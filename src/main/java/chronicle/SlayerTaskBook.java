@@ -8,9 +8,9 @@
  */
 package chronicle;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -88,8 +88,11 @@ final class SlayerTaskBook
 		{
 			if (in != null)
 			{
-				JsonObject root = new Gson().fromJson(
-					new InputStreamReader(in, StandardCharsets.UTF_8), JsonObject.class);
+				// Not the client's Gson: a bundled table read once, from static callers,
+				// has no injector to hand, and the Hub forbids a fresh Gson instance.
+				JsonElement parsed = new JsonParser().parse(
+					new InputStreamReader(in, StandardCharsets.UTF_8));
+				JsonObject root = parsed != null && parsed.isJsonObject() ? parsed.getAsJsonObject() : null;
 				if (root != null && root.has("npc_to_task") && root.get("npc_to_task").isJsonObject())
 				{
 					for (Map.Entry<String, JsonElement> e : root.getAsJsonObject("npc_to_task").entrySet())
