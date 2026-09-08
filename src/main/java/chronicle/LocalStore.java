@@ -166,8 +166,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			currentRsn = rsn;
 			// What an earlier build, or an import, could leave inconsistent: the same
 			// item twice in one source's bag, a feed line twice, by-item leavings that
-			// no longer sum to the pairs.
-			int healed = dedupeSourceBags() + dedupeFeed() + reconcileUntaken();
+			// no longer sum to the pairs, off-task kills counted toward a slayer task.
+			int healed = dedupeSourceBags() + dedupeFeed() + reconcileUntaken()
+				+ purgeOffTaskMonsters();
 			if (healed > 0)
 			{
 				log.debug("repaired {} journal entries on load", healed);
@@ -2308,6 +2309,78 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			root.add("untaken_items", rebuilt);
 		}
 		return corrected;
+	}
+
+	/**
+	 * Drop off-task monsters from slayer task segments. An earlier build stamped every
+	 * NPC kill made while a task was live as a task kill, so a Man or an impling killed
+	 * mid-task sits in the segment's {@code monsters} and inflates its {@code kills},
+	 * which is the count the page shows and the completion trues up against. Each
+	 * monster is put to the same on-task test capture now applies
+	 * ({@link SlayerTaskBook}); the segment stores names only, so it runs on the name
+	 * tier alone. Those that fail are removed and their counts taken off {@code kills}.
+	 * The segment's {@code items} and {@code value} are aggregated across its kills and
+	 * cannot be separated per monster, so they are left as they are. A segment whose
+	 * monsters all fail is kept with zero kills rather than deleted: it may be a
+	 * loot-less completion.
+	 *
+	 * <p>Only the open segment is examined. A closed one was either imported from the
+	 * server, which filtered it with the id tier this name-only store cannot re-run
+	 * (Prifddinas guards on an Elves task are "Guard" here and would be thrown out),
+	 * or its count was already trued up by the completion line. Callers hold
+	 * {@code lock}. Returns how many segments changed.
+	 */
+	private int purgeOffTaskMonsters()
+	{
+		if (root == null || !root.has("slayer") || !root.get("slayer").isJsonObject())
+		{
+			return 0;
+		}
+		JsonObject sl = root.getAsJsonObject("slayer");
+		if (!sl.has("tasks") || !sl.get("tasks").isJsonArray())
+		{
+			return 0;
+		}
+		int changed = 0;
+		for (JsonElement te : sl.getAsJsonArray("tasks"))
+		{
+			if (!te.isJsonObject())
+			{
+				continue;
+			}
+			JsonObject seg = te.getAsJsonObject();
+			boolean open = seg.has("open") && !seg.get("open").isJsonNull()
+				&& seg.get("open").getAsBoolean();
+			if (!open || !seg.has("task") || seg.get("task").isJsonNull()
+				|| !seg.has("monsters") || !seg.get("monsters").isJsonObject())
+			{
+				continue;
+			}
+			String task = seg.get("task").getAsString();
+			JsonObject mons = seg.getAsJsonObject("monsters");
+			long offTask = 0;
+			java.util.List<String> drop = new java.util.ArrayList<>();
+			for (java.util.Map.Entry<String, JsonElement> me : mons.entrySet())
+			{
+				if (!SlayerTaskBook.onTask(me.getKey(), SlayerTaskBook.UNKNOWN_ID, task))
+				{
+					drop.add(me.getKey());
+					offTask += asLong(me.getValue());
+				}
+			}
+			if (drop.isEmpty())
+			{
+				continue;
+			}
+			for (String name : drop)
+			{
+				mons.remove(name);
+			}
+			long kills = seg.has("kills") ? asLong(seg.get("kills")) : 0;
+			seg.addProperty("kills", Math.max(0, kills - offTask));
+			changed++;
+		}
+		return changed;
 	}
 
 	/**

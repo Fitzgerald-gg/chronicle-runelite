@@ -483,7 +483,7 @@ public class ChronicleEventCapture
 			data.addProperty("killCount", kc);
 		}
 		data.add("items", itemsToJson(event.getItems()));
-		stampSlayer(data);
+		stampSlayer(data, npc.getName(), npc.getId());
 		// Hold it: a ServerNpcLoot for this same kill supersedes this ground-scan copy.
 		// flushPendingClientLoot() emits it a couple of ticks later only if no server
 		// event covered the kill.
@@ -517,7 +517,7 @@ public class ChronicleEventCapture
 		}
 		attachKillTime(data);
 		data.add("items", itemsToJson(event.getItems()));
-		stampSlayer(data);
+		stampSlayer(data, comp.getName(), comp.getId());
 		emit("LOOT", data);
 		armKill(comp.getName());
 	}
@@ -674,9 +674,12 @@ public class ChronicleEventCapture
 		}
 	}
 
-	// Tag an NPC-loot event with the slayer task live at the moment of the kill, so
-	// on-task loot is settled at capture instead of guessed from a time window later.
-	private void stampSlayer(JsonObject data)
+	// Tag an NPC-loot event with the slayer task live at the moment of the kill, but
+	// only when the killed NPC counts toward it (SlayerTaskBook: id first, name
+	// second), so on-task loot is settled at capture and a Man killed mid-task is
+	// not a task kill. Any kill during a task still marks the session as a slayer's
+	// and remembers the task's identity, whether or not this one was on-task.
+	void stampSlayer(JsonObject data, String npcName, int npcId)
 	{
 		if (slayerService == null)
 		{
@@ -689,9 +692,13 @@ public class ChronicleEventCapture
 			{
 				return;
 			}
-			data.addProperty("slayerTask", task);
 			lastSlayerTask = task;   // the identity the completion streak line falls back to
 			slayerSeenThisSession = true;
+			if (!SlayerTaskBook.onTask(npcName, npcId, task))
+			{
+				return;
+			}
+			data.addProperty("slayerTask", task);
 			data.addProperty("slayerTaskRemaining", slayerService.getRemainingAmount());
 			data.addProperty("slayerTaskInitial", slayerService.getInitialAmount());
 			String loc = slayerService.getTaskLocation();
@@ -706,8 +713,9 @@ public class ChronicleEventCapture
 		}
 	}
 
-	// True once an on-task kill was stamped this session. Home's slayer card gates on
-	// it so non-slayers never see it. Cleared at the account boundary.
+	// True once a kill landed while a slayer task was live this session, on-task or
+	// not. Home's slayer card gates on it so non-slayers never see it. Cleared at the
+	// account boundary.
 	private volatile boolean slayerSeenThisSession;
 
 	boolean slayerSeenThisSession()
