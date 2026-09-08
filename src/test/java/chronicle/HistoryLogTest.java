@@ -24,6 +24,8 @@ import static org.junit.Assert.assertTrue;
 /**
  * Read contract for the history spine. A date gets written several times over a
  * session; the last line for it wins, and a line that won't parse costs only itself.
+ * Also the close rule (a session past midnight closes yesterday first) and the
+ * window rules the History tab measures a period by.
  */
 public class HistoryLogTest
 {
@@ -246,5 +248,170 @@ public class HistoryLogTest
 		assertEquals(0, log.compact(dir, RSN));
 		org.junit.Assert.assertArrayEquals(before,
 			java.nio.file.Files.readAllBytes(spine(RSN).toPath()));
+	}
+
+	private static final LocalDate D = LocalDate.of(2026, 9, 8);
+
+	private static Map<String, Long> none()
+	{
+		return java.util.Collections.emptyMap();
+	}
+
+	// A 20:00 to 02:00 session: the login line is dated D; the first append after
+	// midnight finds the day turned. D's line must close at that state, not stay
+	// at the login state, and D+1 starts from the same point.
+	@Test
+	public void theFirstAppendAfterMidnightClosesYesterdayAtThatState() throws Exception
+	{
+		log.append(dir, RSN, map("attack", 100L), map("tilesWalked", 10L), map("zulrah", 5L), D);
+		log.append(dir, RSN, map("attack", 140L), map("tilesWalked", 90L), map("zulrah", 8L),
+			D.plusDays(1));
+
+		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
+		assertEquals(2, got.size());
+		assertEquals(2, lineCount());
+		HistoryLog.Baseline yesterday = got.get(D);
+		assertEquals(140L, (long) yesterday.skills.get("attack"));
+		assertEquals(90L, (long) yesterday.counters.get("tilesWalked"));
+		assertEquals(8L, (long) yesterday.kcs.get("zulrah"));
+		assertEquals(140L, (long) got.get(D.plusDays(1)).skills.get("attack"));
+
+		// the 02:00 logout moves only today; yesterday's close stands
+		log.append(dir, RSN, map("attack", 180L), map("tilesWalked", 120L), map("zulrah", 9L),
+			D.plusDays(1));
+		got = log.read(dir, RSN);
+		assertEquals(2, lineCount());
+		assertEquals(140L, (long) got.get(D).skills.get("attack"));
+		assertEquals(180L, (long) got.get(D.plusDays(1)).skills.get("attack"));
+	}
+
+	// A process that has not written yet knows nothing about how yesterday ended,
+	// so its first append never reaches back: an earlier day's line is left alone.
+	@Test
+	public void aFreshProcessNeverRewritesAnEarlierDay() throws Exception
+	{
+		rawLine(RSN, dayLine(D.minusDays(1).toString(), 5L), true);
+		log.append(dir, RSN, map("attack", 200L), map("tilesWalked", 1L), none(), D);
+
+		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
+		assertEquals(2, got.size());
+		assertEquals(5L, (long) got.get(D.minusDays(1)).skills.get("attack"));
+		assertEquals(200L, (long) got.get(D).skills.get("attack"));
+	}
+
+	// An import lands lines this process did not write; the next append must not
+	// treat the day it last wrote as still open behind them.
+	@Test
+	public void anImportEndsTheOpenDay() throws Exception
+	{
+		log.append(dir, RSN, map("attack", 100L), none(), none(), D);
+		File source = new File(dir, "source.jsonl");
+		Files.write(source.toPath(), java.util.Collections.singletonList(
+			dayLine(D.minusDays(3).toString(), 1L)), StandardCharsets.UTF_8);
+		assertEquals(1, log.importSpine(dir, RSN, source));
+		log.append(dir, RSN, map("attack", 140L), none(), none(), D.plusDays(1));
+
+		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
+		assertEquals(100L, (long) got.get(D).skills.get("attack"));
+		assertEquals(140L, (long) got.get(D.plusDays(1)).skills.get("attack"));
+	}
+
+	private static HistoryLog.Baseline baseline(long attack, Long tilesWalked, Long zulrah)
+	{
+		HistoryLog.Baseline b = new HistoryLog.Baseline();
+		b.skills.put("attack", attack);
+		if (tilesWalked != null)
+		{
+			b.counters.put("tilesWalked", tilesWalked);
+		}
+		if (zulrah != null)
+		{
+			b.kcs.put("zulrah", zulrah);
+		}
+		return b;
+	}
+
+	// The site measured from its first snapshot when none came before the window.
+	// A record three days old has no line before this week: the week reads from
+	// its first line, not as nothing.
+	@Test
+	public void nothingBeforeTheWindowMeasuresFromTheEarliestLine()
+	{
+		TreeMap<LocalDate, HistoryLog.Baseline> spine = new TreeMap<>();
+		spine.put(D.minusDays(2), baseline(100L, 10L, null));
+		spine.put(D.minusDays(1), baseline(130L, 40L, null));
+		spine.put(D, baseline(180L, 90L, null));
+
+		Map.Entry<LocalDate, HistoryLog.Baseline> from =
+			HistoryLog.windowStart(spine, D.minusDays(6), D);
+		assertEquals(D.minusDays(2), from.getKey());
+		Map<String, Long> gains = HistoryLog.gained(from.getValue().skills,
+			HistoryLog.earliest(spine, D).skills, spine.get(D).skills);
+		assertEquals(80L, (long) gains.get("attack"));
+	}
+
+	// A line closed before the window still wins over the earliest one
+	@Test
+	public void aLineBeforeTheWindowIsPreferredToTheEarliest()
+	{
+		TreeMap<LocalDate, HistoryLog.Baseline> spine = new TreeMap<>();
+		spine.put(D.minusDays(20), baseline(50L, null, null));
+		spine.put(D.minusDays(9), baseline(100L, null, null));
+		spine.put(D, baseline(180L, null, null));
+
+		assertEquals(D.minusDays(9), HistoryLog.windowStart(spine, D.minusDays(6), D).getKey());
+		// and a window before every line has no start at all
+		assertNull(HistoryLog.windowStart(spine, D.minusDays(40), D.minusDays(30)));
+	}
+
+	// The site's counter rule: a key the start line lacks measures from its earliest
+	// recorded value. Kill counts entered the spine late; a month whose start line
+	// predates them still reads the kills since their first line, not nothing.
+	@Test
+	public void aKeyFirstRecordedInsideTheWindowMeasuresFromItsFirstValue()
+	{
+		TreeMap<LocalDate, HistoryLog.Baseline> spine = new TreeMap<>();
+		spine.put(D.minusDays(10), baseline(100L, null, null));      // start line: no kcs
+		spine.put(D.minusDays(5), baseline(120L, 500L, 300L));      // first line carrying them
+		spine.put(D.minusDays(2), baseline(150L, 700L, 320L));
+		spine.put(D, baseline(180L, 900L, 350L));
+
+		HistoryLog.Baseline start = spine.get(D.minusDays(10));
+		HistoryLog.Baseline earliest = HistoryLog.earliest(spine, D);
+		assertEquals(50L, (long) HistoryLog.gained(start.kcs, earliest.kcs, spine.get(D).kcs)
+			.get("zulrah"));
+		assertEquals(400L, (long) HistoryLog.gained(start.counters, earliest.counters,
+			spine.get(D).counters).get("tilesWalked"));
+		// the start line's own value still wins where it has one
+		assertEquals(80L, (long) HistoryLog.gained(start.skills, earliest.skills,
+			spine.get(D).skills).get("attack"));
+	}
+
+	// A key first recorded on the end line itself has nothing earlier to measure
+	// from, and absence is never read as zero
+	@Test
+	public void aKeyRecordedOnlyAtTheEndHasNoGain()
+	{
+		TreeMap<LocalDate, HistoryLog.Baseline> spine = new TreeMap<>();
+		spine.put(D.minusDays(3), baseline(100L, null, null));
+		spine.put(D, baseline(100L, 900L, 350L));
+
+		HistoryLog.Baseline earliest = HistoryLog.earliest(spine, D);
+		assertTrue(HistoryLog.gained(spine.get(D.minusDays(3)).kcs, earliest.kcs,
+			spine.get(D).kcs).isEmpty());
+		assertTrue(HistoryLog.gained(spine.get(D.minusDays(3)).counters, earliest.counters,
+			spine.get(D).counters).isEmpty());
+		// and with no earliest value to hand at all, the key is skipped, not read as 0
+		assertTrue(HistoryLog.gained(spine.get(D.minusDays(3)).kcs, none(),
+			spine.get(D).kcs).isEmpty());
+		assertTrue(HistoryLog.gained(spine.get(D.minusDays(3)).kcs, null,
+			spine.get(D).kcs).isEmpty());
+		// the earliest map stops at the end line: a key first minted after it is
+		// not on record yet, and a later line never displaces an earlier value
+		HistoryLog.Baseline later = baseline(100L, 1L, 1L);
+		later.counters.put("logsChopped", 7L);
+		spine.put(D.plusDays(1), later);
+		assertEquals(900L, (long) HistoryLog.earliest(spine, D).counters.get("tilesWalked"));
+		assertNull(HistoryLog.earliest(spine, D).counters.get("logsChopped"));
 	}
 }

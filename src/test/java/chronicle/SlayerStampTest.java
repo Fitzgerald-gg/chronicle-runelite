@@ -122,4 +122,53 @@ public class SlayerStampTest
 		assertFalse(capture.slayerSeenThisSession());
 		assertEquals(null, get("lastSlayerTask"));
 	}
+
+	@Test
+	public void theFinishingKillIsStampedWithTheTaskJustCompleted() throws Exception
+	{
+		Mockito.when(slayer.getTask()).thenReturn("");   // cleared on the completing tick
+		set("lastSlayerCompletionTask", "Nechryael");
+		set("lastSlayerCompletionAtMs", System.currentTimeMillis());
+		JsonObject d = stamp("Nechryael", 11);
+		assertEquals("Nechryael", d.get("slayerTask").getAsString());
+		assertFalse(d.has("slayerTaskRemaining"));   // the counter went with the task
+		assertFalse(d.has("slayerTaskInitial"));
+		assertFalse(stamp("Man", SlayerTaskBook.UNKNOWN_ID).has("slayerTask"));
+		assertEquals(null, get("lastSlayerTask"));   // not a live task; no identity kept
+	}
+
+	@Test
+	public void aCompletionOutsideTheGraceStampsNothing() throws Exception
+	{
+		Mockito.when(slayer.getTask()).thenReturn("");
+		set("lastSlayerCompletionTask", "Nechryael");
+		set("lastSlayerCompletionAtMs",
+			System.currentTimeMillis() - ChronicleEventCapture.SLAYER_FINAL_KILL_GRACE_MS - 1_000L);
+		assertFalse(stamp("Nechryael", 11).has("slayerTask"));
+	}
+
+	@Test
+	public void aPendingFinishedLineStampsBeforeTheStreakLine() throws Exception
+	{
+		Mockito.when(slayer.getTask()).thenReturn("");
+		set("pendingSlayerMonster", "Nechryael");
+		set("slayerPendingTicks", 0);
+		assertEquals("Nechryael", stamp("Nechryael", 11).get("slayerTask").getAsString());
+		assertFalse(stamp("Man", SlayerTaskBook.UNKNOWN_ID).has("slayerTask"));
+	}
+
+	@Test
+	public void theStreakLineRecordsTheCompletionForTheGrace() throws Exception
+	{
+		set("pendingSlayerMonster", "Nechryael");
+		set("slayerPendingTicks", 0);
+		capture.onChatMessage(new net.runelite.api.events.ChatMessage(null,
+			net.runelite.api.ChatMessageType.GAMEMESSAGE, "",
+			"You've completed 215 tasks and received 25 points, giving you a total of 4,200; return to a Slayer master.",
+			null, 0));
+		assertEquals("Nechryael", get("lastSlayerCompletionTask"));
+		assertTrue((long) get("lastSlayerCompletionAtMs") > 0);
+		Mockito.when(slayer.getTask()).thenReturn("");
+		assertEquals("Nechryael", stamp("Nechryael", 11).get("slayerTask").getAsString());
+	}
 }

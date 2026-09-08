@@ -290,23 +290,27 @@ public class FoodStatTracker implements StatTracker
 		{
 			return known;
 		}
-		String fourDose = potion + "(4)";
+		boolean catalogueAnswered = false;
 		try
 		{
-			List<ItemPrice> matches = itemManager.search(fourDose);
-			for (ItemPrice p : matches)
+			for (String fourDose : fourDoseNames(potion))
 			{
-				if (p.getName().equalsIgnoreCase(fourDose))
+				List<ItemPrice> matches = itemManager.search(fourDose);
+				catalogueAnswered |= !matches.isEmpty();
+				for (ItemPrice p : matches)
 				{
-					int dose = p.getPrice() / 4;
-					dosePrices.put(potion, dose);
-					return dose;
+					if (p.getName().equalsIgnoreCase(fourDose))
+					{
+						int dose = p.getPrice() / 4;
+						dosePrices.put(potion, dose);
+						return dose;
+					}
 				}
 			}
 			// An empty result can just mean the client's price list hasn't loaded, and
 			// caching a zero from that would leave the potion unpriced all session. Only
 			// a search that came back with something proves there's no 4-dose form.
-			if (!matches.isEmpty())
+			if (catalogueAnswered)
 			{
 				dosePrices.put(potion, 0);
 			}
@@ -316,6 +320,23 @@ public class FoodStatTracker implements StatTracker
 			// price cache unavailable; the dose goes unpriced rather than guessed
 		}
 		return 0;
+	}
+
+	/**
+	 * The 4-dose catalogue names a drink message can stand for, in the order to try
+	 * them. Chat says "super restore potion" where the GE says "Super restore(4)", and
+	 * the client's item search is a substring match, so the longer name finds nothing.
+	 * The name as drunk goes first; its sibling with the trailing " potion" stripped
+	 * (or, the other way about, appended) follows, exactly as the site registered both
+	 * spellings against the one 4-dose item.
+	 */
+	static List<String> fourDoseNames(String potion)
+	{
+		String base = potion.trim();
+		String sibling = base.toLowerCase(Locale.ROOT).endsWith(" potion")
+			? base.substring(0, base.length() - " potion".length()).trim()
+			: base + " potion";
+		return List.of(base + "(4)", sibling + "(4)");
 	}
 
 	private String itemName(int itemId)

@@ -24,6 +24,12 @@ import lombok.extern.slf4j.Slf4j;
  * beside it, so a date appears once. Readers still take the last line for a date
  * and skip a torn one, which is what makes the replacement safe. The History tab
  * and PaceBook read it back.
+ *
+ * <p>A day's line is that day's close, the way the site's nightly snapshot was:
+ * the first append after midnight first sets the previous day's line to the
+ * state it finds (the nearest thing to a midnight close the plugin has), and
+ * only then opens today's line from it. A session run past midnight therefore
+ * leaves its evening on the day it was played rather than on the day after.
  */
 @Slf4j
 class HistoryLog
@@ -38,7 +44,8 @@ class HistoryLog
 		this.gson = gson;
 	}
 
-	// Last date appended, per account, for this session; gates the rollover append.
+	// Last date appended, per account, for this session; gates the rollover append
+	// and names the day the first append after midnight closes.
 	// Keyed per account: two characters played on the same day each still get a line.
 	private final Map<String, String> lastAppendedDate = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -46,32 +53,44 @@ class HistoryLog
 	synchronized void append(File dir, String rsn, Map<String, Long> skills,
 		Map<String, Long> counters, Map<String, Long> kcs)
 	{
-		if (rsn == null || rsn.isEmpty())
+		append(dir, rsn, skills, counters, kcs, LocalDate.now(ZoneId.systemDefault()));
+	}
+
+	/**
+	 * The dated form: {@code today} is the day this state belongs to. When this
+	 * process last appended under an earlier date, nothing has closed that day
+	 * since, so the state is written under it first (its close) and then under
+	 * {@code today} (today's opening baseline, to be replaced as the day goes).
+	 */
+	synchronized void append(File dir, String rsn, Map<String, Long> skills,
+		Map<String, Long> counters, Map<String, Long> kcs, LocalDate today)
+	{
+		if (rsn == null || rsn.isEmpty() || today == null)
 		{
 			return;
 		}
-		String today = LocalDate.now(ZoneId.systemDefault()).toString();
-		JsonObject line = new JsonObject();
-		line.addProperty("date", today);
+		String slug = LocalStore.slug(rsn);
+		String date = today.toString();
+		JsonObject state = new JsonObject();
 		JsonObject sk = new JsonObject();
 		if (skills != null)
 		{
 			skills.forEach(sk::addProperty);
 		}
-		line.add("skills", sk);
+		state.add("skills", sk);
 		JsonObject ct = new JsonObject();
 		if (counters != null)
 		{
 			counters.forEach(ct::addProperty);
 		}
-		line.add("counters", ct);
+		state.add("counters", ct);
 		// kcs arrived after the rest. Older lines on the stream carry none.
 		JsonObject kc = new JsonObject();
 		if (kcs != null)
 		{
 			kcs.forEach(kc::addProperty);
 		}
-		line.add("kcs", kc);
+		state.add("kcs", kc);
 		try
 		{
 			if (!dir.isDirectory() && !dir.mkdirs())
@@ -79,21 +98,42 @@ class HistoryLog
 				log.debug("could not create history dir {}", dir);
 				return;
 			}
-			File f = new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX);
-			// Appends are chronological, so any line already bearing today's date is
-			// at the tail. Cut it and let this one stand in its place: the reader
-			// would have taken the last of them anyway.
-			dropTrailingDate(f, today);
-			try (Writer w = new OutputStreamWriter(new FileOutputStream(f, true), StandardCharsets.UTF_8))
+			File f = new File(dir, slug + SPINE_SUFFIX);
+			// The day turned since this process last wrote: that day's line still
+			// holds its login-time state, so close it at the state in hand before
+			// today's line starts from the same point.
+			String previous = lastAppendedDate.get(slug);
+			if (previous != null && previous.compareTo(date) < 0)
 			{
-				w.write(gson.toJson(line));
-				w.write('\n');
+				writeLine(f, previous, state);
 			}
-			lastAppendedDate.put(LocalStore.slug(rsn), today);
+			writeLine(f, date, state);
+			lastAppendedDate.put(slug, date);
 		}
 		catch (Exception e)   // best-effort; the next append retries
 		{
 			log.debug("history append failed", e);
+		}
+	}
+
+	// One line for `date` carrying `state`, in place of any line the tail already
+	// holds for that date.
+	private void writeLine(File f, String date, JsonObject state) throws java.io.IOException
+	{
+		JsonObject line = new JsonObject();
+		line.addProperty("date", date);
+		for (Map.Entry<String, com.google.gson.JsonElement> e : state.entrySet())
+		{
+			line.add(e.getKey(), e.getValue());
+		}
+		// Appends are chronological, so any line already bearing this date is at
+		// the tail. Cut it and let this one stand in its place: the reader would
+		// have taken the last of them anyway.
+		dropTrailingDate(f, date);
+		try (Writer w = new OutputStreamWriter(new FileOutputStream(f, true), StandardCharsets.UTF_8))
+		{
+			w.write(gson.toJson(line));
+			w.write('\n');
 		}
 	}
 
@@ -102,6 +142,93 @@ class HistoryLog
 		final Map<String, Long> skills = new java.util.HashMap<>();
 		final Map<String, Long> counters = new java.util.HashMap<>();
 		final Map<String, Long> kcs = new java.util.HashMap<>();
+	}
+
+	/**
+	 * The baseline a period is measured from: the last line closed before
+	 * {@code start}, or, when nothing predates the window, the earliest line on
+	 * record up to {@code end}. The site measured the same way, from its first
+	 * snapshot when none came before the window, so a fresh record's first week
+	 * reads from its first day rather than as nothing. Null when no line is dated
+	 * on or before {@code end}.
+	 */
+	static Map.Entry<LocalDate, Baseline> windowStart(
+		java.util.TreeMap<LocalDate, Baseline> spine, LocalDate start, LocalDate end)
+	{
+		if (spine == null || spine.isEmpty() || start == null || end == null)
+		{
+			return null;
+		}
+		Map.Entry<LocalDate, Baseline> before = spine.floorEntry(start.minusDays(1));
+		if (before != null)
+		{
+			return before;
+		}
+		Map.Entry<LocalDate, Baseline> first = spine.firstEntry();
+		return first.getKey().isAfter(end) ? null : first;
+	}
+
+	/**
+	 * Each key's earliest recorded value on any line dated up to {@code upTo},
+	 * inclusive. The base for a key the start line does not carry: a counter or
+	 * kill count first minted inside the window, or a skill the imported past
+	 * predates. A recorded value, never absence read as zero.
+	 */
+	static Baseline earliest(java.util.TreeMap<LocalDate, Baseline> spine, LocalDate upTo)
+	{
+		Baseline out = new Baseline();
+		if (spine == null || upTo == null)
+		{
+			return out;
+		}
+		for (Baseline b : spine.headMap(upTo, true).values())
+		{
+			if (b == null)
+			{
+				continue;
+			}
+			b.skills.forEach(out.skills::putIfAbsent);
+			b.counters.forEach(out.counters::putIfAbsent);
+			b.kcs.forEach(out.kcs::putIfAbsent);
+		}
+		return out;
+	}
+
+	/**
+	 * Positive gains from {@code start} to {@code end}, per key, in {@code end}'s
+	 * order. A key the start side lacks measures from its earliest recorded value
+	 * instead; a key recorded nowhere before the end line has no gain to show.
+	 */
+	static Map<String, Long> gained(Map<String, Long> start, Map<String, Long> earliest,
+		Map<String, Long> end)
+	{
+		Map<String, Long> out = new java.util.LinkedHashMap<>();
+		if (end == null)
+		{
+			return out;
+		}
+		for (Map.Entry<String, Long> e : end.entrySet())
+		{
+			if (e.getValue() == null)
+			{
+				continue;
+			}
+			Long base = start != null ? start.get(e.getKey()) : null;
+			if (base == null && earliest != null)
+			{
+				base = earliest.get(e.getKey());
+			}
+			if (base == null)
+			{
+				continue;
+			}
+			long d = e.getValue() - base;
+			if (d > 0)
+			{
+				out.put(e.getKey(), d);
+			}
+		}
+		return out;
 	}
 
 	/**

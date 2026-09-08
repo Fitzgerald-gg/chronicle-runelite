@@ -307,6 +307,15 @@ public class ChronicleEventCapture
 	// The task name seen at KILL time, via the loot stamp. RuneLite clears getTask()
 	// on the completing tick, so by the streak line the live service is empty.
 	private String lastSlayerTask;
+	// The last completion emitted and when, wall clock. The finishing kill's loot
+	// lands after that clear, so it finds no live task; within the grace it is
+	// stamped with the task just completed instead (SLAYER_FINAL_KILL_GRACE_MS).
+	private String lastSlayerCompletionTask;
+	private long lastSlayerCompletionAtMs = -1;
+
+	// How long after a completion a stamp-less kill of its monster is that task's
+	// finishing kill. Mirrors LocalStore.SLAYER_FINAL_KILL_GRACE.
+	static final long SLAYER_FINAL_KILL_GRACE_MS = LocalStore.SLAYER_FINAL_KILL_GRACE * 1000L;
 
 	@Inject
 	ChronicleEventCapture(Client client, ClientThread clientThread, ConfigManager configManager,
@@ -345,6 +354,8 @@ public class ChronicleEventCapture
 		pendingSlayerKills = null;
 		slayerPendingTicks = -1;
 		lastSlayerTask = null;
+		lastSlayerCompletionTask = null;
+		lastSlayerCompletionAtMs = -1;
 		// Ground-item refs belong to the scene we're leaving, so drop them. The
 		// untaken batch is kept: each item carries the account it was earned on, and
 		// flushUntakenLoot only sends the ones belonging to whoever logs in next.
@@ -690,6 +701,15 @@ public class ChronicleEventCapture
 			String task = slayerService.getTask();
 			if (task == null || task.isEmpty())
 			{
+				// No live task: the completing kill's loot, if a completion of its
+				// monster was just seen (or its finished line is still pending the
+				// streak line). It carries the task alone, no counter: the counter was
+				// cleared with the task.
+				String done = finishingKillTask();
+				if (done != null && SlayerTaskBook.onTask(npcName, npcId, done))
+				{
+					data.addProperty("slayerTask", done);
+				}
 				return;
 			}
 			lastSlayerTask = task;   // the identity the completion streak line falls back to
@@ -711,6 +731,32 @@ public class ChronicleEventCapture
 		{
 			// no service, no stamp
 		}
+	}
+
+	// The task a stamp-less kill landing now would be the finishing kill of: the
+	// finished line's creature while its completion is still pending, else the last
+	// completion emitted within the grace. Null when there is none.
+	private String finishingKillTask()
+	{
+		if (slayerPendingTicks >= 0 && pendingSlayerMonster != null && !pendingSlayerMonster.isEmpty())
+		{
+			return pendingSlayerMonster;
+		}
+		if (lastSlayerCompletionTask != null && lastSlayerCompletionAtMs >= 0
+			&& System.currentTimeMillis() - lastSlayerCompletionAtMs <= SLAYER_FINAL_KILL_GRACE_MS)
+		{
+			return lastSlayerCompletionTask;
+		}
+		return null;
+	}
+
+	// A completion goes out through here so the finishing kill's loot, which lands
+	// after the live task was cleared, can still be stamped with it.
+	private void emitSlayerCompletion(JsonObject data)
+	{
+		lastSlayerCompletionTask = data.get("task").getAsString();
+		lastSlayerCompletionAtMs = System.currentTimeMillis();
+		emit("SLAYER", data);
 	}
 
 	// True once a kill landed while a slayer task was live this session, on-task or
@@ -1196,7 +1242,7 @@ public class ChronicleEventCapture
 						// leave count off
 					}
 				}
-				emit("SLAYER", data);
+				emitSlayerCompletion(data);
 			}
 			else
 			{
@@ -1253,7 +1299,7 @@ public class ChronicleEventCapture
 			{
 				data.addProperty("killCount", pendingSlayerKills);
 			}
-			emit("SLAYER", data);   // no lifetime "count": the finished line has none
+			emitSlayerCompletion(data);   // no lifetime "count": the finished line has none
 		}
 		pendingSlayerTask = null;
 		pendingSlayerMonster = null;

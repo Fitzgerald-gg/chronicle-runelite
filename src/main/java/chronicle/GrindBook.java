@@ -136,7 +136,10 @@ class GrindBook
 			return new ArrayList<>();
 		}
 		Map<String, Long> kcByNorm = killCounts(clog, dropSources);
-		// an item counts as obtained from either the global clog set or the boss's own page.
+		// an item counts as obtained from the global clog set, the drop ledger's bags
+		// (a unique already looted is owned whether or not the log has caught up: the
+		// unlock notification may be off, or the page not reopened since), or the
+		// boss's own page.
 		Set<String> obtained = new HashSet<>();
 		if (clog != null && clog.has("clog_items") && clog.get("clog_items").isJsonObject())
 		{
@@ -145,6 +148,7 @@ class GrindBook
 				obtained.add(e.getKey().toLowerCase(Locale.ROOT));
 			}
 		}
+		obtained.addAll(looted(dropSources));
 		Map<String, Set<String>> pageItems = new HashMap<>();
 		if (clog != null && clog.has("by_cat") && clog.get("by_cat").isJsonObject())
 		{
@@ -327,6 +331,7 @@ class GrindBook
 		}
 		Map<String, Long> kcByNorm = killCounts(clog, dropSources);
 		Set<String> obtained = allObtained(clog);
+		obtained.addAll(looted(dropSources));
 		// pet name (lower-cased) → every boss whose table holds it. A pet with two
 		// sources (Callisto and Artio, Chaos Elemental and Chaos Fanatic) is one
 		// chase fed from both, never the better-looking half of the pair.
@@ -871,6 +876,25 @@ class GrindBook
 				for (Map.Entry<String, JsonElement> it : cat.getValue().getAsJsonObject().entrySet())
 				{
 					out.add(it.getKey().toLowerCase(Locale.ROOT));
+				}
+			}
+		}
+		return out;
+	}
+
+	// Every item name the drop ledger holds a copy of, across all its sources. The
+	// ledger is keyed by name alone, as the site's was: a helm looted anywhere is
+	// the same helm on every page that lists it.
+	private static Set<String> looted(List<LocalStore.SourceRow> dropSources)
+	{
+		Set<String> out = new HashSet<>();
+		if (dropSources != null)
+		{
+			for (LocalStore.SourceRow sr : dropSources)
+			{
+				if (sr.looted != null)
+				{
+					out.addAll(sr.looted);
 				}
 			}
 		}

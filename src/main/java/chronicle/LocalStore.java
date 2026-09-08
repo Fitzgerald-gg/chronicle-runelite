@@ -314,17 +314,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			pbCand = data.get("killTime").getAsDouble();
 		}
 
-		String slayerTask = data.has("slayerTask") && !data.get("slayerTask").isJsonNull()
-			? data.get("slayerTask").getAsString() : null;
-		long slayerAssignment = data.has("slayerTaskInitial") && !data.get("slayerTaskInitial").isJsonNull()
-			? data.get("slayerTaskInitial").getAsLong() : 0;
-
 		synchronized (lock)
 		{
-			if (slayerTask != null && !slayerTask.isEmpty())
-			{
-				slayerLoot(slayerTask, slayerAssignment, batchValue, source, priced);
-			}
+			slayerLoot(data, batchValue, source, priced);
 			JsonObject drops = root.getAsJsonObject("drops");
 			// Guarded field by field: an older journal's source entry (or a hand edit)
 			// can be missing counters, and an exception here is eaten by the event bus.
@@ -341,6 +333,18 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 			src.addProperty("loots", asLong(src.get("loots")) + 1);
 			src.addProperty("value", asLong(src.get("value")) + batchValue);
+			// first_seen/last_seen run as min/max of every kill, epoch ms: an earlier
+			// date the Loot Tracker import set stands, a later one only ever extends.
+			long nowMs = System.currentTimeMillis();
+			long firstSeen = asLong(src.get("first_seen"));
+			if (firstSeen <= 0 || nowMs < firstSeen)
+			{
+				src.addProperty("first_seen", nowMs);
+			}
+			if (nowMs > asLong(src.get("last_seen")))
+			{
+				src.addProperty("last_seen", nowMs);
+			}
 			sessionLoots++;
 			sessionLootValue += batchValue;
 			for (JsonElement pe : priced)
@@ -626,9 +630,19 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		// range and extends as play continues.
 		final long firstMs;
 		final long lastMs;
+		// lower-cased name of every item the bag holds a copy of. The dryness book
+		// reads it as obtained: a unique already looted is never a chase, whatever the
+		// stored log says.
+		final java.util.Set<String> looted;
 
 		SourceRow(String name, int kc, int loots, long value, Double pb,
 			long firstMs, long lastMs)
+		{
+			this(name, kc, loots, value, pb, firstMs, lastMs, java.util.Collections.emptySet());
+		}
+
+		SourceRow(String name, int kc, int loots, long value, Double pb,
+			long firstMs, long lastMs, java.util.Set<String> looted)
 		{
 			this.name = name;
 			this.kc = kc;
@@ -637,6 +651,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			this.pb = pb;
 			this.firstMs = firstMs;
 			this.lastMs = lastMs;
+			this.looted = looted;
 		}
 	}
 
@@ -664,10 +679,41 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					src.has("value") ? src.get("value").getAsLong() : 0,
 					src.has("pb") ? src.get("pb").getAsDouble() : null,
 					src.has("first_seen") ? src.get("first_seen").getAsLong() : 0,
-					src.has("last_seen") ? src.get("last_seen").getAsLong() : 0));
+					src.has("last_seen") ? src.get("last_seen").getAsLong() : 0,
+					lootedNames(src)));
 			}
 		}
 		return out;
+	}
+
+	// The names in one source's bag, lower-cased, holding only entries with a copy
+	// in hand: a zero-quantity row is a name the bag once knew, not an item owned.
+	private static java.util.Set<String> lootedNames(JsonObject src)
+	{
+		if (!src.has("items") || !src.get("items").isJsonObject())
+		{
+			return java.util.Collections.emptySet();
+		}
+		java.util.Set<String> out = new java.util.HashSet<>();
+		for (java.util.Map.Entry<String, JsonElement> e
+			: src.getAsJsonObject("items").entrySet())
+		{
+			if (!e.getValue().isJsonObject())
+			{
+				continue;
+			}
+			JsonObject it = e.getValue().getAsJsonObject();
+			if (asLong(it.get("qty")) <= 0 || !it.has("name") || it.get("name").isJsonNull())
+			{
+				continue;
+			}
+			String name = it.get("name").getAsString().trim().toLowerCase(java.util.Locale.ROOT);
+			if (!name.isEmpty())
+			{
+				out.add(name);
+			}
+		}
+		return out.isEmpty() ? java.util.Collections.emptySet() : out;
 	}
 
 	/** Newest feed entries, newest first (deep copies). */
@@ -1122,6 +1168,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return sl;
 	}
 
+	/**
+	 * How long after a completion the finishing kill's loot may still land on it, in
+	 * seconds. RuneLite clears the live task on the completing tick, so that kill's
+	 * loot arrives after the segment has closed; the server attached it to the
+	 * completion within this window and the segmenter folded it into the task.
+	 */
+	static final long SLAYER_FINAL_KILL_GRACE = 30;
+
 	/** The newest task segment if it is open and names {@code task}, else null.
 	 *  Callers hold {@code lock}. */
 	private static JsonObject openSegment(JsonArray tasks, String task)
@@ -1131,18 +1185,140 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			return null;
 		}
 		JsonObject last = tasks.get(tasks.size() - 1).getAsJsonObject();
-		boolean open = last.has("open") && last.get("open").getAsBoolean();
-		return open && last.has("task")
-			&& task.equalsIgnoreCase(last.get("task").getAsString()) ? last : null;
+		return isOpen(last) && namesTask(last, task) ? last : null;
 	}
 
-	/** One on-task kill: extend (or open) the current task segment. Callers hold lock. */
-	private void slayerLoot(String task, long assignment, long value,
-		String monster, JsonArray items)
+	private static boolean isOpen(JsonObject seg)
 	{
+		return seg.has("open") && !seg.get("open").isJsonNull() && seg.get("open").getAsBoolean();
+	}
+
+	private static boolean namesTask(JsonObject seg, String task)
+	{
+		return seg.has("task") && !seg.get("task").isJsonNull()
+			&& task.equalsIgnoreCase(seg.get("task").getAsString());
+	}
+
+	/** A numeric field, or null when absent. */
+	private static Long optLong(JsonObject o, String key)
+	{
+		return o.has(key) && !o.get(key).isJsonNull() && o.get(key).isJsonPrimitive()
+			? Long.valueOf(asLong(o.get(key))) : null;
+	}
+
+	/**
+	 * The newest segment when this kill continues it: open, the same task, and the
+	 * live counter not having jumped back up. A strict upward jump in
+	 * {@code slayerTaskRemaining} between consecutive same-task kills is a fresh
+	 * assignment even when no completion line was seen (finished on another client,
+	 * both lines missed), so two back-to-back same-monster tasks split on the counter
+	 * alone instead of merging into one bloated row. Callers hold {@code lock}.
+	 */
+	private static JsonObject continuingSegment(JsonArray tasks, String task, Long rem)
+	{
+		JsonObject seg = openSegment(tasks, task);
+		if (seg == null)
+		{
+			return null;
+		}
+		Long lastRem = optLong(seg, "last_rem");
+		return rem != null && lastRem != null && rem > lastRem ? null : seg;
+	}
+
+	/**
+	 * A segment closed by a completion within the finishing-kill grace that this kill
+	 * belongs to, else null. The finishing kill carries the task alone: its counter
+	 * went with the task, so a kill stamped by a live task ({@code live}) is the next
+	 * assignment unless its counter still continues the segment's. Callers hold
+	 * {@code lock}.
+	 */
+	private static JsonObject graceSegment(JsonArray tasks, String task, Long rem, boolean live)
+	{
+		long floor = nowSec() - SLAYER_FINAL_KILL_GRACE;
+		for (int i = tasks.size() - 1; i >= 0; i--)
+		{
+			if (!tasks.get(i).isJsonObject())
+			{
+				continue;
+			}
+			JsonObject seg = tasks.get(i).getAsJsonObject();
+			if ((seg.has("ts") ? asLong(seg.get("ts")) : 0) < floor)
+			{
+				return null;
+			}
+			if (isOpen(seg) || !namesTask(seg, task))
+			{
+				continue;
+			}
+			Long lastRem = optLong(seg, "last_rem");
+			return live && (rem == null || lastRem == null || rem > lastRem) ? null : seg;
+		}
+		return null;
+	}
+
+	/**
+	 * A parked segment this kill resumes, moved to the end so it is the current one
+	 * again, else null. Switching to a different monster parks the task; returning to
+	 * it with a counter that continues downward ({@code rem <= min_rem}) is the same
+	 * assignment, so the two runs are one task rather than two rows. A higher counter
+	 * is a fresh assignment and supersedes the parked run. Only the newest segment of
+	 * the task is eligible, and only while no completion has closed it. Callers hold
+	 * {@code lock}.
+	 */
+	private static JsonObject resumeSegment(JsonArray tasks, String task, Long rem)
+	{
+		for (int i = tasks.size() - 1; i >= 0; i--)
+		{
+			if (!tasks.get(i).isJsonObject())
+			{
+				continue;
+			}
+			JsonObject seg = tasks.get(i).getAsJsonObject();
+			if (!namesTask(seg, task))
+			{
+				continue;
+			}
+			Long minRem = optLong(seg, "min_rem");
+			if (!isOpen(seg) || rem == null || minRem == null || rem > minRem)
+			{
+				return null;
+			}
+			tasks.remove(i);
+			tasks.add(seg);
+			return seg;
+		}
+		return null;
+	}
+
+	/** One on-task kill: extend, fold, resume or open the task segment it belongs
+	 *  to. {@code data} is the loot event; a kill with no task stamp is not on task.
+	 *  Callers hold lock. */
+	private void slayerLoot(JsonObject data, long value, String monster, JsonArray items)
+	{
+		String task = data.has("slayerTask") && !data.get("slayerTask").isJsonNull()
+			? data.get("slayerTask").getAsString() : null;
+		if (task == null || task.isEmpty())
+		{
+			return;
+		}
+		Long rem = optLong(data, "slayerTaskRemaining");
+		Long initialStamp = optLong(data, "slayerTaskInitial");
+		long initial = initialStamp == null ? 0 : initialStamp;
+		// stamped while the task was live, counter and all
+		boolean live = rem != null || initialStamp != null;
 		JsonObject sl = slayerRoot();
 		JsonArray tasks = sl.getAsJsonArray("tasks");
-		JsonObject seg = openSegment(tasks, task);
+		JsonObject seg = continuingSegment(tasks, task, rem);
+		boolean fold = false;
+		if (seg == null)
+		{
+			seg = graceSegment(tasks, task, rem, live);
+			fold = seg != null;
+		}
+		if (seg == null)
+		{
+			seg = resumeSegment(tasks, task, rem);
+		}
 		if (seg == null)
 		{
 			seg = new JsonObject();
@@ -1157,13 +1333,37 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				tasks.remove(0);
 			}
 		}
-		seg.addProperty("kills", seg.get("kills").getAsLong() + 1);
-		seg.addProperty("value", seg.get("value").getAsLong() + value);
-		if (assignment > seg.get("assignment").getAsLong())
+		if (fold)
 		{
-			seg.addProperty("assignment", assignment);
+			// The finishing kill, landing after its completion closed the segment: the
+			// game's count already stands as kills, so it fills a no-drop rather than
+			// adding a kill, and the completion instant stays the segment's date.
+			long total = asLong(seg.get("kills"));
+			long logged = loggedKills(seg) + 1;
+			seg.addProperty("logged", logged);
+			setNoLootKills(seg, total - logged);
 		}
-		seg.addProperty("ts", nowSec());
+		else
+		{
+			seg.addProperty("kills", seg.get("kills").getAsLong() + 1);
+			seg.addProperty("ts", nowSec());
+			// RuneLite's initialAmount is restored from config and can be stale; the
+			// counter is self-proving (remaining is stamped post-decrement), so any
+			// reading R means the assignment was at least R + 1. The higher bound wins.
+			long assignment = Math.max(seg.get("assignment").getAsLong(), initial);
+			if (rem != null && rem + 1 > assignment)
+			{
+				assignment = rem + 1;
+			}
+			seg.addProperty("assignment", assignment);
+			if (rem != null)
+			{
+				seg.addProperty("last_rem", rem);
+				Long minRem = optLong(seg, "min_rem");
+				seg.addProperty("min_rem", minRem == null ? rem : Math.min(minRem, rem));
+			}
+		}
+		seg.addProperty("value", seg.get("value").getAsLong() + value);
 		// What the task was made of: a "blue dragons" assignment takes brutals too,
 		// and its loot is a different question from the monster's lifetime bag.
 		if (monster != null && !monster.isEmpty())
@@ -1191,6 +1391,33 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				bag.add(name, row);
 			}
 			seg.add("items", bag);
+		}
+	}
+
+	/** The kills the loot actually witnessed: kept apart from the game's own count
+	 *  once a completion has set that. A segment closed before the split kept only
+	 *  the total and its no-drops, which recover it. */
+	private static long loggedKills(JsonObject seg)
+	{
+		Long logged = optLong(seg, "logged");
+		if (logged != null)
+		{
+			return logged;
+		}
+		long kills = seg.has("kills") ? asLong(seg.get("kills")) : 0;
+		long noLoot = seg.has("noLootKills") ? asLong(seg.get("noLootKills")) : 0;
+		return Math.max(0, kills - noLoot);
+	}
+
+	private static void setNoLootKills(JsonObject seg, long noLoot)
+	{
+		if (noLoot > 0)
+		{
+			seg.addProperty("noLootKills", noLoot);
+		}
+		else
+		{
+			seg.remove("noLootKills");
 		}
 	}
 
@@ -1229,18 +1456,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					tasks.remove(0);
 				}
 			}
-			long kills = seg.get("kills").getAsLong();
+			// The finished line's N is the game's own number: it becomes the task's
+			// kills and its size, and the kills the loot witnessed are kept apart as
+			// logged, so a surviving double-emit never shows more than N.
+			long logged = seg.get("kills").getAsLong();
+			seg.addProperty("logged", logged);
 			if (exact != null && exact > 0)
 			{
-				if (exact > kills)
-				{
-					seg.addProperty("noLootKills", exact - kills);
-				}
-				seg.addProperty("kills", Math.max(kills, exact));
-				if (exact > seg.get("assignment").getAsLong())
-				{
-					seg.addProperty("assignment", exact);
-				}
+				seg.addProperty("kills", exact);
+				seg.addProperty("assignment", exact);
+				setNoLootKills(seg, exact - logged);
 			}
 			seg.addProperty("open", false);
 			seg.addProperty("ts", nowSec());
@@ -1286,7 +1511,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					seg.has("noLootKills") ? asLong(seg.get("noLootKills")) : 0,
 					seg.has("ts") ? asLong(seg.get("ts")) : 0,
 					value,
-					seg.has("open") && seg.get("open").getAsBoolean()));
+					// Only the newest segment can be in progress: an older one without a
+					// completion was parked or its completion was missed, and is done.
+					i == tasks.size() - 1 && isOpen(seg)));
 			}
 			return new chronicle.ChronicleApiClient.SlayerJourney(
 				(int) (sl.has("completed") ? asLong(sl.get("completed")) : 0),
@@ -2324,7 +2551,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * monsters all fail is kept with zero kills rather than deleted: it may be a
 	 * loot-less completion.
 	 *
-	 * <p>Only the open segment is examined. A closed one was either imported from the
+	 * <p>Only open segments are examined. A closed one was either imported from the
 	 * server, which filtered it with the id tier this name-only store cannot re-run
 	 * (Prifddinas guards on an Elves task are "Guard" here and would be thrown out),
 	 * or its count was already trued up by the completion line. Callers hold

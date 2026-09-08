@@ -2818,9 +2818,12 @@ class ChroniclePanel extends PluginPanel
 	 * not every creature ever killed.
 	 *
 	 * <p>Kill counts only entered the daily baseline later, so a period bounded
-	 * by an older line reports the standing count and no gain.
+	 * by an older line measures each count from the first line that carries it
+	 * ({@code earliestKc}), and a period wholly before that reports the standing
+	 * count and no gain.
 	 */
-	private void addKillCounts(JPanel p, Map<String, Long> beforeKc, Map<String, Long> nowKc)
+	private void addKillCounts(JPanel p, Map<String, Long> beforeKc,
+		Map<String, Long> earliestKc, Map<String, Long> nowKc)
 	{
 		Map<String, Long> standing = plugin.killCounts();
 		if (standing.isEmpty())
@@ -2829,18 +2832,7 @@ class ChroniclePanel extends PluginPanel
 				+ "collection log and from what the drop ledger witnesses."));
 			return;
 		}
-		Map<String, Long> gained = new LinkedHashMap<>();
-		if (beforeKc != null && !beforeKc.isEmpty() && nowKc != null)
-		{
-			for (Map.Entry<String, Long> e : nowKc.entrySet())
-			{
-				Long was = beforeKc.get(e.getKey());
-				if (was != null && e.getValue() - was > 0)
-				{
-					gained.put(e.getKey(), e.getValue() - was);
-				}
-			}
-		}
+		Map<String, Long> gained = HistoryLog.gained(beforeKc, earliestKc, nowKc);
 		if (!gained.isEmpty())
 		{
 			long total = 0;
@@ -3223,11 +3215,15 @@ class ChroniclePanel extends PluginPanel
 		java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> hist = historySpine;
 
 		// baselines bounding the period: closing state the day before it began,
-		// and the last close inside it
+		// and the last close inside it. With nothing closed before the window the
+		// earliest line on record stands in, the way the site measured from its
+		// first snapshot: a fresh record's first week reads from its first day.
 		Map.Entry<java.time.LocalDate, HistoryLog.Baseline> before =
 			hist.floorEntry(pStart.minusDays(1));
+		Map.Entry<java.time.LocalDate, HistoryLog.Baseline> from =
+			HistoryLog.windowStart(hist, pStart, end);
 		Map.Entry<java.time.LocalDate, HistoryLog.Baseline> at = hist.floorEntry(end);
-		if (at == null || (before != null && at.getKey().equals(before.getKey())))
+		if (at == null || from == null || at.getKey().equals(from.getKey()))
 		{
 			String empty;
 			if (hist.isEmpty())
@@ -3252,67 +3248,56 @@ class ChroniclePanel extends PluginPanel
 		}
 		else
 		{
-			// Say so when the nearest earlier baseline sits well before the
-			// window, or a month of xp reads as one week's gain.
-			if (before != null && before.getKey().isBefore(pStart.minusDays(1)))
+			// Say what the period is measured from when it is not the eve of the
+			// window: the nearest earlier baseline sitting well before it (a month
+			// of xp would read as one week's gain), or the earliest line on
+			// record when nothing predates the window at all.
+			if (before == null)
+			{
+				p.add(note("Measured since " + from.getKey().format(FULL_DAY)
+					+ ", the earliest baseline on record."));
+				p.add(vgap(4));
+			}
+			else if (before.getKey().isBefore(pStart.minusDays(1)))
 			{
 				p.add(note("Measured since " + before.getKey().format(FULL_DAY)
 					+ ", the nearest earlier baseline."));
 				p.add(vgap(4));
 			}
-			Map<String, Long> beforeSk = before != null ? before.getValue().skills
-				: new LinkedHashMap<>();
+			// A key the start line does not carry measures from its earliest
+			// recorded value, never from zero: imported baselines predate newer
+			// skills and carry no counters, and absence-as-zero painted a
+			// lifetime as one week's gain. The first line that holds the key is
+			// a recorded value, and the site measured counters the same way.
+			HistoryLog.Baseline earliest = HistoryLog.earliest(hist, at.getKey());
 			List<Map.Entry<String, Long>> gains = new ArrayList<>();
-			for (Map.Entry<String, Long> e : at.getValue().skills.entrySet())
+			for (Map.Entry<String, Long> e : HistoryLog.gained(from.getValue().skills,
+				earliest.skills, at.getValue().skills).entrySet())
 			{
-				if ("overall".equals(e.getKey()))
+				if (!"overall".equals(e.getKey()))
 				{
-					continue;
-				}
-				if (before == null || !beforeSk.containsKey(e.getKey()))
-				{
-					// A skill missing from the before-side has nothing to measure
-					// against: imported baselines predate newer skills, and
-					// absence-as-zero painted a lifetime as one week's gain.
-					continue;
-				}
-				long d = e.getValue() - beforeSk.get(e.getKey());
-				if (d > 0)
-				{
-					gains.add(new java.util.AbstractMap.SimpleEntry<>(e.getKey(), d));
+					gains.add(e);
 				}
 			}
 			gains.sort(Map.Entry.<String, Long>comparingByValue().reversed());
 			if (histBosses)
 			{
-				addKillCounts(p, before != null ? before.getValue().kcs : null,
-					at.getValue().kcs);
+				addKillCounts(p, from.getValue().kcs, earliest.kcs, at.getValue().kcs);
 			}
 			else
 			{
 				addSkillGrid(p, gains, at.getValue().skills);
 			}
 
-			Map<String, Long> beforeCt = before != null ? before.getValue().counters
-				: new LinkedHashMap<>();
 			List<Map.Entry<String, Long>> movers = new ArrayList<>();
-			// Imported baselines carry no counters: a key absent from the
-			// before-side is no data, not a zero. Same rule as the xp above.
-			if (before != null && !beforeCt.isEmpty())
+			for (Map.Entry<String, Long> e : HistoryLog.gained(from.getValue().counters,
+				earliest.counters, at.getValue().counters).entrySet())
 			{
-				for (Map.Entry<String, Long> e : at.getValue().counters.entrySet())
+				if (!LocalStore.MAX_KEYS.contains(e.getKey())
+					&& !StatRegistry.hidden(e.getKey())
+					&& !StatRegistry.isFloor(e.getKey()))
 				{
-					if (!beforeCt.containsKey(e.getKey()))
-					{
-						continue;
-					}
-					long d = e.getValue() - beforeCt.get(e.getKey());
-					if (d > 0 && !LocalStore.MAX_KEYS.contains(e.getKey())
-						&& !StatRegistry.hidden(e.getKey())
-						&& !StatRegistry.isFloor(e.getKey()))
-					{
-						movers.add(new java.util.AbstractMap.SimpleEntry<>(e.getKey(), d));
-					}
+					movers.add(e);
 				}
 			}
 			movers.sort(Map.Entry.<String, Long>comparingByValue().reversed());
