@@ -91,9 +91,9 @@ the source's view from anywhere.
 ## Dependencies
 
 Two of RuneLite's built-in plugins, declared with `@PluginDependency`: **Slayer**, so kills can be
-tagged on-task, and **Loot Tracker**, whose event carries chest and casket loot and whose stored
+tagged on-task, and **Loot Tracker**, whose event carries chest, casket and pickpocket loot and whose stored
 archive a late install inherits. Disable either and only that slice stops — on-task tagging
-without Slayer, chest and casket loot without Loot Tracker — while everything else keeps
+without Slayer, chest, casket and pickpocket loot without Loot Tracker — while everything else keeps
 working. The panel does not flag it, so RuneLite's own plugin list is where to check. No
 third-party plugins are needed.
 

@@ -34,7 +34,9 @@ import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
+import net.runelite.api.Tile;
 import net.runelite.api.TileItem;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
@@ -43,6 +45,7 @@ import net.runelite.api.events.InteractingChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.ItemDespawned;
 import net.runelite.api.events.ItemSpawned;
+import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
@@ -52,7 +55,6 @@ import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.events.ServerNpcLoot;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.loottracker.LootReceived;
@@ -144,6 +146,10 @@ public class ChronicleEventCapture
 		"[Pp]ersonal best[:!]? (?<pb>\\d+(?::\\d{2})+(?:\\.\\d{1,2})?)");
 	private static final String NEW_PB_MARK = "(new personal best)";
 
+	// A successful pickpocket, the core Loot Tracker's expression verbatim. The game
+	// posts NPC loot for it as well, which onServerNpcLoot drops by tick.
+	static final Pattern PICKPOCKET = Pattern.compile("You pick (the )?(?<target>.+)'s? pocket.*");
+
 	private final Client client;
 	private final ClientThread clientThread;
 	private final ConfigManager configManager;
@@ -171,6 +177,9 @@ public class ChronicleEventCapture
 	private static final int ATTACKER_MEMORY_TICKS = 50;
 	private String lastAttackerName;
 	private int lastAttackerTick = -1;
+	// the tick of the last successful pickpocket line. The NPC loot the game posts
+	// for it lands on the same tick and is not a kill.
+	private int pickpocketTick = -1;
 
 	// ── GIM group storage ─────────────────────────────────────────────────
 	// Deposits/withdrawals come from diffing the shared bank's TEMP container
@@ -181,31 +190,11 @@ public class ChronicleEventCapture
 	private Map<Integer, Integer> groupStorageBaseline;
 	private Map<Integer, Integer> groupStorageCurrent;
 
-	// ── Loot reconciliation ───────────────────────────────────────────────
-	// Both NpcLootReceived and ServerNpcLoot can fire for one kill. The client-side
-	// ground scan mis-attributes the pile when several NPCs die on a tick; the game's
-	// own loot script is right every time. Hold each client copy briefly and drop it
-	// if a server event covered the same (npcId, tick).
-	private static final int SERVER_LOOT_WINDOW_TICKS = 2;
-	// (npcId, tick) pairs a ServerNpcLoot reported. Keyed per tick: repeated kills of
-	// the same NPC mustn't cross-cover a genuinely uncovered one.
-	private final Set<Long> serverLootKeys = new HashSet<>();
-	private final List<PendingLoot> pendingClientLoot = new ArrayList<>();
-
-	// an NpcLootReceived built at kill time, waiting on the server-vs-client verdict.
-	private static final class PendingLoot
-	{
-		private final int npcId;
-		private final int tick;
-		private final JsonObject data;
-
-		private PendingLoot(int npcId, int tick, JsonObject data)
-		{
-			this.npcId = npcId;
-			this.tick = tick;
-			this.data = data;
-		}
-	}
+	// ── NPC loot ──────────────────────────────────────────────────────────
+	// NPC loot comes only from the game's own loot script (ServerNpcLoot), the way the
+	// core Loot Tracker records it. The despawn-time tile sweep it replaced had no
+	// ownership filter, so it booked a player's own drop or a neighbouring kill's
+	// stack as the NPC's; the only rows it ever added beyond the script's were those.
 
 	// ── Untaken loot ───────────────────────────────────────────────────────
 	// The player's own ground items from a kill, keyed by TileItem identity (the same
@@ -217,13 +206,37 @@ public class ChronicleEventCapture
 	private static final int KILL_ARM_TICKS = 3;
 	private final Map<TileItem, GroundLoot> groundLoot = new IdentityHashMap<>();
 	// Self-owned items seen on recent ticks, awaiting a kill to confirm them as loot.
-	// RuneLite fires ItemSpawned BEFORE the kill's NpcLootReceived, so the spawn
-	// can't decide; reconcileKillLoot() matches them up at GameTick.
+	// LootManager posts the kill's ServerNpcLoot after the tick's ItemSpawned events
+	// (usually from its own GameTick), so the spawn can't decide; reconcileKillLoot()
+	// matches them up at GameTick.
 	private final Map<TileItem, GroundLoot> pendingSelf = new IdentityHashMap<>();
 	private final List<UntakenItem> untakenBatch = new ArrayList<>();
 	// The kills of the last few ticks, each carrying the source name stamped onto the
 	// loot it produced so the Uncollected ledger can say where things were left.
 	private final List<RecentKill> recentKills = new ArrayList<>();
+	// The player's own "Drop" clicks of the last couple of ticks. The game confirms a
+	// drop with a self-owned spawn at the player's feet, which by tick alone looks
+	// like kill loot; each click is spent by the first spawn it explains. A drop that
+	// waits on the valuable-item warning is confirmed from that dialog, not by a Drop
+	// click, so it is not remembered here.
+	private static final int DROP_WINDOW_TICKS = 2;
+	private final List<RecentDrop> recentDrops = new ArrayList<>();
+
+	private static final class RecentDrop
+	{
+		private final int id;
+		private final int tick;
+		// where the player stood at the click: the drop lands there, and a running
+		// player has moved on by the time the spawn is read
+		private final WorldPoint at;
+
+		private RecentDrop(int id, int tick, WorldPoint at)
+		{
+			this.id = id;
+			this.tick = tick;
+			this.at = at;
+		}
+	}
 
 	// a kill of ours, remembered long enough for its ground items to find it.
 	private static final class RecentKill
@@ -345,6 +358,7 @@ public class ChronicleEventCapture
 		lastKillTimeTick = -1;
 		lastAttackerName = null;
 		lastAttackerTick = -1;
+		pickpocketTick = -1;
 		groupStorageOpen = false;
 		groupStorageBaseline = null;
 		groupStorageCurrent = null;
@@ -362,9 +376,7 @@ public class ChronicleEventCapture
 		groundLoot.clear();
 		pendingSelf.clear();
 		recentKills.clear();
-		// loot reconciliation is tick-scoped to the scene we're leaving.
-		pendingClientLoot.clear();
-		serverLootKeys.clear();
+		recentDrops.clear();
 	}
 
 	// Emit left-behind loot as LOOT_UNTAKEN, one event per SOURCE so the Uncollected
@@ -411,9 +423,10 @@ public class ChronicleEventCapture
 	}
 
 	// Promote buffered self-owned spawns to tracked kill loot when they landed within
-	// KILL_ARM_TICKS of a kill. Runs at GameTick, once both the ItemSpawned and the
-	// later-firing NpcLootReceived are in. A spawn that never sits near a kill is a
-	// manual drop and is discarded.
+	// KILL_ARM_TICKS of a kill. Runs at GameTick and keeps a spawn pending for that
+	// window, so the later-firing ServerNpcLoot (posted by LootManager, usually from
+	// its GameTick) has landed by the time it is judged. A spawn that never sits near a
+	// kill is a manual drop and is discarded.
 	private void reconcileKillLoot()
 	{
 		if (pendingSelf.isEmpty())
@@ -475,52 +488,26 @@ public class ChronicleEventCapture
 
 	// ── LOOT ──────────────────────────────────────────────────────────────
 
-	@Subscribe
-	public void onNpcLootReceived(NpcLootReceived event)
-	{
-		NPC npc = event.getNpc();
-		if (npc == null)
-		{
-			return;
-		}
-		JsonObject data = new JsonObject();
-		data.addProperty("source", npc.getName());
-		data.addProperty("npcId", npc.getId());
-		data.addProperty("category", "NPC");
-		data.addProperty("lootSource", "client");   // ground-scan; superseded by server
-		Integer kc = recentKc.get(cleanKey(npc.getName()));
-		if (kc != null)
-		{
-			data.addProperty("killCount", kc);
-		}
-		data.add("items", itemsToJson(event.getItems()));
-		stampSlayer(data, npc.getName(), npc.getId());
-		// Hold it: a ServerNpcLoot for this same kill supersedes this ground-scan copy.
-		// flushPendingClientLoot() emits it a couple of ticks later only if no server
-		// event covered the kill.
-		pendingClientLoot.add(new PendingLoot(npc.getId(), client.getTickCount(), data));
-		armKill(npc.getName());
-	}
-
-	// The exact per-kill drop from the game's loottracker_add_loot script. Emits
-	// straight away and marks the kill's (npcId, tick) so flushPendingClientLoot()
-	// drops the matching ground-scan copy. For newer content (the Mad Angel) this is
-	// the only loot event. The NPC comes from the composition because the actor has
-	// usually despawned by now.
+	// The exact per-kill drop from the game's loottracker_add_loot script, and the only
+	// NPC loot event this plugin listens to. Emits straight away. The NPC comes from
+	// the composition because the actor has usually despawned by now.
 	@Subscribe
 	public void onServerNpcLoot(ServerNpcLoot event)
 	{
+		if (client.getTickCount() == pickpocketTick)
+		{
+			return;   // the game posts NPC loot for a pickpocket too; not a kill
+		}
 		NPCComposition comp = event.getComposition();
 		if (comp == null)
 		{
 			return;
 		}
-		serverLootKeys.add(slKey(comp.getId(), client.getTickCount()));
 		JsonObject data = new JsonObject();
 		data.addProperty("source", comp.getName());
 		data.addProperty("npcId", comp.getId());
 		data.addProperty("category", "NPC");
-		data.addProperty("lootSource", "server");
+		data.addProperty("lootSource", "server");   // the site protects rows carrying it
 		Integer kc = recentKc.get(cleanKey(comp.getName()));
 		if (kc != null)
 		{
@@ -533,70 +520,51 @@ public class ChronicleEventCapture
 		armKill(comp.getName());
 	}
 
-	// Emit held ground-scan loot once its kill is old enough that the server event, if
-	// there is one, has landed. A kill the loot script covered has its ground-scan copy
-	// dropped here, which keeps one physical kill from being recorded twice.
-	private void flushPendingClientLoot()
+	// Only "Drop" on an inventory item puts an item on the ground (Destroy and Release
+	// do not), so that option alone is remembered.
+	@Subscribe
+	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
-		if (pendingClientLoot.isEmpty())
+		if (!event.isItemOp() || !"Drop".equals(event.getMenuOption()) || event.getItemId() <= 0)
 		{
 			return;
 		}
 		int now = client.getTickCount();
-		List<PendingLoot> survivors = new ArrayList<>();
-		for (PendingLoot pl : pendingClientLoot)
+		Player me = client.getLocalPlayer();
+		recentDrops.removeIf(d -> now - d.tick > DROP_WINDOW_TICKS);
+		recentDrops.add(new RecentDrop(event.getItemId(), now,
+			me == null ? null : me.getWorldLocation()));
+	}
+
+	// Whether a self-owned spawn is the ground copy of a recent "Drop" click: the same
+	// item id within DROP_WINDOW_TICKS of the click, on the tile the player stands on
+	// now or stood on at the click, when the positions can be read. When they can't,
+	// id and tick decide, since missing a real drop is the cheaper error. Spends the
+	// click it matches.
+	private boolean isOwnDrop(TileItem it, Tile tile, int now)
+	{
+		if (recentDrops.isEmpty())
 		{
-			// A relog rewinds getTickCount(); if now < pl.tick, decide immediately
-			// rather than holding forever.
-			if (now >= pl.tick && now - pl.tick < SERVER_LOOT_WINDOW_TICKS)
+			return false;
+		}
+		WorldPoint at = tile == null ? null : tile.getWorldLocation();
+		Player me = client.getLocalPlayer();
+		WorldPoint mine = me == null ? null : me.getWorldLocation();
+		for (int i = 0; i < recentDrops.size(); i++)
+		{
+			RecentDrop d = recentDrops.get(i);
+			if (d.id != it.getId() || now < d.tick || now - d.tick > DROP_WINDOW_TICKS)
 			{
-				survivors.add(pl);   // window still open; give the server event time
 				continue;
 			}
-			if (!serverCovered(pl.npcId, pl.tick))
+			if (at != null && mine != null && !at.equals(mine) && !at.equals(d.at))
 			{
-				// no loot-script event for this NPC; the ground scan is all we have.
-				attachKillTime(pl.data);
-				emit("LOOT", pl.data);
+				continue;   // not at our feet, so a kill's
 			}
-			// else ServerNpcLoot already reported this kill; drop the copy.
-		}
-		pendingClientLoot.clear();
-		pendingClientLoot.addAll(survivors);
-	}
-
-	// Drop server-loot keys past the window in which a held client copy could still
-	// need them. Runs every tick, not off the flush above: content the ground scan
-	// never fires for leaves pendingClientLoot empty, and a prune reached only through
-	// it would hoard every kill of the session.
-	private void expireServerLootKeys()
-	{
-		int now = client.getTickCount();
-		serverLootKeys.removeIf(k -> now - (int) (k & 0xFFFFFFFFL) > SERVER_LOOT_WINDOW_TICKS + 2);
-	}
-
-	private boolean serverCovered(int npcId, int killTick)
-	{
-		return serverCoveredIn(serverLootKeys, npcId, killTick, SERVER_LOOT_WINDOW_TICKS);
-	}
-
-	// Looks forward from the kill's own tick only, so a later kill of the same NPC
-	// can't retroactively cover an earlier uncovered one.
-	static boolean serverCoveredIn(Set<Long> keys, int npcId, int killTick, int window)
-	{
-		for (int t = killTick; t <= killTick + window; t++)
-		{
-			if (keys.contains(slKey(npcId, t)))
-			{
-				return true;
-			}
+			recentDrops.remove(i);
+			return true;
 		}
 		return false;
-	}
-
-	static long slKey(int npcId, int tick)
-	{
-		return ((long) npcId << 32) | (tick & 0xFFFFFFFFL);
 	}
 
 	@Subscribe
@@ -619,10 +587,15 @@ public class ChronicleEventCapture
 			return;
 		}
 		int now = client.getTickCount();
-		// Buffer only: the kill's NpcLootReceived fires AFTER this, so kill loot and a
-		// manual drop are still indistinguishable. reconcileKillLoot() decides at
-		// GameTick. The account is read here while we're certainly logged in as it,
-		// since left-behind items go out after the next login, which may be another's.
+		if (isOwnDrop(it, event.getTile(), now))
+		{
+			return;   // the game confirming a Drop click, not kill loot
+		}
+		// Buffer only: the kill's ServerNpcLoot fires AFTER this (LootManager posts it
+		// later in the tick), so kill loot and a manual drop are still indistinguishable.
+		// reconcileKillLoot() decides at GameTick. The account is read here while we're
+		// certainly logged in as it, since left-behind items go out after the next
+		// login, which may be another's.
 		pendingSelf.put(it, new GroundLoot(it.getId(), it.getQuantity(),
 			it.getDespawnTime(), now, group, localName()));
 	}
@@ -795,7 +768,7 @@ public class ChronicleEventCapture
 	@Subscribe
 	public void onLootReceived(LootReceived event)
 	{
-		// NPC loot arrives via onNpcLootReceived and would double-count here. PLAYER
+		// NPC loot arrives via onServerNpcLoot and would double-count here. PLAYER
 		// loot is dropped outright: on a PK the record carries the victim's display
 		// name and their inventory, and this plugin only ever records its own account.
 		if (event.getType() == LootRecordType.NPC || event.getType() == LootRecordType.PLAYER)
@@ -1080,6 +1053,14 @@ public class ChronicleEventCapture
 		}
 		String msg = Text.removeTags(message.getMessage());
 
+		// A pickpocket line only marks its tick, for onServerNpcLoot. The PICKPOCKET
+		// entry itself arrives from the Loot Tracker through onLootReceived.
+		if (PICKPOCKET.matcher(msg).matches())
+		{
+			pickpocketTick = client.getTickCount();
+			return;
+		}
+
 		// Diary completion is usually a MESBOX line, but the same congratulatory line
 		// can arrive as a plain GAMEMESSAGE, so check both.
 		Matcher d = DIARY_COMPLETION.matcher(msg);
@@ -1313,8 +1294,6 @@ public class ChronicleEventCapture
 	public void onGameTick(GameTick tick)
 	{
 		reconcileKillLoot();
-		flushPendingClientLoot();
-		expireServerLootKeys();
 		flushUntakenLoot();
 
 		// expire a pet prime that never got a name.

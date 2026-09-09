@@ -259,6 +259,25 @@ public class ChatPatternTest
 	}
 
 	@Test
+	public void pickpocket()
+	{
+		// the handler uses matches(), as the core Loot Tracker does with this expression.
+		for (String line : new String[]{
+			"You pick the man's pocket.",
+			"You pick the Master Farmer's pocket.",
+			"You pick the H.A.M. Member's pocket."})
+		{
+			assertTrue("expected to match: " + line,
+				ChronicleEventCapture.PICKPOCKET.matcher(line).matches());
+		}
+		assertFalse(ChronicleEventCapture.PICKPOCKET.matcher(
+			"You fail to pick the man's pocket.").matches());
+		Matcher m = ChronicleEventCapture.PICKPOCKET.matcher("You pick the Master Farmer's pocket.");
+		assertTrue(m.matches());
+		assertEquals("Master Farmer", m.group("target"));
+	}
+
+	@Test
 	public void killDuration()
 	{
 		matches(ChronicleEventCapture.KILL_DURATION,
