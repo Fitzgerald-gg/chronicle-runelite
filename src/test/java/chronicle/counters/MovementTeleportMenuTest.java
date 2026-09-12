@@ -180,6 +180,140 @@ public class MovementTeleportMenuTest
 		return out;
 	}
 
+	/**
+	 * A click on a row that is only a hitbox: the row you click carries no words
+	 * and the label sits at the same index of a list beside it, the way the
+	 * nexus's ROWS and TEXT1 are built.
+	 */
+	private void hitboxRowClick(int clickedId, int textId, int index, String text,
+		String option)
+	{
+		Widget bare = Mockito.mock(Widget.class);
+		Mockito.when(bare.getText()).thenReturn("");
+		Widget[] bareKids = new Widget[index + 1];
+		bareKids[index] = bare;
+		Widget clicked = Mockito.mock(Widget.class);
+		Mockito.when(clicked.getChildren()).thenReturn(bareKids);
+		Mockito.when(client.getWidget(clickedId)).thenReturn(clicked);
+
+		Widget cell = Mockito.mock(Widget.class);
+		Mockito.when(cell.getText()).thenReturn(text);
+		Widget[] cells = new Widget[index + 1];
+		cells[index] = cell;
+		Widget list = Mockito.mock(Widget.class);
+		Mockito.when(list.getChildren()).thenReturn(cells);
+		Mockito.when(client.getWidget(textId)).thenReturn(list);
+
+		MenuEntry entry = Mockito.mock(MenuEntry.class);
+		Mockito.when(entry.getOption()).thenReturn(option);
+		Mockito.when(entry.getTarget()).thenReturn("");
+		Mockito.when(entry.getParam0()).thenReturn(index);
+		Mockito.when(entry.getParam1()).thenReturn(clickedId);
+		tracker.onMenuOptionClicked(new MenuOptionClicked(entry));
+	}
+
+	// the nth component of the menu's own interface that no other stub in this
+	// test has taken, in the order the scan walks them
+	private static int freeMenuComponent(int nth)
+	{
+		int group = InterfaceID.Menu.LJ_LAYER1 >>> 16;
+		int found = 0;
+		for (int child = 0; ; child++)
+		{
+			int id = (group << 16) | child;
+			if (id == InterfaceID.Menu.LJ_LAYER1 || id == InterfaceID.Menu.LJ_LAYER2)
+			{
+				continue;
+			}
+			if (found++ == nth)
+			{
+				return id;
+			}
+		}
+	}
+
+	// a component with no child list at all, carrying one line of its own: a
+	// title, which answers for every index if anything lets it
+	private void headerReading(int componentId, String text)
+	{
+		Widget w = Mockito.mock(Widget.class);
+		Mockito.when(w.getChildren()).thenReturn(null);
+		Mockito.when(w.getText()).thenReturn(text);
+		Mockito.when(client.getWidget(componentId)).thenReturn(w);
+	}
+
+	// a list beside the rows carrying `text` at `index`
+	private void listReading(int componentId, int index, String text)
+	{
+		Widget cell = Mockito.mock(Widget.class);
+		Mockito.when(cell.getText()).thenReturn(text);
+		Widget[] cells = new Widget[index + 1];
+		cells[index] = cell;
+		Widget list = Mockito.mock(Widget.class);
+		Mockito.when(list.getChildren()).thenReturn(cells);
+		Mockito.when(client.getWidget(componentId)).thenReturn(list);
+	}
+
+	@Test
+	public void theRowsPlaceBeatsAHeadersTextAndAKeybindColumn()
+	{
+		// a real menu is more than two components: a title above it, a column of
+		// keybind numbers, then the labels. The place must come from the row's own
+		// index in the list that holds places, not from the first text anywhere in
+		// the interface.
+		headerReading(freeMenuComponent(0), "Varrock");          // a title, no rows
+		listReading(freeMenuComponent(1), 3, "4:");              // the keybind column
+		click("Teleport", "Construct. cape(t)");
+		menuShowing(InterfaceID.Menu.LJ_LAYER2, true);
+		hitboxRowClick(InterfaceID.Menu.LJ_LAYER1, freeMenuComponent(2), 3,
+			"Hosidius", "Continue");
+		menuShowing(InterfaceID.Menu.LJ_LAYER2, false);
+		jumpAt(4);
+
+		assertEquals(1, stat(TELEPORTS_HOSIDIUS));
+		assertEquals(0, stat(TELEPORTS_VARROCK));
+		assertEquals(1, stat(TELEPORTS_TOTAL));
+	}
+
+	@Test
+	public void aRowThatIsOnlyAHitboxTakesItsPlaceFromTheListBesideIt()
+	{
+		// report 2, raised twice: every construction cape teleport but the house
+		// one landed with nowhere against it. The cape's list is built like the
+		// nexus, a column of bare hitboxes with the words in a list beside them,
+		// so reading only the row that was clicked found no place and the teleport
+		// was credited to its means alone.
+		click("Teleport", "Construct. cape(t)");
+		menuShowing(InterfaceID.Menu.LJ_LAYER2, true);
+		idleUntil(6);
+		hitboxRowClick(InterfaceID.Menu.LJ_LAYER1, freeMenuComponent(0), 3,
+			"Hosidius", "Continue");
+		menuShowing(InterfaceID.Menu.LJ_LAYER2, false);
+		jumpAt(7);
+
+		assertEquals(1, stat(TELEPORTS_HOSIDIUS));
+		assertEquals(1, stat(TELEPORTS_VIA_CAPE));
+		assertEquals(1, stat(TELEPORTS_TOTAL));
+	}
+
+	@Test
+	public void aListBesideTheRowsNamesNoPlaceForARowThatIsNotThere()
+	{
+		// the scan reads one index, not the whole list: a row the record cannot
+		// place still credits the teleport and its means, and claims no other
+		// row's destination
+		click("Teleport", "Construct. cape(t)");
+		menuShowing(InterfaceID.Menu.LJ_LAYER2, true);
+		hitboxRowClick(InterfaceID.Menu.LJ_LAYER1, freeMenuComponent(0), 2,
+			"Somewhere the table has never heard of", "Continue");
+		menuShowing(InterfaceID.Menu.LJ_LAYER2, false);
+		jumpAt(4);
+
+		assertEquals(1, stat(TELEPORTS_TOTAL));
+		assertEquals(1, stat(TELEPORTS_VIA_CAPE));
+		assertEquals(places().toString(), 0, places().size());
+	}
+
 	@Test
 	public void capeListRowChosenAfterTheWindowStillCreditsItsPlace()
 	{

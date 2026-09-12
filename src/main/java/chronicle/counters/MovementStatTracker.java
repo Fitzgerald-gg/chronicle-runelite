@@ -530,8 +530,58 @@ public class MovementStatTracker implements StatTracker
 	// first when the click's target names an item as well.
 	private String rowLabel(MenuOptionClicked event, String optLow, String tgtLow)
 	{
-		String row = widgetChildText(event.getWidgetId(), event.getParam0()).toLowerCase();
+		String row = menuRowText(event.getWidgetId(), event.getParam0()).toLowerCase();
 		return (row + " " + optLow + " " + tgtLow).trim();
+	}
+
+	// how far along an interface to look for the list that holds a row's label
+	private static final int MENU_CHILD_SCAN = 24;
+
+	/**
+	 * The label of row {@code index}, for a list whose rows may be bare hitboxes.
+	 * The nexus is built that way already: you click ROWS and the words live at
+	 * the same index of a TEXT1 list beside it. A cape's list is the same shape,
+	 * so reading only the clicked component finds no place, and the teleport was
+	 * credited to its means with nowhere against it. The clicked component is
+	 * still read first; failing that, the interface is walked for a list carrying
+	 * a place at that index.
+	 */
+	private String menuRowText(int componentId, int index)
+	{
+		String own = widgetChildText(componentId, index);
+		if (index < 0 || matchDestinationKey(own.toLowerCase()) != null)
+		{
+			return own;
+		}
+		int group = componentId >>> 16;
+		for (int child = 0; child < MENU_CHILD_SCAN; child++)
+		{
+			String beside = rowOfList((group << 16) | child, index);
+			if (!beside.isEmpty() && matchDestinationKey(beside.toLowerCase()) != null)
+			{
+				return beside;
+			}
+		}
+		return own;
+	}
+
+	// text at `index` of a component's own child list, and nothing else. The
+	// component's own text is no use here: a header reading "Varrock" would answer
+	// for every row in the list.
+	private String rowOfList(int componentId, int index)
+	{
+		Widget w = client.getWidget(componentId);
+		if (w == null)
+		{
+			return "";
+		}
+		Widget[] kids = w.getChildren();
+		if (kids == null || index >= kids.length || kids[index] == null
+			|| kids[index].getText() == null)
+		{
+			return "";
+		}
+		return Text.removeTags(kids[index].getText()).trim();
 	}
 
 	// whether a chat menu is on screen: the chatbox options (group 219) or the
