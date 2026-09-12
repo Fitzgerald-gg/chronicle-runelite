@@ -94,7 +94,9 @@ public class HistoryProgressTest
 			"itemsDroppedValue", 18, "resourcesDroppedValue", 5, "resourcesGatheredValue", 17,
 			"consumedValue", 16, "coinsFromAlchemy", 15, "coinsEarnedAtShops", 14,
 			"coinsSpentAtShops", 13, "distanceWalked", 12, "distanceRan", 11,
-			"clogSlotsObtained", 9, "deaths", 8, "damageDealtMagic", 1, "damageDealtRanged", 2,
+			"clogSlotsObtained", 9, "levelsGained", 26, "combatAchievements", 25,
+			"diariesCompleted", 24, "questsCompleted", 23, "petsObtained", 22,
+			"deaths", 8, "damageDealtMagic", 1, "damageDealtRanged", 2,
 			"damageDealtMelee", 4, "damageDealt", 7, "slayerKills", 5, "slayerTasksCompleted", 6,
 			"kills", 3,
 			"lootLeftValue", 5, "lootLeftCount", 4, "lootValue", 2000, "dropsReceived", 1);
@@ -108,7 +110,8 @@ public class HistoryProgressTest
 			"Drops received", "Loot value", "Left on the floor", "Loot kept", "Kills",
 			"Slayer tasks completed", "Slayer kills", "Damage dealt", "· by melee", "· by ranged",
 			"· by magic",
-			"Deaths", "Collection log slots", "Distance run", "Distance walked",
+			"Deaths", "Pets", "Quests completed", "Diaries completed", "Combat achievements",
+			"Levels gained", "Collection log slots", "Distance run", "Distance walked",
 			"Spent at shops", "Earned at shops", "Coins from alchemy", "Consumed value",
 			"Gathered", "Value dropped"),
 			labels(p.summary()));
@@ -117,6 +120,8 @@ public class HistoryProgressTest
 		assertTrue(row(p, "Consumed value").gp());
 		assertTrue(row(p, "Spent at shops").gp());
 		assertFalse(row(p, "Deaths").gp());
+		assertFalse(row(p, "Pets").gp());
+		assertFalse(row(p, "Levels gained").gp());
 		assertFalse(row(p, "Distance run").gp());
 
 		// a figure that did not move is no row; a zero is not a row either
@@ -130,11 +135,51 @@ public class HistoryProgressTest
 		// one table names a key for both tabs: the summary never words a key
 		// itself
 		HistoryProgress p = of(everything());
-		assertEquals(21, p.summary().size());
+		assertEquals(26, p.summary().size());
 		for (HistoryProgress.Row r : p.summary())
 		{
 			assertEquals(r.key(), StatRegistry.label(r.key()), r.label());
 		}
+	}
+
+	@Test
+	public void theFeedsFiguresLineUpAfterDeathsAndNeverFile()
+	{
+		// the five keys the History tab counts off the feed alone: summary keys
+		// every one, so a journal carrying a counter by that name never files it
+		// as a section
+		String[] feed = {"petsObtained", "questsCompleted", "diariesCompleted",
+			"combatAchievements", "levelsGained"};
+		for (String key : feed)
+		{
+			assertTrue(key, HistoryProgress.summaryKey(key));
+		}
+		// handed in as retroactive figures over a spine that never carried them,
+		// they make their own lines, right after Deaths and before the log slots,
+		// in the order they were named and at the figure each was given
+		HistoryProgress p = HistoryProgress.of(map("deaths", 3, "clogSlotsObtained", 9),
+			StatRegistry::isGp,
+			map("levelsGained", 6, "combatAchievements", 4, "diariesCompleted", 1,
+				"questsCompleted", 2, "petsObtained", 5));
+		assertEquals(Arrays.asList("Deaths", "Pets", "Quests completed", "Diaries completed",
+			"Combat achievements", "Levels gained", "Collection log slots"), labels(p.summary()));
+		assertEquals(5, row(p, "Pets").value());
+		assertEquals(2, row(p, "Quests completed").value());
+		assertEquals(1, row(p, "Diaries completed").value());
+		assertEquals(4, row(p, "Combat achievements").value());
+		assertEquals(6, row(p, "Levels gained").value());
+		assertTrue(p.sections().isEmpty());
+
+		// a zero for one of them is no line, and a zero for deaths takes the
+		// spine's line away too: the feed said nothing happened
+		HistoryProgress zero = HistoryProgress.of(map("deaths", 3, "kills", 2),
+			StatRegistry::isGp, map("deaths", 0, "petsObtained", 0, "questsCompleted", 1));
+		assertEquals(Arrays.asList("Kills", "Quests completed"), labels(zero.summary()));
+
+		// as counters they are summary lines all the same, never sections
+		HistoryProgress counted = of(map("petsObtained", 1, "levelsGained", 2, "hitsMissed", 3));
+		assertEquals(Arrays.asList("Pets", "Levels gained"), labels(counted.summary()));
+		assertEquals(Collections.singletonList("Combat"), sectionNames(counted));
 	}
 
 	@Test
@@ -240,7 +285,7 @@ public class HistoryProgressTest
 	{
 		Map<String, Long> c = everything();
 		HistoryProgress p = of(c);
-		assertEquals(21, p.summary().size());
+		assertEquals(26, p.summary().size());
 		assertTrue(p.sections().toString(), p.sections().isEmpty());
 		for (String k : c.keySet())
 		{

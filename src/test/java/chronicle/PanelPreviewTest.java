@@ -517,15 +517,17 @@ public class PanelPreviewTest
 		s.feed.add(feedEntry(now - 180_000_000L, "COMBAT_ACHIEVEMENT", "task", "Perfect Zulrah"));
 		s.feed.add(feedEntry(now - 190_000_000L, "DEATH", "killerName", "Commander Zilyana"));
 
-		// The History card's two lines that read the journal itself see a
-		// journey and a feed grown past the two above, for that tab's shots
-		// alone: three closed segments dated inside the week and one before it,
-		// one more than the fixture spine's delta says; and collection log
-		// slots inside the week with one entry older than the week, so the
-		// feed reaches back past its start and the card counts the slots from
-		// the feed rather than the spine. The Slayer, Journal and Search
-		// surfaces draw the journey and the feed above, and their pictures
-		// stay put.
+		// The History card's lines that read the journal itself see a journey
+		// and a feed grown past the two above, for that tab's shots alone:
+		// three closed segments dated inside the week and one before it, one
+		// more than the fixture spine's delta says; collection log slots inside
+		// the week with one entry older than the week, so the feed reaches
+		// back past its start and the card counts the slots from the feed
+		// rather than the spine; and one dated entry of each other type the
+		// card counts (a death, a pet, a quest, a diary, a combat achievement,
+		// a level), inside the week, so every line the feed alone can draw is
+		// on the shot. The Slayer, Journal and Search surfaces draw the journey
+		// and the feed above, and their pictures stay put.
 		List<ChronicleApiClient.SlayerTask> grown = new ArrayList<>(tasks);
 		grown.add(1, new ChronicleApiClient.SlayerTask("Gargoyles", 152, 0, 3,
 			System.currentTimeMillis() / 1000.0 - 150_000, 612_113L, false));
@@ -537,6 +539,13 @@ public class PanelPreviewTest
 		s.historyFeed.add(feedEntry(now - 100_000_000L, "COLLECTION", "itemName", "Abyssal whip"));
 		s.historyFeed.add(feedEntry(now - 260_000_000L, "COLLECTION", "itemName", "Kraken tentacle"));
 		s.historyFeed.add(feedEntry(now - 700_000_000L, "COLLECTION", "itemName", "Dragon pickaxe"));
+		s.historyFeed.add(feedEntry(now - 40_000_000L, "DEATH", "killerName", "Vorkath"));
+		s.historyFeed.add(feedEntry(now - 50_000_000L, "PET", "petName", "Vorki"));
+		s.historyFeed.add(feedEntry(now - 60_000_000L, "QUEST", "questName", "Desert Treasure II"));
+		s.historyFeed.add(feedEntry(now - 70_000_000L, "DIARY", "area", "Kandarin"));
+		s.historyFeed.add(feedEntry(now - 80_000_000L, "COMBAT_ACHIEVEMENT", "task",
+			"Vorkath Speed-Chaser"));
+		s.historyFeed.add(feedEntry(now - 120_000_000L, "LEVEL", "skill", "Slayer"));
 		// newest first, the order the journal keeps
 		s.historyFeed.sort((a, b) -> Long.compare(b.get("ts").getAsLong(), a.get("ts").getAsLong()));
 

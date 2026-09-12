@@ -51,9 +51,11 @@ import java.util.function.Predicate;
  * units and so carries no figure. Summary keys, hidden keys and peak keys
  * (whose delta means nothing) never file.
  *
- * <p>Two summary figures may be read off the journal itself instead of the
- * spine: the caller hands them in as retroactive figures, and a key handed in
- * replaces the spine's delta for that line.
+ * <p>Some summary figures may be read off the journal itself instead of the
+ * spine (the slayer lines, and the feed's dated entries counted by type): the
+ * caller hands them in as retroactive figures, and a key handed in replaces
+ * the spine's delta for that line, or stands alone where the spine never
+ * carried the key.
  */
 public final class HistoryProgress
 {
@@ -204,14 +206,19 @@ public final class HistoryProgress
 	// "Damage dealt", and resourcesDroppedValue is the note on the gathered
 	// row, so the list is the keys and not the rows. slayerKills never rides the
 	// spine: the History tab reads it off the slayer journey for the period and
-	// lays it over the deltas as a retroactive figure. Teleports are not here:
-	// the Teleports section carries the period's total with its "Other means",
-	// one place for one figure.
+	// lays it over the deltas as a retroactive figure. Nor do the pets, quests,
+	// diaries, combat achievements and levels: the History tab counts them off
+	// the feed's dated entries for the period, the way it counts deaths and
+	// collection log slots over the spine's delta. Teleports are not here: the
+	// Teleports section carries the period's total with its "Other means", one
+	// place for one figure.
 	private static final Set<String> SUMMARY_KEYS = new HashSet<>(Arrays.asList(
 		"dropsReceived", "lootValue", "lootLeftCount", "lootLeftValue", "kills",
 		"slayerTasksCompleted", "slayerKills", "damageDealt", "damageDealtMelee",
 		"damageDealtRanged",
-		"damageDealtMagic", "deaths", "clogSlotsObtained", "distanceRan", "distanceWalked",
+		"damageDealtMagic", "deaths", "petsObtained", "questsCompleted", "diariesCompleted",
+		"combatAchievements", "levelsGained", "clogSlotsObtained", "distanceRan",
+		"distanceWalked",
 		"coinsSpentAtShops", "coinsEarnedAtShops", "coinsFromAlchemy", "consumedValue",
 		"resourcesGatheredValue", "resourcesDroppedValue", "itemsDroppedValue"));
 
@@ -260,9 +267,9 @@ public final class HistoryProgress
 	 * @param counters the period's positive counter deltas, spine extras included
 	 * @param gp whether a key's figure is gp; null reads the registry
 	 * @param retroactive summary keys with the figure the journal gives them for
-	 * the period (closed slayer segments, collection log entries); a key here
-	 * replaces the spine's delta, a zero included, and a key the summary does
-	 * not read is ignored. Null for none.
+	 * the period (closed slayer segments, the feed's dated entries by type); a
+	 * key here replaces the spine's delta, a zero included, and a key the
+	 * summary does not read is ignored. Null for none.
 	 */
 	public static HistoryProgress of(Map<String, Long> counters, Predicate<String> gp,
 		Map<String, Long> retroactive)
@@ -318,6 +325,12 @@ public final class HistoryProgress
 		add(out, c, gp, "damageDealtRanged");
 		add(out, c, gp, "damageDealtMagic");
 		add(out, c, gp, "deaths");
+		// the feed's dated entries, counted by type on the History tab
+		add(out, c, gp, "petsObtained");
+		add(out, c, gp, "questsCompleted");
+		add(out, c, gp, "diariesCompleted");
+		add(out, c, gp, "combatAchievements");
+		add(out, c, gp, "levelsGained");
 		add(out, c, gp, "clogSlotsObtained");
 		add(out, c, gp, "distanceRan");
 		add(out, c, gp, "distanceWalked");

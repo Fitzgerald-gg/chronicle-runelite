@@ -224,6 +224,13 @@ public final class StatRegistry
 		LABELS.put("slayerTasksCompleted", "Slayer tasks completed");
 		// read off the slayer journey on the History tab alone, never on the spine
 		LABELS.put("slayerKills", "Slayer kills");
+		// counted off the feed's dated entries on the History tab alone, never
+		// on the spine
+		LABELS.put("petsObtained", "Pets");
+		LABELS.put("questsCompleted", "Quests completed");
+		LABELS.put("diariesCompleted", "Diaries completed");
+		LABELS.put("combatAchievements", "Combat achievements");
+		LABELS.put("levelsGained", "Levels gained");
 		LABELS.put("clogSlotsObtained", "Collection log slots");
 		LABELS.put("lootLeftCount", "Left on the floor");
 		LABELS.put("lootLeftValue", "Value left on the floor");

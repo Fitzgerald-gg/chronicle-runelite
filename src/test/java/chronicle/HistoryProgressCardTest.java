@@ -45,11 +45,12 @@ import static org.junit.Assert.assertTrue;
  * than the period's start, then one list of folds in the Stats tab's family
  * and section order with no heading between families. A fold starts shut, its
  * head carries the section's period total where the rows add up to one, and a
- * click on the head opens it to the rows and the leftover "Other". Three
+ * click on the head opens it to the rows and the leftover "Other". Some
  * summary lines read the journal itself and reach back past the spine: slayer
  * tasks and slayer kills from the closed segments dated inside the period, and
- * collection log slots from the feed's COLLECTION entries when the feed reaches
- * back past the window's start. The note reads the spine only as far as the period's last
+ * the feed's dated entries counted by type (collection log slots, deaths, pets,
+ * quests, diaries, combat achievements, levels) when the feed reaches back
+ * past the window's start. The note reads the spine only as far as the period's last
  * line, and the journey reaches the card through the read the panel primes
  * when it is built. The folds are keyed apart from the Stats tab's.
  */
@@ -85,6 +86,7 @@ public class HistoryProgressCardTest
 			put(a, b, "slayerTasksCompleted", 40, 45);
 			put(a, b, "clogSlotsObtained", 400, 407);
 			put(a, b, "damageDealt", 500_000, 560_000);
+			put(a, b, "deaths", 20, 23);
 			put(a, b, "resourcesGatheredValue", 1_000_000, 1_250_000);
 			put(a, b, "resourcesDroppedValue", 50_000, 80_000);
 			put(a, b, "fishCaught", 1_000, 1_050);
@@ -436,6 +438,7 @@ public class HistoryProgressCardTest
 			"Kills", "+12",
 			"Slayer tasks completed", "+5",
 			"Damage dealt", "+60,000",
+			"Deaths", "+3",
 			"Collection log slots", "+7",
 			"Gathered", "+250k gp · 30k dropped",
 			"LIVING",
@@ -793,6 +796,122 @@ public class HistoryProgressCardTest
 		s.feed.add(entry(now - DAY_MS, "PET", "petName", "Abyssal orphan"));
 		s.feed.add(entry(now - 20 * DAY_MS, "COLLECTION", "itemName", "Dragon pickaxe"));
 		assertNull(beside(card(labels(history(panel(s)))), "Collection log slots"));
+	}
+
+	@Test
+	public void deathsCountTheFeedsEntriesWhenTheFeedReachesBackAndTheSpinesOtherwise()
+		throws Exception
+	{
+		long now = System.currentTimeMillis();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.feed.add(entry(now - DAY_MS, "DEATH", "killerName", "Vorkath"));
+		s.feed.add(entry(now - DAY_MS - 3_600_000L, "DEATH", "killerName", "Zulrah"));
+		s.feed.add(entry(now - 2 * DAY_MS, "COLLECTION", "itemName", "Abyssal head"));
+		s.feed.add(entry(now - 2 * DAY_MS - 3_600_000L, "DEATH", "killerName", "Vorkath"));
+		s.feed.add(entry(now - 3 * DAY_MS, "DEATH", "killerName", "Vorkath"));
+		s.feed.add(entry(now - 4 * DAY_MS, "DEATH", "killerName", "Kraken"));
+		s.feed.add(entry(now - 20 * DAY_MS, "DEATH", "killerName", "Vorkath"));
+		// the feed reaches back past the week's start: its five deaths inside
+		// the week beat the spine's three, and the one before the week is out
+		assertEquals("+5", beside(card(labels(history(panel(s)))), "Deaths"));
+
+		// a feed that begins inside the week cannot say what it missed: the
+		// spine's delta stands
+		s.feed.remove(6);
+		assertEquals("+3", beside(card(labels(history(panel(s)))), "Deaths"));
+
+		// reaching back with no death inside the week: no line, whatever the
+		// spine's delta says
+		s.feed.clear();
+		s.feed.add(entry(now - DAY_MS, "COLLECTION", "itemName", "Abyssal head"));
+		s.feed.add(entry(now - 20 * DAY_MS, "DEATH", "killerName", "Vorkath"));
+		assertNull(beside(card(labels(history(panel(s)))), "Deaths"));
+	}
+
+	@Test
+	public void theFeedsOtherTypesEachCountTheirOwnEntriesInsideTheWindow() throws Exception
+	{
+		long now = System.currentTimeMillis();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		// a different count per type inside the week, one of each type before
+		// it, a log slot inside the week and one older still so the feed
+		// reaches back
+		String[][] types = {
+			{"DEATH", "killerName", "Vorkath"},
+			{"PET", "petName", "Vorki"},
+			{"QUEST", "questName", "Dragon Slayer II"},
+			{"DIARY", "area", "Karamja"},
+			{"COMBAT_ACHIEVEMENT", "task", "Perfect Zulrah"},
+			{"LEVEL", "skill", "Slayer"}};
+		int[] inside = {5, 1, 2, 3, 4, 6};
+		for (int t = 0; t < types.length; t++)
+		{
+			for (int i = 0; i < inside[t]; i++)
+			{
+				s.feed.add(entry(now - DAY_MS - t * 3_600_000L - i * 60_000L,
+					types[t][0], types[t][1], types[t][2]));
+			}
+			s.feed.add(entry(now - 10 * DAY_MS - t * 3_600_000L, types[t][0], types[t][1],
+				types[t][2]));
+		}
+		s.feed.add(entry(now - DAY_MS - 6 * 3_600_000L, "COLLECTION", "itemName", "Abyssal whip"));
+		s.feed.add(entry(now - 20 * DAY_MS, "COLLECTION", "itemName", "Dragon pickaxe"));
+		List<String> card = card(labels(history(panel(s))));
+		assertEquals(card.toString(), "+5", beside(card, "Deaths"));
+		assertEquals(card.toString(), "+1", beside(card, "Pets"));
+		assertEquals(card.toString(), "+2", beside(card, "Quests completed"));
+		assertEquals(card.toString(), "+3", beside(card, "Diaries completed"));
+		assertEquals(card.toString(), "+4", beside(card, "Combat achievements"));
+		assertEquals(card.toString(), "+6", beside(card, "Levels gained"));
+		// the five run on from Deaths, in the summary's fixed order, and the
+		// log slots follow them
+		int deaths = card.indexOf("Deaths");
+		assertTrue(card.toString(), deaths > card.indexOf("Damage dealt"));
+		assertEquals(card.toString(), Arrays.asList(
+			"Deaths", "+5", "Pets", "+1", "Quests completed", "+2", "Diaries completed", "+3",
+			"Combat achievements", "+4", "Levels gained", "+6", "Collection log slots", "+1"),
+			card.subList(deaths, deaths + 14));
+
+		// a type absent from the feed draws no line: the spine never carries
+		// these, so there is nothing to fall back on
+		s.feed.removeIf(e -> "DIARY".equals(e.get("type").getAsString()));
+		card = card(labels(history(panel(s))));
+		assertNull(card.toString(), beside(card, "Diaries completed"));
+		assertEquals(card.toString(), "+1", beside(card, "Pets"));
+		assertEquals(card.toString(), "+6", beside(card, "Levels gained"));
+
+		// a feed that begins inside the week says nothing for any of them
+		s.feed.removeIf(e -> e.get("ts").getAsLong() < now - 6 * DAY_MS);
+		card = card(labels(history(panel(s))));
+		for (String label : new String[]{"Pets", "Quests completed", "Diaries completed",
+			"Combat achievements", "Levels gained"})
+		{
+			assertNull(card.toString(), beside(card, label));
+		}
+		// while the keys the spine carries fall back to its delta
+		assertEquals(card.toString(), "+3", beside(card, "Deaths"));
+		assertEquals(card.toString(), "+7", beside(card, "Collection log slots"));
+	}
+
+	@Test
+	public void anEntryWithNoUsableStampIsSkipped() throws Exception
+	{
+		long now = System.currentTimeMillis();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.feed.add(entry(now - DAY_MS, "DEATH", "killerName", "Vorkath"));
+		// one entry stamped with a word, one with no stamp at all: neither is
+		// counted, neither is a milestone, and neither stops the card drawing
+		s.feed.add(entry(now - 2 * DAY_MS, "DEATH", "killerName", "Zulrah"));
+		s.feed.get(1).addProperty("ts", "soon");
+		JsonObject bare = new JsonObject();
+		bare.addProperty("type", "PET");
+		s.feed.add(bare);
+		s.feed.add(entry(now - 20 * DAY_MS, "COLLECTION", "itemName", "Dragon pickaxe"));
+		List<String> all = labels(history(panel(s)));
+		List<String> card = card(all);
+		assertEquals(card.toString(), "+1", beside(card, "Deaths"));
+		assertNull(card.toString(), beside(card, "Pets"));
+		assertTrue(all.toString(), all.contains("MILESTONES · 1"));
 	}
 
 	@Test

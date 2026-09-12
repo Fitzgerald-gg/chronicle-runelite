@@ -47,6 +47,17 @@ public class StatRegistryTest
 		// the journey's own figure for a period, named here like the rest
 		assertEquals("Slayer kills", StatRegistry.label("slayerKills"));
 		assertFalse(StatRegistry.isGp("slayerKills"));
+		// the feed's dated entries counted for a period, named here too
+		assertEquals("Pets", StatRegistry.label("petsObtained"));
+		assertEquals("Quests completed", StatRegistry.label("questsCompleted"));
+		assertEquals("Diaries completed", StatRegistry.label("diariesCompleted"));
+		assertEquals("Combat achievements", StatRegistry.label("combatAchievements"));
+		assertEquals("Levels gained", StatRegistry.label("levelsGained"));
+		for (String key : new String[]{"petsObtained", "questsCompleted", "diariesCompleted",
+			"combatAchievements", "levelsGained"})
+		{
+			assertFalse(key, StatRegistry.isGp(key));
+		}
 		assertEquals("Collection log slots", StatRegistry.label("clogSlotsObtained"));
 		assertEquals("Left on the floor", StatRegistry.label("lootLeftCount"));
 		assertEquals("Value left on the floor", StatRegistry.label("lootLeftValue"));

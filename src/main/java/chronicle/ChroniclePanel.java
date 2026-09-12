@@ -2941,6 +2941,23 @@ class ChroniclePanel extends PluginPanel
 		return !t.inProgress && ms >= fromMs && ms < toMs;
 	}
 
+	// The feed's dated entry types the progress card counts, each under the
+	// summary key its line reads. Where the spine carries the key too (deaths,
+	// collection log slots) the feed's count lays over its delta; the rest
+	// never ride the spine and stand on the feed alone.
+	private static final Map<String, String> FEED_SUMMARY_KEYS = new LinkedHashMap<>();
+
+	static
+	{
+		FEED_SUMMARY_KEYS.put("COLLECTION", "clogSlotsObtained");
+		FEED_SUMMARY_KEYS.put("DEATH", "deaths");
+		FEED_SUMMARY_KEYS.put("PET", "petsObtained");
+		FEED_SUMMARY_KEYS.put("QUEST", "questsCompleted");
+		FEED_SUMMARY_KEYS.put("DIARY", "diariesCompleted");
+		FEED_SUMMARY_KEYS.put("COMBAT_ACHIEVEMENT", "combatAchievements");
+		FEED_SUMMARY_KEYS.put("LEVEL", "levelsGained");
+	}
+
 	// The oldest stamp in the feed slice, or 0 when it holds none: whether the
 	// slice reaches back past a window's start.
 	private static long oldestTs(List<JsonObject> feed)
@@ -3460,23 +3477,29 @@ class ChroniclePanel extends PluginPanel
 			// Milestones inside the window, and beside them the summary lines
 			// that read the journal itself rather than the spine: slayer tasks
 			// and slayer kills from the closed segments dated inside the period,
-			// and collection log slots from the feed's COLLECTION entries when
-			// the feed reaches back past the window's start (a feed that begins
-			// inside it cannot say what it missed, and the spine's delta stands).
-			// All of them reach back past the day the spine first carried them.
+			// and the feed's dated entries counted by type (collection log
+			// slots, deaths, pets, quests, diaries, combat achievements, levels)
+			// when the feed reaches back past the window's start (a feed that
+			// begins inside it cannot say what it missed, and the spine's delta
+			// stands where the spine carries the key). All of them reach back
+			// past the day the spine first carried them. One walk of the feed
+			// serves the milestones and the counts, each entry counted once by
+			// its type; an entry with no usable stamp is skipped.
 			long fromMs = pStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			long toMs = end.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			List<JsonObject> milestones = new ArrayList<>();
-			long clogSlots = 0;
+			Map<String, Long> fromFeed = new java.util.HashMap<>();
 			for (JsonObject e : historyFeed)
 			{
-				long ts = e.has("ts") ? e.get("ts").getAsLong() : 0;
+				long ts = safeLong(e.get("ts"));
 				if (ts >= fromMs && ts < toMs)
 				{
 					milestones.add(e);
-					if (e.has("type") && "COLLECTION".equals(e.get("type").getAsString()))
+					String key = e.has("type")
+						? FEED_SUMMARY_KEYS.get(e.get("type").getAsString()) : null;
+					if (key != null)
 					{
-						clogSlots++;
+						fromFeed.merge(key, 1L, Long::sum);
 					}
 				}
 			}
@@ -3489,7 +3512,12 @@ class ChroniclePanel extends PluginPanel
 			long oldest = oldestTs(historyFeed);
 			if (oldest > 0 && oldest < fromMs)
 			{
-				retro.put("clogSlotsObtained", clogSlots);
+				// every counted type, a zero included: a type absent from the
+				// feed draws no line, whatever the spine's delta says
+				for (String key : FEED_SUMMARY_KEYS.values())
+				{
+					retro.put(key, fromFeed.getOrDefault(key, 0L));
+				}
 			}
 
 			// What the period tracked: the headline figures, then every other
