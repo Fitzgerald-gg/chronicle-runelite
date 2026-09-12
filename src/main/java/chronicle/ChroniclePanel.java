@@ -250,12 +250,11 @@ class ChroniclePanel extends PluginPanel
 			}
 		});
 		// ── tabs, then search ──
-		tabGroup.setLayout(new GridLayout(1, 7, 2, 0));
+		tabGroup.setLayout(new GridLayout(1, 6, 2, 0));
 		addTab("tab_home.png", "Home", View.HOME);
 		addTab("tab_drops.png", "Drops", View.DROPS);
 		addTab("tab_slayer.png", "Slayer", View.SLAYER);
 		addTab("tab_log.png", "Collection log", View.LOG);
-		addTab("tab_stats.png", "Stats", View.STATS);
 		addTab("tab_history.png", "History", View.HISTORY);
 		addTab("tab_journal.png", "Journal", View.JOURNAL);
 		north.add(tabGroup);
@@ -4765,7 +4764,15 @@ class ChroniclePanel extends PluginPanel
 			}
 			else if ("Trackers".equals(histFacet))
 			{
-				if (!progress.groups().isEmpty() || !gains.isEmpty())
+				// A window shows what moved in it, read off the spine's own two
+				// ends. A lifetime has no earlier end to measure against, and the
+				// figure a reader wants there is the total itself, which is what
+				// the Stats tab carried before it was folded in here.
+				if ("Lifetime".equals(histGranularity) && histFrom == null)
+				{
+					p.add(buildStats());
+				}
+				else if (!progress.groups().isEmpty() || !gains.isEmpty())
 				{
 					p.add(trackedProgress(progress, gains, named));
 					p.add(vgap(5));
@@ -5158,7 +5165,7 @@ class ChroniclePanel extends PluginPanel
 		if (!statHits.isEmpty())
 		{
 			p.add(group("Trackers"));
-			jump(View.STATS);
+			jump(View.HISTORY);
 			for (int i = 0; i < Math.min(4, statHits.size()); i++)
 			{
 				Map.Entry<String, Long> e = statHits.get(i);

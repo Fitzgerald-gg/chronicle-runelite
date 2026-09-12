@@ -3004,4 +3004,25 @@ public class HistoryProgressCardTest
 		assertEquals(all.toString(), "Nechryael", all.get(at + 3));
 		assertTrue(all.toString(), all.indexOf("Man") > all.indexOf("Nechryael"));
 	}
+
+	@Test
+	public void lifetimeOnTheTrackersFacetIsTheOldStatsTab() throws Exception
+	{
+		// a window shows what moved in it; a lifetime has no earlier end to
+		// measure against, so it shows the totals themselves, which is what the
+		// Stats tab carried before it was folded in here
+		ChroniclePanel p = panel(stub(true));
+		set(p, "histFacet", "Trackers");
+		set(p, "histGranularity", "Week");
+		List<String> window = labels(history(p));
+		assertTrue(window.toString(), window.contains("TRACKED PROGRESS"));
+		assertFalse(window.toString(), window.contains("Ledger & Roads"));
+
+		set(p, "histGranularity", "Lifetime");
+		List<String> lifetime = labels(history(p));
+		// the Stats tab's own family pills, which the progress card never had
+		assertTrue("no family pills: " + lifetime, lifetime.contains("Ledger & Roads"));
+		assertTrue(lifetime.toString(), lifetime.contains("Skilling"));
+		assertFalse(lifetime.toString(), lifetime.contains("TRACKED PROGRESS"));
+	}
 }
