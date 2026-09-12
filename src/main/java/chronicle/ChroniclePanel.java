@@ -727,50 +727,11 @@ class ChroniclePanel extends PluginPanel
 			strip.add(row("Left behind", fmt(untaken[0]) + " · " + gp(untaken[1]) + " gp", null));
 			mounted++;
 		}
-		// Everything else the session moved, each tracker under the parent it
-		// belongs to. A herb sack run moves a dozen typed keys, and the strip says
-		// "Herblore 247" until the reader opens it rather than listing twelve
-		// herbs. A tracker with no parent stands on its own line. Sections and
-		// lone rows rank together, biggest first, so the reading order is one list.
-		Map<String, List<Map.Entry<String, Long>>> bySection = new LinkedHashMap<>();
-		Map<String, List<Map.Entry<String, Long>>> floorRows = new LinkedHashMap<>();
-		Map<String, Long> lone = new LinkedHashMap<>();
-		for (Map.Entry<String, Integer> e : plugin.sessionDisplayCounters().entrySet())
-		{
-			String key = e.getKey();
-			if (e.getValue() <= 0 || shownKeys.contains(key) || StatRegistry.hidden(key)
-				|| DAMAGE_SPLIT.contains(key))
-			{
-				continue;
-			}
-			Map.Entry<String, Long> moved =
-				new java.util.AbstractMap.SimpleEntry<>(key, (long) e.getValue());
-			String sec = StatRegistry.subgroup(key);
-			boolean floor = StatRegistry.isFloor(key);
-			if (sec.isEmpty())
-			{
-				// a flat key that heads one of its family's sections is that
-				// section's floor, not a row of its own: "Doses drunk" is the
-				// Potions total, and one figure is shown once
-				String heads = headOf(key);
-				if (heads == null)
-				{
-					lone.put(key, moved.getValue());
-					continue;
-				}
-				sec = heads;
-				floor = true;
-			}
-			if (floor)
-			{
-				floorRows.computeIfAbsent(sec, k -> new ArrayList<>()).add(moved);
-			}
-			else
-			{
-				bySection.computeIfAbsent(sec, k -> new ArrayList<>()).add(moved);
-			}
-		}
-		mounted += addSessionMovers(strip, bySection, floorRows, lone);
+		// Everything else the session moved, one row to a tracker, under the
+		// family it belongs to. Where a tracker has a parent total the parent is
+		// the row: a herb sack run says "Herbs sacked" once and leaves the twelve
+		// herbs to the Trackers tab, which is what that tab is for.
+		mounted += addSessionMovers(strip, plugin.sessionDisplayCounters(), shownKeys);
 		if (mounted == 0)
 		{
 			strip.add(row("A fresh page", "", null));
@@ -813,106 +774,71 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * The section a flat key heads, or null when it heads none. A key with no
-	 * subgroup of its own can still be a section's floor total: foodEaten is
-	 * Living's "Meals eaten" and the Food section's total, and the strip must
-	 * show that one figure once, on the section, rather than twice.
+	 * Whether a tracker already has a parent that speaks for it in this list.
+	 * The sack types every herb it swallows and the spellbook types every place
+	 * it sends you, but the session moved one tracker, not twelve or thirty: the
+	 * parent total carries them, and the typed rows belong to the Trackers tab.
+	 * A child is only hidden where its parent actually moved, so nothing the
+	 * session did can fall out of the strip.
 	 */
-	private static String headOf(String key)
+	private static boolean coveredByParent(String key, Map<String, Integer> sess)
 	{
-		for (String sec : StatRegistry.fixedSections(StatRegistry.family(key)))
+		if (StatRegistry.isFloor(key))
 		{
-			if (!sec.isEmpty() && StatRegistry.floorKeys(sec).contains(key))
+			return false;
+		}
+		String sec = StatRegistry.subgroup(key);
+		if (sec.isEmpty())
+		{
+			return false;
+		}
+		// a place reached is one of the teleports the total already counted
+		List<String> floors = StatRegistry.floorKeys(
+			sec.equals("Destinations") ? "Teleports" : sec);
+		for (String f : floors)
+		{
+			if (sess.getOrDefault(f, 0) > 0)
 			{
-				return sec;
+				return true;
 			}
 		}
-		return null;
+		return false;
 	}
 
 	/**
-	 * The rest of what the session moved, as one ranked list. A section with
-	 * typed rows under it is a single line carrying its total, and opens to those
-	 * rows with the unresolved remainder reconciled as "Other". A section that
-	 * only moved its own totals draws them plainly, since a fold that opens on
-	 * nothing is a worse row than the row it hid. Returns the lines mounted.
+	 * The rest of what the session moved, under quiet family headings, one row to
+	 * a tracker. A heading carries how many trackers it holds and folds away on a
+	 * click; it holds no figure of its own, since the sum of an arrow shaft and a
+	 * herbiboar is not a number anybody wants. Returns the lines mounted.
 	 */
-	private int addSessionMovers(JPanel strip,
-		Map<String, List<Map.Entry<String, Long>>> bySection,
-		Map<String, List<Map.Entry<String, Long>>> floorRows,
-		Map<String, Long> lone)
+	private int addSessionMovers(JPanel strip, Map<String, Integer> sess,
+		java.util.Set<String> shownKeys)
 	{
-		java.util.Set<String> sections = new java.util.LinkedHashSet<>(bySection.keySet());
-		sections.addAll(floorRows.keySet());
-		Map<String, Long> total = new LinkedHashMap<>();
-		Map<String, Long> ghosts = new LinkedHashMap<>();
-		for (String sec : sections)
+		Map<String, List<Map.Entry<String, Long>>> byFamily = new LinkedHashMap<>();
+		for (Map.Entry<String, Integer> e : sess.entrySet())
 		{
-			List<Map.Entry<String, Long>> rows = bySection.get(sec);
-			long floor = 0;
-			for (Map.Entry<String, Long> f : floorRows.getOrDefault(sec, EMPTY_ROWS))
+			String key = e.getKey();
+			if (e.getValue() <= 0 || shownKeys.contains(key) || StatRegistry.hidden(key)
+				|| DAMAGE_SPLIT.contains(key) || coveredByParent(key, sess))
 			{
-				floor += f.getValue();
+				continue;
 			}
-			long shown = 0;
-			long typedSum = 0;
-			boolean anyTyped = false;
-			for (Map.Entry<String, Long> e : rows == null ? EMPTY_ROWS : rows)
-			{
-				shown += e.getValue();
-				if (StatRegistry.typed(e.getKey()))
-				{
-					anyTyped = true;
-					typedSum += e.getValue();
-				}
-			}
-			// the floor counts every action and only some of them resolve to a
-			// typed row; the remainder is drawn rather than dropped
-			long ghost = anyTyped && floor - typedSum >= 1 ? floor - typedSum : 0;
-			if (sec.equals("Teleports") && floor - shown >= 1)
-			{
-				ghost = floor - shown;
-			}
-			ghosts.put(sec, ghost);
-			total.put(sec, Math.max(shown + ghost, floor));
+			byFamily.computeIfAbsent(StatRegistry.family(key), f -> new ArrayList<>())
+				.add(new java.util.AbstractMap.SimpleEntry<>(key, (long) e.getValue()));
 		}
-
-		List<String[]> order = new ArrayList<>();
-		for (String sec : sections)
-		{
-			order.add(new String[]{"section", sec});
-		}
-		for (String key : lone.keySet())
-		{
-			order.add(new String[]{"row", key});
-		}
-		order.sort((a, b) -> Long.compare(
-			lineValue(b, total, lone), lineValue(a, total, lone)));
 
 		int mounted = 0;
-		for (String[] line : order)
+		for (String family : StatRegistry.FAMILIES)
 		{
-			String name = line[1];
-			if (line[0].equals("row"))
-			{
-				strip.add(sessionRow(name, lone.get(name)));
-				mounted++;
-				continue;
-			}
-			List<Map.Entry<String, Long>> rows = bySection.get(name);
+			List<Map.Entry<String, Long>> rows = byFamily.get(family);
 			if (rows == null || rows.isEmpty())
 			{
-				for (Map.Entry<String, Long> f : floorRows.getOrDefault(name, EMPTY_ROWS))
-				{
-					strip.add(sessionRow(f.getKey(), f.getValue()));
-					mounted++;
-				}
 				continue;
 			}
-			rows.sort(StatRegistry::compareRows);
-			String stateKey = "session:" + name;
-			boolean open = foldOpen(stateKey);
-			strip.add(groupHead(name, fmt(total.get(name)), stateKey, open));
+			rows.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
+			String stateKey = "session:" + family;
+			boolean open = !foldOpen(stateKey);   // these stand open; the fold shuts them
+			strip.add(quietHead(family, open ? "" : fmt(rows.size()), stateKey));
 			mounted++;
 			if (!open)
 			{
@@ -920,31 +846,35 @@ class ChroniclePanel extends PluginPanel
 			}
 			for (Map.Entry<String, Long> e : rows)
 			{
-				strip.add(row(StatRegistry.rowLabel(e.getKey()), fmt(e.getValue()), null));
-				mounted++;
-			}
-			long ghost = ghosts.getOrDefault(name, 0L);
-			if (ghost > 0)
-			{
-				strip.add(ghostRow(name.equals("Teleports") ? "Other means" : "Other",
-					fmt(ghost)));
+				strip.add(sessionRow(e.getKey(), e.getValue()));
 				mounted++;
 			}
 		}
 		return mounted;
 	}
 
-	private static final List<Map.Entry<String, Long>> EMPTY_ROWS = new ArrayList<>();
 
-	// what a line in that ranked list is worth: a section is its total, a lone
-	// tracker is its own figure
-	private static long lineValue(String[] line, Map<String, Long> total,
-		Map<String, Long> lone)
+	/**
+	 * A heading that names a band and folds it away. It is structure, not a
+	 * figure, so it stays quiet in both states and the accent is left to mean one
+	 * thing: what this session earned. Open, the rows beneath speak for it and it
+	 * carries nothing; shut, it says how many rows it is holding.
+	 */
+	private JPanel quietHead(String name, String count, String stateKey)
 	{
-		Long v = line[0].equals("section") ? total.get(line[1]) : lone.get(line[1]);
-		return v != null ? v : 0L;
+		JPanel head = row(name.toUpperCase(Locale.ROOT), count, null);
+		JLabel headName = (JLabel) ((BorderLayout) head.getLayout())
+			.getLayoutComponent(BorderLayout.CENTER);
+		headName.setFont(FontManager.getRunescapeSmallFont());
+		headName.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+		head.setBorder(BorderFactory.createEmptyBorder(7, 2, 1, 2));
+		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		head.addMouseListener(clicker(() -> toggleFold(stateKey)));
+		return head;
 	}
 
+	// one tracker, one line: its name and its figure, in the one register every
+	// other line in the strip uses
 	private JPanel sessionRow(String key, long v)
 	{
 		return row(StatRegistry.label(key),

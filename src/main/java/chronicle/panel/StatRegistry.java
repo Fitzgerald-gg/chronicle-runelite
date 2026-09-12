@@ -111,10 +111,14 @@ public final class StatRegistry
 		new SkillSpec("Herblore", new String[]{"Sacked"}, new String[]{"herbsSacked"},
 			new String[]{"herbsCleaned", "unfinishedPotionsMade", "potionsMade",
 				"herbTarsMade", "weaponPoisonsMade"}),
-		new SkillSpec("Fletching", new String[]{"LogsFletched"}, NONE,
+		// logsFletched is the total the typed logs reconcile to, not a row beside
+		// them: it counts every log cut to a bow, and mapleLogsFletched and its
+		// siblings are that same count typed by log
+		new SkillSpec("Fletching", new String[]{"LogsFletched"},
+			new String[]{"logsFletched"},
 			new String[]{"dartsFletched", "arrowsFletched", "boltsFletched", "boltsUnfinished",
 				"javelinsFletched", "boltTips", "crossbowsStrung", "crossbowsUnstrung",
-				"crossbowStocksCut", "bowsStrung", "logsFletched",
+				"crossbowStocksCut", "bowsStrung",
 				"arrowShaftsFletched", "headlessArrowsFletched",
 				"javelinShaftsFletched", "ballistaeFletched", "blowpipesFletched"}),
 		// "Tanned" is the tanner's line, typed by hide; no xp behind it

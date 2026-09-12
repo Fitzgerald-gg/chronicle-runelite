@@ -230,71 +230,112 @@ public class HomeSessionStripTest
 	}
 
 	@Test
-	public void aHerbSackRunIsOneLineNotTwelve() throws Exception
+	public void everyTrackerSitsUnderAHeading() throws Exception
 	{
-		// the sack types every herb it swallows; the session moved one tracker
-		// and the strip says so, rather than naming twelve herbs
+		// one rule for the whole strip: a combat tracker is not left bare while a
+		// skilling one gets a parent. Every row has a heading above it.
 		List<String> strip = home(moved(
-			"herbsSacked", 247, "guamLeafSacked", 60, "cadantineSacked", 35,
-			"kwuarmSacked", 40, "iritLeafSacked", 29, "avantoeSacked", 27,
-			"ranarrWeedSacked", 19, "lantadymeSacked", 19, "dwarfWeedSacked", 12,
-			"marrentillSacked", 4, "harralanderSacked", 2));
-		assertEquals(strip.toString(), "247", beside(strip, "HERBLORE"));
+			"hitsBlocked", 6, "herbsSacked", 248, "distanceWalked", 169,
+			"foodEaten", 20));
+		for (String label : new String[]{
+			StatRegistry.label("hitsBlocked"), StatRegistry.label("herbsSacked"),
+			StatRegistry.label("distanceWalked"), StatRegistry.label("foodEaten")})
+		{
+			int at = strip.indexOf(label);
+			assertTrue(strip.toString() + " has no " + label, at > 0);
+			assertTrue(label + " stands under no heading",
+				lastHeadingBefore(strip, at) != null);
+		}
+		assertEquals(strip.toString(), "COMBAT",
+			lastHeadingBefore(strip, strip.indexOf(StatRegistry.label("hitsBlocked"))));
+		assertEquals(strip.toString(), "SKILLING",
+			lastHeadingBefore(strip, strip.indexOf(StatRegistry.label("herbsSacked"))));
+		assertEquals(strip.toString(), "LIVING",
+			lastHeadingBefore(strip, strip.indexOf(StatRegistry.label("foodEaten"))));
+		assertEquals(strip.toString(), "LEDGER & ROADS",
+			lastHeadingBefore(strip, strip.indexOf(StatRegistry.label("distanceWalked"))));
+	}
+
+	// the heading a row reads under, or null when it stands loose
+	private static String lastHeadingBefore(List<String> strip, int at)
+	{
+		String head = null;
+		for (int i = 0; i < at; i++)
+		{
+			for (String f : StatRegistry.FAMILIES)
+			{
+				if (strip.get(i).equals(f.toUpperCase(java.util.Locale.ROOT)))
+				{
+					head = strip.get(i);
+				}
+			}
+		}
+		return head;
+	}
+
+	@Test
+	public void aHerbSackRunIsOneRowAndNamesTheTrackerThatMoved() throws Exception
+	{
+		// the sack types every herb it swallows; the session moved one tracker,
+		// and the row says which one rather than naming a family
+		List<String> strip = home(moved(
+			"herbsSacked", 248, "guamLeafSacked", 60, "cadantineSacked", 35,
+			"kwuarmSacked", 40, "avantoeSacked", 27, "dwarfWeedSacked", 12));
+		assertEquals(strip.toString(), "248",
+			beside(strip, StatRegistry.label("herbsSacked")));
 		assertFalse(strip.toString(), strip.contains("Guam leaf"));
 		assertFalse(strip.toString(), strip.contains("Cadantine"));
-		assertFalse(strip.toString(), strip.contains("Herbs sacked"));
 	}
 
 	@Test
-	public void theHerbsAreThereWhenTheReaderOpensTheParent() throws Exception
+	public void aPlaceReachedIsOneOfTheTeleportsTheTotalCounted() throws Exception
 	{
 		List<String> strip = home(moved(
-			"herbsSacked", 100, "guamLeafSacked", 60, "kwuarmSacked", 40),
-			"session:Herblore");
-		assertEquals(strip.toString(), "100", beside(strip, "HERBLORE"));
-		assertEquals(strip.toString(), "60", beside(strip, "Guam leaf"));
-		assertEquals(strip.toString(), "40", beside(strip, "Kwuarm"));
+			"teleportsTotal", 3, "teleportsVarrock", 2, "teleportsLumbridge", 1));
+		assertEquals(strip.toString(), "3", beside(strip, StatRegistry.label("teleportsTotal")));
+		assertFalse(strip.toString(), strip.contains("Varrock"));
+		assertFalse(strip.toString(), strip.contains("Lumbridge"));
 	}
 
 	@Test
-	public void whatTheFloorCountedAndTheRowsDidNotIsDrawnAsOther() throws Exception
+	public void aTrackerWhoseParentNeverMovedKeepsItsOwnRow() throws Exception
 	{
-		// the sack swallowed a hundred and the chat typed sixty of them: the
-		// forty it could not name is a row, not a silent gap
-		List<String> strip = home(moved("herbsSacked", 100, "guamLeafSacked", 60),
-			"session:Herblore");
-		assertEquals(strip.toString(), "100", beside(strip, "HERBLORE"));
-		assertEquals(strip.toString(), "40", beside(strip, "Other"));
+		// nothing above it can speak for it, so hiding it would lose the session
+		List<String> strip = home(moved("teleportsVarrock", 2));
+		assertEquals(strip.toString(), "2", beside(strip, StatRegistry.label("teleportsVarrock")));
 	}
 
 	@Test
-	public void aTrackerWithNoParentKeepsItsOwnLine() throws Exception
+	public void theLogsAFletcherCutReconcileToOneRow() throws Exception
 	{
-		List<String> strip = home(moved("hitsMissed", 125, "deaths", 2));
-		assertEquals(strip.toString(), "125", beside(strip, StatRegistry.label("hitsMissed")));
-		assertEquals(strip.toString(), "2", beside(strip, StatRegistry.label("deaths")));
+		// mapleLogsFletched and its siblings are logsFletched typed by log, and
+		// they sum to it exactly
+		List<String> strip = home(moved("logsFletched", 14_556,
+			"mapleLogsFletched", 12_865, "magicLogsFletched", 866,
+			"yewLogsFletched", 420, "willowLogsFletched", 405));
+		assertEquals(strip.toString(), "14,556",
+			beside(strip, StatRegistry.label("logsFletched")));
+		for (String typed : new String[]{"mapleLogsFletched", "magicLogsFletched",
+			"yewLogsFletched", "willowLogsFletched"})
+		{
+			assertFalse(strip.toString(), strip.contains(StatRegistry.label(typed)));
+			assertFalse(strip.toString(), strip.contains(StatRegistry.rowLabel(typed)));
+		}
 	}
 
 	@Test
-	public void aParentThatMovedAloneDrawsPlainlyRatherThanOpeningOnNothing()
-		throws Exception
+	public void aHeadingCarriesNoFigureUntilItIsShut() throws Exception
 	{
-		// nothing typed under it, so a fold would open on an empty list; the
-		// total is the row
-		List<String> strip = home(moved("agilityObstacles", 66));
-		assertEquals(strip.toString(), "66",
-			beside(strip, StatRegistry.label("agilityObstacles")));
-		assertFalse(strip.toString(), strip.contains("AGILITY"));
-	}
+		// open, the rows beneath speak for it; shut, it says what it is holding
+		List<String> open = home(moved("hitsBlocked", 6, "deaths", 2));
+		// nothing stands between the heading and the first row it holds
+		assertEquals(open.toString(), StatRegistry.label("hitsBlocked"),
+			beside(open, "COMBAT"));
+		assertEquals(open.toString(), "6", beside(open, StatRegistry.label("hitsBlocked")));
 
-	@Test
-	public void aTotalThatHeadsASectionIsShownOnceAsThatSection() throws Exception
-	{
-		// "Meals eaten" is the Food section's total, so it is the section's
-		// figure and not a second line beside it
-		List<String> strip = home(moved("foodEaten", 20, "sharkEaten", 12));
-		assertEquals(strip.toString(), "20", beside(strip, "FOOD"));
-		assertFalse(strip.toString(), strip.contains(StatRegistry.label("foodEaten")));
+		List<String> shut = home(moved("hitsBlocked", 6, "deaths", 2), "session:Combat");
+		assertEquals(shut.toString(), "2", beside(shut, "COMBAT"));
+		assertFalse(shut.toString(), shut.contains(StatRegistry.label("hitsBlocked")));
 	}
 
 	@Test
@@ -310,7 +351,5 @@ public class HomeSessionStripTest
 			"damageDealtRanged", 253, "damageDealtMagic", 21), "home:damage");
 		assertEquals(open.toString(), "253",
 			beside(open, StatRegistry.label("damageDealtRanged")));
-		assertEquals(open.toString(), "81",
-			beside(open, StatRegistry.label("damageDealtMelee")));
 	}
 }
