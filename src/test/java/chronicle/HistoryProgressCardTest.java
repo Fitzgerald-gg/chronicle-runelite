@@ -2505,19 +2505,14 @@ public class HistoryProgressCardTest
 			body[0] = (JPanel) m.invoke(p);
 		});
 		List<String> inBody = labels(body[0]);
-		// "Skills" and "Kills" are left out of this check: the headline has a row
-		// called Kills, and the lens is proved to have moved by the controls below
-		for (String control : new String[]{"Day", "Month", "Year"})
-		{
-			assertFalse(control + " is still inside the scrolling body: " + inBody,
-				inBody.contains(control));
-		}
+		assertFalse("the period row is still inside the scrolling body: " + inBody,
+			inBody.contains("Period"));
 		Field f = ChroniclePanel.class.getDeclaredField("historyControls");
 		f.setAccessible(true);
 		JPanel controls = (JPanel) f.get(p);
 		assertNotNull("buildHistory handed up no controls", controls);
 		List<String> up = labels(controls);
-		for (String control : new String[]{"Day", "Week", "Month", "Year", "Skills", "Kills"})
+		for (String control : new String[]{"Period", "Skills", "Kills"})
 		{
 			assertTrue(control + " is not among the controls: " + up, up.contains(control));
 		}
@@ -2684,21 +2679,16 @@ public class HistoryProgressCardTest
 		first.skills.put("attack", 900_000L);
 		s.history.put(today.minusDays(90), first);
 		ChroniclePanel p = panel(s);
-		List<String> all = labels(history(p));
-		assertTrue(all.toString(), all.contains("Lifetime"));
-
 		set(p, "histGranularity", "Lifetime");
-		all = labels(history(p));
-		int at = all.indexOf("Lifetime");
-		assertTrue(all.toString(), at >= 0);
-		// the stepper names the window, and at Lifetime that is the word itself
-		assertEquals(all.toString(), 2, java.util.Collections.frequency(all, "Lifetime"));
+		List<String> all = labels(history(p));
+		assertEquals(all.toString(), "Lifetime", beside(all, "Period"));
 		// the period's own figures still draw, and they measure from the record's
 		// first line rather than from the window a shorter period would open on
 		assertTrue(all.toString(), all.contains("THE PERIOD"));
 		assertEquals(all.toString(), "+150k", beside(headline(all), "Experience"));
 
 		set(p, "histGranularity", "Week");
+		assertEquals(labels(history(p)).toString(), "Week", beside(labels(history(p)), "Period"));
 		assertEquals(labels(history(p)).toString(), "+50k",
 			beside(headline(labels(history(p))), "Experience"));
 	}
@@ -2735,29 +2725,43 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
-	public void noPeriodPillClipsItsOwnName() throws Exception
+	public void theListOffersEveryPeriodWidestFirst() throws Exception
+	{
+		// five pills across a 225px panel clipped the longest word; a list does
+		// not, however many periods there come to be
+		ChroniclePanel p = panel(stub(true));
+		history(p);
+		java.lang.reflect.Method m = ChroniclePanel.class.getDeclaredMethod("periodMenu");
+		m.setAccessible(true);
+		javax.swing.JPopupMenu menu = (javax.swing.JPopupMenu) m.invoke(p);
+		List<String> offered = new ArrayList<>();
+		for (Component k : menu.getComponents())
+		{
+			if (k instanceof javax.swing.JMenuItem)
+			{
+				offered.add(((javax.swing.JMenuItem) k).getText());
+			}
+		}
+		assertEquals(Arrays.asList("Lifetime", "Year", "Month", "Week", "Day"), offered);
+	}
+
+	@Test
+	public void theRowNamesThePeriodItIsShowing() throws Exception
 	{
 		// five choices across one row left each 31px of text and "Lifetime"
 		// needs 39. Laid out at the real panel width, none may overflow.
 		ChroniclePanel p = panel(stub(true));
-		history(p);   // buildHistory is what hands the controls up
-		JPanel controls = historyControlsOf(p);
-		assertNotNull("buildHistory handed up no controls", controls);
-		// lay the pill row out at the width the panel really gives it
-		JPanel row = (JPanel) labelNamed(controls, "Day").getParent();
-		row.setSize(net.runelite.client.ui.PluginPanel.PANEL_WIDTH - 16,
-			row.getPreferredSize().height);
-		row.doLayout();
-		for (String name : new String[]{"Day", "Week", "Month", "Year", "Lifetime"})
+		for (String period : ChroniclePanel.PERIODS)
 		{
-			JLabel pill = labelNamed(controls, name);
-			assertNotNull(name + " is not on the control row", pill);
-			int text = pill.getFontMetrics(pill.getFont()).stringWidth(name);
-			java.awt.Insets in = pill.getInsets();
-			int room = pill.getWidth() - in.left - in.right;
-			assertTrue(name + " clips: " + text + "px of text in " + room + "px",
-				room >= text);
+			set(p, "histGranularity", period);
+			List<String> all = labels(history(p));
+			assertEquals(all.toString(), period, beside(all, "Period"));
 		}
+		// and exact dates are a period of their own, named as such
+		LocalDate today = LocalDate.now();
+		set(p, "histFrom", today.minusDays(3));
+		set(p, "histTo", today);
+		assertEquals("Exact dates", beside(labels(history(p)), "Period"));
 	}
 
 	private static JPanel historyControlsOf(ChroniclePanel p) throws Exception
@@ -2785,5 +2789,18 @@ public class HistoryProgressCardTest
 			}
 		}
 		return null;
+	}
+
+	@Test
+	public void theTabOpensOnTheWholeRecord() throws Exception
+	{
+		// a window is a narrowing of the record, so the record is where it starts.
+		// Read off a fresh panel, since the test helper pins the period itself.
+		final ChroniclePanel[] holder = new ChroniclePanel[1];
+		PanelPreviewTest.StubPlugin s = stub(true);
+		edt(() -> holder[0] = new ChroniclePanel(s));
+		Field f = ChroniclePanel.class.getDeclaredField("histGranularity");
+		f.setAccessible(true);
+		assertEquals("Lifetime", f.get(holder[0]));
 	}
 }

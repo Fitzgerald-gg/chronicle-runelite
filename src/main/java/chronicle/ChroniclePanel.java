@@ -120,7 +120,8 @@ class ChroniclePanel extends PluginPanel
 	// Whether the journal is reaching disk. Nothing else in the panel shows it:
 	// the views are served from memory and look the same either way.
 	private final JLabel heartbeat = new JLabel();
-	private String histGranularity = "Week";
+	// the tab opens on the whole record; a window is a narrowing of it
+	private String histGranularity = "Lifetime";
 	// The period's END date (inclusive); the stepper moves it by one granule.
 	private java.time.LocalDate histCursor = java.time.LocalDate.now();
 	// Exact dates: non-null overrides the granularity pills. Set by clicking the
@@ -4016,6 +4017,34 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 
+	/** The periods the tab offers, widest first, as the list reads them. */
+	static final String[] PERIODS = {"Lifetime", "Year", "Month", "Week", "Day"};
+
+	// the choices, built fresh so the tick sits on whichever is current
+	private javax.swing.JPopupMenu periodMenu()
+	{
+		javax.swing.JPopupMenu menu = new javax.swing.JPopupMenu();
+		for (String g : PERIODS)
+		{
+			javax.swing.JMenuItem item = new javax.swing.JMenuItem(g);
+			item.setFont(FontManager.getRunescapeSmallFont());
+			if (g.equals(histGranularity) && histFrom == null)
+			{
+				item.setForeground(accent());
+			}
+			item.addActionListener(e ->
+			{
+				histGranularity = g;
+				histFrom = null;
+				histTo = null;
+				histCursor = java.time.LocalDate.now();
+				rebuildInPlace();
+			});
+			menu.add(item);
+		}
+		return menu;
+	}
+
 	private JPanel buildHistory()
 	{
 		JPanel p = column();
@@ -4026,27 +4055,14 @@ class ChroniclePanel extends PluginPanel
 		// granularity pills
 		// three across, two rows. Five in one row gives each pill 31px of text
 		// and "Lifetime" needs 39, so it clipped.
-		JPanel pills = new JPanel(new GridLayout(0, 3, 3, 3));
-		pills.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		for (String g : new String[]{"Day", "Week", "Month", "Year", "Lifetime"})
-		{
-			JLabel pill = new JLabel(g, JLabel.CENTER);
-			pill.setOpaque(true);
-			pill.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-			pill.setFont(FontManager.getRunescapeSmallFont());
-			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-			pill.setForeground(g.equals(histGranularity) && histFrom == null
-				? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
-			pill.addMouseListener(clicker(() ->
-			{
-				histGranularity = g;
-				histFrom = null;
-				histTo = null;
-				rebuild();
-			}));
-			pills.add(pill);
-		}
-		controls.add(pills);
+		// The period, one line that opens on the choices. Five of them across a
+		// 225px panel left the longest word 31px to say itself in and it needs
+		// 39, and a list has no such trouble however many there come to be.
+		JPanel picker = row("Period",
+			histFrom != null ? "Exact dates" : histGranularity, accent());
+		picker.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		picker.addMouseListener(clicker(() -> periodMenu().show(picker, 0, picker.getHeight())));
+		controls.add(picker);
 		controls.add(vgap(3));
 
 		JPanel lens = new JPanel(new GridLayout(1, 2, 3, 3));
