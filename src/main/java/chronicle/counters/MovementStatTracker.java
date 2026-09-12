@@ -19,6 +19,7 @@ import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.widgets.Widget;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.Text;
 
 import static chronicle.counters.StatKeys.*;
@@ -213,6 +214,9 @@ public class MovementStatTracker implements StatTracker
 
 	private final StatStore statStore;
 	private final Client client;
+	// only to name the item a click was made on: an item operation carries the item
+	// in its id and leaves the target empty
+	private final ItemManager itemManager;
 
 	// player tile last tick, for measuring this tick's step
 	private WorldPoint lastPlayerPos;
@@ -233,10 +237,11 @@ public class MovementStatTracker implements StatTracker
 	// through; this is the gate for a row whose own arm was missed. -1 = idle
 	private int rubTick = -1;
 
-	public MovementStatTracker(StatStore statStore, Client client)
+	public MovementStatTracker(StatStore statStore, Client client, ItemManager itemManager)
 	{
 		this.statStore = statStore;
 		this.client = client;
+		this.itemManager = itemManager;
 	}
 
 	@Override
@@ -394,17 +399,22 @@ public class MovementStatTracker implements StatTracker
 			return;
 		}
 
-		// A cape whose right-click names the place outright. The construction
-		// cape's menu lists the house locations as options of their own, so
-		// neither half of the click says "tele" and nothing above it matches:
-		// every one of those teleports went uncounted, the cape's own "Tele to
-		// POH" alone excepted. The option has to name a place the table knows,
-		// so "Wear" and "Examine" cannot arm it.
-		if (isTeleportCape(tgtLow) && !isWearHandling(optLow)
+		// An item whose right-click names the place outright. Read off a live
+		// client: a construction cape teleport to Pollnivneach arrives as
+		// option "Pollnivneach", target EMPTY, on the inventory interface, with
+		// the item in the click's own item id. There is no "Teleport" click and
+		// no list to choose from; the destinations are options of their own. An
+		// earlier fix tested the target for "cape", which is empty here, so it
+		// could never match and every one of these went uncounted.
+		if ((event.isItemOp() || isTeleportCape(tgtLow))
+			&& !isWearHandling(optLow) && !isInventoryManagement(optLow)
 			&& matchDestinationKey(optLow) != null)
 		{
+			// the means is read off the item, since an item operation names it
+			// nowhere in the click; a click that does carry a target keeps it
+			String item = tgtLow.isEmpty() ? itemName(event.getItemId()) : tgtLow;
 			armTeleport(optLow, false);
-			pendingMethod = TELEPORTS_VIA_CAPE;
+			pendingMethod = methodOf(optLow, item);
 			return;
 		}
 
@@ -447,6 +457,26 @@ public class MovementStatTracker implements StatTracker
 		return tgtLow.contains("cape") || tgtLow.contains("max hood");
 	}
 
+	// the name of the item a click was made on, lower-cased, or "" when the id
+	// names nothing. An item operation leaves the target empty, so this is the
+	// only way to tell a cape from a ring.
+	private String itemName(int itemId)
+	{
+		if (itemId <= 0 || itemManager == null)
+		{
+			return "";
+		}
+		try
+		{
+			return itemManager.getItemComposition(itemManager.canonicalize(itemId))
+				.getName().toLowerCase();
+		}
+		catch (RuntimeException e)   // an id the cache cannot name
+		{
+			return "";
+		}
+	}
+
 	// items whose activating option names neither "tele" nor a jewellery family
 	private static boolean isNamedTeleportItem(String tgtLow)
 	{
@@ -480,7 +510,9 @@ public class MovementStatTracker implements StatTracker
 		{
 			return TELEPORTS_VIA_TABLET;
 		}
-		if (optLow.startsWith("cast"))
+		// the whole word: a spell's option is "Cast" or "Cast <spell>", and
+		// "Castle Wars" on a ring of dueling is a place, not a spellbook
+		if (optLow.equals("cast") || optLow.startsWith("cast "))
 		{
 			return TELEPORTS_VIA_SPELL;
 		}
@@ -651,7 +683,11 @@ public class MovementStatTracker implements StatTracker
 	private boolean chatMenuOpen()
 	{
 		return showing(InterfaceID.Chatmenu.UNIVERSE)
-			|| showing(InterfaceID.Menu.LJ_LAYER2) || showing(InterfaceID.Menu.LJ_LAYER1);
+			|| showing(InterfaceID.Menu.LJ_LAYER2) || showing(InterfaceID.Menu.LJ_LAYER1)
+			// the client has a third list interface, MENU_NEW (947), which this
+			// never tested for. Its rows are the nexus shape: you click GRAPHICS
+			// and the words sit at the same index of TEXT beside it.
+			|| showing(InterfaceID.MenuNew.UNIVERSE) || showing(InterfaceID.MenuNew.CONTENT);
 	}
 
 	private boolean showing(int componentId)

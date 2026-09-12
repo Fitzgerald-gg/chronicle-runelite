@@ -18,6 +18,7 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
+import net.runelite.client.game.ItemManager;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -51,6 +52,7 @@ public class MovementTeleportMenuTest
 	private Client client;
 	private Player local;
 	private MovementStatTracker tracker;
+	private ItemManager items;
 	private int tick;
 	private int landingX = 2694;
 
@@ -59,9 +61,10 @@ public class MovementTeleportMenuTest
 	{
 		store = new StatStore();
 		client = Mockito.mock(Client.class);
+		items = Mockito.mock(ItemManager.class);
 		local = Mockito.mock(Player.class);
 		Mockito.when(client.getLocalPlayer()).thenReturn(local);
-		tracker = new MovementStatTracker(store, client);
+		tracker = new MovementStatTracker(store, client, items);
 		at(0);
 		standAt(3200, 3200);   // settle the tracker's last position
 	}
@@ -853,5 +856,68 @@ public class MovementTeleportMenuTest
 		idleUntil(14);
 		jumpAt(15);
 		assertEquals(0, stat(TELEPORTS_TOTAL));
+	}
+
+	// an item operation: the option names the place, the target is empty, and the
+	// item is in the click's own id. Read off a live client on 2026-09-12:
+	// opt='Pollnivneach' tgt='' group=149 child=0 param0=27
+	private void itemOpClick(String option, int itemId, String itemName)
+	{
+		if (itemName != null)
+		{
+			net.runelite.api.ItemComposition comp =
+				Mockito.mock(net.runelite.api.ItemComposition.class);
+			Mockito.when(comp.getName()).thenReturn(itemName);
+			Mockito.when(items.canonicalize(itemId)).thenReturn(itemId);
+			Mockito.when(items.getItemComposition(itemId)).thenReturn(comp);
+		}
+		MenuEntry entry = Mockito.mock(MenuEntry.class);
+		Mockito.when(entry.getOption()).thenReturn(option);
+		Mockito.when(entry.getTarget()).thenReturn("");
+		Mockito.when(entry.getItemId()).thenReturn(itemId);
+		Mockito.when(entry.isItemOp()).thenReturn(true);
+		Mockito.when(entry.getParam0()).thenReturn(27);
+		Mockito.when(entry.getParam1()).thenReturn((149 << 16));
+		tracker.onMenuOptionClicked(new MenuOptionClicked(entry));
+	}
+
+	@Test
+	public void aCapeWhoseOptionIsThePlaceCountsIt()
+	{
+		// THE REPORTED BUG, read off the owner's own client rather than guessed:
+		// a construction cape teleport to Pollnivneach arrives as one click whose
+		// option is "Pollnivneach" and whose target is EMPTY, because it is an
+		// item operation. Three fixes tested the target for "cape" and could
+		// never match, so every one of these went uncounted.
+		itemOpClick("Pollnivneach", 9789, "Construct. cape(t)");
+		jumpAt(3);
+
+		assertEquals(1, stat(TELEPORTS_POLLNIVNEACH));
+		assertEquals(1, stat(TELEPORTS_VIA_CAPE));
+		assertEquals(1, stat(TELEPORTS_TOTAL));
+	}
+
+	@Test
+	public void theMeansIsReadOffTheItemSinceTheClickDoesNotName2It()
+	{
+		// the same shape on a ring names jewellery, not a cape
+		itemOpClick("Castle Wars", 2552, "Ring of dueling(8)");
+		jumpAt(3);
+		assertEquals(1, stat(TELEPORTS_CASTLE_WARS));
+		assertEquals(1, stat(TELEPORTS_VIA_JEWELLERY));
+		assertEquals(0, stat(TELEPORTS_VIA_CAPE));
+	}
+
+	@Test
+	public void handlingAnItemIsNotTeleportingWithIt()
+	{
+		// an option that names no place arms nothing, and neither do the verbs
+		// that move an item about
+		itemOpClick("Wear", 9789, "Construct. cape(t)");
+		itemOpClick("Drop", 9789, "Construct. cape(t)");
+		itemOpClick("Examine", 9789, "Construct. cape(t)");
+		jumpAt(4);
+		assertEquals(0, stat(TELEPORTS_TOTAL));
+		assertEquals(places().toString(), 0, places().size());
 	}
 }

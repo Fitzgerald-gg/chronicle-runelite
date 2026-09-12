@@ -91,7 +91,7 @@ public class ChronicleCounters
 			built = new StatTracker[]{
 				new GoldStatTracker(store, client),
 				new ItemStatTracker(store, client, itemManager, gatheredLedger),
-				new MovementStatTracker(store, client),
+				new MovementStatTracker(store, client, itemManager),
 				new SkillingStatTracker(store, client, skillDeriver),
 				new FoodStatTracker(store, client, itemManager, consumableSink),
 				new NPCStatTracker(store),

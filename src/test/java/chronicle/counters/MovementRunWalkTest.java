@@ -13,6 +13,7 @@ import net.runelite.api.Player;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.gameval.VarPlayerID;
+import net.runelite.client.game.ItemManager;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -36,15 +37,17 @@ public class MovementRunWalkTest
 	private Client client;
 	private Player local;
 	private MovementStatTracker tracker;
+	private ItemManager items;
 
 	@Before
 	public void setUp()
 	{
 		store = new StatStore();
 		client = Mockito.mock(Client.class);
+		items = Mockito.mock(ItemManager.class);
 		local = Mockito.mock(Player.class);
 		Mockito.when(client.getLocalPlayer()).thenReturn(local);
-		tracker = new MovementStatTracker(store, client);
+		tracker = new MovementStatTracker(store, client, items);
 	}
 
 	// the run toggle, and a bar with something in it
