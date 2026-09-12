@@ -33,6 +33,13 @@ import static chronicle.counters.StatKeys.*;
  * logins, world hops, instance entries and staircases out of the count and supplies the
  * destination label. Fairy rings have their own animation and credit straight off it.
  *
+ * <p>Some clicks only open a menu the destination is chosen from: a cape's "Teleport"
+ * opens the scrollable list, a rubbed ring or amulet the chatbox options, the POH
+ * jewellery box its own interface. The opener arms the means, the row chosen re-arms
+ * with the place, and while the menu is on screen the pending waits rather than
+ * expiring, so a slow choice or one made from the keyboard still lands in the window.
+ * Closing the interface instead, or walking out of the house, drops it.
+ *
  * <p>Run and walk are split off the step itself: two tiles in a tick can only be a run.
  * Only a one-tile step is ambiguous, and it falls back on the run toggle and a non-empty
  * energy bar, so the residual error is a single tile at a time and it leans one way -
@@ -56,7 +63,7 @@ public class MovementStatTracker implements StatTracker
 	private static final int TELEPORT_MIN_JUMP = 15;
 
 	// A teleport is attributed to the FIRST substring that occurs in the click label
-	// (option + target) or the nexus row text. Substring rather than exact, since a
+	// (option + target) or a menu row's text. Substring rather than exact, since a
 	// nexus row is keybind-prefixed ("5 :  Camelot"). ORDER IS LOAD-BEARING: any
 	// substring that contains another comes first, and a diary switch destination
 	// (Grand Exchange, Seers', Yanille) comes before its base town. Some places carry
@@ -217,7 +224,8 @@ public class MovementStatTracker implements StatTracker
 	// the player likes before a row is picked, and nothing moves until one is.
 	private static final int RUB_MENU_WINDOW_TICKS = 25;
 	// tick of the last "Rub" on teleport jewellery; the destination arrives as a
-	// chat-menu row click shortly after. -1 = idle
+	// chat-menu row click shortly after. The pending itself is what lets that row
+	// through; this is the gate for a row whose own arm was missed. -1 = idle
 	private int rubTick = -1;
 
 	public MovementStatTracker(StatStore statStore, Client client)
@@ -242,37 +250,64 @@ public class MovementStatTracker implements StatTracker
 			return;
 		}
 
+		int group = event.getWidgetId() >> 16;
+
+		// the close button of a teleport interface (the nexus list, the jewellery box):
+		// the player chose nothing and the box is gone, so whatever its opener armed is
+		// dropped rather than left for the next house exit to claim. The nexus's Close
+		// is a static child of its group, which the row branch below would otherwise
+		// read as an empty row and arm as Nexus.
+		if (optLow.equals("close")
+			&& (group == InterfaceID.TELENEXUS_TELEPORT || group == InterfaceID.POH_JEWELLERY_BOX))
+		{
+			clearPending();
+			return;
+		}
+
 		// a row click in the nexus teleport list
-		if ((event.getWidgetId() >> 16) == InterfaceID.TELENEXUS_TELEPORT)
+		if (group == InterfaceID.TELENEXUS_TELEPORT)
 		{
 			armTeleport(nexusRowText(event.getParam0()), true);
 			return;
 		}
 
-		// the POH jewellery box lists its destinations as text rows. Only the six
-		// destination sections arm; the FRAME child is the close button and scroll
-		// furniture, and arming there would phantom-credit the next house exit.
-		if ((event.getWidgetId() >> 16) == InterfaceID.POH_JEWELLERY_BOX)
+		// the POH jewellery box lists its destinations as text rows. Which child holds
+		// them is not pinned down (the six sections DUELING..GLORY, or a layer of the
+		// box's own), so any row in the group whose text names a place arms, whatever
+		// it sits under; the scroll furniture names none and arms nothing, and Close
+		// returned above with the opener's arm dropped. A row the table can't place
+		// still credits the total and the means through the box's opener, armed
+		// further down.
+		if (group == InterfaceID.POH_JEWELLERY_BOX)
 		{
-			if (event.getWidgetId() >= InterfaceID.PohJewelleryBox.DUELING
-				&& event.getWidgetId() <= InterfaceID.PohJewelleryBox.GLORY)
+			String row = rowLabel(event, optLow, tgtLow);
+			if (matchDestinationKey(row) != null)
 			{
-				String row = widgetChildText(event.getWidgetId(), event.getParam0());
-				armTeleport((row == null || row.isEmpty()) ? optLow + " " + tgtLow : row, false);
+				armTeleport(row, false);
 				pendingMethod = TELEPORTS_VIA_JEWELLERY;
 			}
 			return;
 		}
 
-		// the chat menu a rubbed item opens, its rows being the destinations. Gated on
-		// a recent rub so ordinary chat menus don't arm anything.
-		if ((event.getWidgetId() >> 16) == InterfaceID.MENU && rubTick >= 0
-			&& client.getTickCount() - rubTick <= RUB_MENU_WINDOW_TICKS)
+		// a row of either chat menu: the scrollable list a cape's "Teleport" opens, or
+		// the chatbox options a rubbed ring or amulet shows
+		if (group == InterfaceID.MENU || group == InterfaceID.CHATMENU)
 		{
-			String row = widgetChildText(event.getWidgetId(), event.getParam0());
-			armTeleport((row == null || row.isEmpty()) ? optLow + " " + tgtLow : row, false);
-			pendingMethod = TELEPORTS_VIA_JEWELLERY;
-			rubTick = -1;
+			chooseMenuRow(rowLabel(event, optLow, tgtLow));
+			return;
+		}
+
+		// the jewellery box itself. Its rows arrive as group 590 clicks above, but a
+		// row chosen from the keyboard posts none, so the "Teleport Menu" opener arms
+		// the means on its own and a recognised row re-arms with the place. An option
+		// that names a place outright (should the box offer one) arms the same way.
+		if (tgtLow.contains("jewellery box"))
+		{
+			if (optLow.equals("teleport menu") || matchDestinationKey(optLow) != null)
+			{
+				armTeleport(optLow + " " + tgtLow, false);
+				pendingMethod = TELEPORTS_VIA_JEWELLERY;
+			}
 			return;
 		}
 
@@ -296,7 +331,7 @@ public class MovementStatTracker implements StatTracker
 
 		// a left-click on the nexus with a primary destination set teleports straight
 		// away, no list interface: the option text is the place itself ("Last Boat",
-		// "Great Kourend"). "Configuration" opens the destination editor — the one nexus
+		// "Great Kourend"). "Configuration" opens the destination editor, the one nexus
 		// option to skip. The openers and Examine returned above.
 		if (tgtLow.contains("portal nexus"))
 		{
@@ -318,13 +353,19 @@ public class MovementStatTracker implements StatTracker
 		}
 
 		// the world's house portal names no place at all (target just "Portal"), so the
-		// gate above can't see it. Outside only, since the same click inside the house
-		// is the exit.
+		// gate above can't see it. The same click inside the house is the exit, on
+		// foot: no teleport can still be in flight, so a pending left by a jewellery
+		// box dismissed from the keyboard is dropped there rather than credited to the
+		// exit's scene rebuild.
 		if (tgtLow.equals("portal")
 			&& (optLow.equals("enter") || optLow.equals("home")
-			|| optLow.equals("build mode") || optLow.equals("friend's house"))
-			&& !client.isInInstancedRegion())
+			|| optLow.equals("build mode") || optLow.equals("friend's house")))
 		{
+			if (client.isInInstancedRegion())
+			{
+				clearPending();
+				return;
+			}
 			armTeleport("house", false);
 			return;
 		}
@@ -441,6 +482,84 @@ public class MovementStatTracker implements StatTracker
 		pendingMethod = null;   // callers that know the means set it after arming
 	}
 
+	// a chat-menu row chosen while a teleport is pending names its destination: the
+	// pending re-arms with the row's text and keeps its means. "Home" in a cape's
+	// list is the player's house. A row the table can't place leaves the pending as
+	// it is, so the landing still credits the total and the method. A rub whose own
+	// arm was missed is the one case that arms from nothing, gated on rubTick; the
+	// rub's menu is answered by exactly one row, so that gate closes on whichever row
+	// it is, matched or not ("Nowhere" is the glory's own cancel).
+	private void chooseMenuRow(String row)
+	{
+		boolean rubbed = rubTick >= 0 && client.getTickCount() - rubTick <= RUB_MENU_WINDOW_TICKS;
+		if (!teleportPending() && !rubbed)
+		{
+			return;
+		}
+		if (rubbed)
+		{
+			rubTick = -1;
+		}
+		// a spirit tree's list is stops on one network, like fairy rings: the hop
+		// stays credited to the tree, whatever place the row names
+		if (teleportPending() && "spirit tree".equals(pendingLabel))
+		{
+			return;
+		}
+		String place = isHomeRow(row) ? "house" : row;
+		if (matchDestinationKey(place) == null)
+		{
+			return;
+		}
+		String method = pendingMethod != null ? pendingMethod
+			: (rubbed ? TELEPORTS_VIA_JEWELLERY : null);
+		armTeleport(place, false);
+		pendingMethod = method;
+	}
+
+	// the word "home" on its own in a row, whatever keybind prefix or click verb
+	// sits around it ("Home", "1 :  Home", "home continue")
+	private static boolean isHomeRow(String row)
+	{
+		return row.matches("(?s)(?:.*\\W)?home(?:\\W.*)?");
+	}
+
+	// the text a clicked row carries, lower-cased: its widget child's text joined with
+	// the click's own option and target, so the place is found wherever the row
+	// keeps it. The row text leads, so its place is the one a substring scan sees
+	// first when the click's target names an item as well.
+	private String rowLabel(MenuOptionClicked event, String optLow, String tgtLow)
+	{
+		String row = widgetChildText(event.getWidgetId(), event.getParam0()).toLowerCase();
+		return (row + " " + optLow + " " + tgtLow).trim();
+	}
+
+	// whether a chat menu is on screen: the chatbox options (group 219) or the
+	// scrollable list (group 187). Only asked while a teleport is pending, so an idle
+	// tick consults no widget. Group 187 names no UNIVERSE; its child 0 is LJ_LAYER2
+	// in gameval naming, and the list layer LJ_LAYER1 is read as well in case the
+	// root's visibility reads differently live.
+	// whether the pending is one whose destination is chosen from a chat menu
+	private boolean awaitsAMenu()
+	{
+		return TELEPORTS_VIA_CAPE.equals(pendingMethod)
+			|| TELEPORTS_VIA_JEWELLERY.equals(pendingMethod)
+			|| rubTick >= 0
+			|| "spirit tree".equals(pendingLabel);
+	}
+
+	private boolean chatMenuOpen()
+	{
+		return showing(InterfaceID.Chatmenu.UNIVERSE)
+			|| showing(InterfaceID.Menu.LJ_LAYER2) || showing(InterfaceID.Menu.LJ_LAYER1);
+	}
+
+	private boolean showing(int componentId)
+	{
+		Widget w = client.getWidget(componentId);
+		return w != null && !w.isHidden();
+	}
+
 	// tag-stripped text of a clicked component's child, falling back to the
 	// component's own text
 	private String widgetChildText(int compositeId, int index)
@@ -514,6 +633,17 @@ public class MovementStatTracker implements StatTracker
 		}
 
 		lastPlayerPos = current;
+
+		// a chat menu holding the destination choice (a cape's list, a rubbed item's
+		// options, a spirit tree's stops) sits open as long as the player likes, and a
+		// row picked from the keyboard posts no click at all. While one is on screen
+		// the pending waits, so the landing still falls inside the window. Only a
+		// pending that opens such a menu waits: a cast that never landed must not
+		// ride out an unrelated dialogue and claim the next region hop.
+		if (pendingTick >= 0 && awaitsAMenu() && chatMenuOpen())
+		{
+			pendingTick = client.getTickCount();
+		}
 
 		// expire a pending that never landed: a cancelled cast, a non-teleport nexus
 		// click. Left standing it attaches itself to whatever movement comes next.
