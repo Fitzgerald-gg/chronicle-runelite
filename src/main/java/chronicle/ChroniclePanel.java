@@ -4024,7 +4024,9 @@ class ChroniclePanel extends PluginPanel
 		JPanel controls = column();
 
 		// granularity pills
-		JPanel pills = new JPanel(new GridLayout(1, 5, 3, 3));
+		// three across, two rows. Five in one row gives each pill 31px of text
+		// and "Lifetime" needs 39, so it clipped.
+		JPanel pills = new JPanel(new GridLayout(0, 3, 3, 3));
 		pills.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		for (String g : new String[]{"Day", "Week", "Month", "Year", "Lifetime"})
 		{

@@ -2733,4 +2733,57 @@ public class HistoryProgressCardTest
 		}
 		return false;
 	}
+
+	@Test
+	public void noPeriodPillClipsItsOwnName() throws Exception
+	{
+		// five choices across one row left each 31px of text and "Lifetime"
+		// needs 39. Laid out at the real panel width, none may overflow.
+		ChroniclePanel p = panel(stub(true));
+		history(p);   // buildHistory is what hands the controls up
+		JPanel controls = historyControlsOf(p);
+		assertNotNull("buildHistory handed up no controls", controls);
+		// lay the pill row out at the width the panel really gives it
+		JPanel row = (JPanel) labelNamed(controls, "Day").getParent();
+		row.setSize(net.runelite.client.ui.PluginPanel.PANEL_WIDTH - 16,
+			row.getPreferredSize().height);
+		row.doLayout();
+		for (String name : new String[]{"Day", "Week", "Month", "Year", "Lifetime"})
+		{
+			JLabel pill = labelNamed(controls, name);
+			assertNotNull(name + " is not on the control row", pill);
+			int text = pill.getFontMetrics(pill.getFont()).stringWidth(name);
+			java.awt.Insets in = pill.getInsets();
+			int room = pill.getWidth() - in.left - in.right;
+			assertTrue(name + " clips: " + text + "px of text in " + room + "px",
+				room >= text);
+		}
+	}
+
+	private static JPanel historyControlsOf(ChroniclePanel p) throws Exception
+	{
+		Field f = ChroniclePanel.class.getDeclaredField("historyControls");
+		f.setAccessible(true);
+		return (JPanel) f.get(p);
+	}
+
+	private static JLabel labelNamed(Container c, String text)
+	{
+		for (Component k : c.getComponents())
+		{
+			if (k instanceof JLabel && text.equals(((JLabel) k).getText()))
+			{
+				return (JLabel) k;
+			}
+			if (k instanceof Container)
+			{
+				JLabel hit = labelNamed((Container) k, text);
+				if (hit != null)
+				{
+					return hit;
+				}
+			}
+		}
+		return null;
+	}
 }
