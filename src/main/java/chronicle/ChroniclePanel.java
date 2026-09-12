@@ -571,6 +571,31 @@ class ChroniclePanel extends PluginPanel
 	// state is a key in the panel's one fold register, same as every other fold: the
 	// home ticker rebuilds every three seconds and would otherwise shut the fold on
 	// the reader between one glance and the next.
+	// how much of this session's damage the three styles account for; nothing to
+	// open when the record never typed it
+	private static long splitOf(Map<String, Integer> sess)
+	{
+		long n = 0;
+		for (String k : DAMAGE_SPLIT)
+		{
+			n += sess.getOrDefault(k, 0);
+		}
+		return n;
+	}
+
+	private void damageFoldHead(JPanel head)
+	{
+		JLabel name = (JLabel) ((BorderLayout) head.getLayout())
+			.getLayoutComponent(BorderLayout.CENTER);
+		if (foldOpen(FOLD_HOME_DAMAGE))
+		{
+			name.setForeground(accent());
+		}
+		head.setToolTipText("The damage this session, by style");
+		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		head.addMouseListener(clicker(() -> toggleFold(FOLD_HOME_DAMAGE)));
+	}
+
 	private void xpFoldHead(JPanel head)
 	{
 		JLabel name = (JLabel) ((BorderLayout) head.getLayout())
@@ -645,6 +670,10 @@ class ChroniclePanel extends PluginPanel
 			if (v > 0)
 			{
 				boolean isXp = "totalXpGained".equals(key);
+				// damage carries its own split, the way xp carries its skills:
+				// the three styles are that one figure broken up, not three more
+				// trackers, so they open from it rather than standing beside it
+				boolean isDamage = "damageDealt".equals(key) && splitOf(sess) > 0;
 				JPanel r = row(homeLabel(key),
 					StatRegistry.isGp(key) ? gp(v) + " gp"
 						: (isXp ? "+" + gp(v) : fmt(v)),
@@ -653,10 +682,26 @@ class ChroniclePanel extends PluginPanel
 				{
 					xpFoldHead(r);
 				}
+				if (isDamage)
+				{
+					damageFoldHead(r);
+				}
 				strip.add(r);
 				if (isXp && foldOpen(FOLD_HOME_XP))
 				{
 					addXpBySkill(strip);
+				}
+				if (isDamage && foldOpen(FOLD_HOME_DAMAGE))
+				{
+					for (String split : DAMAGE_SPLIT)
+					{
+						long sv = sess.getOrDefault(split, 0);
+						if (sv > 0)
+						{
+							strip.add(row(StatRegistry.label(split), fmt(sv), null));
+							mounted++;
+						}
+					}
 				}
 				shownKeys.add(key);
 				mounted++;
@@ -682,26 +727,50 @@ class ChroniclePanel extends PluginPanel
 			strip.add(row("Left behind", fmt(untaken[0]) + " · " + gp(untaken[1]) + " gp", null));
 			mounted++;
 		}
-		List<Map.Entry<String, Integer>> movers = new ArrayList<>();
+		// Everything else the session moved, each tracker under the parent it
+		// belongs to. A herb sack run moves a dozen typed keys, and the strip says
+		// "Herblore 247" until the reader opens it rather than listing twelve
+		// herbs. A tracker with no parent stands on its own line. Sections and
+		// lone rows rank together, biggest first, so the reading order is one list.
+		Map<String, List<Map.Entry<String, Long>>> bySection = new LinkedHashMap<>();
+		Map<String, List<Map.Entry<String, Long>>> floorRows = new LinkedHashMap<>();
+		Map<String, Long> lone = new LinkedHashMap<>();
 		for (Map.Entry<String, Integer> e : plugin.sessionDisplayCounters().entrySet())
 		{
-			if (e.getValue() > 0 && !shownKeys.contains(e.getKey())
-				&& !StatRegistry.hidden(e.getKey())
-				&& !StatRegistry.isFloor(e.getKey()))
+			String key = e.getKey();
+			if (e.getValue() <= 0 || shownKeys.contains(key) || StatRegistry.hidden(key)
+				|| DAMAGE_SPLIT.contains(key))
 			{
-				movers.add(e);
+				continue;
+			}
+			Map.Entry<String, Long> moved =
+				new java.util.AbstractMap.SimpleEntry<>(key, (long) e.getValue());
+			String sec = StatRegistry.subgroup(key);
+			boolean floor = StatRegistry.isFloor(key);
+			if (sec.isEmpty())
+			{
+				// a flat key that heads one of its family's sections is that
+				// section's floor, not a row of its own: "Doses drunk" is the
+				// Potions total, and one figure is shown once
+				String heads = headOf(key);
+				if (heads == null)
+				{
+					lone.put(key, moved.getValue());
+					continue;
+				}
+				sec = heads;
+				floor = true;
+			}
+			if (floor)
+			{
+				floorRows.computeIfAbsent(sec, k -> new ArrayList<>()).add(moved);
+			}
+			else
+			{
+				bySection.computeIfAbsent(sec, k -> new ArrayList<>()).add(moved);
 			}
 		}
-		movers.sort(Map.Entry.<String, Integer>comparingByValue().reversed());
-		// Everything the session moved, biggest first. The tab has the room and a
-		// session only counts what was actually done, so there is nothing to trim to.
-		for (Map.Entry<String, Integer> e : movers)
-		{
-			long v = e.getValue();
-			strip.add(row(StatRegistry.label(e.getKey()),
-				StatRegistry.isGp(e.getKey()) ? gp(v) + " gp" : fmt(v), null));
-			mounted++;
-		}
+		mounted += addSessionMovers(strip, bySection, floorRows, lone);
 		if (mounted == 0)
 		{
 			strip.add(row("A fresh page", "", null));
@@ -741,6 +810,145 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		return p;
+	}
+
+	/**
+	 * The section a flat key heads, or null when it heads none. A key with no
+	 * subgroup of its own can still be a section's floor total: foodEaten is
+	 * Living's "Meals eaten" and the Food section's total, and the strip must
+	 * show that one figure once, on the section, rather than twice.
+	 */
+	private static String headOf(String key)
+	{
+		for (String sec : StatRegistry.fixedSections(StatRegistry.family(key)))
+		{
+			if (!sec.isEmpty() && StatRegistry.floorKeys(sec).contains(key))
+			{
+				return sec;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * The rest of what the session moved, as one ranked list. A section with
+	 * typed rows under it is a single line carrying its total, and opens to those
+	 * rows with the unresolved remainder reconciled as "Other". A section that
+	 * only moved its own totals draws them plainly, since a fold that opens on
+	 * nothing is a worse row than the row it hid. Returns the lines mounted.
+	 */
+	private int addSessionMovers(JPanel strip,
+		Map<String, List<Map.Entry<String, Long>>> bySection,
+		Map<String, List<Map.Entry<String, Long>>> floorRows,
+		Map<String, Long> lone)
+	{
+		java.util.Set<String> sections = new java.util.LinkedHashSet<>(bySection.keySet());
+		sections.addAll(floorRows.keySet());
+		Map<String, Long> total = new LinkedHashMap<>();
+		Map<String, Long> ghosts = new LinkedHashMap<>();
+		for (String sec : sections)
+		{
+			List<Map.Entry<String, Long>> rows = bySection.get(sec);
+			long floor = 0;
+			for (Map.Entry<String, Long> f : floorRows.getOrDefault(sec, EMPTY_ROWS))
+			{
+				floor += f.getValue();
+			}
+			long shown = 0;
+			long typedSum = 0;
+			boolean anyTyped = false;
+			for (Map.Entry<String, Long> e : rows == null ? EMPTY_ROWS : rows)
+			{
+				shown += e.getValue();
+				if (StatRegistry.typed(e.getKey()))
+				{
+					anyTyped = true;
+					typedSum += e.getValue();
+				}
+			}
+			// the floor counts every action and only some of them resolve to a
+			// typed row; the remainder is drawn rather than dropped
+			long ghost = anyTyped && floor - typedSum >= 1 ? floor - typedSum : 0;
+			if (sec.equals("Teleports") && floor - shown >= 1)
+			{
+				ghost = floor - shown;
+			}
+			ghosts.put(sec, ghost);
+			total.put(sec, Math.max(shown + ghost, floor));
+		}
+
+		List<String[]> order = new ArrayList<>();
+		for (String sec : sections)
+		{
+			order.add(new String[]{"section", sec});
+		}
+		for (String key : lone.keySet())
+		{
+			order.add(new String[]{"row", key});
+		}
+		order.sort((a, b) -> Long.compare(
+			lineValue(b, total, lone), lineValue(a, total, lone)));
+
+		int mounted = 0;
+		for (String[] line : order)
+		{
+			String name = line[1];
+			if (line[0].equals("row"))
+			{
+				strip.add(sessionRow(name, lone.get(name)));
+				mounted++;
+				continue;
+			}
+			List<Map.Entry<String, Long>> rows = bySection.get(name);
+			if (rows == null || rows.isEmpty())
+			{
+				for (Map.Entry<String, Long> f : floorRows.getOrDefault(name, EMPTY_ROWS))
+				{
+					strip.add(sessionRow(f.getKey(), f.getValue()));
+					mounted++;
+				}
+				continue;
+			}
+			rows.sort(StatRegistry::compareRows);
+			String stateKey = "session:" + name;
+			boolean open = foldOpen(stateKey);
+			strip.add(groupHead(name, fmt(total.get(name)), stateKey, open));
+			mounted++;
+			if (!open)
+			{
+				continue;
+			}
+			for (Map.Entry<String, Long> e : rows)
+			{
+				strip.add(row(StatRegistry.rowLabel(e.getKey()), fmt(e.getValue()), null));
+				mounted++;
+			}
+			long ghost = ghosts.getOrDefault(name, 0L);
+			if (ghost > 0)
+			{
+				strip.add(ghostRow(name.equals("Teleports") ? "Other means" : "Other",
+					fmt(ghost)));
+				mounted++;
+			}
+		}
+		return mounted;
+	}
+
+	private static final List<Map.Entry<String, Long>> EMPTY_ROWS = new ArrayList<>();
+
+	// what a line in that ranked list is worth: a section is its total, a lone
+	// tracker is its own figure
+	private static long lineValue(String[] line, Map<String, Long> total,
+		Map<String, Long> lone)
+	{
+		Long v = line[0].equals("section") ? total.get(line[1]) : lone.get(line[1]);
+		return v != null ? v : 0L;
+	}
+
+	private JPanel sessionRow(String key, long v)
+	{
+		return row(StatRegistry.label(key),
+			StatRegistry.isGp(key) ? gp(v) + " gp" : fmt(v), null);
 	}
 
 	private boolean dropsLeftBehind;
@@ -2337,6 +2545,11 @@ class ChroniclePanel extends PluginPanel
 
 	// Home's xp total, broken out per skill.
 	private static final String FOLD_HOME_XP = "home:xp";
+	private static final String FOLD_HOME_DAMAGE = "home:damage";
+	// the styles damageDealt is made of; they read as its breakdown, never as
+	// trackers of their own
+	private static final List<String> DAMAGE_SPLIT = java.util.Arrays.asList(
+		"damageDealtMelee", "damageDealtRanged", "damageDealtMagic");
 
 	/** True while the fold under this key stands open. */
 	private boolean foldOpen(String key)
