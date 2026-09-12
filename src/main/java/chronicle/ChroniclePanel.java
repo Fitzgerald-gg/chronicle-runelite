@@ -2909,6 +2909,21 @@ class ChroniclePanel extends PluginPanel
 		return note.length() == 0 ? null : note.toString();
 	}
 
+	// The first line on the spine that carries kill counts, or null when none
+	// does yet: the date the Kills toggle names for a period closed before them.
+	private static java.time.LocalDate firstCarryingKcs(
+		java.util.SortedMap<java.time.LocalDate, HistoryLog.Baseline> spine)
+	{
+		for (Map.Entry<java.time.LocalDate, HistoryLog.Baseline> e : spine.entrySet())
+		{
+			if (e.getValue() != null && !e.getValue().kcs.isEmpty())
+			{
+				return e.getKey();
+			}
+		}
+		return null;
+	}
+
 	// Closed slayer segments dated inside [fromMs, toMs): a segment's ts is its
 	// completion instant, in epoch seconds.
 	private static long closedTasksBetween(ChronicleApiClient.SlayerJourney j, long fromMs, long toMs)
@@ -3000,15 +3015,32 @@ class ChroniclePanel extends PluginPanel
 	 * by an older line measures each count from the first line that carries it
 	 * ({@code earliestKc}), and a period wholly before that reports the standing
 	 * count and no gain.
+	 *
+	 * <p>The standing column is the period's close ({@code nowKc}), the way the
+	 * site drew every period as a snapshot. Only a period that reaches today
+	 * reads the live ledger instead ({@code live}): its closing line is the
+	 * newest one, and the ledger is that same state a few minutes fresher. A
+	 * closing line from before the plugin wrote kill counts says so in a note,
+	 * naming {@code kcsSince}, the first line that carries them, rather than
+	 * standing today's counts in for a past period.
 	 */
 	private void addKillCounts(JPanel p, Map<String, Long> beforeKc,
-		Map<String, Long> earliestKc, Map<String, Long> nowKc)
+		Map<String, Long> earliestKc, Map<String, Long> nowKc, boolean live,
+		java.time.LocalDate kcsSince)
 	{
-		Map<String, Long> standing = plugin.killCounts();
+		Map<String, Long> standing = live ? plugin.killCounts() : nowKc;
 		if (standing.isEmpty())
 		{
-			p.add(note("No kill counts recorded yet: they come from the "
-				+ "collection log and from what the drop ledger witnesses."));
+			if (live)
+			{
+				p.add(note("No kill counts recorded yet: they come from the "
+					+ "collection log and from what the drop ledger witnesses."));
+			}
+			else
+			{
+				p.add(note("Kill counts were not on the record when this period closed."
+					+ (kcsSince != null ? " They begin on " + kcsSince.format(FULL_DAY) + "." : "")));
+			}
 			return;
 		}
 		Map<String, Long> gained = HistoryLog.gained(beforeKc, earliestKc, nowKc);
@@ -3040,15 +3072,14 @@ class ChroniclePanel extends PluginPanel
 		};
 
 		// Everything else the drop ledger counted stands apart below. The
-		// collection log knows what counts as a boss; the ledger doesn't.
-		Map<String, Long> unpaged = plugin.ledgerKills();
+		// collection log knows what counts as a boss; the ledger doesn't. The
+		// ledger only sorts the names here; the figures stay the standing ones.
+		java.util.Set<String> unpaged = plugin.ledgerKills().keySet();
 		List<Map.Entry<String, Long>> rows = new ArrayList<>();
+		List<Map.Entry<String, Long>> rest = new ArrayList<>();
 		for (Map.Entry<String, Long> e : standing.entrySet())
 		{
-			if (!unpaged.containsKey(e.getKey()))
-			{
-				rows.add(e);
-			}
+			(unpaged.contains(e.getKey()) ? rest : rows).add(e);
 		}
 		rows.sort(byGainThenTotal);
 		if (!rows.isEmpty())
@@ -3062,7 +3093,6 @@ class ChroniclePanel extends PluginPanel
 			p.add(vgap(6));
 		}
 
-		List<Map.Entry<String, Long>> rest = new ArrayList<>(unpaged.entrySet());
 		rest.sort(byGainThenTotal);
 		if (!rest.isEmpty())
 		{
@@ -3140,10 +3170,21 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
-	// The hiscores grid: every skill's standing level and the period's gain. A
-	// skill that didn't move keeps its place and says nothing.
+	// The hiscores grid: every skill's level at the period's close and the
+	// period's gain. A skill that didn't move keeps its place and says nothing.
+	//
+	// The levels are read off the closing line's xp, the way the site drew every
+	// period as a snapshot: the year 2022 shows the levels 2022 ended on. A skill
+	// the closing line lacks draws no level, and the head sums the drawn levels
+	// into a total. That total is short, and the head reads "Experience"
+	// instead, only when a skill the record had already begun to carry is
+	// missing from the close (carried: every skill on any line up to it). A
+	// skill the record had not yet begun to carry is no shortfall, so the
+	// imported past, which predates Sailing, keeps its total. Only a period
+	// that reaches today reads the live sheet instead (live): its closing line
+	// is the newest one, and the sheet is that same state a few minutes fresher.
 	private void addSkillGrid(JPanel p, List<Map.Entry<String, Long>> gains,
-		Map<String, Long> closingXp)
+		Map<String, Long> closingXp, java.util.Set<String> carried, boolean live)
 	{
 		Map<String, Long> gain = new LinkedHashMap<>();
 		long totalGained = 0;
@@ -3152,11 +3193,30 @@ class ChroniclePanel extends PluginPanel
 			gain.put(g.getKey(), g.getValue());
 			totalGained += g.getValue();
 		}
-		Map<String, long[]> sheet = plugin.skillSheet();
+		Map<String, long[]> sheet = live ? plugin.skillSheet() : java.util.Collections.emptyMap();
+
+		List<net.runelite.api.Skill> order = skillOrder();
+		Map<net.runelite.api.Skill, Long> levels =
+			new java.util.EnumMap<>(net.runelite.api.Skill.class);
+		long total = 0;
+		boolean complete = true;
+		for (net.runelite.api.Skill sk : order)
+		{
+			String key = sk.name().toLowerCase(Locale.ROOT);
+			long[] cur = sheet.get(key);
+			Long xp = closingXp.get(key);
+			long level = cur != null && cur[0] > 0 ? cur[0]
+				: xp != null ? PaceBook.levelAt(xp) : 0;
+			levels.put(sk, level);
+			total += level;
+			complete &= level > 0 || !carried.contains(key);
+		}
 
 		JPanel head = card("The period");
 		long[] ov = sheet.get("overall");
-		head.add(row(ov != null && ov[0] > 0 ? "Total level " + fmt(ov[0]) : "Experience",
+		String standing = ov != null && ov[0] > 0 ? "Total level " + fmt(ov[0])
+			: complete ? "Total level " + fmt(total) : "Experience";
+		head.add(row(standing,
 			totalGained > 0 ? "+" + gp(totalGained) : "nothing gained",
 			totalGained > 0 ? accent() : null));
 		if (!gains.isEmpty())
@@ -3171,17 +3231,9 @@ class ChroniclePanel extends PluginPanel
 		JPanel grid = new JPanel(new GridLayout(0, 3, 2, 2));
 		grid.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
-		for (net.runelite.api.Skill sk : skillOrder())
+		for (net.runelite.api.Skill sk : order)
 		{
-			String key = sk.name().toLowerCase(Locale.ROOT);
-			long[] cur = sheet.get(key);
-			long level = cur != null ? cur[0] : 0;
-			// No sheet yet: read the level off the spine's xp.
-			if (level <= 0)
-			{
-				level = PaceBook.levelAt(closingXp.getOrDefault(key, 0L));
-			}
-			grid.add(skillCell(sk, level, gain.get(key)));
+			grid.add(skillCell(sk, levels.get(sk), gain.get(sk.name().toLowerCase(Locale.ROOT))));
 		}
 		p.add(grid);
 		p.add(vgap(6));
@@ -3472,13 +3524,19 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 			gains.sort(Map.Entry.<String, Long>comparingByValue().reversed());
+			// The standing figures are the period's close, its last line, the
+			// way the site drew every period as a snapshot. Only a period that
+			// reaches today reads the live sheet and ledger: its closing line
+			// is the newest one, and they are that state a few minutes fresher.
+			boolean live = !pEnd.isBefore(java.time.LocalDate.now());
 			if (histBosses)
 			{
-				addKillCounts(p, from.getValue().kcs, earliest.kcs, at.getValue().kcs);
+				addKillCounts(p, from.getValue().kcs, earliest.kcs, at.getValue().kcs, live,
+					firstCarryingKcs(hist));
 			}
 			else
 			{
-				addSkillGrid(p, gains, at.getValue().skills);
+				addSkillGrid(p, gains, at.getValue().skills, earliest.skills.keySet(), live);
 			}
 
 			// Milestones inside the window, and beside them the summary lines

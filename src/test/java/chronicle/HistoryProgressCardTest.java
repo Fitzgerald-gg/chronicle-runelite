@@ -175,6 +175,83 @@ public class HistoryProgressCardTest
 		return s;
 	}
 
+	// a spine of three lines twenty days ago, ten days ago and today, every
+	// skill on each, under a live sheet a long way past all three: a window
+	// closed between the older two draws its own last line, and one reaching
+	// today draws the sheet. The closing line can lack Sailing (the imported
+	// past predates it) and can predate kill counts, which the last line and
+	// the live ledger carry either way. The ledger stands a few kills past
+	// today's line, so a figure tells which one a live period read, and it
+	// counts Nechryael, a source the collection log has no page for
+	private static PanelPreviewTest.StubPlugin spanned(boolean sailingOnClose,
+		boolean kcsOnClose)
+	{
+		PanelPreviewTest.StubPlugin s =
+			new PanelPreviewTest.StubPlugin(Mockito.mock(ItemManager.class));
+		LocalDate today = LocalDate.now();
+		HistoryLog.Baseline a = new HistoryLog.Baseline();
+		HistoryLog.Baseline b = new HistoryLog.Baseline();
+		HistoryLog.Baseline c = new HistoryLog.Baseline();
+		long overall = 0;
+		for (net.runelite.api.Skill sk : net.runelite.api.Skill.values())
+		{
+			if (sk == net.runelite.api.Skill.OVERALL)
+			{
+				continue;
+			}
+			String key = sk.name().toLowerCase(Locale.ROOT);
+			a.skills.put(key, 1_000_000L);   // level 73
+			if (sailingOnClose || sk != net.runelite.api.Skill.SAILING)
+			{
+				b.skills.put(key, 1_250_000L);   // level 75
+			}
+			c.skills.put(key, 1_400_000L);   // level 76
+			s.skills.put(key, new long[]{99, 13_100_000L});
+			overall += 99;
+		}
+		s.skills.put("overall", new long[]{overall, 0});
+		if (kcsOnClose)
+		{
+			a.kcs.put("Zulrah", 100L);
+			b.kcs.put("Zulrah", 108L);
+			a.kcs.put("Nechryael", 580L);
+			b.kcs.put("Nechryael", 600L);
+		}
+		c.kcs.put("Zulrah", 130L);
+		c.kcs.put("Nechryael", 630L);
+		s.kcs.put("Zulrah", 135L);
+		s.kcs.put("Nechryael", 630L);
+		s.ledgerKcs.put("Nechryael", 630L);
+		s.history.put(today.minusDays(20), a);
+		s.history.put(today.minusDays(10), b);
+		s.history.put(today, c);
+		return s;
+	}
+
+	// the number of skills the client draws in the grid: every one but Overall,
+	// which the api keeps as a field beside the constants rather than among them
+	private static int skillCount()
+	{
+		int n = 0;
+		for (net.runelite.api.Skill sk : net.runelite.api.Skill.values())
+		{
+			if (sk != net.runelite.api.Skill.OVERALL)
+			{
+				n++;
+			}
+		}
+		return n;
+	}
+
+	// the labels of the skill grid alone: from the first cell's icon text to
+	// the end of the last cell
+	private static List<String> grid(List<String> all)
+	{
+		int at = all.indexOf("ATT");
+		assertTrue(all.toString(), at >= 0);
+		return all.subList(at, all.size());
+	}
+
 	private static JsonObject entry(long ts, String type, String key, String val)
 	{
 		JsonObject e = new JsonObject();
@@ -923,5 +1000,176 @@ public class HistoryProgressCardTest
 		assertFalse(all.toString(), all.contains("TRACKED PROGRESS"));
 		// the xp grid above it still draws
 		assertTrue(all.toString(), all.contains("THE PERIOD"));
+	}
+
+	@Test
+	public void aPastPeriodDrawsTheLevelsItsClosingLineEndedOn() throws Exception
+	{
+		// a window closed ten days ago, under a live sheet that stands at 99 in
+		// everything: the grid reads the closing line's xp as levels (1.25M is
+		// 75), each lit with the period's gain, and the head sums those levels,
+		// not the sheet's total
+		LocalDate today = LocalDate.now();
+		ChroniclePanel p = panel(spanned(true, true));
+		set(p, "histFrom", today.minusDays(15));
+		set(p, "histTo", today.minusDays(5));
+		List<String> all = labels(history(p));
+		List<String> grid = grid(all);
+		assertEquals(grid.toString(), "75", grid.get(1));
+		assertEquals(grid.toString(), "+250k", grid.get(2));
+		assertEquals(grid.toString(), "75", beside(grid, "SAI"));
+		assertFalse(grid.toString(), grid.contains("99"));
+		String total = "Total level " + String.format(Locale.UK, "%,d", 75L * skillCount());
+		assertTrue(all.toString(), all.contains(total));
+		assertFalse(all.toString(), all.contains("Experience"));
+		assertFalse(all.toString(),
+			all.contains("Total level " + String.format(Locale.UK, "%,d", 99L * skillCount())));
+	}
+
+	@Test
+	public void aPeriodReachingTodayDrawsTheLiveSheet() throws Exception
+	{
+		// the closing line is today's, and the sheet is that state a few
+		// minutes fresher: the week, a typed range ending today, and the year
+		// under the cursor all read the sheet's 99s and its own total
+		LocalDate today = LocalDate.now();
+		String total = "Total level " + String.format(Locale.UK, "%,d", 99L * skillCount());
+		ChroniclePanel p = panel(spanned(true, true));
+		List<String> all = labels(history(p));
+		assertEquals(all.toString(), "99", grid(all).get(1));
+		assertTrue(all.toString(), all.contains(total));
+
+		set(p, "histFrom", today.minusDays(15));
+		set(p, "histTo", today);
+		all = labels(history(p));
+		assertEquals(all.toString(), "99", grid(all).get(1));
+		assertTrue(all.toString(), all.contains(total));
+
+		set(p, "histFrom", null);
+		set(p, "histTo", null);
+		set(p, "histGranularity", "Year");
+		all = labels(history(p));
+		assertEquals(all.toString(), "99", grid(all).get(1));
+		assertTrue(all.toString(), all.contains(total));
+	}
+
+	@Test
+	public void aSkillTheClosingLineLacksDrawsNoLevelAndTheHeadReadsExperience() throws Exception
+	{
+		// the closing line predates Sailing: its cell draws no level, and with
+		// one skill missing there is no total to sum, so the head reads
+		// Experience rather than a total short by a skill
+		LocalDate today = LocalDate.now();
+		ChroniclePanel p = panel(spanned(false, true));
+		set(p, "histFrom", today.minusDays(15));
+		set(p, "histTo", today.minusDays(5));
+		List<String> all = labels(history(p));
+		List<String> grid = grid(all);
+		assertEquals(grid.toString(), "-", beside(grid, "SAI"));
+		assertEquals(grid.toString(), "75", grid.get(1));
+		assertTrue(all.toString(), all.contains("Experience"));
+		for (String label : all)
+		{
+			assertFalse(label, label.startsWith("Total level"));
+		}
+	}
+
+	@Test
+	public void aSkillTheRecordHadNotBegunToCarryLeavesTheTotalWhole() throws Exception
+	{
+		// no line up to the close carries Sailing, the way the imported past
+		// predates it: its cell draws no level, and the head still sums the
+		// skills the record carried into a total rather than reading
+		// Experience, since a skill the record had not yet begun to carry is
+		// no shortfall
+		LocalDate today = LocalDate.now();
+		PanelPreviewTest.StubPlugin s = spanned(false, true);
+		s.history.get(today.minusDays(20)).skills.remove("sailing");
+		ChroniclePanel p = panel(s);
+		set(p, "histFrom", today.minusDays(15));
+		set(p, "histTo", today.minusDays(5));
+		List<String> all = labels(history(p));
+		List<String> grid = grid(all);
+		assertEquals(grid.toString(), "-", beside(grid, "SAI"));
+		assertEquals(grid.toString(), "75", grid.get(1));
+		assertTrue(all.toString(), all.contains("Total level "
+			+ String.format(Locale.UK, "%,d", 75L * (skillCount() - 1))));
+		assertFalse(all.toString(), all.contains("Experience"));
+	}
+
+	@Test
+	public void theKillsToggleStandsAtTheClosingLinesCounts() throws Exception
+	{
+		// the standing column is the closing line's count, with the period's
+		// gain beside it; neither today's line's 130 nor the live ledger's 135
+		// is anywhere on a past window
+		LocalDate today = LocalDate.now();
+		ChroniclePanel p = panel(spanned(true, true));
+		set(p, "histBosses", true);
+		set(p, "histFrom", today.minusDays(15));
+		set(p, "histTo", today.minusDays(5));
+		List<String> all = labels(history(p));
+		assertEquals(all.toString(), "108  +8", beside(all, "Zulrah"));
+		for (String label : all)
+		{
+			assertFalse(label, label.startsWith("130") || label.startsWith("135"));
+		}
+
+		// the week reaching today reads the ledger, fresher than today's line:
+		// its 135 stands, not the line's 130, beside the gain measured between
+		// the lines
+		set(p, "histFrom", null);
+		set(p, "histTo", null);
+		all = labels(history(p));
+		assertEquals(all.toString(), "135  +22", beside(all, "Zulrah"));
+	}
+
+	@Test
+	public void theKillsToggleStandsTheLedgersOwnSourcesAtTheClosingLine() throws Exception
+	{
+		// a source the collection log has no page for sits under Everything
+		// else counted, and on a past window it stands at the closing line's
+		// count like any other row, not the ledger's: the ledger only sorts the
+		// name there. The week reaching today reads the ledger.
+		LocalDate today = LocalDate.now();
+		ChroniclePanel p = panel(spanned(true, true));
+		set(p, "histBosses", true);
+		set(p, "histFrom", today.minusDays(15));
+		set(p, "histTo", today.minusDays(5));
+		List<String> all = labels(history(p));
+		int rest = all.indexOf("EVERYTHING ELSE COUNTED");
+		assertTrue(all.toString(), rest > all.indexOf("BOSSES AND ACTIVITIES"));
+		assertEquals(all.toString(), "Nechryael", all.get(rest + 1));
+		assertEquals(all.toString(), "600  +20", all.get(rest + 2));
+		for (String label : all)
+		{
+			assertFalse(label, label.startsWith("630"));
+		}
+
+		set(p, "histFrom", null);
+		set(p, "histTo", null);
+		all = labels(history(p));
+		rest = all.indexOf("EVERYTHING ELSE COUNTED");
+		assertEquals(all.toString(), "Nechryael", all.get(rest + 1));
+		assertEquals(all.toString(), "630  +30", all.get(rest + 2));
+	}
+
+	@Test
+	public void aClosingLineBeforeKillCountsSaysSoInsteadOfTodaysCounts() throws Exception
+	{
+		// the window closed before the spine carried kill counts: a note names
+		// the first line that does, and today's ledger stays off the past
+		LocalDate today = LocalDate.now();
+		ChroniclePanel p = panel(spanned(true, false));
+		set(p, "histBosses", true);
+		set(p, "histFrom", today.minusDays(15));
+		set(p, "histTo", today.minusDays(5));
+		List<String> all = labels(history(p));
+		String joined = String.join(" ", all);
+		assertTrue(joined, joined.contains("Kill counts were not on the record when this "
+			+ "period closed. They begin on " + today.format(FULL) + "."));
+		assertFalse(all.toString(), all.contains("Zulrah"));
+		assertFalse(all.toString(), all.contains("BOSSES AND ACTIVITIES"));
+		assertFalse(joined, joined.contains("No kill counts recorded yet"));
 	}
 }

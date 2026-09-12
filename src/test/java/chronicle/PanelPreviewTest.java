@@ -243,8 +243,16 @@ public class PanelPreviewTest
 		for (String g : new String[]{"Day", "Week", "Month", "Year"})
 		{
 			set(panel, "histGranularity", g);
+			// The Year shot steps back into the year before, the way the back
+			// arrow does: a period that reaches today draws the live sheet, and
+			// only a closed year can show the levels it ended on.
+			if ("Year".equals(g))
+			{
+				set(panel, "histCursor", LocalDate.now().withDayOfYear(1).minusDays(1));
+			}
 			shoot(panel, out, prefix + "-history-" + g.toLowerCase(), "HISTORY");
 		}
+		set(panel, "histCursor", LocalDate.now());
 		// one tracked-progress fold open: its rows and the leftover "Other" only
 		// exist in this state, and the folds are keyed apart from the Stats tab's.
 		// Cooking holds two verbs, so each row names its own.
@@ -551,11 +559,64 @@ public class PanelPreviewTest
 		// newest first, the order the journal keeps
 		s.historyFeed.sort((a, b) -> Long.compare(b.get("ts").getAsLong(), a.get("ts").getAsLong()));
 
-		// history: five weeks of daily baselines with drifting xp. The spine
-		// joined in stages, as a real record does: five imported days carrying
-		// skills alone, then the trackers, then the journal-derived extras ten
-		// days later, so the year's card says what it measures from
+		// history: the imported year before the plugin, resolved by quarter, then
+		// five weeks of daily baselines with drifting xp. The spine joined in
+		// stages, as a real record does: the imported lines carry every skill but
+		// Sailing and neither counters nor kill counts, the way the site's
+		// snapshots did (they predate Sailing, so the Year shot's head sums the
+		// skills the record carried and the Sailing cell draws no level), the
+		// daily lines open with five more days of skills alone, then the trackers,
+		// then the journal-derived extras ten days later, so a card says what it
+		// measures from. Every level in the imported year sits under the live
+		// sheet's (mining 85, woodcutting 92, fishing 96, runecraft 91), and the
+		// daily lines open above the year's close, so the Year shot, which steps
+		// back into this year, shows that year's closing levels rather than
+		// today's. Six skills move over the year; the rest hold, so the grid keeps
+		// quiet cells. The live sheet stays as it is: the shot has to differ from it.
 		LocalDate d = LocalDate.now();
+		LocalDate lastYear = d.minusYears(1);
+		Map<String, Long> yearEnd = new LinkedHashMap<>();
+		yearEnd.put("attack", 12_500_000L);
+		yearEnd.put("hitpoints", 12_000_000L);
+		yearEnd.put("mining", 2_900_000L);
+		yearEnd.put("strength", 10_000_000L);
+		yearEnd.put("agility", 4_000_000L);
+		yearEnd.put("smithing", 1_800_000L);
+		yearEnd.put("defence", 9_000_000L);
+		yearEnd.put("herblore", 3_000_000L);
+		yearEnd.put("fishing", 9_500_000L);
+		yearEnd.put("ranged", 11_000_000L);
+		yearEnd.put("thieving", 1_300_000L);
+		yearEnd.put("cooking", 13_100_000L);
+		yearEnd.put("prayer", 1_500_000L);
+		yearEnd.put("crafting", 2_500_000L);
+		yearEnd.put("firemaking", 4_500_000L);
+		yearEnd.put("magic", 8_000_000L);
+		yearEnd.put("fletching", 6_000_000L);
+		yearEnd.put("woodcutting", 5_500_000L);
+		yearEnd.put("runecraft", 1_100_000L);
+		yearEnd.put("slayer", 6_000_000L);
+		yearEnd.put("farming", 2_700_000L);
+		yearEnd.put("construction", 1_200_000L);
+		yearEnd.put("hunter", 1_500_000L);
+		Map<String, Long> quarterStep = new LinkedHashMap<>();
+		quarterStep.put("attack", 200_000L);
+		quarterStep.put("slayer", 150_000L);
+		quarterStep.put("fishing", 150_000L);
+		quarterStep.put("mining", 60_000L);
+		quarterStep.put("woodcutting", 40_000L);
+		quarterStep.put("runecraft", 30_000L);
+		for (int q = 0; q < 4; q++)
+		{
+			HistoryLog.Baseline imported = new HistoryLog.Baseline();
+			for (Map.Entry<String, Long> e : yearEnd.entrySet())
+			{
+				imported.skills.put(e.getKey(),
+					e.getValue() - (3 - q) * quarterStep.getOrDefault(e.getKey(), 0L));
+			}
+			LocalDate quarterEnd = lastYear.withMonth(3 * (q + 1));
+			s.history.put(quarterEnd.withDayOfMonth(quarterEnd.lengthOfMonth()), imported);
+		}
 		long base = 13_204_113L;
 		for (int i = 35; i >= 0; i--)
 		{
