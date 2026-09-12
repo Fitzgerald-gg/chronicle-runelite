@@ -780,7 +780,7 @@ public class MovementTeleportMenuTest
 		// nothing at all was counted. The cape lists its house locations as
 		// options of their own, so neither half of the click says "tele" and no
 		// rule above it matched.
-		click("Pollnivneach", "Construct. cape(t)");
+		itemOpClick("Pollnivneach", 9789, "Construct. cape(t)");
 		jumpAt(3);
 		assertEquals(1, stat(TELEPORTS_POLLNIVNEACH));
 		assertEquals(1, stat(TELEPORTS_VIA_CAPE));
@@ -875,7 +875,12 @@ public class MovementTeleportMenuTest
 		Mockito.when(entry.getOption()).thenReturn(option);
 		Mockito.when(entry.getTarget()).thenReturn("");
 		Mockito.when(entry.getItemId()).thenReturn(itemId);
-		Mockito.when(entry.isItemOp()).thenReturn(true);
+		// FALSE, which is the proven value. The client returns true from
+		// isItemOp() only when the entry's identifier falls inside a 1-to-7
+		// switch (injected-client rl5.isItemOp), and a sub-option's identifier
+		// is ((sub + 1) << 16) | (op + 1), which never does. Stubbing this true
+		// is what made the previous fix look verified when it could not work.
+		Mockito.when(entry.isItemOp()).thenReturn(false);
 		Mockito.when(entry.getParam0()).thenReturn(27);
 		Mockito.when(entry.getParam1()).thenReturn((149 << 16));
 		tracker.onMenuOptionClicked(new MenuOptionClicked(entry));
@@ -919,5 +924,36 @@ public class MovementTeleportMenuTest
 		jumpAt(4);
 		assertEquals(0, stat(TELEPORTS_TOTAL));
 		assertEquals(places().toString(), 0, places().size());
+	}
+
+	@Test
+	public void theCapesHomeOptionIsThePlayersHouse()
+	{
+		// "Home" is the cape's first destination and the table has no entry for
+		// the bare word, so it resolved to nothing and the teleport arrived with
+		// no place against it
+		itemOpClick("Home", 9789, "Construct. cape(t)");
+		jumpAt(3);
+		assertEquals(1, stat(TELEPORTS_HOUSE));
+		assertEquals(1, stat(TELEPORTS_VIA_CAPE));
+	}
+
+	@Test
+	public void theClickIsRecognisedWithoutTheClientCallingItAnItemOp()
+	{
+		// the whole point: nothing here leans on isItemOp(), whose real value
+		// for a sub-option is false, nor on a target, which is empty
+		MenuEntry entry = Mockito.mock(MenuEntry.class);
+		Mockito.when(entry.getOption()).thenReturn("Rellekka");
+		Mockito.when(entry.getTarget()).thenReturn("");
+		Mockito.when(entry.getParam0()).thenReturn(27);
+		Mockito.when(entry.getParam1()).thenReturn(149 << 16);
+		Mockito.when(entry.getItemId()).thenReturn(0);
+		Mockito.when(entry.isItemOp()).thenReturn(false);
+		tracker.onMenuOptionClicked(new MenuOptionClicked(entry));
+		jumpAt(3);
+
+		assertEquals(1, stat(TELEPORTS_RELLEKKA));
+		assertEquals(1, stat(TELEPORTS_TOTAL));
 	}
 }

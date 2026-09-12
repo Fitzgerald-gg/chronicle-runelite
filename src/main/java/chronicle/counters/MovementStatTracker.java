@@ -406,14 +406,24 @@ public class MovementStatTracker implements StatTracker
 		// no list to choose from; the destinations are options of their own. An
 		// earlier fix tested the target for "cape", which is empty here, so it
 		// could never match and every one of these went uncounted.
-		if ((event.isItemOp() || isTeleportCape(tgtLow))
+		// "Home" is the cape's first destination and names the player's house.
+		String place = isHomeRow(optLow) ? "house" : optLow;
+		if (matchDestinationKey(place) != null
 			&& !isWearHandling(optLow) && !isInventoryManagement(optLow)
-			&& matchDestinationKey(optLow) != null)
+			&& (tgtLow.isEmpty() || event.isItemOp() || isTeleportCape(tgtLow)))
 		{
-			// the means is read off the item, since an item operation names it
-			// nowhere in the click; a click that does carry a target keeps it
+			// The target is what this must NOT lean on. isItemOp() is not it
+			// either: the client only returns true there when the entry's
+			// identifier falls inside a 1-to-7 switch, and a sub-option's
+			// identifier is built as ((sub + 1) << 16) | (op + 1), which never
+			// does. What was actually observed is an option naming a place and
+			// a target holding nothing, so that is what is tested.
+			//
+			// The means is read off the item, since the click names it nowhere.
+			// Where the id cannot be resolved the place and the total still
+			// count, which is the part that matters.
 			String item = tgtLow.isEmpty() ? itemName(event.getItemId()) : tgtLow;
-			armTeleport(optLow, false);
+			armTeleport(place, false);
 			pendingMethod = methodOf(optLow, item);
 			return;
 		}
