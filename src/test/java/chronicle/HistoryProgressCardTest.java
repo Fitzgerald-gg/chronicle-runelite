@@ -380,6 +380,9 @@ public class HistoryProgressCardTest
 		return (Set<String>) f.get(panel);
 	}
 
+	// The tab as a reader sees it: the window controls, which buildHistory now
+	// hands up to the panel so they can hang above the scroll, and the body under
+	// them.
 	private static JPanel history(ChroniclePanel panel) throws Exception
 	{
 		final JPanel[] out = new JPanel[1];
@@ -387,7 +390,18 @@ public class HistoryProgressCardTest
 		{
 			Method m = ChroniclePanel.class.getDeclaredMethod("buildHistory");
 			m.setAccessible(true);
-			out[0] = (JPanel) m.invoke(panel);
+			JPanel body = (JPanel) m.invoke(panel);
+			Field f = ChroniclePanel.class.getDeclaredField("historyControls");
+			f.setAccessible(true);
+			JPanel controls = (JPanel) f.get(panel);
+			JPanel whole = new JPanel();
+			whole.setLayout(new javax.swing.BoxLayout(whole, javax.swing.BoxLayout.Y_AXIS));
+			if (controls != null)
+			{
+				whole.add(controls);
+			}
+			whole.add(body);
+			out[0] = whole;
 		});
 		return out[0];
 	}
@@ -435,6 +449,23 @@ public class HistoryProgressCardTest
 	}
 
 	// the figure beside a named line, or null when the line is absent
+	// the group heads a card draws, in the order it draws them
+	private static List<String> groupHeads(List<String> card)
+	{
+		List<String> out = new ArrayList<>();
+		for (String line : card)
+		{
+			for (String g : chronicle.panel.HistoryProgress.GROUPS)
+			{
+				if (line.equals(g.toUpperCase(Locale.UK)))
+				{
+					out.add(line);
+				}
+			}
+		}
+		return out;
+	}
+
 	private static String beside(List<String> card, String label)
 	{
 		int at = card.indexOf(label);
@@ -766,17 +797,20 @@ public class HistoryProgressCardTest
 	public void theGroupsReadInOrderEachWithItsCount() throws Exception
 	{
 		List<String> card = card(labels(history(panel(stub(true)))));
-		// one shut fold per group, in the tab's fixed order, each carrying the
-		// number of lines it opens to. Travel and Achievement are absent: this
-		// period moved nothing either of them claims.
-		assertEquals(Arrays.asList(
-			"TRACKED PROGRESS",
-			"EXPERIENCE", "1",
-			"COMBAT", "4",
-			"LOOT", "6",
-			"SKILLING", "1",
-			"UPKEEP", "3",
-			"THE REST", "1"), card);
+		// the groups stand open, in the tab's fixed order, each head carrying the
+		// number of lines it holds. Travel and Achievement are absent: this period
+		// moved nothing either of them claims.
+		assertEquals(card.toString(), Arrays.asList(
+			"EXPERIENCE", "COMBAT", "LOOT", "SKILLING", "UPKEEP", "THE REST"),
+			groupHeads(card));
+		assertEquals(card.toString(), "1", beside(card, "EXPERIENCE"));
+		assertEquals(card.toString(), "4", beside(card, "COMBAT"));
+		assertEquals(card.toString(), "6", beside(card, "LOOT"));
+		assertEquals(card.toString(), "1", beside(card, "SKILLING"));
+		assertEquals(card.toString(), "3", beside(card, "UPKEEP"));
+		assertEquals(card.toString(), "1", beside(card, "THE REST"));
+		// and a group that stands open shows what it holds without a click
+		assertTrue(card.toString(), card.contains("Fishing"));
 	}
 
 	@Test
@@ -858,32 +892,38 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
-	public void aClickOnTheHeadOpensTheGroupThenTheFoldToItsRowsAndTheGhost() throws Exception
+	public void aClickOnTheHeadShutsTheGroupAndTheFoldInsideIsItsOwn() throws Exception
 	{
 		ChroniclePanel p = panel(stub(true));
 		JPanel view = history(p);
-		List<String> shut = labels(view);
-		// a shut group hides its sections, and a shut section its rows
-		assertFalse(shut.toString(), shut.contains("Fishing"));
-		assertFalse(shut.toString(), shut.contains("Shark"));
-		assertTrue(openFolds(p).isEmpty());
-
-		// the group's head opens it to its sections
-		JPanel group = rowNamed(view, "SKILLING");
-		assertNotNull(shut.toString(), group);
-		assertEquals(java.awt.Cursor.HAND_CURSOR, group.getCursor().getType());
-		click(group);
-		assertEquals(java.util.Collections.singleton("history:Skilling"), openFolds(p));
-		view = history(p);
 		List<String> open = card(labels(view));
+		// a group stands open on its sections, and a section stands shut on its rows
+		assertTrue(open.toString(), open.contains("Fishing"));
+		assertFalse(open.toString(), open.contains("Shark"));
+		assertTrue(openFolds(p).isEmpty());
 		int at = open.indexOf("SKILLING");
 		assertEquals(open.toString(), Arrays.asList("SKILLING", "1", "Fishing", "+50", "UPKEEP"),
 			open.subList(at, at + 5));
 
-		// and the section's head opens it to its rows and the leftover
+		// the group's head shuts it, and shutting one leaves the rest standing
+		JPanel group = rowNamed(view, "SKILLING");
+		assertNotNull(open.toString(), group);
+		assertEquals(java.awt.Cursor.HAND_CURSOR, group.getCursor().getType());
+		click(group);
+		assertEquals(java.util.Collections.singleton("history:shut:Skilling"), openFolds(p));
+		List<String> shut = card(labels(history(p)));
+		assertFalse(shut.toString(), shut.contains("Fishing"));
+		assertTrue(shut.toString(), shut.contains("SKILLING"));
+		assertTrue(shut.toString(), shut.contains("COMBAT"));
+
+		// and the same click opens it again
+		click(rowNamed(history(p), "SKILLING"));
+		assertTrue(openFolds(p).isEmpty());
+		view = history(p);
+
+		// the section's head opens it to its rows and the leftover
 		click(rowNamed(view, "Fishing"));
-		assertEquals(new java.util.HashSet<>(Arrays.asList("history:Skilling", FOLD)),
-			openFolds(p));
+		assertEquals(java.util.Collections.singleton(FOLD), openFolds(p));
 		open = card(labels(history(p)));
 		at = open.indexOf("Fishing");
 		assertEquals(open.toString(),
@@ -892,7 +932,7 @@ public class HistoryProgressCardTest
 
 		// and the same click shuts it again
 		click(rowNamed(history(p), "Fishing"));
-		assertEquals(java.util.Collections.singleton("history:Skilling"), openFolds(p));
+		assertTrue(openFolds(p).toString(), openFolds(p).isEmpty());
 	}
 
 	@Test
@@ -936,14 +976,16 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
-	public void theStatsTabsFoldsLeaveTheHistoryFoldsShut() throws Exception
+	public void theStatsTabsFoldsLeaveTheHistoryFoldsAlone() throws Exception
 	{
 		ChroniclePanel p = panel(stub(true));
 		openFolds(p).add("Skilling");
 		openFolds(p).add("Skilling:Fishing");
 		openFolds(p).add("Living:Food");
 		List<String> card = card(labels(history(p)));
-		assertFalse(card.toString(), card.contains("Fishing"));
+		// the section heads stand because their group does, and not one of them
+		// has been opened by a key belonging to the other tab
+		assertTrue(card.toString(), card.contains("Fishing"));
 		assertFalse(card.toString(), card.contains("Shark"));
 		assertFalse(card.toString(), card.contains("Other"));
 	}
@@ -1564,8 +1606,9 @@ public class HistoryProgressCardTest
 		List<String> all = labels(history(panel(stub(false))));
 		// no counter moved, so no group but Experience has anything to hold,
 		// and the xp the period gained is still reachable there
-		assertEquals(all.toString(), Arrays.asList("TRACKED PROGRESS", "EXPERIENCE", "1"),
-			card(all));
+		assertEquals(all.toString(), java.util.Collections.singletonList("EXPERIENCE"),
+			groupHeads(card(all)));
+		assertEquals(all.toString(), "1", beside(card(all), "EXPERIENCE"));
 		// the headline and the grid above it still draw
 		assertTrue(all.toString(), all.contains("THE PERIOD"));
 		assertEquals(all.toString(), "+50k", beside(headline(all), "Experience"));
@@ -2359,5 +2402,131 @@ public class HistoryProgressCardTest
 		// as far down as the redrawn view allows, and never back to the first line
 		assertTrue("the fold click threw the reader to the top",
 			moved.getValue() > 0);
+	}
+
+	// ---- the tab a reader opens ------------------------------------------
+
+	@Test
+	public void aRunOfMilestonesThatNameNothingIsOneLine() throws Exception
+	{
+		// an imported log slot carries no item name, so six of them were six
+		// copies of the same sentence. They fold into one line saying how many
+		// and across what span; anything that names itself keeps its own line.
+		long now = System.currentTimeMillis();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		for (int i = 0; i < 6; i++)
+		{
+			JsonObject e = new JsonObject();
+			e.addProperty("ts", now - (i + 1) * 3600_000L);
+			e.addProperty("type", "COLLECTION");
+			e.add("data", new JsonObject());
+			s.feed.add(e);
+		}
+		s.feed.add(entry(now - 2 * 3600_000L, "PET", "petName", "Abyssal orphan"));
+		ChroniclePanel p = panel(s);
+		List<String> all = labels(history(p));
+		assertTrue(all.toString(), all.contains("6 new log slots"));
+		assertTrue(all.toString(), all.contains("Pet: Abyssal orphan"));
+		// the card still counts the milestones, not the lines
+		assertTrue(all.toString(), all.contains("MILESTONES · 7"));
+		// and the folded run is not also listed one by one
+		assertEquals(all.toString(), 0,
+			java.util.Collections.frequency(all, "Log slot: new item"));
+	}
+
+	@Test
+	public void oneOfAKindThatNamesNothingKeepsItsOwnLine() throws Exception
+	{
+		// nothing to fold: a single unnamed milestone reads as itself
+		long now = System.currentTimeMillis();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		JsonObject e = new JsonObject();
+		e.addProperty("ts", now - 3600_000L);
+		e.addProperty("type", "COLLECTION");
+		e.add("data", new JsonObject());
+		s.feed.add(e);
+		List<String> all = labels(history(panel(s)));
+		assertTrue(all.toString(), all.contains("Log slot: new item"));
+		assertFalse(all.toString(), all.contains("1 new log slots"));
+	}
+
+	@Test
+	public void theKillBoardIsCappedAndOneClickBringsTheRest() throws Exception
+	{
+		// uncapped, a one day window drew the whole standing board
+		PanelPreviewTest.StubPlugin s = stub(true);
+		for (int i = 0; i < 20; i++)
+		{
+			s.kcs.put("Boss " + (char) ('A' + i), 100L + i);
+		}
+		ChroniclePanel p = panel(s);
+		set(p, "histBosses", true);
+		List<String> all = labels(history(p));
+		int board = all.indexOf("BOSSES AND ACTIVITIES");
+		assertTrue(all.toString(), board >= 0);
+		assertTrue(all.toString(), all.contains("Show 14 more"));
+		// six stand, ranked, and the other fourteen are held back
+		assertTrue(all.toString(), all.contains("Boss T"));
+		assertFalse(all.toString(), all.contains("Boss A"));
+		assertFalse(all.toString(), all.contains("Boss N"));
+
+		click(rowNamed(history(p), "Show 14 more"));
+		all = labels(history(p));
+		assertFalse(all.toString(), all.contains("Show 14 more"));
+		assertTrue(all.toString(), all.contains("Boss T"));
+		assertTrue(all.toString(), all.contains("Boss A"));
+	}
+
+	@Test
+	public void theWindowControlsHangAboveTheBodyAndNotInsideIt() throws Exception
+	{
+		// they choose the period, so they must not scroll away from the figures
+		// they chose
+		ChroniclePanel p = panel(stub(true));
+		final JPanel[] body = new JPanel[1];
+		edt(() ->
+		{
+			Method m = ChroniclePanel.class.getDeclaredMethod("buildHistory");
+			m.setAccessible(true);
+			body[0] = (JPanel) m.invoke(p);
+		});
+		List<String> inBody = labels(body[0]);
+		// "Skills" and "Kills" are left out of this check: the headline has a row
+		// called Kills, and the lens is proved to have moved by the controls below
+		for (String control : new String[]{"Day", "Month", "Year"})
+		{
+			assertFalse(control + " is still inside the scrolling body: " + inBody,
+				inBody.contains(control));
+		}
+		Field f = ChroniclePanel.class.getDeclaredField("historyControls");
+		f.setAccessible(true);
+		JPanel controls = (JPanel) f.get(p);
+		assertNotNull("buildHistory handed up no controls", controls);
+		List<String> up = labels(controls);
+		for (String control : new String[]{"Day", "Week", "Month", "Year", "Skills", "Kills"})
+		{
+			assertTrue(control + " is not among the controls: " + up, up.contains(control));
+		}
+	}
+
+	@Test
+	public void aSectionWhoseRowsMixUnitsSaysHowManyItHolds() throws Exception
+	{
+		// "Odds & ends" gathers a tile count beside a shop's takings, so there is
+		// no total to print. A heading with nothing beside it says neither what is
+		// inside nor that anything is, so it carries the count.
+		PanelPreviewTest.StubPlugin s = stub(true);
+		boolean opening = true;
+		for (HistoryLog.Baseline b : s.history.values())
+		{
+			b.counters.put("examines", opening ? 10L : 50L);
+			b.counters.put("animalsPetted", opening ? 1L : 4L);
+			opening = false;
+		}
+		ChroniclePanel p = panel(s);
+		List<String> card = card(labels(history(p)));
+		int at = card.indexOf("Odds & ends");
+		assertTrue(card.toString(), at >= 0);
+		assertEquals(card.toString(), "2", card.get(at + 1));
 	}
 }

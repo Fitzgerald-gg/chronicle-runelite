@@ -403,16 +403,34 @@ class ChroniclePanel extends PluginPanel
 	// somewhere new — a tab, a search, an opened detail — and lands at the top.
 	private boolean keepScroll;
 
+	// The History tab's period controls, hung above the scroll rather than inside
+	// it. Built by buildHistory, which is the only place that knows the window
+	// they name, and cleared on every rebuild so no other view inherits them.
+	private JPanel historyControls;
+
+	private static JScrollPane paneIn(java.awt.Container c)
+	{
+		for (Component k : c.getComponents())
+		{
+			if (k instanceof JScrollPane)
+			{
+				return (JScrollPane) k;
+			}
+		}
+		return null;
+	}
+
 	private void rebuild()
 	{
 		// rebuild() throws the whole scroll pane away and hangs a fresh one, which
 		// starts at the top. Expanded, Home is longer than the panel.
 		int priorScroll = 0;
-		if (keepScroll && display.getComponentCount() > 0
-			&& display.getComponent(0) instanceof JScrollPane)
+		if (keepScroll)
 		{
-			priorScroll = ((JScrollPane) display.getComponent(0))
-				.getVerticalScrollBar().getValue();
+			// found, not assumed to be first: a view that fixes controls above the
+			// scroll hangs them in the same container
+			JScrollPane was = paneIn(display);
+			priorScroll = was == null ? 0 : was.getVerticalScrollBar().getValue();
 		}
 		String stalled = plugin.journalWarning();
 		Color pulse = stalled == null ? ACCENT_SESSION : ColorScheme.PROGRESS_ERROR_COLOR;
@@ -427,6 +445,7 @@ class ChroniclePanel extends PluginPanel
 			manage.setVisible(view == View.JOURNAL || view == View.MANAGE);
 		}
 		display.removeAll();
+		historyControls = null;
 		JPanel body;
 		if (!searchQuery().isEmpty())
 		{
@@ -486,6 +505,13 @@ class ChroniclePanel extends PluginPanel
 		scroll.setBorder(null);
 		scroll.getVerticalScrollBar().setUnitIncrement(14);
 		display.add(scroll, BorderLayout.CENTER);
+		if (historyControls != null)
+		{
+			// The window a reader is looking at should not scroll away from the
+			// figures it chose. buildHistory hands its controls up and they hang
+			// above the scroll, fixed, for as long as that view is the one on show.
+			display.add(historyControls, BorderLayout.NORTH);
+		}
 		display.revalidate();
 		display.repaint();
 		if (priorScroll > 0)
@@ -3040,8 +3066,15 @@ class ChroniclePanel extends PluginPanel
 			{
 				continue;
 			}
-			String stateKey = "history:" + name;
-			boolean open = foldOpen(stateKey);
+			// The tab exists to show a period's progress, so it shows it. A group
+			// stands open and the fold shuts it, the way the session strip's bands
+			// do; the key names that, so a reader of this code is not left working
+			// out which way round it is.
+			String stateKey = "history:shut:" + name;
+			boolean open = !foldOpen(stateKey);
+			// the count stands in both states here, unlike the session strip's
+			// bands: these lists are capped and paged, so how many the group holds
+			// is not something the rows on screen can tell you
 			card.add(groupHead(name, fmt(lines), stateKey, open));
 			if (!open)
 			{
@@ -3126,10 +3159,13 @@ class ChroniclePanel extends PluginPanel
 	{
 		String stateKey = "history:" + s.family() + ":" + s.name();
 		boolean open = foldOpen(stateKey);
-		// a section of gp rows totals in gp; every other section counts, and
-		// one whose rows mix units carries no figure at all
-		String total = !s.summed() ? ""
-			: "+" + (s.gp() ? gp(s.total()) + " gp" : fmt(s.total()));
+		// a section of gp rows totals in gp and every other section counts. One
+		// whose rows mix units has no total worth printing, so it says how many
+		// it holds instead: a bare heading with nothing beside it tells a reader
+		// neither what is inside nor that anything is.
+		String total = s.summed()
+			? "+" + (s.gp() ? gp(s.total()) + " gp" : fmt(s.total()))
+			: fmt(s.rows().size());
 		card.add(subHead(s.name(), total, stateKey, open));
 		if (!open)
 		{
@@ -3505,49 +3541,39 @@ class ChroniclePanel extends PluginPanel
 		{
 			(unpaged.contains(e.getKey()) ? rest : rows).add(e);
 		}
+		// Both boards page the way every other list on the tab does: what moved
+		// this period stands at the top, a cap holds the rest back, and one click
+		// brings all of it. Uncapped, a one day window drew the whole standing
+		// board, hundreds of rows of lifetime counts under a heading that says
+		// the period moved four of them.
 		rows.sort(byGainThenTotal);
-		if (!rows.isEmpty())
-		{
-			JPanel card = card("Bosses and activities");
-			for (Map.Entry<String, Long> e : rows)
-			{
-				card.add(kcRow(e.getKey(), e.getValue(), gained.get(e.getKey())));
-			}
-			p.add(card);
-			p.add(vgap(6));
-		}
-
+		addKcBoard(p, "Bosses and activities", "history:list:kills", rows, gained);
 		rest.sort(byGainThenTotal);
-		if (!rest.isEmpty())
-		{
-			JPanel other = card("Everything else counted");
-			int mounted = 0;
-			for (Map.Entry<String, Long> e : rest)
-			{
-				if (mounted++ >= histKcShown)
-				{
-					break;
-				}
-				other.add(kcRow(e.getKey(), e.getValue(), gained.get(e.getKey())));
-			}
-			p.add(other);
-			if (rest.size() > histKcShown)
-			{
-				p.add(vgap(3));
-				JButton more = new JButton("Show " + Math.min(ROW_CAP, rest.size() - histKcShown)
-					+ " more of " + fmt(rest.size()));
-				more.addActionListener(e ->
-				{
-					histKcShown += ROW_CAP;
-					rebuildInPlace();
-				});
-				p.add(more);
-			}
-			p.add(vgap(6));
-		}
+		addKcBoard(p, "Everything else counted", "history:list:killsRest", rest, gained);
 	}
 
-	private int histKcShown = ROW_CAP;
+	private void addKcBoard(JPanel p, String title, String key,
+		List<Map.Entry<String, Long>> rows, Map<String, Long> gained)
+	{
+		if (rows.isEmpty())
+		{
+			return;
+		}
+		JPanel card = card(title);
+		int cap = shownCap(key);
+		int mounted = 0;
+		for (Map.Entry<String, Long> e : rows)
+		{
+			if (mounted++ >= cap)
+			{
+				break;
+			}
+			card.add(kcRow(e.getKey(), e.getValue(), gained.get(e.getKey())));
+		}
+		addMore(card, key, rows.size(), cap, false);
+		p.add(card);
+		p.add(vgap(6));
+	}
 
 	// One counted thing: what it stands at, and what the period added.
 	private JPanel kcRow(String name, long standing, Long gained)
@@ -3849,6 +3875,9 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildHistory()
 	{
 		JPanel p = column();
+		// the window controls, which rebuild() hangs above the scroll so they stay
+		// on screen while the period's figures move under them
+		JPanel controls = column();
 
 		// granularity pills
 		JPanel pills = new JPanel(new GridLayout(1, 4, 3, 3));
@@ -3871,8 +3900,8 @@ class ChroniclePanel extends PluginPanel
 			}));
 			pills.add(pill);
 		}
-		p.add(pills);
-		p.add(vgap(3));
+		controls.add(pills);
+		controls.add(vgap(3));
 
 		JPanel lens = new JPanel(new GridLayout(1, 2, 3, 3));
 		lens.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -3894,8 +3923,8 @@ class ChroniclePanel extends PluginPanel
 			}));
 			lens.add(t);
 		}
-		p.add(lens);
-		p.add(vgap(5));
+		controls.add(lens);
+		controls.add(vgap(5));
 
 		// the period under the cursor — or the exact dates the player typed
 		java.time.LocalDate end = histCursor;
@@ -3984,8 +4013,9 @@ class ChroniclePanel extends PluginPanel
 		stepper.add(back, BorderLayout.WEST);
 		stepper.add(lbl, BorderLayout.CENTER);
 		stepper.add(fwd, BorderLayout.EAST);
-		p.add(stepper);
-		p.add(vgap(6));
+		controls.add(stepper);
+		controls.add(vgap(6));
+		historyControls = controls;
 
 		// Ask for a fresh pass when the day has turned or the feed has grown.
 		// Probing the newest entry costs one copy; the gather costs thousands,
@@ -4287,19 +4317,19 @@ class ChroniclePanel extends PluginPanel
 
 			if (!milestones.isEmpty())
 			{
+				List<String[]> lines = milestoneLines(milestones);
 				JPanel card = card("Milestones · " + fmt(milestones.size()));
 				int shown = shownCap("history:list:milestones");
 				int mounted = 0;
-				for (JsonObject e : milestones)
+				for (String[] line : lines)
 				{
 					if (mounted++ >= shown)
 					{
 						break;
 					}
-					long ts = e.has("ts") ? e.get("ts").getAsLong() : 0;
-					card.add(row(feedLine(e), ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "", null));
+					card.add(row(line[0], line[1], null));
 				}
-				addMore(card, "history:list:milestones", milestones.size(), shown, false);
+				addMore(card, "history:list:milestones", lines.size(), shown, false);
 				p.add(card);
 				p.add(vgap(5));
 			}
@@ -4839,6 +4869,93 @@ class ChroniclePanel extends PluginPanel
 	// ------------------------------------------------------------------
 	// Feed rendering
 	// ------------------------------------------------------------------
+
+	/**
+	 * The period's milestones as lines, newest first. One that names itself is a
+	 * line of its own. A run of milestones of a kind that names nothing, the
+	 * imported log slots and the deaths with no killer on record, would otherwise
+	 * be the same sentence over and over: those fold into one line saying how
+	 * many and across what span, standing where the most recent of them stood.
+	 */
+	private static List<String[]> milestoneLines(List<JsonObject> milestones)
+	{
+		Map<String, Integer> nameless = new LinkedHashMap<>();
+		for (JsonObject e : milestones)
+		{
+			if (feedName(e) == null)
+			{
+				nameless.merge(typeOf(e), 1, Integer::sum);
+			}
+		}
+		List<String[]> out = new ArrayList<>();
+		java.util.Set<String> folded = new java.util.HashSet<>();
+		for (JsonObject e : milestones)
+		{
+			String type = typeOf(e);
+			String when = stamp(e);
+			if (feedName(e) != null || nameless.getOrDefault(type, 0) < 2)
+			{
+				out.add(new String[]{feedLine(e), when});
+				continue;
+			}
+			if (!folded.add(type))
+			{
+				continue;
+			}
+			// the list runs newest first, so the last of this run is its oldest
+			String oldest = when;
+			for (int i = milestones.size() - 1; i >= 0; i--)
+			{
+				JsonObject o = milestones.get(i);
+				if (type.equals(typeOf(o)) && feedName(o) == null)
+				{
+					oldest = stamp(o);
+					break;
+				}
+			}
+			out.add(new String[]{namelessLine(type, nameless.get(type)),
+				oldest.isEmpty() || oldest.equals(when) ? when : oldest + " to " + when});
+		}
+		return out;
+	}
+
+	private static String typeOf(JsonObject e)
+	{
+		return e.has("type") ? e.get("type").getAsString() : "";
+	}
+
+	private static String stamp(JsonObject e)
+	{
+		long ts = e.has("ts") ? e.get("ts").getAsLong() : 0;
+		return ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "";
+	}
+
+	// what a folded run of one kind reads as. The record knows how many and when,
+	// and nothing else about them, so the line says exactly that.
+	private static String namelessLine(String type, int n)
+	{
+		switch (type)
+		{
+			case "COLLECTION":
+				return fmt(n) + " new log slots";
+			case "DEATH":
+				return fmt(n) + " deaths";
+			case "PET":
+				return fmt(n) + " pets";
+			case "CLUE":
+				return fmt(n) + " caskets opened";
+			case "QUEST":
+				return fmt(n) + " quests completed";
+			case "DIARY":
+				return fmt(n) + " diaries completed";
+			case "COMBAT_ACHIEVEMENT":
+				return fmt(n) + " combat achievements";
+			case "LEVEL":
+				return fmt(n) + " levels";
+			default:
+				return fmt(n) + " " + StatRegistry.prettify(type.toLowerCase(Locale.ROOT));
+		}
+	}
 
 	private static String feedLine(JsonObject e)
 	{
