@@ -762,6 +762,18 @@ public class ChroniclePlugin extends Plugin
 		return localStore.dropSources();
 	}
 
+	/** The first day the dated loot roll holds, epoch ms, or 0 for none. */
+	long lootRollFrom()
+	{
+		return localStore.lootRollFrom();
+	}
+
+	/** The dated loot roll over a window, both days included. */
+	LocalStore.LootWindow lootBetween(java.time.LocalDate from, java.time.LocalDate to)
+	{
+		return localStore.lootBetween(from, to);
+	}
+
 	java.util.List<LocalStore.BagItem> sourceItems(String source)
 	{
 		return localStore.sourceItems(source);

@@ -2593,4 +2593,82 @@ public class HistoryProgressCardTest
 		assertEquals(card.toString(), "+400", beside(card, "Drops received"));
 		assertEquals(card.toString(), "+2.0M gp", beside(card, "Loot value"));
 	}
+
+	@Test
+	public void theDatedRollAnswersThePeriodAndNamesWhatTheLootWas() throws Exception
+	{
+		// the roll keeps one entry a day holding what was taken and what was
+		// left, so it answers a window exactly and can say what the loot was.
+		// Where it reaches back it is the source, over any sitting.
+		long now = System.currentTimeMillis();
+		LocalDate today = LocalDate.now();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		for (HistoryLog.Baseline b : s.history.values())
+		{
+			b.counters.remove("dropsReceived");
+			b.counters.remove("lootValue");
+		}
+		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		// a sitting says 400 drops; the roll, which reaches back further, says 981
+		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
+		s.lootRollDay = today.minusDays(300);
+		LocalStore.LootWindow w = new LocalStore.LootWindow();
+		w.loots = 981;
+		w.value = 81_147_381L;
+		w.left = 44;
+		w.leftValue = 12_500;
+		w.leftKills = 30;
+		w.items.add(new String[]{"Granite hammer", "1", "10086894"});
+		w.items.add(new String[]{"Abyssal whip", "4", "3356000"});
+		w.leftItems.add(new String[]{"Belladonna seed", "9", "958"});
+		w.sources.add(new String[]{"Nechryael", "622", "3495578"});
+		s.lootWindow = w;
+
+		ChroniclePanel p = panel(s);
+		set(p, "histGranularity", "Year");
+		List<String> card = card(labels(history(p)));
+		assertEquals(card.toString(), "+981", beside(card, "Drops received"));
+		assertEquals(card.toString(), "+81.1M gp", beside(card, "Loot value"));
+		assertEquals(card.toString(), "+44 · 12k gp", beside(card, "Left on the floor"));
+		// the sitting's 400 is not what the year was told
+		assertFalse(card.toString(), card.contains("+400"));
+
+		// and the loot itself is a click away
+		openFolds(p).add("history:list:lootValue");
+		List<String> open = card(labels(history(p)));
+		assertEquals(open.toString(), "1 · 10.1M gp", beside(open, "Granite hammer"));
+		assertEquals(open.toString(), "4 · 3.4M gp", beside(open, "Abyssal whip"));
+
+		openFolds(p).add("history:list:lootLeftCount");
+		open = card(labels(history(p)));
+		assertEquals(open.toString(), "9 · 958 gp", beside(open, "Belladonna seed"));
+	}
+
+	@Test
+	public void aRollThatBeginsInsideThePeriodDoesNotAnswerForIt() throws Exception
+	{
+		// it started keeping days partway through, so it can say nothing about
+		// what came before and must not be read as the period's account
+		long now = System.currentTimeMillis();
+		LocalDate today = LocalDate.now();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		for (HistoryLog.Baseline b : s.history.values())
+		{
+			b.counters.remove("dropsReceived");
+			b.counters.remove("lootValue");
+		}
+		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		s.lootRollDay = today.minusDays(2);
+		LocalStore.LootWindow w = new LocalStore.LootWindow();
+		w.loots = 12;
+		w.value = 900;
+		s.lootWindow = w;
+		ChroniclePanel p = panel(s);
+		set(p, "histGranularity", "Year");
+		List<String> card = card(labels(history(p)));
+		assertFalse(card.toString(), card.contains("Drops received"));
+		assertEquals("Loot since " + today.minusDays(2).format(FULL),
+			noteHolding(history(p), "Loot since"));
+	}
 }

@@ -3207,7 +3207,9 @@ class ChroniclePanel extends PluginPanel
 				card.add(nested(ghostRow(entry[0], entry[1])));
 			}
 			addMore(card, listKey, list.size(), cap);
-			long unnamed = r.value() - list.size();
+			// only a count row can be short of its list: a gp row's drill names
+			// the items its value is made of, and the two are not the same unit
+			long unnamed = r.gp() ? 0 : r.value() - list.size();
 			if (unnamed > 0)
 			{
 				card.add(nested(ghostRow("Not named in the record", "+" + fmt(unnamed))));
@@ -3517,6 +3519,62 @@ class ChroniclePanel extends PluginPanel
 
 	// The oldest stamp in the feed slice, or 0 when it holds none: whether the
 	// slice reaches back past a window's start.
+	// whether the record was keeping sittings before this window opened
+	private static boolean sittingsCover(List<JsonObject> feed, long fromMs)
+	{
+		long oldest = oldestSessionTs(feed);
+		return oldest > 0 && oldest <= fromMs;
+	}
+
+	// the earliest day either dated loot source can speak for: the roll where it
+	// has been running, the sittings before it existed
+	private static long earliestDatedLoot(List<JsonObject> feed, long rollFrom)
+	{
+		long sittings = oldestSessionTs(feed);
+		if (sittings <= 0)
+		{
+			return rollFrom;
+		}
+		return rollFrom <= 0 ? sittings : Math.min(sittings, rollFrom);
+	}
+
+	// a ranked breakdown as drill rows: what it was, then how many and what for
+	private List<String[]> itemLines(List<String[]> ranked)
+	{
+		List<String[]> out = new ArrayList<>();
+		for (String[] r : ranked)
+		{
+			long qty = safeParse(r[1]);
+			long val = safeParse(r[2]);
+			out.add(new String[]{r[0],
+				fmt(qty) + (val > 0 ? " · " + gp(val) + " gp" : "")});
+		}
+		return out;
+	}
+
+	private List<String[]> sourceLines(List<String[]> ranked)
+	{
+		List<String[]> out = new ArrayList<>();
+		for (String[] r : ranked)
+		{
+			out.add(new String[]{r[0], fmt(safeParse(r[1])) + " · "
+				+ gp(safeParse(r[2])) + " gp"});
+		}
+		return out;
+	}
+
+	private static long safeParse(String s)
+	{
+		try
+		{
+			return Long.parseLong(s);
+		}
+		catch (NumberFormatException e)
+		{
+			return 0;
+		}
+	}
+
 	// The oldest sitting the record holds. A sitting is the only dated account of
 	// a take, so this is the day from which any loot figure can be drawn at all.
 	private static long oldestSessionTs(List<JsonObject> feed)
@@ -4316,9 +4374,35 @@ class ChroniclePanel extends PluginPanel
 				// figure is drawn and the note says the day loot can be counted
 				// from, because a fortnight of receipts under a heading that
 				// says a year is worse than no figure at all.
-				long sittingsFrom = oldestSessionTs(historyFeed);
-				boolean sittingsCover = sittingsFrom > 0 && sittingsFrom <= fromMs;
-				if (sittingsCover && played[1] > 0 && took[0] > 0)
+				// The dated roll first, where it reaches back far enough. It keeps
+				// one entry a day holding what was taken and what was left, with
+				// the items and sources beside them, so it answers a period
+				// exactly and can say what the loot actually was.
+				long rollFrom = plugin.lootRollFrom();
+				if (rollFrom > 0 && rollFrom <= fromMs)
+				{
+					LocalStore.LootWindow w = plugin.lootBetween(pStart, pEnd);
+					sessionsSpeak[0] = true;
+					sessionsHoldTheFloor[0] = true;   // the roll dates the floor too
+					retro.put("dropsReceived", w.loots);
+					retro.put("lootValue", w.value);
+					retro.put("lootLeftCount", w.left);
+					retro.put("lootLeftValue", w.leftValue);
+					retro.put("lootLeftKills", w.leftKills);
+					if (!w.items.isEmpty())
+					{
+						named.put("lootValue", itemLines(w.items));
+					}
+					if (!w.leftItems.isEmpty())
+					{
+						named.put("lootLeftCount", itemLines(w.leftItems));
+					}
+					if (!w.sources.isEmpty())
+					{
+						named.put("dropsReceived", sourceLines(w.sources));
+					}
+				}
+				else if (sittingsCover(historyFeed, fromMs) && played[1] > 0 && took[0] > 0)
 				{
 					sessionsSpeak[0] = true;
 					retro.put("dropsReceived", took[0]);
@@ -4373,7 +4457,7 @@ class ChroniclePanel extends PluginPanel
 			// names the day one could be. Where they do, the figures are theirs
 			// and the spine's own start date says nothing about them.
 			java.time.LocalDate lootSince = null;
-			long lootFromTs = oldestSessionTs(historyFeed);
+			long lootFromTs = earliestDatedLoot(historyFeed, plugin.lootRollFrom());
 			if (lootFromTs > 0)
 			{
 				java.time.LocalDate sat = Instant.ofEpochMilli(lootFromTs)

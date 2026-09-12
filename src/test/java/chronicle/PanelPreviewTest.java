@@ -1090,6 +1090,22 @@ public class PanelPreviewTest
 			return lifetime;
 		}
 
+		java.time.LocalDate lootRollDay;       // the day the roll begins, null for none
+		LocalStore.LootWindow lootWindow;      // what it holds for any window asked
+
+		@Override
+		long lootRollFrom()
+		{
+			return lootRollDay == null ? 0 : lootRollDay
+				.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+		}
+
+		@Override
+		LocalStore.LootWindow lootBetween(java.time.LocalDate from, java.time.LocalDate to)
+		{
+			return lootWindow != null ? lootWindow : new LocalStore.LootWindow();
+		}
+
 		@Override
 		Map<String, Integer> sessionCounters()
 		{

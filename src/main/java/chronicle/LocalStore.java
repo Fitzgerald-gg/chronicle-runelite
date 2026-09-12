@@ -351,6 +351,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				src.addProperty("last_seen", nowMs);
 			}
+			rollTaken(source, batchValue, priced);
 			sessionLoots++;
 			sessionLootValue += batchValue;
 			for (JsonElement pe : priced)
@@ -391,6 +392,220 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				}
 			}
 			root.addProperty("updated_at", nowSec());
+		}
+	}
+
+	// ------------------------------------------------------------------
+	// The dated loot roll
+	//
+	// A loot event knows when it happened and the ledger above keeps only what
+	// it was, so until this roll existed the record could say a player had taken
+	// 64,274 drops worth 488M and nothing whatever about when. One entry a day
+	// carries the day's take and the day's floor, with a breakdown beside them,
+	// which is as fine as any window the panel offers. Per kill would be tens of
+	// thousands of rows a year for no extra precision.
+	//
+	// The breakdown is pruned past DETAIL_DAYS; the day's totals are kept for
+	// good, being a few dozen bytes apiece.
+	// ------------------------------------------------------------------
+
+	private static final int DETAIL_DAYS = 400;
+	private static final java.time.format.DateTimeFormatter DAY_KEY =
+		java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+	private JsonObject dayRoll()
+	{
+		if (!root.has("loot_days") || !root.get("loot_days").isJsonObject())
+		{
+			root.add("loot_days", new JsonObject());
+		}
+		JsonObject days = root.getAsJsonObject("loot_days");
+		String today = java.time.LocalDate.now().format(DAY_KEY);
+		if (!days.has(today) || !days.get(today).isJsonObject())
+		{
+			days.add(today, new JsonObject());
+			pruneDetail(days);
+		}
+		return days.getAsJsonObject(today);
+	}
+
+	// the breakdown goes off days older than DETAIL_DAYS; their totals stay
+	private static void pruneDetail(JsonObject days)
+	{
+		String cut = java.time.LocalDate.now().minusDays(DETAIL_DAYS).format(DAY_KEY);
+		for (String day : new java.util.ArrayList<>(days.keySet()))
+		{
+			if (day.compareTo(cut) >= 0 || !days.get(day).isJsonObject())
+			{
+				continue;
+			}
+			JsonObject d = days.getAsJsonObject(day);
+			d.remove("sources");
+			d.remove("items");
+			d.remove("leftItems");
+		}
+	}
+
+	private static void bump(JsonObject o, String key, long by)
+	{
+		o.addProperty(key, asLong(o.get(key)) + by);
+	}
+
+	private static JsonObject sub(JsonObject parent, String key)
+	{
+		if (!parent.has(key) || !parent.get(key).isJsonObject())
+		{
+			parent.add(key, new JsonObject());
+		}
+		return parent.getAsJsonObject(key);
+	}
+
+	// one kill's take, against today
+	private void rollTaken(String source, long value, JsonArray priced)
+	{
+		JsonObject day = dayRoll();
+		bump(day, "loots", 1);
+		bump(day, "value", value);
+		JsonObject bySource = sub(sub(day, "sources"), source);
+		bump(bySource, "loots", 1);
+		bump(bySource, "value", value);
+		JsonObject items = sub(day, "items");
+		for (JsonElement pe : priced)
+		{
+			JsonObject p = pe.getAsJsonObject();
+			JsonObject it = sub(items, String.valueOf(p.get("id").getAsInt()));
+			it.addProperty("n", p.get("name").getAsString());
+			bump(it, "q", p.get("qty").getAsLong());
+			bump(it, "v", p.get("value").getAsLong());
+		}
+	}
+
+	// one kill's floor, against today
+	private void rollLeft(long qty, long value, int kills, java.util.List<BagItem> perItem)
+	{
+		JsonObject day = dayRoll();
+		bump(day, "left", qty);
+		bump(day, "leftValue", value);
+		bump(day, "leftKills", kills);
+		JsonObject items = sub(day, "leftItems");
+		for (BagItem b : perItem)
+		{
+			JsonObject it = sub(items, b.name);
+			bump(it, "q", b.qty);
+			bump(it, "v", b.value);
+		}
+	}
+
+	/** What the dated roll holds for a window, or null when it holds nothing. */
+	static final class LootWindow
+	{
+		long loots;
+		long value;
+		long left;
+		long leftValue;
+		long leftKills;
+		final java.util.List<String[]> items = new java.util.ArrayList<>();
+		final java.util.List<String[]> sources = new java.util.ArrayList<>();
+		final java.util.List<String[]> leftItems = new java.util.ArrayList<>();
+	}
+
+	/** The first day the roll holds, as epoch ms, or 0 when it holds none. A
+	 *  window opening before this day has no dated account of its loot. */
+	long lootRollFrom()
+	{
+		synchronized (lock)
+		{
+			if (!root.has("loot_days") || !root.get("loot_days").isJsonObject())
+			{
+				return 0;
+			}
+			String first = null;
+			for (String day : root.getAsJsonObject("loot_days").keySet())
+			{
+				if (first == null || day.compareTo(first) < 0)
+				{
+					first = day;
+				}
+			}
+			return first == null ? 0 : java.time.LocalDate.parse(first)
+				.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+		}
+	}
+
+	/** The roll summed over [from, to], both days included. */
+	LootWindow lootBetween(java.time.LocalDate from, java.time.LocalDate to)
+	{
+		LootWindow w = new LootWindow();
+		java.util.Map<String, long[]> items = new java.util.LinkedHashMap<>();
+		java.util.Map<String, long[]> sources = new java.util.LinkedHashMap<>();
+		java.util.Map<String, long[]> left = new java.util.LinkedHashMap<>();
+		synchronized (lock)
+		{
+			if (!root.has("loot_days") || !root.get("loot_days").isJsonObject())
+			{
+				return w;
+			}
+			String lo = from.format(DAY_KEY);
+			String hi = to.format(DAY_KEY);
+			JsonObject days = root.getAsJsonObject("loot_days");
+			for (String day : days.keySet())
+			{
+				if (day.compareTo(lo) < 0 || day.compareTo(hi) > 0
+					|| !days.get(day).isJsonObject())
+				{
+					continue;
+				}
+				JsonObject d = days.getAsJsonObject(day);
+				w.loots += asLong(d.get("loots"));
+				w.value += asLong(d.get("value"));
+				w.left += asLong(d.get("left"));
+				w.leftValue += asLong(d.get("leftValue"));
+				w.leftKills += asLong(d.get("leftKills"));
+				gather(d, "items", items, true);
+				gather(d, "sources", sources, false);
+				gather(d, "leftItems", left, true);
+			}
+		}
+		rank(items, w.items);
+		rank(sources, w.sources);
+		rank(left, w.leftItems);
+		return w;
+	}
+
+	// fold one day's breakdown into the running tally. `named` reads the stored
+	// display name off the entry; a source is named by its own key.
+	private static void gather(JsonObject day, String key,
+		java.util.Map<String, long[]> into, boolean named)
+	{
+		if (!day.has(key) || !day.get(key).isJsonObject())
+		{
+			return;
+		}
+		JsonObject o = day.getAsJsonObject(key);
+		for (String k : o.keySet())
+		{
+			if (!o.get(k).isJsonObject())
+			{
+				continue;
+			}
+			JsonObject e = o.getAsJsonObject(k);
+			String name = named && e.has("n") ? e.get("n").getAsString() : k;
+			long[] t = into.computeIfAbsent(name, x -> new long[2]);
+			t[0] += asLong(e.get(named ? "q" : "loots"));
+			t[1] += asLong(e.get(named ? "v" : "value"));
+		}
+	}
+
+	// biggest by value first, as {name, qty, value}
+	private static void rank(java.util.Map<String, long[]> from, java.util.List<String[]> into)
+	{
+		java.util.List<java.util.Map.Entry<String, long[]>> rows =
+			new java.util.ArrayList<>(from.entrySet());
+		rows.sort((a, b) -> Long.compare(b.getValue()[1], a.getValue()[1]));
+		for (java.util.Map.Entry<String, long[]> e : rows)
+		{
+			into.add(new String[]{e.getKey(), String.valueOf(e.getValue()[0]),
+				String.valueOf(e.getValue()[1])});
 		}
 	}
 
@@ -1058,6 +1273,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				byItem.add(b.name, e);
 			}
 			root.add("untaken_items", byItem);
+			rollLeft(qty, value, kills, perItem);
 			// …and the pairing, so the lens drills from either end: which items a
 			// source left, and which sources left an item.
 			JsonObject pairs = root.has("untaken_pairs") && root.get("untaken_pairs").isJsonObject()
