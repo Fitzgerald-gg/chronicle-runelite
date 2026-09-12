@@ -11,14 +11,21 @@ package chronicle.counters;
 import com.google.gson.Gson;
 import java.util.HashMap;
 import java.util.Map;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.GameState;
 import net.runelite.api.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
+import net.runelite.api.MenuAction;
+import net.runelite.api.MenuEntry;
 import net.runelite.api.Skill;
+import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.StatChanged;
 import net.runelite.client.game.ItemManager;
 import org.junit.Before;
@@ -119,5 +126,86 @@ public class SkillingStatTrackerTest
 
 		assertEquals(1, store.getStat("runesCrafted"));
 		assertEquals(0, store.getStat("essenceCrafted"));
+	}
+
+	private void chat(String line)
+	{
+		tracker.onChatMessage(new ChatMessage(null, ChatMessageType.GAMEMESSAGE, "", line, null, 0));
+	}
+
+	private void click(MenuAction action, String option, String target)
+	{
+		MenuEntry entry = Mockito.mock(MenuEntry.class);
+		Mockito.when(entry.getType()).thenReturn(action);
+		Mockito.when(entry.getOption()).thenReturn(option);
+		Mockito.when(entry.getTarget()).thenReturn(target);
+		tracker.onMenuOptionClicked(new MenuOptionClicked(entry));
+	}
+
+	@Test
+	public void theChatGateLetsEachCountedLineThrough()
+	{
+		// the deriver only sees what the prefix list lets past
+		chat("You put the grimy guam leaf herb into your herb sack.");
+		assertEquals(1, store.getStat("herbsSacked"));
+		assertEquals(1, store.getStat("guamLeafSacked"));
+		chat("You gently shoo the letvek away.");
+		assertEquals(1, store.getStat("letveksShooed"));
+		chat("The tanner tans 27 cowhides for you.");
+		assertEquals(27, store.getStat("hidesTanned"));
+		assertEquals(27, store.getStat("cowhideTanned"));
+		chat("You put the Guam leaf into the vial of water.");
+		assertEquals(1, store.getStat("unfinishedPotionsMade"));
+		chat("You resurrect a greater skeletal thrall.");
+		assertEquals(1, store.getStat("thrallsSummoned"));
+		assertEquals(1, store.getStat("greaterSkeletalThrallsSummoned"));
+		chat("The glowing fish scatter, shedding their magical scales.");
+		assertEquals(1, store.getStat("spiritPoolsHarpooned"));
+		// a channel the game never says these on stays shut
+		tracker.onChatMessage(new ChatMessage(null, ChatMessageType.PUBLICCHAT, "someone",
+			"You resurrect a greater skeletal thrall.", null, 0));
+		assertEquals(1, store.getStat("thrallsSummoned"));
+	}
+
+	@Test
+	public void sapIsCreditedToTheTreeTheLastObjectClickNamed()
+	{
+		String line = "You fill the bucket with sap.";
+		// no tree clicked yet: the line could be an evergreen's
+		chat(line);
+		assertEquals(0, store.getStat("bloodwoodSapBucketsFilled"));
+
+		click(MenuAction.GAME_OBJECT_FIRST_OPTION, "Chop", "<col=ffff>Bloodwood tree");
+		chat(line);
+		assertEquals(1, store.getStat("bloodwoodSapBucketsFilled"));
+		// a tap is one click for many buckets: the memory outlives the target TTL
+		for (int i = 0; i < 20; i++)
+		{
+			tracker.onGameTick(new GameTick());
+		}
+		chat(line);
+		assertEquals(2, store.getStat("bloodwoodSapBucketsFilled"));
+
+		// the knife on an evergreen is an item used on an object, and it names
+		// the evergreen: the next bucket is not bloodwood's
+		click(MenuAction.WIDGET_TARGET_ON_GAME_OBJECT, "Use",
+			"<col=ff9040>Knife</col><col=ffffff> -> <col=ffff>Evergreen");
+		chat(line);
+		assertEquals(2, store.getStat("bloodwoodSapBucketsFilled"));
+
+		click(MenuAction.GAME_OBJECT_FIRST_OPTION, "Chop", "Engorged bloodwood tree");
+		chat(line);
+		assertEquals(3, store.getStat("bloodwoodSapBucketsFilled"));
+		// an NPC click is not a change of tree
+		click(MenuAction.NPC_FIRST_OPTION, "Pickpocket", "Guard");
+		chat(line);
+		assertEquals(4, store.getStat("bloodwoodSapBucketsFilled"));
+
+		// a logout forgets the tree with everything else click-local
+		GameStateChanged out = new GameStateChanged();
+		out.setGameState(GameState.LOGIN_SCREEN);
+		tracker.onGameStateChanged(out);
+		chat(line);
+		assertEquals(4, store.getStat("bloodwoodSapBucketsFilled"));
 	}
 }

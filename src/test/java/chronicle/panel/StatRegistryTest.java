@@ -144,6 +144,89 @@ public class StatRegistryTest
 	}
 
 	@Test
+	public void theChatCountedKeysHaveHomes()
+	{
+		// a key with no home falls to "Odds & ends"; none of these may
+		String[] all = {"herbsSacked", "guamLeafSacked", "ranarrWeedSacked",
+			"letveksShooed", "bloodwoodSapBucketsFilled", "thrallsSummoned",
+			"lesserGhostlyThrallsSummoned", "greaterZombifiedThrallsSummoned",
+			"hidesTanned", "cowhideTanned", "greenDragonhideTanned",
+			"unfinishedPotionsMade", "spiritPoolsHarpooned"};
+		for (String key : all)
+		{
+			assertFalse(key, StatRegistry.hidden(key));
+			assertFalse(key, StatRegistry.family(key).equals("Ledger & Roads"));
+			assertFalse(key, StatRegistry.subgroup(key).equals("Odds & ends"));
+			assertFalse(key, StatRegistry.subgroup(key).isEmpty());
+		}
+
+		// the herb sack: a Herblore floor under typed herb rows
+		assertEquals("Herblore", StatRegistry.skillOf("herbsSacked"));
+		assertTrue(StatRegistry.isFloor("herbsSacked"));
+		assertEquals("Herbs sacked", StatRegistry.label("herbsSacked"));
+		assertEquals("Herblore", StatRegistry.subgroup("guamLeafSacked"));
+		assertTrue(StatRegistry.typed("guamLeafSacked"));
+		assertEquals("Sacked", StatRegistry.suffixOf("guamLeafSacked"));
+		assertEquals("Guam leaf", StatRegistry.rowLabel("guamLeafSacked"));
+		assertEquals("Ranarr weed", StatRegistry.rowLabel("ranarrWeedSacked"));
+		assertEquals("herbsSacked", StatRegistry.suffixFloor("Herblore", "Sacked"));
+		assertEquals("Herbs sacked", StatRegistry.suffixLabel("Sacked"));
+		// the unfinished potion stays a named Herblore row
+		assertEquals("Herblore", StatRegistry.skillOf("unfinishedPotionsMade"));
+		assertFalse(StatRegistry.typed("unfinishedPotionsMade"));
+		assertEquals("Unfinished potions made", StatRegistry.rowLabel("unfinishedPotionsMade"));
+
+		// the tanner: a Crafting floor under typed hide rows
+		assertEquals("Crafting", StatRegistry.skillOf("hidesTanned"));
+		assertTrue(StatRegistry.isFloor("hidesTanned"));
+		assertEquals("Hides tanned", StatRegistry.label("hidesTanned"));
+		assertEquals("Crafting", StatRegistry.subgroup("cowhideTanned"));
+		assertTrue(StatRegistry.typed("cowhideTanned"));
+		assertEquals("Tanned", StatRegistry.suffixOf("greenDragonhideTanned"));
+		assertEquals("Cowhide", StatRegistry.rowLabel("cowhideTanned"));
+		assertEquals("Green dragonhide", StatRegistry.rowLabel("greenDragonhideTanned"));
+		assertEquals("hidesTanned", StatRegistry.suffixFloor("Crafting", "Tanned"));
+		assertEquals("Hides tanned", StatRegistry.suffixLabel("Tanned"));
+		// and the armour keys it sits beside are untouched
+		assertEquals("Crafting", StatRegistry.skillOf("dhideCrafted"));
+		assertFalse(StatRegistry.typed("dhideCrafted"));
+
+		// the Vampyrium pair are named Woodcutting rows
+		assertEquals("Woodcutting", StatRegistry.skillOf("letveksShooed"));
+		assertEquals("Woodcutting", StatRegistry.skillOf("bloodwoodSapBucketsFilled"));
+		assertEquals("Letveks shooed", StatRegistry.rowLabel("letveksShooed"));
+		assertEquals("Bloodwood sap buckets filled",
+			StatRegistry.rowLabel("bloodwoodSapBucketsFilled"));
+		assertFalse(StatRegistry.typed("letveksShooed"));
+		assertFalse(StatRegistry.isFloor("bloodwoodSapBucketsFilled"));
+
+		// Tempoross is a named Fishing row
+		assertEquals("Fishing", StatRegistry.skillOf("spiritPoolsHarpooned"));
+		assertEquals("Skilling", StatRegistry.family("spiritPoolsHarpooned"));
+		assertEquals("Spirit pools harpooned", StatRegistry.rowLabel("spiritPoolsHarpooned"));
+		assertFalse(StatRegistry.typed("spiritPoolsHarpooned"));
+
+		// thralls: Combat's one fold, a floor with typed rows that shed the suffix
+		assertEquals("Combat", StatRegistry.family("thrallsSummoned"));
+		assertEquals("Combat", StatRegistry.family("lesserGhostlyThrallsSummoned"));
+		assertEquals("Thralls", StatRegistry.subgroup("thrallsSummoned"));
+		assertEquals("Thralls", StatRegistry.subgroup("greaterZombifiedThrallsSummoned"));
+		assertTrue(StatRegistry.isFloor("thrallsSummoned"));
+		assertFalse(StatRegistry.isFloor("lesserGhostlyThrallsSummoned"));
+		assertTrue(StatRegistry.typed("lesserGhostlyThrallsSummoned"));
+		assertFalse(StatRegistry.typed("thrallsSummoned"));
+		assertNull(StatRegistry.skillOf("lesserGhostlyThrallsSummoned"));
+		assertEquals("Thralls raised", StatRegistry.label("thrallsSummoned"));
+		assertEquals("Lesser ghostly", StatRegistry.rowLabel("lesserGhostlyThrallsSummoned"));
+		assertEquals("Greater zombified", StatRegistry.rowLabel("greaterZombifiedThrallsSummoned"));
+		assertEquals(java.util.Collections.singletonList("thrallsSummoned"),
+			StatRegistry.floorKeys("Thralls"));
+		assertEquals(java.util.Arrays.asList("", "Thralls"), StatRegistry.fixedSections("Combat"));
+		// the flat Combat rows did not move
+		assertEquals("", StatRegistry.subgroup("damageDealt"));
+	}
+
+	@Test
 	public void labelsPolish()
 	{
 		// keys like logsLogsChopped stutter; polish collapses the doubled word
@@ -167,5 +250,58 @@ public class StatRegistryTest
 		assertTrue(StatRegistry.isGp("itemsDroppedValue"));
 		assertFalse(StatRegistry.isGp("damageDealt"));
 		assertEquals("The purse", StatRegistry.subgroup("itemsDroppedValue"));
+	}
+
+	@Test
+	public void burnedFoodFilesUnderCookingBesideTheCookedRows()
+	{
+		String[] burns = {"sharkBurned", "moonlightAntelopeBurned", "cakeBurned",
+			"karambwanjiBurned"};
+		for (String key : burns)
+		{
+			assertFalse(key, StatRegistry.hidden(key));
+			assertEquals(key, "Skilling", StatRegistry.family(key));
+			assertEquals(key, "Cooking", StatRegistry.skillOf(key));
+			assertEquals(key, "Cooking", StatRegistry.subgroup(key));
+			assertTrue(key, StatRegistry.typed(key));
+			assertEquals(key, "Burned", StatRegistry.suffixOf(key));
+		}
+		assertEquals("Shark", StatRegistry.rowLabel("sharkBurned"));
+		assertEquals("Moonlight antelope", StatRegistry.rowLabel("moonlightAntelopeBurned"));
+		assertEquals("Cake", StatRegistry.rowLabel("cakeBurned"));
+		assertEquals("Karambwanji", StatRegistry.rowLabel("karambwanjiBurned"));
+		// the burns reconcile against their own floor, as the cooked rows do
+		assertTrue(StatRegistry.isFloor("foodBurned"));
+		assertFalse(StatRegistry.typed("foodBurned"));
+		assertEquals("foodBurned", StatRegistry.suffixFloor("Cooking", "Burned"));
+		assertEquals("Food burned", StatRegistry.label("foodBurned"));
+		assertEquals("Burned", StatRegistry.suffixLabel("Burned"));
+		assertEquals(java.util.Arrays.asList("foodCooked", "foodBurned"),
+			StatRegistry.floorKeys("Cooking"));
+		// and a burnt log is still Firemaking's
+		assertEquals("Firemaking", StatRegistry.skillOf("willowLogsBurned"));
+		assertEquals("LogsBurned", StatRegistry.suffixOf("willowLogsBurned"));
+		assertEquals("Firemaking", StatRegistry.subgroup("logsBurned"));
+	}
+
+	@Test
+	public void theRetypedKeysHaveHomes()
+	{
+		String[] all = {"leapingTroutCaught", "leapingSalmonCaught", "leapingSturgeonCaught",
+			"sacredEelCaught", "normalLogsChopped", "guardPickpockets"};
+		for (String key : all)
+		{
+			assertFalse(key, StatRegistry.hidden(key));
+			assertEquals(key, "Skilling", StatRegistry.family(key));
+			assertFalse(key, StatRegistry.subgroup(key).equals("Odds & ends"));
+			assertTrue(key, StatRegistry.typed(key));
+		}
+		assertEquals("Fishing", StatRegistry.skillOf("leapingTroutCaught"));
+		assertEquals("Leaping sturgeon", StatRegistry.rowLabel("leapingSturgeonCaught"));
+		assertEquals("Sacred eel", StatRegistry.rowLabel("sacredEelCaught"));
+		assertEquals("Woodcutting", StatRegistry.skillOf("normalLogsChopped"));
+		assertEquals("Normal", StatRegistry.rowLabel("normalLogsChopped"));
+		assertEquals("Thieving", StatRegistry.skillOf("guardPickpockets"));
+		assertEquals("Guard", StatRegistry.rowLabel("guardPickpockets"));
 	}
 }

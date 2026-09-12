@@ -401,4 +401,57 @@ public class LocalStorePersistenceTest
 	{
 		assertEquals(0, mounted().achievements().size());
 	}
+
+	@Test
+	public void theKeysAnEarlierBuildMintedWrongFoldOnLoadAndNothingElseMoves() throws Exception
+	{
+		write(FILE, "{\"schema\":1,\"rsn\":\"Tester\",\"first_seen\":1700000000,"
+			+ "\"skills\":{\"Attack\":{\"level\":70,\"xp\":737627}},"
+			+ "\"feed\":[{\"ts\":1700000000000,\"type\":\"LEVEL\","
+			+ "\"data\":{\"skill\":\"Attack\",\"level\":70}}],"
+			+ "\"trackers\":{\"logsLogsChopped\":1,\"normalLogsChopped\":4,"
+			+ "\"guard(level21)Pickpockets\":2,\"guardPickpockets\":3,"
+			+ "\"knight(level-46)FailedPickpockets\":6,"
+			+ "\"__probe\":1,\"deaths\":7,\"willowLogsChopped\":9,\"highestHit\":60}}");
+		LocalStore store = newStore();
+		store.load(dir, "Tester");
+
+		// the plain tree, the levelled guard and the probe fold away; every
+		// neighbour keeps its figure
+		Map<String, Long> expected = new HashMap<>();
+		expected.put("normalLogsChopped", 5L);
+		expected.put("guardPickpockets", 5L);
+		expected.put("knightFailedPickpockets", 6L);
+		expected.put("deaths", 7L);
+		expected.put("willowLogsChopped", 9L);
+		expected.put("highestHit", 60L);
+		assertEquals(expected, store.trackersSnapshot());
+
+		// the session total is rebuilt on the folded base, so the old keys stay gone
+		store.setTrackers(session("deaths", 1), "Tester");
+		expected.put("deaths", 8L);
+		assertEquals(expected, store.trackersSnapshot());
+
+		// the fold is what reaches the disk, and the neighbouring sections are untouched
+		store.flush(dir);
+		JsonObject flushed = readJson(FILE);
+		Map<String, Long> onDisk = new HashMap<>();
+		for (Map.Entry<String, com.google.gson.JsonElement> e
+			: flushed.getAsJsonObject("trackers").entrySet())
+		{
+			onDisk.put(e.getKey(), e.getValue().getAsLong());
+		}
+		assertEquals(expected, onDisk);
+		assertEquals(70, flushed.getAsJsonObject("skills").getAsJsonObject("Attack")
+			.get("level").getAsInt());
+		assertEquals(737627, flushed.getAsJsonObject("skills").getAsJsonObject("Attack")
+			.get("xp").getAsInt());
+		assertEquals(1, flushed.getAsJsonArray("feed").size());
+		assertEquals(1700000000L, flushed.get("first_seen").getAsLong());
+
+		// a second mount finds nothing left to fold
+		LocalStore again = newStore();
+		again.load(dir, "Tester");
+		assertEquals(expected, again.trackersSnapshot());
+	}
 }

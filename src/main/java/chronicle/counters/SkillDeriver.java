@@ -51,8 +51,9 @@ public class SkillDeriver
 		"volcanic ash", "barronite shards", "barronite deposit",
 		"basalt", "urt salt", "efh salt", "te salt", "daeyalt shard",
 		"dense essence block"));
+	// the catches the game hands over with no "Raw " in front of the name
 	private static final Set<String> FISH_NORAW = new HashSet<>(Arrays.asList(
-		"minnow", "minnows", "karambwanji"));
+		"minnow", "minnows", "karambwanji", "sacred eel"));
 	private static final Map<String, String> ITEM_ALIASES = new HashMap<>();
 	private static final Set<String> PRODUCTION = new HashSet<>(Arrays.asList(
 		"FLETCHING", "CRAFTING", "HERBLORE", "HUNTER"));
@@ -247,6 +248,25 @@ public class SkillDeriver
 	private static final Pattern FAILED_PICKPOCKET =
 		Pattern.compile("You fail to pick (?:the )?([\\w'. -]+?)'s pocket.*");
 
+	// "You accidentally burn the shark." The food is whatever follows the verb,
+	// so a cake or a slice of meat types itself without a list. Only "the" is
+	// confirmed verbatim; the other articles are tolerated, not relied on. The
+	// karambwanji line runs on ("You accidentally burn the karambwanji to
+	// ashes."), and the ashes are no part of the food.
+	private static final Pattern BURNED = Pattern.compile(
+		"You accidentally burn (?:the |some |a |an )?([\\w' -]+?)(?: to ashes)?[.!]?\\s*$");
+
+	// "Guard  (level-21)": the menu target carries the combat level, which is no
+	// part of who was robbed. Both bracket spellings go, along with any level text
+	// the tag strip left loose at the end of the name.
+	private static final Pattern NPC_LEVEL = Pattern.compile(
+		"\\s*\\(?\\s*level[\\s-]*\\d*\\s*\\)?\\s*$", Pattern.CASE_INSENSITIVE);
+
+	static String npcName(String target)
+	{
+		return NPC_LEVEL.matcher(target).replaceFirst("").trim();
+	}
+
 	// "You plant 3 potato seeds in the allotment." — the crop is whatever sits
 	// in front of the seed noun, and the count in the line is the seeds one
 	// planting takes, not a number of plantings. A line naming no seed (the
@@ -256,17 +276,59 @@ public class SkillDeriver
 		"You plant (?:\\d+ )?(?:a |an |the |some )?([\\w'-]+(?: [\\w'-]+)*?) "
 			+ "(?:seed|seeds|spore|spores|sapling|saplings|seedling|seedlings)\\b");
 
+	// "You resurrect a lesser ghostly thrall." The tier and the kind name the
+	// typed key; a line that names neither still counts the floor.
+	private static final Pattern THRALL_RAISED = Pattern.compile(
+		"You resurrect (?:a |an |the |your )?((?:lesser|superior|greater) "
+			+ "(?:ghostly|skeletal|zombified))", Pattern.CASE_INSENSITIVE);
+
+	// "The tanner tans your cowhide." for one, "The tanner tans 27 cowhides for
+	// you." for a batch. The count is read off the line, and the plural comes
+	// off the hide so both forms land on the same key.
+	private static final Pattern HIDES_TANNED = Pattern.compile(
+		"The tanner tans (your|\\d+) ([\\w' -]+?)(?: for you)?\\.");
+
+	// "You put the grimy guam leaf herb into your herb sack." The grimy prefix and
+	// the trailing "herb" are both optional, since neither is confirmed verbatim;
+	// the sack only takes grimy herbs, so the key names the herb bare.
+	private static final Pattern HERB_SACKED = Pattern.compile(
+		"You put the (?:grimy )?([\\w' -]+?)(?: herb)? into your herb sack",
+		Pattern.CASE_INSENSITIVE);
+
 	// the signals no xp drop carries: burns, failed pickpockets, seeds planted
 	// and lap lines. SkillingStatTracker pre-filters before anything reaches here.
 	void applyChat(String msg)
 	{
+		applyChat(msg, "");
+	}
+
+	// objectTarget is the game object the player last clicked, tags stripped,
+	// for the one line that reads the same at two trees: a bucket fills with sap
+	// at an evergreen as it does at a bloodwood tree, and only the second counts.
+	void applyChat(String msg, String objectTarget)
+	{
 		if (msg == null || msg.isEmpty())
+		{
+			return;
+		}
+		if (chatLine(msg, objectTarget == null ? "" : objectTarget))
 		{
 			return;
 		}
 		if (msg.contains("You accidentally burn"))
 		{
 			statStore.incrementStat("foodBurned");
+			Matcher burned = BURNED.matcher(msg);
+			if (burned.find())
+			{
+				// the same aliasing the cooked rows get, so shrimp burn as shrimp cook
+				String food = stripCamel(burned.group(1).toLowerCase(Locale.ROOT),
+					new String[0], "");
+				if (!food.isEmpty())
+				{
+					statStore.incrementStat(food + "Burned");
+				}
+			}
 			return;
 		}
 		if (msg.contains("You plant "))
@@ -304,6 +366,91 @@ public class SkillDeriver
 				statStore.incrementStat(typed + "FailedPickpockets");
 			}
 		}
+	}
+
+	// The lines that count a whole action on their own: nothing else the client
+	// sees marks a herb sacked, a hide tanned, a thrall raised or a pool
+	// harpooned. Returns true when the line was one of them.
+	private boolean chatLine(String msg, String objectTarget)
+	{
+		if (msg.contains("into your herb sack"))
+		{
+			statStore.incrementStat(StatKeys.HERBS_SACKED);
+			Matcher sacked = HERB_SACKED.matcher(msg);
+			if (sacked.find())
+			{
+				String herb = camel(sacked.group(1));
+				if (!herb.isEmpty())
+				{
+					statStore.incrementStat(herb + "Sacked");
+				}
+			}
+			return true;
+		}
+		if (msg.contains("You gently shoo the letvek"))
+		{
+			statStore.incrementStat(StatKeys.LETVEKS_SHOOED);
+			return true;
+		}
+		if (msg.contains("You fill the bucket with sap"))
+		{
+			if (objectTarget.toLowerCase(Locale.ROOT).contains("bloodwood"))
+			{
+				statStore.incrementStat(StatKeys.BLOODWOOD_SAP_BUCKETS_FILLED);
+			}
+			return true;
+		}
+		if (msg.contains("The glowing fish scatter"))
+		{
+			statStore.incrementStat(StatKeys.SPIRIT_POOLS_HARPOONED);
+			return true;
+		}
+		if (msg.contains("You resurrect "))
+		{
+			Matcher raised = THRALL_RAISED.matcher(msg);
+			if (raised.find())
+			{
+				statStore.incrementStat(StatKeys.THRALLS_SUMMONED);
+				statStore.incrementStat(camel(raised.group(1)) + "ThrallsSummoned");
+			}
+			else if (msg.contains("thrall"))
+			{
+				statStore.incrementStat(StatKeys.THRALLS_SUMMONED);
+			}
+			return true;
+		}
+		if (msg.contains("The tanner tans"))
+		{
+			Matcher tanned = HIDES_TANNED.matcher(msg);
+			if (tanned.find())
+			{
+				int n = tanned.group(1).equals("your") ? 1 : intOr(tanned.group(1), 0);
+				if (n > 0)
+				{
+					statStore.incrementStatBy(StatKeys.HIDES_TANNED, n);
+					String hide = tanned.group(2).trim().toLowerCase(Locale.ROOT);
+					if (n > 1 && hide.endsWith("s"))
+					{
+						hide = hide.substring(0, hide.length() - 1);
+					}
+					String typed = camel(hide);
+					if (!typed.isEmpty())
+					{
+						statStore.incrementStatBy(typed + "Tanned", n);
+					}
+				}
+			}
+			return true;
+		}
+		// "You put the Guam leaf into the vial of water." The step pays no xp, so
+		// the mint table's own row for this key never fires; the herb is left
+		// untyped because the line's naming of it is unconfirmed.
+		if (msg.contains("You put the") && msg.contains("vial"))
+		{
+			statStore.incrementStat(StatKeys.UNFINISHED_POTIONS_MADE);
+			return true;
+		}
+		return false;
 	}
 
 	List<Map.Entry<String, Integer>> derive(String tuple)
@@ -908,7 +1055,9 @@ public class SkillDeriver
 		{
 			return pairs("safesCracked", 1);
 		}
-		return pairs("pickPockets", 1, camel(low) + "Pickpockets", 1);
+		String npc = camel(npcName(low));
+		return npc.isEmpty() ? pairs("pickPockets", 1)
+			: pairs("pickPockets", 1, npc + "Pickpockets", 1);
 	}
 
 	// Sailing pays out for half a dozen activities and several of them share xp
@@ -1006,8 +1155,9 @@ public class SkillDeriver
 				{
 					n = low.substring(4).trim();
 				}
-				else if (FISH_NORAW.contains(low))
+				else if (FISH_NORAW.contains(low) || low.startsWith("leaping "))
 				{
+					// barbarian fishing lands the fish already leaping, never raw
 					n = low;
 				}
 				else

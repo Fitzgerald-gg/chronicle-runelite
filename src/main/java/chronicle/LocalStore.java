@@ -160,6 +160,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		synchronized (lock)
 		{
 			root = loaded;
+			// The counter keys are folded before the base below is frozen: a key
+			// left in the base would be restated on the next session total.
+			int healed = repairTrackerKeys();
 			// Freeze the loaded lifetime counters; setTrackers() recomputes the live
 			// total as this base + the current session.
 			trackersBase = deepCopy(loaded.getAsJsonObject("trackers"));
@@ -167,7 +170,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			// What an earlier build, or an import, could leave inconsistent: the same
 			// item twice in one source's bag, a feed line twice, by-item leavings that
 			// no longer sum to the pairs, off-task kills counted toward a slayer task.
-			int healed = dedupeSourceBags() + dedupeFeed() + reconcileUntaken()
+			healed += dedupeSourceBags() + dedupeFeed() + reconcileUntaken()
 				+ purgeOffTaskMonsters();
 			if (healed > 0)
 			{
@@ -2681,6 +2684,59 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 		}
 		return absorbed;
+	}
+
+	// the combat level an earlier build left inside a pickpocket key
+	private static final java.util.regex.Pattern KEY_LEVEL =
+		java.util.regex.Pattern.compile("\\(level[\\s-]*\\d*\\)?",
+			java.util.regex.Pattern.CASE_INSENSITIVE);
+
+	/**
+	 * Fold the counter keys an earlier build minted wrong into the keys the mint
+	 * writes now, so the panel shows one row where it showed two: the plain tree
+	 * keyed as logsLogsChopped beside normalLogsChopped, a pickpocket target that
+	 * kept its combat level (guard(level21)Pickpockets), and a double-underscore
+	 * probe written as a counter. The sum survives, the old key goes, and a second
+	 * pass finds nothing. Callers hold {@code lock}. Returns how many keys went.
+	 */
+	private int repairTrackerKeys()
+	{
+		if (root == null || !root.has("trackers") || !root.get("trackers").isJsonObject())
+		{
+			return 0;
+		}
+		JsonObject tr = root.getAsJsonObject("trackers");
+		int folded = 0;
+		for (java.util.Map.Entry<String, JsonElement> e
+			: new java.util.ArrayList<>(tr.entrySet()))
+		{
+			String key = e.getKey();
+			String into;
+			if (key.startsWith("__"))
+			{
+				into = "";
+			}
+			else if (key.equals("logsLogsChopped"))
+			{
+				into = "normalLogsChopped";
+			}
+			else if (key.contains("(level"))
+			{
+				into = KEY_LEVEL.matcher(key).replaceAll("");
+			}
+			else
+			{
+				continue;
+			}
+			long v = asLong(e.getValue());
+			tr.remove(key);
+			if (!into.isEmpty() && !into.equals(key))
+			{
+				tr.addProperty(into, asLong(tr.get(into)) + v);
+			}
+			folded++;
+		}
+		return folded;
 	}
 
 	private static boolean isNumeric(String s)

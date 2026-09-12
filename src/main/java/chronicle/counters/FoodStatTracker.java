@@ -10,10 +10,14 @@ package chronicle.counters;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -46,6 +50,13 @@ import static chronicle.counters.StatKeys.VIALS_SHATTERED;
  * shrinking in the inventory; hitpoints play no part, since dropping food on a natural
  * regen tick looks identical. Drinks and vial-smashing read off the chat box. Regen has
  * no signal of its own, so a +1 hitpoint step no recent Eat/Drink explains is regen.
+ *
+ * <p>A dose is priced off the potion the pack shows leaving, not the name the chat
+ * gives it: the two disagree ("restore prayer potion" is a Prayer potion), and only the
+ * item carries an id. The chat name is priced only when no pack change pairs with it.
+ * The two halves are paired by name and only an item the pack lets you "Drink" is a
+ * dose at all, so a teleport, a watering or a waterskin sip in the pairing window is
+ * never taken for the potion.
  */
 @Slf4j
 public class FoodStatTracker implements StatTracker
@@ -112,9 +123,62 @@ public class FoodStatTracker implements StatTracker
 	// Previous inventory contents, for spotting the eaten stack shrink.
 	private Map<Integer, Integer> inventorySnapshot;
 
-	// Dose price per potion name, held for the session. The lookup behind it walks
-	// every tradeable item name on the client thread, and a 4-dose price won't move
-	// underneath a session.
+	// A potion dose seen leaving the pack: which item shrank, its catalogue name with
+	// the dose suffix off, and how many doses it held.
+	private static final class DoseDrunk
+	{
+		private final int itemId;
+		private final String base;
+		private final int doses;
+		private int ticksLeft;
+
+		private DoseDrunk(int itemId, String base, int doses, int ticksLeft)
+		{
+			this.itemId = itemId;
+			this.base = base;
+			this.doses = doses;
+			this.ticksLeft = ticksLeft;
+		}
+	}
+
+	// A drink line the pack has not yet explained: the typed key it was tallied under,
+	// and the name as drunk for the chat-name fallback should the pack never do so.
+	private static final class ParkedDrink
+	{
+		private final String typed;
+		private final String potion;
+		private int ticksLeft;
+
+		private ParkedDrink(String typed, String potion, int ticksLeft)
+		{
+			this.typed = typed;
+			this.potion = potion;
+			this.ticksLeft = ticksLeft;
+		}
+	}
+
+	// The chat line and the pack change of one drink land in the same client cycle, in
+	// either order. Each half waits this many ticks for the other. The potion delay is
+	// three ticks, so a wait never survives into the next drink.
+	private static final int DRINK_PAIR_TICKS = 2;
+
+	private static final int MAX_PENDING_DRINKS = 4;
+
+	// Doses seen leaving the pack with no drink line for them yet.
+	private final List<DoseDrunk> pendingDoses = new ArrayList<>();
+
+	// Drink lines seen with no pack change for them yet.
+	private final List<ParkedDrink> parkedDrinks = new ArrayList<>();
+
+	// "Prayer potion(3)" -> "Prayer potion", 3. The dose count is the bracketed digit
+	// closing the name; "Overload (+)(4)" keeps its own brackets in the base.
+	private static final Pattern DOSE_SUFFIX = Pattern.compile("^(.+?)\\s*\\((\\d)\\)$");
+
+	// Dose price per catalogue base name ("Prayer potion"), from the item path, and per
+	// name as drunk ("restore prayer potion"), from the chat-name fallback. Both held
+	// for the session: the lookups behind them walk every tradeable item name on the
+	// client thread, and a 4-dose price won't move underneath a session.
+	private final Map<String, Integer> itemDosePrices = new HashMap<>();
 	private final Map<String, Integer> dosePrices = new HashMap<>();
 
 	// Journal sink for per-consumable gp (typed key -> price at use). Null in tests, and
@@ -188,6 +252,25 @@ public class FoodStatTracker implements StatTracker
 				it.remove();
 			}
 		}
+
+		// The pairing windows. A dose the chat never claimed just expires; a drink line
+		// the pack never explained is priced off its name as it goes.
+		for (Iterator<DoseDrunk> it = pendingDoses.iterator(); it.hasNext(); )
+		{
+			if (--it.next().ticksLeft <= 0)
+			{
+				it.remove();
+			}
+		}
+		for (Iterator<ParkedDrink> it = parkedDrinks.iterator(); it.hasNext(); )
+		{
+			ParkedDrink drink = it.next();
+			if (--drink.ticksLeft <= 0)
+			{
+				it.remove();
+				filePrice(drink.typed, dosePrice(drink.potion));
+			}
+		}
 	}
 
 	@Override
@@ -205,6 +288,7 @@ public class FoodStatTracker implements StatTracker
 		// region cross keeps them.
 		if (event.getGameState() == GameState.LOGIN_SCREEN)
 		{
+			itemDosePrices.clear();
 			dosePrices.clear();
 		}
 	}
@@ -213,6 +297,8 @@ public class FoodStatTracker implements StatTracker
 	private void reset()
 	{
 		pendingEats.clear();
+		pendingDoses.clear();
+		parkedDrinks.clear();
 		inventorySnapshot = null;
 		lastConsumed = null;
 		previousHitpoints = -1;
@@ -275,10 +361,249 @@ public class FoodStatTracker implements StatTracker
 			}
 		}
 
+		// A potion dose leaving the pack. Paired with the drink line the chat carries,
+		// whichever of the two arrived first.
+		if (inventorySnapshot != null)
+		{
+			for (Map.Entry<Integer, Integer> before : inventorySnapshot.entrySet())
+			{
+				if (before.getValue() - current.getOrDefault(before.getKey(), 0) != 1)
+				{
+					continue;
+				}
+				DoseDrunk dose = doseDrunk(before.getKey(), current);
+				if (dose == null)
+				{
+					continue;
+				}
+				ParkedDrink drink = takeParkedDrink(dose.base);
+				if (drink != null)
+				{
+					filePrice(drink.typed, itemDosePrice(dose));
+				}
+				else if (pendingDoses.size() < MAX_PENDING_DRINKS)
+				{
+					pendingDoses.add(dose);
+				}
+			}
+		}
+
 		inventorySnapshot = current;
 	}
 
-	/** A dose's worth: the 4-dose item's GE price over four, or 0 unknown. */
+	/**
+	 * The dose this shrink was, or null. The item must carry a dose suffix and offer
+	 * "Drink" in the pack, and the next dose down must have appeared in its place; the
+	 * last dose leaves a vial, or nothing at all when the vial is smashed, so a (1) is
+	 * taken on the shrink alone. Jewellery and watering cans count their charges down
+	 * in the same brackets, and without the menu check a teleport or a watering in the
+	 * pairing window would stand in for the sip and price the drink line.
+	 */
+	private DoseDrunk doseDrunk(int itemId, Map<Integer, Integer> current)
+	{
+		ItemComposition definition = client.getItemDefinition(itemId);
+		if (definition == null || definition.getName() == null)
+		{
+			return null;
+		}
+		Matcher m = DOSE_SUFFIX.matcher(definition.getName());
+		if (!m.matches() || !drinkable(definition))
+		{
+			return null;
+		}
+		String base = m.group(1);
+		int doses = m.group(2).charAt(0) - '0';
+		if (doses < 1)
+		{
+			return null;
+		}
+		if (doses > 1 && !appeared(base + "(" + (doses - 1) + ")", current))
+		{
+			return null;
+		}
+		return new DoseDrunk(itemId, base, doses, DRINK_PAIR_TICKS);
+	}
+
+	/** Whether a stack of this name grew by one in this pack change. */
+	private boolean appeared(String name, Map<Integer, Integer> current)
+	{
+		for (Map.Entry<Integer, Integer> now : current.entrySet())
+		{
+			if (now.getValue() - inventorySnapshot.getOrDefault(now.getKey(), 0) == 1
+				&& name.equals(itemName(now.getKey())))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Whether the item's pack menu offers "Drink", as every potion's does. */
+	private static boolean drinkable(ItemComposition definition)
+	{
+		String[] actions = definition.getInventoryActions();
+		if (actions == null)
+		{
+			return false;
+		}
+		for (String action : actions)
+		{
+			if (action != null && "drink".equalsIgnoreCase(action.trim()))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** The first dose waiting that names the potion this drink line does, or null. */
+	private DoseDrunk takePendingDose(String potion)
+	{
+		for (Iterator<DoseDrunk> it = pendingDoses.iterator(); it.hasNext(); )
+		{
+			DoseDrunk dose = it.next();
+			if (namesAgree(potion, dose.base))
+			{
+				it.remove();
+				return dose;
+			}
+		}
+		return null;
+	}
+
+	/** The first drink line waiting that names the potion this dose was, or null. */
+	private ParkedDrink takeParkedDrink(String base)
+	{
+		for (Iterator<ParkedDrink> it = parkedDrinks.iterator(); it.hasNext(); )
+		{
+			ParkedDrink drink = it.next();
+			if (namesAgree(drink.potion, base))
+			{
+				it.remove();
+				return drink;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Whether a drink line and a pack item name the same potion. The chat names it in
+	 * its own words ("restore prayer potion"), the catalogue in its own ("Prayer
+	 * potion"), and the two share a word, or one spelling runs on into the other
+	 * ("superantipoison potion" beside "Superantipoison"). "potion" alone is no
+	 * agreement, since every potion says it. A waterskin sip in the pairing window
+	 * shares nothing with the drink line and is left waiting on a line of its own.
+	 */
+	static boolean namesAgree(String potion, String base)
+	{
+		String drunk = consumableKey(potion, "").toLowerCase(Locale.ROOT);
+		String held = consumableKey(base, "").toLowerCase(Locale.ROOT);
+		if (drunk.isEmpty() || held.isEmpty())
+		{
+			return false;
+		}
+		if (drunk.contains(held) || held.contains(drunk))
+		{
+			return true;
+		}
+		Set<String> shared = new HashSet<>(words(potion));
+		shared.retainAll(words(base));
+		shared.remove("potion");
+		return !shared.isEmpty();
+	}
+
+	/**
+	 * Price a drink line. The pack is the authority on which potion it was: a dose
+	 * already seen leaving that names the same potion is taken now, otherwise the line
+	 * waits its window for one. Only when there is no pack to wait on is the name as
+	 * drunk priced on the spot.
+	 */
+	private void priceDrink(String typed, String potion)
+	{
+		DoseDrunk dose = takePendingDose(potion);
+		if (dose != null)
+		{
+			filePrice(typed, itemDosePrice(dose));
+		}
+		else if (inventorySnapshot != null && parkedDrinks.size() < MAX_PENDING_DRINKS)
+		{
+			parkedDrinks.add(new ParkedDrink(typed, potion, DRINK_PAIR_TICKS));
+		}
+		else
+		{
+			filePrice(typed, dosePrice(potion));
+		}
+	}
+
+	/** File a dose's worth under the aggregate and, when the potion has a key, its own. */
+	private void filePrice(String typed, int perDose)
+	{
+		if (perDose <= 0)
+		{
+			return;
+		}
+		store.incrementStatBy(CONSUMED_VALUE, perDose);
+		if (!typed.isEmpty() && consumableSink != null)
+		{
+			consumableSink.accept(typed, perDose);
+		}
+	}
+
+	/**
+	 * A dose's worth from the item that left the pack: the 4-dose form's GE price over
+	 * four. The 4-dose is the traded form; the lower doses are thin markets whose prices
+	 * wander, so pricing every sip off the one row keeps a potion's four doses worth the
+	 * same, and matches how the chat-name path always priced.
+	 *
+	 * <p>Misses are not remembered: the catalogue cannot tell an unloaded price list
+	 * from an untradeable potion, and a potion pinned at zero on login would stay
+	 * unpriced all session. A repeat walk per unpriced dose is cheap beside that.
+	 */
+	private int itemDosePrice(DoseDrunk dose)
+	{
+		Integer known = itemDosePrices.get(dose.base);
+		if (known != null)
+		{
+			return known;
+		}
+		try
+		{
+			// A (4) in the pack is the row itself; a lower dose finds its 4-dose sibling
+			// by catalogue name, which the search then matches exactly.
+			int fourDoseId = dose.doses == 4 ? dose.itemId : fourDoseId(dose.base);
+			int perDose = fourDoseId >= 0 ? itemManager.getItemPrice(fourDoseId) / 4 : 0;
+			if (perDose > 0)
+			{
+				itemDosePrices.put(dose.base, perDose);
+			}
+			return perDose;
+		}
+		catch (RuntimeException ignored)
+		{
+			// price cache unavailable; the dose goes unpriced rather than guessed
+			return 0;
+		}
+	}
+
+	/** The catalogue id of "<base>(4)", or -1 when the price list has no such row. */
+	private int fourDoseId(String base)
+	{
+		String wanted = base + "(4)";
+		for (ItemPrice row : itemManager.search(wanted))
+		{
+			if (row.getName().equalsIgnoreCase(wanted))
+			{
+				return row.getId();
+			}
+		}
+		return -1;
+	}
+
+	/**
+	 * The chat-name fallback: a dose's worth as the 4-dose item's GE price over four,
+	 * found by the name as drunk, or 0 unknown. The pack path above is preferred; this
+	 * runs only for a drink line no pack change explained.
+	 */
 	private int dosePrice(String potion)
 	{
 		if (potion == null || potion.isEmpty())
@@ -371,23 +696,12 @@ public class FoodStatTracker implements StatTracker
 	/**
 	 * Camel-case a consumable's name and stamp the suffix on: "Prayer potion" + "Doses"
 	 * -&gt; prayerPotionDoses. Empty in, empty out.
-	 *
-	 * <p>Locale.ROOT because these keys are written into the journal and read back on
-	 * whatever machine opens it. A Turkish JVM lowercases I to a dotless i, which the
-	 * a-z split below then throws away, minting a key no other client would agree with.
 	 */
 	private static String consumableKey(String name, String suffix)
 	{
 		StringBuilder key = new StringBuilder();
-		// Apostrophes go before the split so a possessive collapses into its word:
-		// "Chef's delight" is chefsDelight, not chefSDelight.
-		String cleaned = name.trim().toLowerCase(Locale.ROOT).replace("'", "").replace("’", "");
-		for (String word : cleaned.split("[^a-z0-9]+"))
+		for (String word : words(name))
 		{
-			if (word.isEmpty())
-			{
-				continue;
-			}
 			if (key.length() == 0)
 			{
 				key.append(word);
@@ -398,6 +712,30 @@ public class FoodStatTracker implements StatTracker
 			}
 		}
 		return key.length() == 0 ? "" : key.append(suffix).toString();
+	}
+
+	/**
+	 * A consumable's name as lower-case words, letters and digits only. Apostrophes go
+	 * before the split so a possessive collapses into its word: "Chef's delight" is
+	 * chefs, delight, not chef, s, delight.
+	 *
+	 * <p>Locale.ROOT because the keys built from these words are written into the
+	 * journal and read back on whatever machine opens it. A Turkish JVM lowercases I to
+	 * a dotless i, which the a-z split then throws away, minting a key no other client
+	 * would agree with.
+	 */
+	private static List<String> words(String name)
+	{
+		List<String> out = new ArrayList<>();
+		String cleaned = name.trim().toLowerCase(Locale.ROOT).replace("'", "").replace("’", "");
+		for (String word : cleaned.split("[^a-z0-9]+"))
+		{
+			if (!word.isEmpty())
+			{
+				out.add(word);
+			}
+		}
+		return out;
 	}
 
 	/**
@@ -448,23 +786,17 @@ public class FoodStatTracker implements StatTracker
 			if (message.contains("You drink some of the") || message.contains("You drink some of your"))
 			{
 				store.incrementStat(POTION_DOSES);
-				// A quarter of the 4-dose price. Chat carries no item id, so this is an
-				// estimate, and anything unpriced errs low.
-				int dose = dosePrice(potionName(message));
-				if (dose > 0)
-				{
-					store.incrementStatBy(CONSUMED_VALUE, dose);
-				}
-				// Per-potion tally beside the aggregate: "Prayer potion" -> prayerPotionDoses.
-				String typed = perPotionKey(potionName(message));
+				String potion = potionName(message);
+				// Per-potion tally beside the aggregate, keyed by the name as drunk so the
+				// history runs on: "restore prayer potion" -> restorePrayerPotionDoses.
+				String typed = perPotionKey(potion);
 				if (!typed.isEmpty())
 				{
 					store.incrementStat(typed);
-					if (dose > 0 && consumableSink != null)
-					{
-						consumableSink.accept(typed, dose);
-					}
 				}
+				// A quarter of the 4-dose price, off the item the pack shows leaving.
+				// Anything unpriced errs low.
+				priceDrink(typed, potion);
 
 				if (message.contains("divine"))
 				{

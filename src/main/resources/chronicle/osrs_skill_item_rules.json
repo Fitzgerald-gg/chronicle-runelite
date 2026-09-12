@@ -407,6 +407,7 @@
    "qty": true
   },
   {
+   "_comment": "The vial step pays no xp, so no tuple ever reaches this row; SkillDeriver.applyChat counts the chat line instead. Kept so the weapon poison rule below still sees '(unf)' poisons first.",
    "match": "endswith",
    "value": " (unf)",
    "key": "unfinishedPotionsMade"

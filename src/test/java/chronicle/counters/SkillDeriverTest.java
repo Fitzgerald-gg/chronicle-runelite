@@ -296,6 +296,122 @@ public class SkillDeriverTest
 		assertEquals(0, store.getStat("explosivePlanted"));
 	}
 
+	// a deriver on a fresh store, for the chat lines that need no item lookup
+	private static SkillDeriver chatDeriver(StatStore store)
+	{
+		return new SkillDeriver(Mockito.mock(ItemManager.class), store, new Gson());
+	}
+
+	@Test
+	public void herbsIntoTheSackAreCountedByHerb()
+	{
+		StatStore store = new StatStore();
+		SkillDeriver cd = chatDeriver(store);
+		cd.applyChat("You put the grimy guam leaf herb into your herb sack.");
+		assertEquals(1, store.getStat("herbsSacked"));
+		assertEquals(1, store.getStat("guamLeafSacked"));
+		cd.applyChat("You put the grimy ranarr weed herb into your herb sack.");
+		assertEquals(1, store.getStat("ranarrWeedSacked"));
+		// the grimy prefix and the trailing "herb" are both unconfirmed, so a line
+		// without either still names its herb
+		cd.applyChat("You put the Toadflax into your herb sack.");
+		assertEquals(1, store.getStat("toadflaxSacked"));
+		assertEquals(3, store.getStat("herbsSacked"));
+		assertEquals(0, store.getStat("grimyGuamLeafSacked"));
+	}
+
+	@Test
+	public void letveksShooedAndSpiritPoolsHarpooned()
+	{
+		StatStore store = new StatStore();
+		SkillDeriver cd = chatDeriver(store);
+		cd.applyChat("You gently shoo the letvek away.");
+		assertEquals(1, store.getStat("letveksShooed"));
+		cd.applyChat("The glowing fish scatter, shedding their magical scales.");
+		assertEquals(1, store.getStat("spiritPoolsHarpooned"));
+	}
+
+	@Test
+	public void aBucketOfSapCountsOnlyAtABloodwoodTree()
+	{
+		StatStore store = new StatStore();
+		SkillDeriver cd = chatDeriver(store);
+		String line = "You fill the bucket with sap.";
+		cd.applyChat(line, "Bloodwood tree");
+		assertEquals(1, store.getStat("bloodwoodSapBucketsFilled"));
+		// the same line at an evergreen, and with no tree known at all
+		cd.applyChat(line, "Knife -> Evergreen");
+		cd.applyChat(line);
+		assertEquals(1, store.getStat("bloodwoodSapBucketsFilled"));
+		cd.applyChat(line, "Engorged bloodwood tree");
+		assertEquals(2, store.getStat("bloodwoodSapBucketsFilled"));
+	}
+
+	@Test
+	public void thrallsAreCountedByTierAndKind()
+	{
+		StatStore store = new StatStore();
+		SkillDeriver cd = chatDeriver(store);
+		String[] tiers = {"lesser", "superior", "greater"};
+		String[] kinds = {"ghostly", "skeletal", "zombified"};
+		for (String tier : tiers)
+		{
+			for (String kind : kinds)
+			{
+				cd.applyChat("You resurrect a " + tier + " " + kind + " thrall.");
+			}
+		}
+		assertEquals(9, store.getStat("thrallsSummoned"));
+		assertEquals(1, store.getStat("lesserGhostlyThrallsSummoned"));
+		assertEquals(1, store.getStat("lesserSkeletalThrallsSummoned"));
+		assertEquals(1, store.getStat("lesserZombifiedThrallsSummoned"));
+		assertEquals(1, store.getStat("superiorGhostlyThrallsSummoned"));
+		assertEquals(1, store.getStat("superiorSkeletalThrallsSummoned"));
+		assertEquals(1, store.getStat("superiorZombifiedThrallsSummoned"));
+		assertEquals(1, store.getStat("greaterGhostlyThrallsSummoned"));
+		assertEquals(1, store.getStat("greaterSkeletalThrallsSummoned"));
+		assertEquals(1, store.getStat("greaterZombifiedThrallsSummoned"));
+		// a thrall the line names no tier for still counts the floor alone
+		cd.applyChat("You resurrect a thrall.");
+		assertEquals(10, store.getStat("thrallsSummoned"));
+	}
+
+	@Test
+	public void hidesTannedOneAtATimeAndByTheBatch()
+	{
+		StatStore store = new StatStore();
+		SkillDeriver cd = chatDeriver(store);
+		cd.applyChat("The tanner tans your cowhide.");
+		assertEquals(1, store.getStat("hidesTanned"));
+		assertEquals(1, store.getStat("cowhideTanned"));
+		cd.applyChat("The tanner tans your cowhide for you.");
+		assertEquals(2, store.getStat("cowhideTanned"));
+		// the batch form names the count and the plural; both land on the same key
+		cd.applyChat("The tanner tans 27 green dragonhides for you.");
+		assertEquals(29, store.getStat("hidesTanned"));
+		assertEquals(27, store.getStat("greenDragonhideTanned"));
+		cd.applyChat("The tanner tans 5 snake hides for you.");
+		assertEquals(5, store.getStat("snakeHideTanned"));
+		assertEquals(34, store.getStat("hidesTanned"));
+		assertEquals(0, store.getStat("greenDragonhidesTanned"));
+	}
+
+	@Test
+	public void unfinishedPotionsComeOffTheVialLine()
+	{
+		StatStore store = new StatStore();
+		SkillDeriver cd = chatDeriver(store);
+		cd.applyChat("You put the Guam leaf into the vial of water.");
+		assertEquals(1, store.getStat("unfinishedPotionsMade"));
+		// the sack line also starts "You put the"; it is not a potion
+		cd.applyChat("You put the grimy guam leaf herb into your herb sack.");
+		assertEquals(1, store.getStat("unfinishedPotionsMade"));
+		// nor is any other "You put the" line the gate forwards (a synthetic one:
+		// the vial is what makes the line a potion, not the opening words)
+		cd.applyChat("You put the coins into the coffer.");
+		assertEquals(1, store.getStat("unfinishedPotionsMade"));
+	}
+
 	@Test
 	public void absorbsAndFloors()
 	{
@@ -372,5 +488,89 @@ public class SkillDeriverTest
 		assertEquals((Integer) 1, got.get("logsChopped"));
 		assertNull(got.get("resourcesGatheredValue"));
 		assertFalse(gathered.contains(11941));
+	}
+
+	@Test
+	public void burnsAreCountedByTheFoodTheLineNames()
+	{
+		StatStore store = new StatStore();
+		SkillDeriver cd = new SkillDeriver(Mockito.mock(ItemManager.class), store, new Gson());
+		cd.applyChat("You accidentally burn the shark.");
+		cd.applyChat("You accidentally burn the moonlight antelope.");
+		// a cake is no fish: the rule reads the name off the line, not off a list
+		cd.applyChat("You accidentally burn the cake.");
+		// the cooked row is aliased to the singular, so the burnt one sits beside it
+		cd.applyChat("You accidentally burn the shrimps.");
+		// the one line that runs on past the food (wiki, verbatim)
+		cd.applyChat("You accidentally burn the karambwanji to ashes.");
+		assertEquals(5, store.getStat("foodBurned"));
+		assertEquals(1, store.getStat("sharkBurned"));
+		assertEquals(1, store.getStat("moonlightAntelopeBurned"));
+		assertEquals(1, store.getStat("cakeBurned"));
+		assertEquals(1, store.getStat("shrimpBurned"));
+		assertEquals(0, store.getStat("shrimpsBurned"));
+		assertEquals(1, store.getStat("karambwanjiBurned"));
+		assertEquals(0, store.getStat("karambwanjiToAshesBurned"));
+	}
+
+	@Test
+	public void theLeapingFishAndTheSacredEelTypeWithoutARawPrefix()
+	{
+		names.put(11328, "Leaping trout");
+		names.put(11330, "Leaping salmon");
+		names.put(11332, "Leaping sturgeon");
+		names.put(13339, "Sacred eel");
+		// the xp on each is a members collision, so only the item can name the row
+		assertEquals((Integer) 1, derive("FISHING|50||11328|1||").get("leapingTroutCaught"));
+		assertEquals((Integer) 1, derive("FISHING|70||11330|1||").get("leapingSalmonCaught"));
+		assertEquals((Integer) 1, derive("FISHING|80||11332|1||").get("leapingSturgeonCaught"));
+		Map<String, Integer> eel = derive("FISHING|105||13339|1||");
+		assertEquals((Integer) 1, eel.get("sacredEelCaught"));
+		assertEquals((Integer) 1, eel.get("fishCaught"));
+		// two eels in one tick put the xp off the ladder; the item still names them
+		Map<String, Integer> pair = derive("FISHING|210||13339|2||");
+		assertEquals((Integer) 2, pair.get("sacredEelCaught"));
+		assertEquals((Integer) 2, pair.get("fishCaught"));
+		// minnows still count one to a minnow
+		names.put(21356, "Minnow");
+		Map<String, Integer> minnows = derive("FISHING|26||21356|12||");
+		assertEquals((Integer) 12, minnows.get("minnowCaught"));
+		assertEquals((Integer) 12, minnows.get("fishCaught"));
+	}
+
+	@Test
+	public void thePlainTreeIsNormalOnTheItemPathAsOnTheLadder()
+	{
+		names.put(1511, "Logs");
+		Map<String, Integer> byItem = derive("WOODCUTTING|25||1511|1||");
+		assertEquals((Integer) 1, byItem.get("normalLogsChopped"));
+		assertNull(byItem.get("logsLogsChopped"));
+		// a full pack drops the log on the ground, and the xp ladder names the same key
+		assertEquals((Integer) 1, derive("WOODCUTTING|25|||||").get("normalLogsChopped"));
+	}
+
+	@Test
+	public void pickpocketTargetsShedTheirCombatLevel()
+	{
+		// the menu target reads "Guard  (level-21)" once the colour tags are gone
+		Map<String, Integer> got = derive("THIEVING|47||||Guard  (level-21)|");
+		assertEquals((Integer) 1, got.get("pickPockets"));
+		assertEquals((Integer) 1, got.get("guardPickpockets"));
+		for (String key : got.keySet())
+		{
+			assertFalse(key, key.contains("(level"));
+		}
+		assertEquals((Integer) 1, derive("THIEVING|84||||Knight of Ardougne (level 46)|")
+			.get("knightOfArdougnePickpockets"));
+		// a level with no name in front of it robs nobody in particular
+		assertEquals(1, derive("THIEVING|47||||(level-21)|").size());
+		assertEquals("Guard", SkillDeriver.npcName("Guard  (level-21)"));
+		assertEquals("Guard", SkillDeriver.npcName("Guard (level 21)"));
+		assertEquals("Guard", SkillDeriver.npcName("Guard level-21"));
+		assertEquals("Master Farmer", SkillDeriver.npcName("Master Farmer"));
+		StatStore store = new StatStore();
+		SkillDeriver cd = new SkillDeriver(Mockito.mock(ItemManager.class), store, new Gson());
+		cd.applyChat("You fail to pick the Guard's pocket.");
+		assertEquals(1, store.getStat("guardFailedPickpockets"));
 	}
 }

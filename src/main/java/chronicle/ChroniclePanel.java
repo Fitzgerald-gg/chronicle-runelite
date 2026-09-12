@@ -2459,7 +2459,8 @@ class ChroniclePanel extends PluginPanel
 
 			boolean foldable = statsFamily.equals("Skilling")
 				|| sec.equals("Food") || sec.equals("Potions")
-				|| sec.equals("Teleports") || sec.equals("Destinations");
+				|| sec.equals("Teleports") || sec.equals("Destinations")
+				|| sec.equals("Thralls");
 			if (!foldable)
 			{
 				p.add(group(sec));

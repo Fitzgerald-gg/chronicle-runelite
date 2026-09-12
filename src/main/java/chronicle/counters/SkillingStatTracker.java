@@ -94,8 +94,21 @@ public class SkillingStatTracker implements StatTracker
 		"You accidentally burn",   // cooking burns
 		"You fail to pick",        // pickpocket failure; success rides the target-name tuple
 		"You plant ",              // farming seeds planted
-		"Rooftop lap", "lap count" // agility laps, which aren't 1:1 with obstacle xp
+		"Rooftop lap", "lap count", // agility laps, which aren't 1:1 with obstacle xp
+		"into your herb sack",     // a herb sacked, whole or from the Fill option
+		"You gently shoo the letvek",
+		"You fill the bucket with sap",   // bloodwood or evergreen; the click target decides
+		"The tanner tans",         // one hide or a batch, both named in the line
+		"You put the",             // a herb into a vial of water
+		"You resurrect ",          // a thrall; the tier and kind are only in the line
+		"The glowing fish scatter" // a Tempoross spirit pool harpooned
 	};
+
+	// The game object the last click named, kept until the next object click. The
+	// sap line reads the same at an evergreen as at a bloodwood tree, so the tree
+	// tells them apart; and a tap is one click for many buckets, so the tick TTL
+	// on lastTargetName would drop every bucket after the first.
+	private String lastObjectTarget = "";
 
 	public SkillingStatTracker(StatStore statStore, Client client, SkillDeriver deriver)
 	{
@@ -129,6 +142,14 @@ public class SkillingStatTracker implements StatTracker
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
 		MenuAction a = event.getMenuAction();
+		if (a == MenuAction.WIDGET_TARGET_ON_GAME_OBJECT)
+		{
+			// an item used on an object, the knife on an evergreen: it names the
+			// object for the sap gate but is no skilling verb for the tuples
+			String used = event.getMenuTarget();
+			lastObjectTarget = used == null ? "" : Text.removeTags(used);
+			return;
+		}
 		boolean object = a == MenuAction.GAME_OBJECT_FIRST_OPTION || a == MenuAction.GAME_OBJECT_SECOND_OPTION
 			|| a == MenuAction.GAME_OBJECT_THIRD_OPTION || a == MenuAction.GAME_OBJECT_FOURTH_OPTION
 			|| a == MenuAction.GAME_OBJECT_FIFTH_OPTION;
@@ -156,6 +177,10 @@ public class SkillingStatTracker implements StatTracker
 		}
 		lastTargetName = Text.removeTags(event.getMenuTarget());   // "Master Farmer", "Oak", "Gnome"
 		targetTtl = TTL_TICKS;
+		if (object)
+		{
+			lastObjectTarget = lastTargetName;
+		}
 		if (object && (o.contains("chop") || o.contains("mine")))
 		{
 			lastObjectId = event.getId();   // the live tree/rock, caught before it becomes a stump
@@ -284,7 +309,7 @@ public class SkillingStatTracker implements StatTracker
 		{
 			if (msg.contains(prefix))
 			{
-				deriver.applyChat(msg);
+				deriver.applyChat(msg, lastObjectTarget);
 				return;
 			}
 		}
@@ -316,6 +341,7 @@ public class SkillingStatTracker implements StatTracker
 			objectTtl = 0;
 			lastTargetName = "";
 			targetTtl = 0;
+			lastObjectTarget = "";
 			rakeTtl = 0;
 		}
 	}

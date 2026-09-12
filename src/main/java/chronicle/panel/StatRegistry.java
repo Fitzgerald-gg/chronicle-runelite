@@ -30,7 +30,11 @@ public final class StatRegistry
 	private static final Set<String> COMBAT = new HashSet<>(Arrays.asList(
 		"damageDealt", "damageTaken", "highestHit", "highestHitTaken",
 		"hitsMissed", "hitsBlocked", "deaths", "poisonDamageTaken", "venomDamageTaken",
-		"specialAttacksUsed", "damageDealtMelee", "damageDealtRanged", "damageDealtMagic"));
+		"specialAttacksUsed", "damageDealtMelee", "damageDealtRanged", "damageDealtMagic",
+		"thrallsSummoned"));
+	// the typed thrall keys (lesserGhostlyThrallsSummoned) are minted from the
+	// chat line, so Combat claims them by suffix the way a craft does
+	private static final String THRALL_SUFFIX = "ThrallsSummoned";
 	private static final Set<String> LIVING_FLAT = new HashSet<>(Arrays.asList(
 		"foodEaten", "potionDoses", "beersDrunk", "vialsShattered",
 		"hitpointsRegenerated", "divinePotionDamage", "consumedValue",
@@ -74,15 +78,22 @@ public final class StatRegistry
 	// matchedSuffix takes the first hit: this order, and the order inside each
 	// craft's suffix list, is load-bearing (FailedPickpockets before Pickpockets)
 	private static final List<SkillSpec> SKILLS = Arrays.asList(
-		new SkillSpec("Woodcutting", new String[]{"LogsChopped"}, new String[]{"logsChopped"}, NONE),
-		new SkillSpec("Fishing", new String[]{"Caught"}, new String[]{"fishCaught"}, NONE),
-		new SkillSpec("Cooking", new String[]{"Cooked"}, new String[]{"foodCooked"},
-			new String[]{"foodBurned"}),
+		// the two Vampyrium keys are chat-counted: a tap is a chop with a bucket
+		new SkillSpec("Woodcutting", new String[]{"LogsChopped"}, new String[]{"logsChopped"},
+			new String[]{"letveksShooed", "bloodwoodSapBucketsFilled"}),
+		new SkillSpec("Fishing", new String[]{"Caught"}, new String[]{"fishCaught"},
+			new String[]{"spiritPoolsHarpooned"}),
+		// Firemaking sits above Cooking so "LogsBurned" is claimed before the
+		// broader "Burned" sweep could take a log for a burnt meal
 		new SkillSpec("Firemaking", new String[]{"LogsBurned"}, new String[]{"logsBurned"}, NONE),
+		// a burn is typed by the food the chat line names, under its own floor
+		new SkillSpec("Cooking", new String[]{"Cooked", "Burned"},
+			new String[]{"foodCooked", "foodBurned"}, NONE),
 		new SkillSpec("Mining", new String[]{"OreMined", "Mined"}, new String[]{"rocksMined"}, NONE),
 		new SkillSpec("Smithing", new String[]{"BarsSmelted", "ItemsSmithed"}, NONE,
 			new String[]{"itemsSmithed", "cannonballsSmithed"}),
-		new SkillSpec("Herblore", NONE, NONE,
+		// "Sacked" is the herb sack, typed by herb off the chat line
+		new SkillSpec("Herblore", new String[]{"Sacked"}, new String[]{"herbsSacked"},
 			new String[]{"herbsCleaned", "unfinishedPotionsMade", "potionsMade",
 				"herbTarsMade", "weaponPoisonsMade"}),
 		new SkillSpec("Fletching", new String[]{"LogsFletched"}, NONE,
@@ -91,7 +102,8 @@ public final class StatRegistry
 				"crossbowStocksCut", "bowsStrung", "logsFletched",
 				"arrowShaftsFletched", "headlessArrowsFletched",
 				"javelinShaftsFletched", "ballistaeFletched", "blowpipesFletched"}),
-		new SkillSpec("Crafting", NONE, NONE,
+		// "Tanned" is the tanner's line, typed by hide; no xp behind it
+		new SkillSpec("Crafting", new String[]{"Tanned"}, new String[]{"hidesTanned"},
 			new String[]{"gemsCut", "glassBlown", "leatherCrafted", "dhideCrafted",
 				"jewelleryCrafted", "potteryMade", "battlestavesCrafted", "itemsSpun",
 				"moltenGlassMade", "snakeskinCrafted", "xericianCrafted", "silverCrafted",
@@ -150,6 +162,7 @@ public final class StatRegistry
 		}
 		FLOORS.add("teleportsTotal");
 		FLOORS.add("teleports");
+		FLOORS.add("thrallsSummoned");
 	}
 
 	private static final Map<String, String> LABELS = new HashMap<>();
@@ -190,6 +203,7 @@ public final class StatRegistry
 		LABELS.put("teleportsSpiritTree", "· by spirit tree");
 		// the essence spent, not the runes it came back as
 		LABELS.put("essenceCrafted", "Essence crafted");
+		LABELS.put("thrallsSummoned", "Thralls raised");
 
 		// destinations whose real name the camelCase split can't get back to
 		TELE_NAMES.put("teleportsSeersVillage", "Seers' Village");
@@ -232,6 +246,12 @@ public final class StatRegistry
 		return FLOORS.contains(key);
 	}
 
+	// a typed thrall row: lesserGhostlyThrallsSummoned, never the floor itself
+	private static boolean thrallTyped(String key)
+	{
+		return key.endsWith(THRALL_SUFFIX) && !key.equals(THRALL_SUFFIX);
+	}
+
 	// the craft that owns a key, or null if no craft claims it
 	public static String skillOf(String key)
 	{
@@ -272,7 +292,7 @@ public final class StatRegistry
 		{
 			return "Living";
 		}
-		if (COMBAT.contains(key))
+		if (COMBAT.contains(key) || thrallTyped(key))
 		{
 			return "Combat";
 		}
@@ -309,6 +329,11 @@ public final class StatRegistry
 		{
 			String skill = skillOf(key);
 			return skill != null ? skill : "";
+		}
+		if (fam.equals("Combat"))
+		{
+			// the one fold in Combat: thralls reconcile to their floor like a craft
+			return key.equals("thrallsSummoned") || thrallTyped(key) ? "Thralls" : "";
 		}
 		if (fam.equals("Living"))
 		{
@@ -370,6 +395,8 @@ public final class StatRegistry
 				return java.util.Collections.singletonList("foodEaten");
 			case "Potions":
 				return java.util.Collections.singletonList("potionDoses");
+			case "Thralls":
+				return java.util.Collections.singletonList("thrallsSummoned");
 			default:
 				return java.util.Collections.emptyList();
 		}
@@ -422,6 +449,10 @@ public final class StatRegistry
 			{
 				return typedName(key, "Doses");
 			}
+		}
+		if (thrallTyped(key))
+		{
+			return typedName(key, THRALL_SUFFIX);   // "Lesser ghostly" under Thralls
 		}
 		return label(key);
 	}
@@ -476,6 +507,10 @@ public final class StatRegistry
 				return "Ensouled heads";
 			case "OreMined":
 				return "Ores mined";
+			case "Sacked":
+				return "Herbs sacked";
+			case "Tanned":
+				return "Hides tanned";
 			default:
 				return prettify(Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1));
 		}
@@ -507,8 +542,17 @@ public final class StatRegistry
 			case "Cooked":
 				cand = "foodCooked";
 				break;
+			case "Burned":
+				cand = "foodBurned";
+				break;
 			case "TrialsCompleted":
 				cand = "barracudaTrialsCompleted";
+				break;
+			case "Sacked":
+				cand = "herbsSacked";
+				break;
+			case "Tanned":
+				cand = "hidesTanned";
 				break;
 			default:
 				cand = Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1);
@@ -539,7 +583,7 @@ public final class StatRegistry
 		{
 			return false;
 		}
-		if (skillOf(key) != null)
+		if (skillOf(key) != null || thrallTyped(key))
 		{
 			return true;
 		}
@@ -617,6 +661,8 @@ public final class StatRegistry
 		{
 			case "Living":
 				return Arrays.asList("", "Food", "Potions");
+			case "Combat":
+				return Arrays.asList("", "Thralls");
 			case "Ledger & Roads":
 				return Arrays.asList("The purse", "On foot", "Teleports", "Destinations", "Odds & ends");
 			default:

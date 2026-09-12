@@ -256,6 +256,23 @@ public final class StatKeys
 
 	public static final String ESSENCE_CRAFTED = "essenceCrafted";
 
+	// ── Counted off a chat line ───────────────────────────────────────────
+	// No experience drop behind any of these. The typed keys minted beside the
+	// floors (guamLeafSacked, cowhideTanned, lesserGhostlyThrallsSummoned) take
+	// their name from the line itself, so they have no constant here.
+
+	public static final String HERBS_SACKED = "herbsSacked";
+	public static final String HIDES_TANNED = "hidesTanned";
+	// The mint table names this one too, but the vial step pays no xp, so the
+	// chat line is the only writer.
+	public static final String UNFINISHED_POTIONS_MADE = "unfinishedPotionsMade";
+	public static final String LETVEKS_SHOOED = "letveksShooed";
+	// The line is the one an evergreen gives too; the tree the last click named
+	// decides whether the bucket counts.
+	public static final String BLOODWOOD_SAP_BUCKETS_FILLED = "bloodwoodSapBucketsFilled";
+	public static final String SPIRIT_POOLS_HARPOONED = "spiritPoolsHarpooned";
+	public static final String THRALLS_SUMMONED = "thrallsSummoned";
+
 	// ── Experience ────────────────────────────────────────────────────────
 
 	// Every skill's gains added up, from the point the plugin started watching.
