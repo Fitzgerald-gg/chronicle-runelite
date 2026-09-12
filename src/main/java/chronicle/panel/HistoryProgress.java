@@ -42,11 +42,18 @@ import java.util.function.Predicate;
  * section come from the registry, floors head their section instead of listing
  * as rows, typed rows reconcile to the floor with the remainder as a ghost
  * "Other", and a section's total is the larger of its floor and what its rows
- * and ghost add up to. Skilling crafts rank by total, the other families keep
- * the registry's fixed order. Destinations stand as a section of their own
- * under Ledger &amp; Roads, and a family's sectionless rows form a section
- * named after the family. Summary keys, hidden keys and peak keys (whose delta
- * means nothing) never file.
+ * and ghost add up to. A family's flat key that heads one of its own sections
+ * (potionDoses is the Potions floor, foodEaten the Food floor) files there as
+ * the floor, once, never as a row beside the fold. Skilling crafts rank by
+ * total, the other families keep the registry's fixed order. Destinations
+ * stand as a section of their own under Ledger &amp; Roads, and a family's
+ * sectionless rows form a section named after the family, one whose rows mix
+ * units and so carries no figure. Summary keys, hidden keys and peak keys
+ * (whose delta means nothing) never file.
+ *
+ * <p>Two summary figures may be read off the journal itself instead of the
+ * spine: the caller hands them in as retroactive figures, and a key handed in
+ * replaces the spine's delta for that line.
  */
 public final class HistoryProgress
 {
@@ -122,8 +129,11 @@ public final class HistoryProgress
 		private final List<Row> rows;
 		private final long ghost;
 		private final String ghostLabel;
+		private final boolean summed;
+		private final boolean gp;
 
-		Section(String name, String family, long total, List<Row> rows, long ghost, String ghostLabel)
+		Section(String name, String family, long total, List<Row> rows, long ghost, String ghostLabel,
+			boolean summed, boolean gp)
 		{
 			this.name = name;
 			this.family = family;
@@ -131,6 +141,8 @@ public final class HistoryProgress
 			this.rows = Collections.unmodifiableList(rows);
 			this.ghost = ghost;
 			this.ghostLabel = ghostLabel;
+			this.summed = summed;
+			this.gp = gp;
 		}
 
 		public String name()
@@ -166,6 +178,23 @@ public final class HistoryProgress
 		public String ghostLabel()
 		{
 			return ghostLabel;
+		}
+
+		/**
+		 * Whether the rows add up to one figure the head can carry: a floor heads
+		 * them, every row is gp, or the section counts one kind of action (a
+		 * craft, Food, Potions, Thralls, the roads). A family's flat list and
+		 * Odds &amp; ends mix units (meals, doses, hitpoints) and carry none.
+		 */
+		public boolean summed()
+		{
+			return summed;
+		}
+
+		/** Whether {@link #total()} renders as gp: every row is gp. */
+		public boolean gp()
+		{
+			return gp;
 		}
 	}
 
@@ -218,7 +247,38 @@ public final class HistoryProgress
 	 */
 	public static HistoryProgress of(Map<String, Long> counters, Predicate<String> gp)
 	{
-		Map<String, Long> c = counters != null ? counters : Collections.emptyMap();
+		return of(counters, gp, null);
+	}
+
+	/**
+	 * Shape a period, with summary figures read off the journal itself laid over
+	 * the spine's deltas.
+	 *
+	 * @param counters the period's positive counter deltas, spine extras included
+	 * @param gp whether a key's figure is gp; null reads the registry
+	 * @param retroactive summary keys with the figure the journal gives them for
+	 * the period (closed slayer segments, collection log entries); a key here
+	 * replaces the spine's delta, a zero included, and a key the summary does
+	 * not read is ignored. Null for none.
+	 */
+	public static HistoryProgress of(Map<String, Long> counters, Predicate<String> gp,
+		Map<String, Long> retroactive)
+	{
+		Map<String, Long> c = new LinkedHashMap<>();
+		if (counters != null)
+		{
+			c.putAll(counters);
+		}
+		if (retroactive != null)
+		{
+			for (Map.Entry<String, Long> e : retroactive.entrySet())
+			{
+				if (e.getKey() != null && e.getValue() != null && SUMMARY_KEYS.contains(e.getKey()))
+				{
+					c.put(e.getKey(), e.getValue());
+				}
+			}
+		}
 		Predicate<String> g = gp != null ? gp : StatRegistry::isGp;
 		return new HistoryProgress(summary(c, g), sections(c, g));
 	}
@@ -307,9 +367,24 @@ public final class HistoryProgress
 			{
 				continue;
 			}
-			Bucket b = byFamily.computeIfAbsent(StatRegistry.family(key), f -> new LinkedHashMap<>())
-				.computeIfAbsent(StatRegistry.subgroup(key), s -> new Bucket());
-			if (StatRegistry.isFloor(key))
+			String family = StatRegistry.family(key);
+			String sec = StatRegistry.subgroup(key);
+			boolean floor = StatRegistry.isFloor(key);
+			if (sec.isEmpty())
+			{
+				// a flat key that heads one of the family's own sections files
+				// there as the floor: potionDoses is Living's "Doses drunk" and
+				// the Potions floor, and one figure is shown once
+				String heads = headOf(family, key);
+				if (heads != null)
+				{
+					sec = heads;
+					floor = true;
+				}
+			}
+			Bucket b = byFamily.computeIfAbsent(family, f -> new LinkedHashMap<>())
+				.computeIfAbsent(sec, s -> new Bucket());
+			if (floor)
 			{
 				b.floor += v;
 				b.floors.put(key, v);
@@ -338,6 +413,20 @@ public final class HistoryProgress
 			}
 		}
 		return out;
+	}
+
+	// the section of `family` that `key` is a floor of, or null when none of the
+	// family's fixed sections is headed by it
+	private static String headOf(String family, String key)
+	{
+		for (String sec : StatRegistry.fixedSections(family))
+		{
+			if (!sec.isEmpty() && StatRegistry.floorKeys(sec).contains(key))
+			{
+				return sec;
+			}
+		}
+		return null;
 	}
 
 	// Skilling ranks its crafts by weight (the floor when there is one, else the
@@ -451,6 +540,16 @@ public final class HistoryProgress
 		{
 			return null;
 		}
-		return new Section(sec.isEmpty() ? family : sec, family, total, lines, ghost, ghostLabel);
+		// the head carries a figure where the rows add up to one: a floor heads
+		// them, every row is gp, or the section counts one kind of action. A
+		// family's flat list and Odds & ends mix meals, doses and hitpoints.
+		boolean allGp = !lines.isEmpty();
+		for (Row r : lines)
+		{
+			allGp &= r.gp();
+		}
+		boolean summed = floor > 0 || allGp || !(sec.isEmpty() || sec.equals("Odds & ends"));
+		return new Section(sec.isEmpty() ? family : sec, family, total, lines, ghost, ghostLabel,
+			summed, allGp);
 	}
 }

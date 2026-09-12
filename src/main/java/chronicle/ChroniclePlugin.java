@@ -780,6 +780,18 @@ public class ChroniclePlugin extends Plugin
 		executor.submit(() -> onDone.accept(localStore.slayerJourney()));
 	}
 
+	// The same journey read on the calling thread, for the History tab's gather
+	// worker; null while no store is mounted. Never call this on the EDT.
+	ChronicleApiClient.SlayerJourney slayerJourney()
+	{
+		final String rsn = localName;
+		if (rsn == null || !localStore.isReadyFor(rsn))
+		{
+			return null;
+		}
+		return localStore.slayerJourney();
+	}
+
 	java.util.List<JsonObject> feedNewest(int n)
 	{
 		return localStore.feedNewest(n);

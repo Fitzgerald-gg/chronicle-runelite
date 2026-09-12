@@ -887,6 +887,7 @@ class ChroniclePanel extends PluginPanel
 		grindsFetching = false;
 		historySpine = null;
 		historyFeed = new ArrayList<>();
+		historyJourney = null;
 		historyDay = null;
 		historyFeedTs = 0;
 		// disown any gather still reading the old journal
@@ -2724,6 +2725,9 @@ class ChroniclePanel extends PluginPanel
 	// lands as a stall on every pill click.
 	private java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> historySpine;
 	private List<JsonObject> historyFeed = new ArrayList<>();
+	// The slayer journey read beside them: the progress card's tasks-completed
+	// line counts its closed segments by date, which reach back past the spine.
+	private ChronicleApiClient.SlayerJourney historyJourney;
 	// What that pair was true of: the day it was read and the newest feed entry
 	// it saw. Either one moving means the cache is stale.
 	private java.time.LocalDate historyDay;
@@ -2738,13 +2742,16 @@ class ChroniclePanel extends PluginPanel
 	{
 		final java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> spine;
 		final List<JsonObject> feed;
+		final ChronicleApiClient.SlayerJourney journey;
 		final java.time.LocalDate day;
 
 		HistoryData(java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> spine,
-			List<JsonObject> feed, java.time.LocalDate day)
+			List<JsonObject> feed, ChronicleApiClient.SlayerJourney journey,
+			java.time.LocalDate day)
 		{
 			this.spine = spine;
 			this.feed = feed;
+			this.journey = journey;
 			this.day = day;
 		}
 	}
@@ -2768,7 +2775,8 @@ class ChroniclePanel extends PluginPanel
 			protected HistoryData doInBackground()
 			{
 				return new HistoryData(plugin.historyBaselines(),
-					plugin.feedNewest(HISTORY_FEED_SCAN), java.time.LocalDate.now());
+					plugin.feedNewest(HISTORY_FEED_SCAN), plugin.slayerJourney(),
+					java.time.LocalDate.now());
 			}
 
 			@Override
@@ -2798,6 +2806,7 @@ class ChroniclePanel extends PluginPanel
 				}
 				historySpine = d.spine;
 				historyFeed = d.feed;
+				historyJourney = d.journey;
 				historyDay = d.day;
 				historyFeedTs = newestTs(d.feed);
 				if (view == View.HISTORY)
@@ -2814,49 +2823,36 @@ class ChroniclePanel extends PluginPanel
 		return feed.isEmpty() ? 0 : safeLong(feed.get(0).get("ts"));
 	}
 
-	// The period's tracked progress: the headline figures, then every other
-	// counter under the family and section the Stats tab files it in. Each
-	// section is a fold that starts shut and opens to its rows and the leftover
-	// "Other"; a family heads its sections only when it has one to show. The
-	// folds are keyed apart from the Stats tab's, so a reader's fold on one tab
-	// leaves the other tab as it was.
-	private JPanel trackedProgress(HistoryProgress progress)
+	// The period's tracked progress: the headline figures, a line saying what
+	// they measure from when that is later than the period's start, then every
+	// other counter as one list of folds in the Stats tab's family-then-section
+	// order, with no heading between families. A family's flat rows (Living's
+	// meals and doses, Combat's hits and damage taken) fold under the family's
+	// own name. Each fold starts shut, its head carries the section's period
+	// total where the rows add up to one figure, and a click opens it to its
+	// rows and the leftover "Other". The folds are keyed apart from the Stats
+	// tab's, so a reader's fold on one tab leaves the other tab as it was.
+	private JPanel trackedProgress(HistoryProgress progress, String since)
 	{
 		JPanel card = card("Tracked progress");
+		if (since != null)
+		{
+			card.add(note(since));
+			card.add(vgap(3));
+		}
 		for (HistoryProgress.Row r : progress.summary())
 		{
 			card.add(row(r.label(), "+" + figure(r), null));
 		}
-		String family = null;
 		for (HistoryProgress.Section s : progress.sections())
 		{
-			if (!s.family().equals(family))
-			{
-				family = s.family();
-				card.add(group(family));
-			}
-			if (s.name().equals(s.family()))
-			{
-				// the family's flat top list, drawn as the Stats tab draws it:
-				// plain rows under the family, no fold and no total, since meals
-				// and doses and hitpoints regained do not add up to anything
-				for (HistoryProgress.Row r : s.rows())
-				{
-					card.add(row(r.label(), "+" + figure(r), null));
-				}
-				continue;
-			}
 			String stateKey = "history:" + s.family() + ":" + s.name();
 			boolean open = foldOpen(stateKey);
-			// a section of gp rows totals in gp; every other section counts
-			boolean gpTotal = !s.rows().isEmpty();
-			for (HistoryProgress.Row r : s.rows())
-			{
-				gpTotal &= r.gp();
-			}
-			JPanel head = row(s.name().toUpperCase(Locale.ROOT),
-				"+" + (gpTotal ? gp(s.total()) + " gp" : fmt(s.total())),
-				open ? accent() : null);
+			// a section of gp rows totals in gp; every other section counts, and
+			// one whose rows mix units carries no figure at all
+			String total = !s.summed() ? ""
+				: "+" + (s.gp() ? gp(s.total()) + " gp" : fmt(s.total()));
+			JPanel head = row(s.name().toUpperCase(Locale.ROOT), total, open ? accent() : null);
 			JLabel headName = (JLabel) ((BorderLayout) head.getLayout())
 				.getLayoutComponent(BorderLayout.CENTER);
 			headName.setFont(FontManager.getRunescapeSmallFont());
@@ -2878,6 +2874,64 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		return card;
+	}
+
+	// What the card measures from, when that is later than the period's start
+	// line: the counters joined the spine after the imported baselines, and the
+	// journal-derived loot and kill totals joined it later still. Null when both
+	// go back to the start line. The spine handed in ends where the period
+	// does, so a key that joined after the period closed is not on it.
+	private static String countersSince(
+		java.util.SortedMap<java.time.LocalDate, HistoryLog.Baseline> spine,
+		java.time.LocalDate startLine)
+	{
+		java.time.LocalDate counters = HistoryLog.firstCarrying(spine, null);
+		java.time.LocalDate loot = HistoryLog.firstCarrying(spine, "dropsReceived");
+		StringBuilder note = new StringBuilder();
+		java.time.LocalDate since = startLine;
+		if (counters != null && (since == null || counters.isAfter(since)))
+		{
+			note.append("Counters since ").append(counters.format(FULL_DAY));
+			since = counters;
+		}
+		if (loot != null && (since == null || loot.isAfter(since)))
+		{
+			note.append(note.length() == 0 ? "Loot and kills since " : " · loot and kills since ")
+				.append(loot.format(FULL_DAY));
+		}
+		return note.length() == 0 ? null : note.toString();
+	}
+
+	// Closed slayer segments dated inside [fromMs, toMs): a segment's ts is its
+	// completion instant, in epoch seconds.
+	private static long closedTasksBetween(ChronicleApiClient.SlayerJourney j, long fromMs, long toMs)
+	{
+		long n = 0;
+		for (ChronicleApiClient.SlayerTask t : j.tasks)
+		{
+			long ms = (long) (t.ts * 1000);
+			if (!t.inProgress && ms >= fromMs && ms < toMs)
+			{
+				n++;
+			}
+		}
+		return n;
+	}
+
+	// The oldest stamp in the feed slice, or 0 when it holds none: whether the
+	// slice reaches back past a window's start.
+	private static long oldestTs(List<JsonObject> feed)
+	{
+		long oldest = 0;
+		for (JsonObject e : feed)
+		{
+			long ts = safeLong(e.get("ts"));
+			if (ts > 0 && (oldest == 0 || ts < oldest))
+			{
+				oldest = ts;
+			}
+		}
+		return oldest;
 	}
 
 	// A progress figure: gp keys in gp, and a second gp figure beside the value
@@ -3366,33 +3420,58 @@ class ChroniclePanel extends PluginPanel
 				addSkillGrid(p, gains, at.getValue().skills);
 			}
 
-			// What the period tracked: the headline figures, then every other
-			// counter under the family and section the Stats tab files it in.
-			// The per-source kill counts stay with the Bosses toggle above; the
-			// card's Kills line is the drop ledger's own tally, written on the
-			// spine beside the counters.
-			HistoryProgress progress = HistoryProgress.of(
-				HistoryLog.gained(from.getValue().counters, earliest.counters,
-					at.getValue().counters),
-				null);
-			if (!progress.summary().isEmpty() || !progress.sections().isEmpty())
-			{
-				p.add(trackedProgress(progress));
-				p.add(vgap(5));
-			}
-
-			// milestones inside the window
+			// Milestones inside the window, and beside them the two summary lines
+			// that read the journal itself rather than the spine: slayer tasks
+			// from the closed segments dated inside the period, and collection
+			// log slots from the feed's COLLECTION entries when the feed reaches
+			// back past the window's start (a feed that begins inside it cannot
+			// say what it missed, and the spine's delta stands). Both reach back
+			// past the day the spine first carried them.
 			long fromMs = pStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			long toMs = end.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			List<JsonObject> milestones = new ArrayList<>();
+			long clogSlots = 0;
 			for (JsonObject e : historyFeed)
 			{
 				long ts = e.has("ts") ? e.get("ts").getAsLong() : 0;
 				if (ts >= fromMs && ts < toMs)
 				{
 					milestones.add(e);
+					if (e.has("type") && "COLLECTION".equals(e.get("type").getAsString()))
+					{
+						clogSlots++;
+					}
 				}
 			}
+			Map<String, Long> retro = new java.util.HashMap<>();
+			if (historyJourney != null)
+			{
+				retro.put("slayerTasksCompleted", closedTasksBetween(historyJourney, fromMs, toMs));
+			}
+			long oldest = oldestTs(historyFeed);
+			if (oldest > 0 && oldest < fromMs)
+			{
+				retro.put("clogSlotsObtained", clogSlots);
+			}
+
+			// What the period tracked: the headline figures, then every other
+			// counter as a fold named for the section the Stats tab files it in.
+			// The per-source kill counts stay with the Bosses toggle above; the
+			// card's Kills line is the drop ledger's own tally, written on the
+			// spine beside the counters. The note under the caption reads the
+			// spine only as far as the period's last line: a period closed
+			// before a key joined names no date after its own end.
+			HistoryProgress progress = HistoryProgress.of(
+				HistoryLog.gained(from.getValue().counters, earliest.counters,
+					at.getValue().counters),
+				null, retro);
+			if (!progress.summary().isEmpty() || !progress.sections().isEmpty())
+			{
+				p.add(trackedProgress(progress,
+					countersSince(hist.headMap(at.getKey(), true), from.getKey())));
+				p.add(vgap(5));
+			}
+
 			if (!milestones.isEmpty())
 			{
 				JPanel card = card("Milestones · " + fmt(milestones.size()));

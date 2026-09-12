@@ -414,4 +414,30 @@ public class HistoryLogTest
 		assertEquals(900L, (long) HistoryLog.earliest(spine, D).counters.get("tilesWalked"));
 		assertNull(HistoryLog.earliest(spine, D).counters.get("logsChopped"));
 	}
+
+	// The History tab says what a period's card measures from: the first line
+	// that carries any counter, and the first that carries a given key
+	@Test
+	public void theFirstLineCarryingAKeyIsItsDate()
+	{
+		TreeMap<LocalDate, HistoryLog.Baseline> spine = new TreeMap<>();
+		spine.put(D.minusDays(10), baseline(100L, null, null));      // imported: no counters
+		spine.put(D.minusDays(5), baseline(120L, 500L, null));       // the trackers join
+		HistoryLog.Baseline withLoot = baseline(150L, 700L, null);
+		withLoot.counters.put("dropsReceived", 40L);                 // the journal totals join
+		spine.put(D.minusDays(2), withLoot);
+		HistoryLog.Baseline last = baseline(180L, 900L, null);
+		last.counters.put("dropsReceived", 52L);
+		spine.put(D, last);
+
+		assertEquals(D.minusDays(5), HistoryLog.firstCarrying(spine, null));
+		assertEquals(D.minusDays(5), HistoryLog.firstCarrying(spine, "tilesWalked"));
+		assertEquals(D.minusDays(2), HistoryLog.firstCarrying(spine, "dropsReceived"));
+		// a key no line carries, an empty spine, and no spine at all
+		assertNull(HistoryLog.firstCarrying(spine, "kills"));
+		assertNull(HistoryLog.firstCarrying(new TreeMap<>(), null));
+		assertNull(HistoryLog.firstCarrying(null, "dropsReceived"));
+		// bounded to a head map, the lookup stops where the period does
+		assertNull(HistoryLog.firstCarrying(spine.headMap(D.minusDays(5), false), null));
+	}
 }

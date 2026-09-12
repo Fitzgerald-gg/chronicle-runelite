@@ -173,10 +173,6 @@ public class PanelPreviewTest
 		shoot(panel, out, prefix + "-journal-slayer", "JOURNAL");
 		set(panel, "journalLens", "All");
 
-		set(panel, "histBosses", true);
-		shoot(panel, out, prefix + "-history-bosses", "HISTORY");
-		set(panel, "histBosses", false);
-
 		set(panel, "clogTab", "Other");
 		set(panel, "clogPageSel", "All Pets");
 		shoot(panel, out, prefix + "-log-pets", "LOG");
@@ -228,20 +224,40 @@ public class PanelPreviewTest
 		collapseAll(panel);
 		set(panel, "statsFamily", chronicle.panel.StatRegistry.FAMILIES[0]);
 
+		// The History tab's shots. Around them, and only them, the plugin hands
+		// out the journey and the feed the fixture grew for this tab, and the
+		// tab reads the plugin again each way, the path a mounted journal
+		// takes; the surfaces before and after draw the fixture's own.
+		ChronicleApiClient.SlayerJourney journey = stub.journey;
+		List<JsonObject> feed = stub.feed;
+		boolean grown = stub.historyJourney != null || stub.historyFeed != null;
+		if (grown)
+		{
+			stub.journey = stub.historyJourney != null ? stub.historyJourney : journey;
+			stub.feed = stub.historyFeed != null ? stub.historyFeed : feed;
+			regatherHistory(panel);
+		}
+		set(panel, "histBosses", true);
+		shoot(panel, out, prefix + "-history-bosses", "HISTORY");
+		set(panel, "histBosses", false);
 		for (String g : new String[]{"Day", "Week", "Month", "Year"})
 		{
 			set(panel, "histGranularity", g);
 			shoot(panel, out, prefix + "-history-" + g.toLowerCase(), "HISTORY");
 		}
-		// tracked-progress folds open: their rows and the leftover "Other" only
+		// one tracked-progress fold open: its rows and the leftover "Other" only
 		// exist in this state, and the folds are keyed apart from the Stats tab's.
-		// Cooking holds two verbs, Teleports reconciles to "Other means".
+		// Cooking holds two verbs, so each row names its own.
 		set(panel, "histGranularity", "Week");
-		expandSection(panel, "history:Skilling:Woodcutting");
 		expandSection(panel, "history:Skilling:Cooking");
-		expandSection(panel, "history:Ledger & Roads:Teleports");
 		shoot(panel, out, prefix + "-history-progress-open", "HISTORY");
 		collapseAll(panel);
+		if (grown)
+		{
+			stub.journey = journey;
+			stub.feed = feed;
+			regatherHistory(panel);
+		}
 
 		shoot(panel, out, prefix + "-journal", "JOURNAL");
 
@@ -501,7 +517,33 @@ public class PanelPreviewTest
 		s.feed.add(feedEntry(now - 180_000_000L, "COMBAT_ACHIEVEMENT", "task", "Perfect Zulrah"));
 		s.feed.add(feedEntry(now - 190_000_000L, "DEATH", "killerName", "Commander Zilyana"));
 
-		// history: five weeks of daily baselines with drifting xp
+		// The History card's two lines that read the journal itself see a
+		// journey and a feed grown past the two above, for that tab's shots
+		// alone: three closed segments dated inside the week and one before it,
+		// one more than the fixture spine's delta says; and collection log
+		// slots inside the week with one entry older than the week, so the
+		// feed reaches back past its start and the card counts the slots from
+		// the feed rather than the spine. The Slayer, Journal and Search
+		// surfaces draw the journey and the feed above, and their pictures
+		// stay put.
+		List<ChronicleApiClient.SlayerTask> grown = new ArrayList<>(tasks);
+		grown.add(1, new ChronicleApiClient.SlayerTask("Gargoyles", 152, 0, 3,
+			System.currentTimeMillis() / 1000.0 - 150_000, 612_113L, false));
+		grown.add(2, new ChronicleApiClient.SlayerTask("Bloodvelds", 188, 0, 0,
+			System.currentTimeMillis() / 1000.0 - 300_000, 402_113L, false));
+		s.historyJourney = new ChronicleApiClient.SlayerJourney(214, 48_231, 61_204_113L,
+			8_204_113L, grown);
+		s.historyFeed = new ArrayList<>(s.feed);
+		s.historyFeed.add(feedEntry(now - 100_000_000L, "COLLECTION", "itemName", "Abyssal whip"));
+		s.historyFeed.add(feedEntry(now - 260_000_000L, "COLLECTION", "itemName", "Kraken tentacle"));
+		s.historyFeed.add(feedEntry(now - 700_000_000L, "COLLECTION", "itemName", "Dragon pickaxe"));
+		// newest first, the order the journal keeps
+		s.historyFeed.sort((a, b) -> Long.compare(b.get("ts").getAsLong(), a.get("ts").getAsLong()));
+
+		// history: five weeks of daily baselines with drifting xp. The spine
+		// joined in stages, as a real record does: five imported days carrying
+		// skills alone, then the trackers, then the journal-derived extras ten
+		// days later, so the year's card says what it measures from
 		LocalDate d = LocalDate.now();
 		long base = 13_204_113L;
 		for (int i = 35; i >= 0; i--)
@@ -510,6 +552,13 @@ public class PanelPreviewTest
 			b.skills.put("attack", base + (35 - i) * 21_204L);
 			b.skills.put("slayer", base / 2 + (35 - i) * 44_113L);
 			b.skills.put("runecraft", 1_204_113L + (35 - i) * 8_402L);
+			b.kcs.put("Abyssal demons", 4_000L + (35 - i) * 12L);
+			b.kcs.put("Zulrah", 480L + (35 - i) * 2L);
+			s.history.put(d.minusDays(i), b);
+			if (i > 30)
+			{
+				continue;
+			}
 			b.counters.put("damageDealt", 1_500_000L + (35 - i) * 9_113L);
 			b.counters.put("damageDealtMelee", 900_000L + (35 - i) * 6_000L);
 			b.counters.put("damageDealtRanged", 400_000L + (35 - i) * 3_113L);
@@ -534,9 +583,18 @@ public class PanelPreviewTest
 			b.counters.put("sharkEaten", 4_000L + (35 - i) * 28L);
 			b.counters.put("potionDoses", 6_000L + (35 - i) * 24L);
 			b.counters.put("prayerDoses", 3_500L + (35 - i) * 20L);
+			// a family's flat rows, so Living and Combat each draw the fold that
+			// carries no figure (meals beside vials, damage taken beside misses)
+			b.counters.put("vialsShattered", 900L + (35 - i) * 3L);
+			b.counters.put("damageTaken", 700_000L + (35 - i) * 4_200L);
+			b.counters.put("hitsMissed", 40_000L + (35 - i) * 150L);
 			b.counters.put("teleportsTotal", 1_100L + (35 - i) * 9L);
 			b.counters.put("teleportsViaJewellery", 500L + (35 - i) * 5L);
 			b.counters.put("teleportsCastleWars", 400L + (35 - i) * 4L);
+			if (i > 20)
+			{
+				continue;
+			}
 			// the spine extras the plugin writes beside the counters
 			b.counters.put("dropsReceived", 8_000L + (35 - i) * 41L);
 			b.counters.put("lootValue", 61_000_000L + (35 - i) * 412_000L);
@@ -545,9 +603,6 @@ public class PanelPreviewTest
 			b.counters.put("kills", 60_000L + (35 - i) * 14L);
 			b.counters.put("slayerTasksCompleted", 200L + (35 - i) / 3);
 			b.counters.put("clogSlotsObtained", 400L + (35 - i) / 5);
-			b.kcs.put("Abyssal demons", 4_000L + (35 - i) * 12L);
-			b.kcs.put("Zulrah", 480L + (35 - i) * 2L);
-			s.history.put(d.minusDays(i), b);
 		}
 		return s;
 	}
@@ -722,6 +777,10 @@ public class PanelPreviewTest
 		LocalStore store;   // set for the real-journal variant
 		boolean cloud;
 		ChronicleApiClient.SlayerJourney journey;
+		// the journey and the feed the History tab alone reads, when a fixture
+		// grows them past the two above; null to read the same as every surface
+		ChronicleApiClient.SlayerJourney historyJourney;
+		List<JsonObject> historyFeed;
 		Map<String, Long> consumVals = new LinkedHashMap<>();
 		List<ChronicleApiClient.GrindRow> grinds = new ArrayList<>();
 		List<LocalStore.PetRow> petRows = new ArrayList<>();
@@ -861,6 +920,12 @@ public class PanelPreviewTest
 			java.util.function.Consumer<ChronicleApiClient.SlayerJourney> onDone)
 		{
 			onDone.accept(journey);
+		}
+
+		@Override
+		ChronicleApiClient.SlayerJourney slayerJourney()
+		{
+			return journey;
 		}
 
 		@Override
@@ -1130,6 +1195,50 @@ public class PanelPreviewTest
 		Field f = ChroniclePanel.class.getDeclaredField(field);
 		f.setAccessible(true);
 		f.set(panel, val);
+	}
+
+	private static Object get(ChroniclePanel panel, String field) throws Exception
+	{
+		Field f = ChroniclePanel.class.getDeclaredField(field);
+		f.setAccessible(true);
+		return f.get(panel);
+	}
+
+	// Ask the History tab to read the plugin again, the way a mounted journal
+	// does, and wait for the read to land: the shots after it draw what the
+	// plugin holds now. The read the panel primed when it was built is waited
+	// for first, so it cannot land over the new one.
+	private static void regatherHistory(ChroniclePanel panel) throws Exception
+	{
+		awaitHistory(panel);
+		edt(() ->
+		{
+			Method m = ChroniclePanel.class.getDeclaredMethod("gatherHistory");
+			m.setAccessible(true);
+			m.invoke(panel);
+		});
+		awaitHistory(panel);
+	}
+
+	// the read is flagged in flight on the EDT when it starts and cleared
+	// there when its worker is done
+	private static void awaitHistory(ChroniclePanel panel) throws Exception
+	{
+		long deadline = System.currentTimeMillis() + 10_000;
+		while (true)
+		{
+			final boolean[] landed = new boolean[1];
+			edt(() -> landed[0] = !(Boolean) get(panel, "historyGathering"));
+			if (landed[0])
+			{
+				return;
+			}
+			if (System.currentTimeMillis() > deadline)
+			{
+				throw new AssertionError("the History tab's read never landed");
+			}
+			Thread.sleep(20);
+		}
 	}
 
 	@SuppressWarnings("unchecked")

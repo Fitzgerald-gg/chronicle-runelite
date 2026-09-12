@@ -195,6 +195,34 @@ class HistoryLog
 	}
 
 	/**
+	 * The date of the earliest line whose counters carry {@code key}, or carry
+	 * any counter at all when {@code key} is null; null when no line does. What
+	 * the History tab says a period's counters measure from: imported baselines
+	 * predate the counters, and the journal-derived totals (dropsReceived and
+	 * the rest) joined the line later than the trackers.
+	 */
+	static LocalDate firstCarrying(java.util.SortedMap<LocalDate, Baseline> spine, String key)
+	{
+		if (spine == null)
+		{
+			return null;
+		}
+		for (Map.Entry<LocalDate, Baseline> e : spine.entrySet())
+		{
+			Baseline b = e.getValue();
+			if (b == null)
+			{
+				continue;
+			}
+			if (key == null ? !b.counters.isEmpty() : b.counters.containsKey(key))
+			{
+				return e.getKey();
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Positive gains from {@code start} to {@code end}, per key, in {@code end}'s
 	 * order. A key the start side lacks measures from its earliest recorded value
 	 * instead; a key recorded nowhere before the end line has no gain to show.

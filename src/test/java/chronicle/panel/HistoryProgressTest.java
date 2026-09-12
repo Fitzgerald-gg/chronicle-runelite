@@ -376,6 +376,99 @@ public class HistoryProgressTest
 	}
 
 	@Test
+	public void aFlatKeyThatHeadsAFoldInItsFamilyFilesOnceAsTheFloor()
+	{
+		// potionDoses is Living's "Doses drunk" and the Potions floor, foodEaten
+		// its "Meals eaten" and the Food floor: each heads its fold and is never
+		// a row beside it, so one figure shows once
+		HistoryProgress p = of(map("potionDoses", 225, "prayerDoses", 140, "foodEaten", 20,
+			"sharkEaten", 16, "vialsShattered", 3));
+		assertEquals(Arrays.asList("Living", "Food", "Potions"), sectionNames(p));
+		assertEquals(Collections.singletonList("Vials shattered"),
+			labels(section(p, "Living").rows()));
+		HistoryProgress.Section potions = section(p, "Potions");
+		assertEquals(225, potions.total());
+		assertEquals(Collections.singletonList("Prayer"), labels(potions.rows()));
+		assertEquals(85, potions.ghost());
+		HistoryProgress.Section food = section(p, "Food");
+		assertEquals(20, food.total());
+		assertEquals(Collections.singletonList("Shark"), labels(food.rows()));
+		assertEquals(4, food.ghost());
+		for (HistoryProgress.Section s : p.sections())
+		{
+			assertFalse(s.name(), labels(s.rows()).contains("Doses drunk"));
+			assertFalse(s.name(), labels(s.rows()).contains("Meals eaten"));
+		}
+
+		// the floor alone, with no typed row under it: the fold heads with it
+		// and opens to the floor's own name, as Prayer opens to its verbs
+		HistoryProgress bare = of(map("potionDoses", 225));
+		assertEquals(Collections.singletonList("Potions"), sectionNames(bare));
+		assertEquals(225, section(bare, "Potions").total());
+		assertEquals(Collections.singletonList("Doses drunk"),
+			labels(section(bare, "Potions").rows()));
+	}
+
+	@Test
+	public void theHeadCarriesAFigureOnlyWhereTheRowsAddUp()
+	{
+		HistoryProgress p = of(map(
+			"vialsShattered", 3, "hitpointsRegenerated", 500,   // Living's flat list: mixed units
+			"damageTaken", 300, "hitsMissed", 40,                // Combat's flat list: mixed
+			"examines", 2, "cabbagesPicked", 9,                  // Odds & ends: mixed
+			"untakenLootValue", 1000,                            // The purse: gp
+			"tilesRan", 800,                                     // On foot: tiles
+			"dartsFletched", 40, "arrowsFletched", 10,           // Fletching: one craft's actions
+			"logsChopped", 10, "oakLogsChopped", 3,              // Woodcutting: a floor
+			"teleportsVarrock", 4));                             // Destinations
+		assertFalse(section(p, "Living").summed());
+		assertFalse(section(p, "Combat").summed());
+		assertFalse(section(p, "Odds & ends").summed());
+		assertTrue(section(p, "The purse").summed());
+		assertTrue(section(p, "The purse").gp());
+		assertTrue(section(p, "On foot").summed());
+		assertTrue(section(p, "Fletching").summed());
+		assertFalse(section(p, "Fletching").gp());
+		assertTrue(section(p, "Woodcutting").summed());
+		assertTrue(section(p, "Destinations").summed());
+
+		// a flat list whose rows are all gp does add up, in gp
+		HistoryProgress gp = of(map("potionsConsumedValue", 700, "foodConsumedValue", 300));
+		assertTrue(section(gp, "Living").summed());
+		assertTrue(section(gp, "Living").gp());
+		assertEquals(1000, section(gp, "Living").total());
+		// and one gp row beside a count is mixed again
+		HistoryProgress mixed = of(map("potionsConsumedValue", 700, "vialsShattered", 3));
+		assertFalse(section(mixed, "Living").summed());
+		assertFalse(section(mixed, "Living").gp());
+	}
+
+	@Test
+	public void retroactiveFiguresReplaceTheSpinesDelta()
+	{
+		Map<String, Long> spine = map("kills", 3, "slayerTasksCompleted", 6, "clogSlotsObtained", 9);
+		Map<String, Long> journal = map("slayerTasksCompleted", 2, "clogSlotsObtained", 0,
+			"logsChopped", 50);
+		HistoryProgress p = HistoryProgress.of(spine, StatRegistry::isGp, journal);
+		// the journal's figure stands in for the spine's, a zero included; a key
+		// the summary does not read is ignored, and never files as a section
+		assertEquals(Arrays.asList("Kills", "Slayer tasks completed"), labels(p.summary()));
+		assertEquals(2, row(p, "Slayer tasks completed").value());
+		assertNull(row(p, "Collection log slots"));
+		assertTrue(p.sections().isEmpty());
+		// a figure the spine never carried still makes its line
+		HistoryProgress fresh = HistoryProgress.of(map("kills", 3), StatRegistry::isGp,
+			map("slayerTasksCompleted", 4));
+		assertEquals(4, row(fresh, "Slayer tasks completed").value());
+		// no journal figures: the spine's deltas as they were
+		HistoryProgress plain = HistoryProgress.of(spine, StatRegistry::isGp, null);
+		assertEquals(6, row(plain, "Slayer tasks completed").value());
+		assertEquals(9, row(plain, "Collection log slots").value());
+		// and the caller's map is left alone
+		assertEquals(Long.valueOf(6), spine.get("slayerTasksCompleted"));
+	}
+
+	@Test
 	public void emptyInputYieldsNothing()
 	{
 		HistoryProgress p = of(Collections.emptyMap());
