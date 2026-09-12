@@ -2961,4 +2961,47 @@ public class HistoryProgressCardTest
 		set(p, "histFacet", "PvM");
 		assertTrue(labels(history(p)).toString(), labels(history(p)).contains("Zulrah"));
 	}
+
+	@Test
+	public void whatThePeriodWasWorthReadsInOneUnit() throws Exception
+	{
+		// counts are the boards' business; these five are the money
+		ChroniclePanel p = panel(stub(true));
+		set(p, "histFacet", "PvM");
+		List<String> all = labels(history(p));
+		int at = all.indexOf("WHAT IT WAS WORTH");
+		assertTrue("no value card: " + all, at >= 0);
+		for (String name : new String[]{"Loot received", "Loot taken", "Loot left",
+			"Discarded", "Food consumed"})
+		{
+			String v = beside(all, name);
+			assertNotNull(name + " is missing: " + all, v);
+			assertTrue(name + " is not a value: " + v, v.endsWith(" gp"));
+		}
+		// the stub received 2.5M and left 300k of it behind
+		assertEquals(all.toString(), "2.5M gp", beside(all, "Loot received"));
+		assertEquals(all.toString(), "2.2M gp", beside(all, "Loot taken"));
+		assertEquals(all.toString(), "300k gp", beside(all, "Loot left"));
+	}
+
+	@Test
+	public void everyKillIsRankedByWhatItPaid() throws Exception
+	{
+		// a lifetime reads the drop ledger, which is the whole account
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.sources = Arrays.asList(
+			new LocalStore.SourceRow("Zulrah", 108, 108, 5_000_000L, null, 0, 0),
+			new LocalStore.SourceRow("Nechryael", 622, 622, 3_400_000L, null, 0, 0),
+			new LocalStore.SourceRow("Man", 4, 4, 120L, null, 0, 0));
+		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "PvM");
+		set(p, "histGranularity", "Lifetime");
+		List<String> all = labels(history(p));
+		int at = all.indexOf("EVERY KILL, BY WHAT IT PAID");
+		assertTrue("no profit list: " + all, at >= 0);
+		assertEquals(all.toString(), "Zulrah", all.get(at + 1));
+		assertEquals(all.toString(), "108 kc · 5.0M gp", all.get(at + 2));
+		assertEquals(all.toString(), "Nechryael", all.get(at + 3));
+		assertTrue(all.toString(), all.indexOf("Man") > all.indexOf("Nechryael"));
+	}
 }

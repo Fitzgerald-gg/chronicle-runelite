@@ -3722,6 +3722,81 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
+	 * What the period's loot was worth, five figures in one unit. Counts are the
+	 * boards' business; this is the money.
+	 */
+	private void addLootValues(JPanel p, HistoryProgress progress)
+	{
+		long received = summaryValue(progress, "lootValue");
+		// what was carried away is its own row where the record can date the
+		// floor; where it cannot, nothing was left so far as this can say
+		HistoryProgress.Row keptRow = summaryRow(progress, "lootKept");
+		long kept = keptRow == null ? received : keptRow.value();
+		long left = Math.max(0, received - kept);
+		JPanel card = card("What it was worth");
+		card.add(row("Loot received", gp(received) + " gp", accent()));
+		// taken is what was received less what was left where it fell
+		card.add(row("Loot taken", gp(kept) + " gp", null));
+		card.add(row("Loot left", gp(left) + " gp", null));
+		card.add(row("Discarded", gp(summaryValue(progress, "itemsDroppedValue")) + " gp", null));
+		card.add(row("Food consumed", gp(summaryValue(progress, "consumedValue")) + " gp", null));
+		p.add(card);
+		p.add(vgap(6));
+	}
+
+	/**
+	 * Every monster the period killed, what it dropped and what that came to,
+	 * the most profitable first. Over a window this reads the dated roll, which
+	 * knows what was taken on the days it covers. Over a lifetime it reads the
+	 * drop ledger, which is the whole account and needs no dating.
+	 */
+	private void addMonsterProfit(JPanel p, java.time.LocalDate from, java.time.LocalDate to,
+		Map<String, Long> killed)
+	{
+		List<String[]> rows = new ArrayList<>();
+		if ("Lifetime".equals(histGranularity) && histFrom == null)
+		{
+			for (LocalStore.SourceRow r : plugin.dropSources())
+			{
+				rows.add(new String[]{r.name, String.valueOf(r.kc > 0 ? r.kc : r.loots),
+					String.valueOf(r.value)});
+			}
+		}
+		else
+		{
+			for (String[] r : plugin.lootBetween(from, to).sources)
+			{
+				long kc = killed.getOrDefault(r[0], 0L);
+				rows.add(new String[]{r[0], String.valueOf(kc > 0 ? kc : safeParse(r[1])), r[2]});
+			}
+		}
+		if (rows.isEmpty())
+		{
+			p.add(note("No loot is dated inside this period. The roll counts from the day"
+				+ " it began keeping days."));
+			p.add(vgap(6));
+			return;
+		}
+		rows.sort((a, b) -> Long.compare(safeParse(b[2]), safeParse(a[2])));
+		JPanel card = card("Every kill, by what it paid");
+		String key = "history:list:profit";
+		int cap = shownCap(key);
+		int mounted = 0;
+		for (String[] r : rows)
+		{
+			if (mounted++ >= cap)
+			{
+				break;
+			}
+			card.add(row(r[0], fmt(safeParse(r[1])) + " kc · " + gp(safeParse(r[2])) + " gp", null));
+		}
+		addMore(card, key, rows.size(), cap, false);
+		p.add(card);
+		p.add(vgap(6));
+	}
+
+	/**
+	 * The period's activities: the collection log's own minigame, skilling and	/**
 	 * The period's activities: the collection log's own minigame, skilling and
 	 * treasure trail pages, each at the count it stands on with what the period
 	 * added. The site reads these off Jagex's hiscores, which this plugin has
@@ -3966,6 +4041,13 @@ class ChroniclePanel extends PluginPanel
 			card.add(row(deaths.label(), "+" + figure(deaths), null));
 		}
 		return card;
+	}
+
+	// One summary figure, or zero where the period did not move it.
+	private static long summaryValue(HistoryProgress progress, String key)
+	{
+		HistoryProgress.Row r = summaryRow(progress, key);
+		return r == null ? 0 : r.value();
 	}
 
 	// One summary figure by key, or null when the period did not move it.
@@ -4672,6 +4754,9 @@ class ChroniclePanel extends PluginPanel
 			{
 				addKillCounts(p, opening.kcs, earliest.kcs, closing.kcs, live,
 					firstCarryingKcs(hist));
+				addLootValues(p, progress);
+				addMonsterProfit(p, pStart, pEnd,
+					HistoryLog.gained(opening.kcs, earliest.kcs, closing.kcs));
 			}
 			else if ("Activities".equals(histFacet))
 			{
