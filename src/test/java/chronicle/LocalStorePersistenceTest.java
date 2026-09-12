@@ -78,6 +78,37 @@ public class LocalStorePersistenceTest
 		store.record("PET", data, RSN);
 	}
 
+	// one stack left on the floor, with the kills figure the capture puts on the
+	// event, or without it (null) as an older build's event arrives
+	private void leave(LocalStore store, String source, int itemId, int qty, Integer kills)
+	{
+		JsonObject data = new JsonObject();
+		data.addProperty("source", source);
+		JsonArray items = new JsonArray();
+		JsonObject it = new JsonObject();
+		it.addProperty("id", itemId);
+		it.addProperty("quantity", qty);
+		items.add(it);
+		data.add("items", items);
+		if (kills != null)
+		{
+			data.addProperty("kills", kills);
+		}
+		store.record("LOOT_UNTAKEN", data, RSN);
+	}
+
+	private LocalStore.UntakenRow untakenSource(LocalStore store, String name)
+	{
+		for (LocalStore.UntakenRow row : store.untakenSources())
+		{
+			if (name.equals(row.name))
+			{
+				return row;
+			}
+		}
+		throw new AssertionError("no untaken source " + name);
+	}
+
 	private Map<String, Integer> session(String key, int value)
 	{
 		Map<String, Integer> m = new HashMap<>();
@@ -150,6 +181,62 @@ public class LocalStorePersistenceTest
 			feed.get(0).getAsJsonObject("data").get("name").getAsString());
 
 		assertEquals(Long.valueOf(3), second.trackersSnapshot().get("deaths"));
+	}
+
+	@Test
+	public void theKillsThatLeftLootSumPerSourceAndAcrossTheSession()
+	{
+		LocalStore store = mounted();
+		leave(store, "Nechryael", 526, 3, 2);
+		leave(store, "Nechryael", 526, 1, 1);
+		leave(store, "Zulrah", 526, 2, 1);
+		assertEquals(4, store.sessionUntakenKills());
+		assertEquals(3, untakenSource(store, "Nechryael").kills);
+		assertEquals(1, untakenSource(store, "Zulrah").kills);
+		// the stack and gp tallies count the items, untouched by the kills figure
+		assertEquals(6, store.sessionUntakenTally()[0]);
+		assertEquals(600L, store.sessionUntakenTally()[1]);
+		assertEquals(4, untakenSource(store, "Nechryael").qty);
+		assertEquals(Long.valueOf(4), store.spineExtras().get("lootLeftKills"));
+		assertEquals(Long.valueOf(6), store.spineExtras().get("lootLeftCount"));
+	}
+
+	@Test
+	public void anEventWithoutTheKillsFigureReadsAsNoKills()
+	{
+		// an older build's event carries no kills: its stacks still count, and
+		// the kills read as none rather than one per event
+		LocalStore store = mounted();
+		leave(store, "Nechryael", 526, 5, null);
+		assertEquals(0, store.sessionUntakenKills());
+		assertEquals(0, untakenSource(store, "Nechryael").kills);
+		assertEquals(5, untakenSource(store, "Nechryael").qty);
+		assertEquals(Long.valueOf(0), store.spineExtras().get("lootLeftKills"));
+		// a figure below zero reads as none too
+		leave(store, "Nechryael", 526, 1, -3);
+		assertEquals(0, store.sessionUntakenKills());
+		assertEquals(0, untakenSource(store, "Nechryael").kills);
+	}
+
+	@Test
+	public void theKillsThatLeftLootSurviveAReloadAndTheSessionTallyDoesNot() throws Exception
+	{
+		LocalStore first = mounted();
+		leave(first, "Nechryael", 526, 3, 2);
+		first.flush(dir);
+		assertEquals(2, readJson(FILE).getAsJsonObject("untaken")
+			.getAsJsonObject("Nechryael").get("kills").getAsInt());
+
+		LocalStore second = mounted();
+		assertEquals(2, untakenSource(second, "Nechryael").kills);
+		assertEquals(Long.valueOf(2), second.spineExtras().get("lootLeftKills"));
+		// the session figure starts over with the session
+		assertEquals(0, second.sessionUntakenKills());
+		leave(second, "Nechryael", 526, 1, 1);
+		assertEquals(1, second.sessionUntakenKills());
+		assertEquals(3, untakenSource(second, "Nechryael").kills);
+		second.endSession();
+		assertEquals(0, second.sessionUntakenKills());
 	}
 
 	@Test

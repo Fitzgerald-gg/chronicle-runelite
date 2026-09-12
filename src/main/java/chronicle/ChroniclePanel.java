@@ -656,6 +656,13 @@ class ChroniclePanel extends PluginPanel
 				plugin.sessionLoots() + " · " + gp(plugin.sessionLootValue()) + " gp",
 				ACCENT_SESSION));
 			mounted++;
+			// the kills whose loot was all picked up: the loot events less the kills
+			// that left a stack behind, one unit both ways. "Left behind" below
+			// counts stacks, so it is not what this subtracts.
+			strip.add(row("Drops taken",
+				fmt(Math.max(0, plugin.sessionLoots() - plugin.sessionUntakenKills())),
+				ACCENT_SESSION));
+			mounted++;
 		}
 		long[] untaken = plugin.sessionUntakenTally();
 		if (untaken[0] > 0)

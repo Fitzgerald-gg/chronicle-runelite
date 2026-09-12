@@ -82,6 +82,7 @@ public class HistoryProgressCardTest
 			put(a, b, "lootValue", 1_000_000, 3_500_000);
 			put(a, b, "lootLeftCount", 10, 13);
 			put(a, b, "lootLeftValue", 100_000, 400_000);
+			put(a, b, "lootLeftKills", 5, 9);
 			put(a, b, "kills", 300, 312);
 			put(a, b, "slayerTasksCompleted", 40, 45);
 			put(a, b, "clogSlotsObtained", 400, 407);
@@ -432,6 +433,7 @@ public class HistoryProgressCardTest
 		assertEquals(Arrays.asList(
 			"TRACKED PROGRESS",
 			"Drops received", "+12",
+			"Drops taken", "+8",
 			"Loot value", "+2.5M gp",
 			"Left on the floor", "+3 · 300k gp",
 			"Loot kept", "+2.2M gp",

@@ -62,8 +62,15 @@ public class StatRegistryTest
 		assertEquals("Left on the floor", StatRegistry.label("lootLeftCount"));
 		assertEquals("Value left on the floor", StatRegistry.label("lootLeftValue"));
 		assertEquals("Kills", StatRegistry.label("kills"));
+		// the kills that left a stack ride the spine for "Drops taken" to subtract
+		assertEquals("Kills that left loot", StatRegistry.label("lootLeftKills"));
+		assertTrue(StatRegistry.isSummary("lootLeftKills"));
+		assertFalse(StatRegistry.isGp("lootLeftKills"));
 		// derived on the History tab, named here all the same
 		assertEquals("Loot kept", StatRegistry.label("lootKept"));
+		assertEquals("Drops taken", StatRegistry.label("dropsTaken"));
+		assertFalse(StatRegistry.isGp("dropsTaken"));
+		assertFalse(StatRegistry.isSummary("dropsTaken"));
 		assertTrue(StatRegistry.isGp("lootValue"));
 		assertTrue(StatRegistry.isGp("lootLeftValue"));
 		assertFalse(StatRegistry.isGp("dropsReceived"));

@@ -259,13 +259,17 @@ public class ChronicleEventCapture
 		// the account that earned it. The batch is gathered before a logout and sent
 		// after the next login, which may belong to somebody else.
 		private final String owner;
+		// the tick of the kill it fell from, the only identity a stack carries, so
+		// the flush can count how many kills left something; -1 when unknown
+		private final int killTick;
 
-		private UntakenItem(int id, int qty, String source, String owner)
+		private UntakenItem(int id, int qty, String source, String owner, int killTick)
 		{
 			this.id = id;
 			this.qty = qty;
 			this.source = source;
 			this.owner = owner;
+			this.killTick = killTick;
 		}
 	}
 
@@ -278,15 +282,16 @@ public class ChronicleEventCapture
 		private final boolean group;   // group-ironman ownership rather than our own
 		private final String owner;    // the account it spawned for
 		private final String source;   // the kill it belongs to; null until promoted
+		private final int killTick;    // that kill's tick; -1 until promoted
 
 		private GroundLoot(int id, int qty, int despawnTick, int spawnTick,
 			boolean group, String owner)
 		{
-			this(id, qty, despawnTick, spawnTick, group, owner, null);
+			this(id, qty, despawnTick, spawnTick, group, owner, null, -1);
 		}
 
 		private GroundLoot(int id, int qty, int despawnTick, int spawnTick,
-			boolean group, String owner, String source)
+			boolean group, String owner, String source, int killTick)
 		{
 			this.id = id;
 			this.qty = qty;
@@ -295,11 +300,15 @@ public class ChronicleEventCapture
 			this.group = group;
 			this.owner = owner;
 			this.source = source;
+			this.killTick = killTick;
 		}
 
-		private GroundLoot withSource(String src)
+		// the same stack, stamped with the kill it fell from: its source name and
+		// its tick
+		private GroundLoot withKill(RecentKill kill)
 		{
-			return new GroundLoot(id, qty, despawnTick, spawnTick, group, owner, src);
+			return new GroundLoot(id, qty, despawnTick, spawnTick, group, owner,
+				kill.source, kill.tick);
 		}
 	}
 
@@ -380,11 +389,13 @@ public class ChronicleEventCapture
 	}
 
 	// Emit left-behind loot as LOOT_UNTAKEN, one event per SOURCE so the Uncollected
-	// ledger can say where things were left. Items swept up at a logout only go out on
-	// the next login's ticks, and that login can belong to a different player, so
-	// anything stamped with another account is discarded. It also waits for the
-	// journal to be mounted: otherwise LocalStore.record() drops the batch while the
-	// cloud push still takes it, and the two ledgers disagree about the same kill.
+	// ledger can say where things were left, each carrying "kills", how many kills
+	// of that source left at least one of its stacks. Items swept up at a logout
+	// only go out on the next login's ticks, and that login can belong to a
+	// different player, so anything stamped with another account is discarded. It
+	// also waits for the journal to be mounted: otherwise LocalStore.record() drops
+	// the batch while the cloud push still takes it, and the two ledgers disagree
+	// about the same kill.
 	private void flushUntakenLoot()
 	{
 		if (untakenBatch.isEmpty())
@@ -397,6 +408,8 @@ public class ChronicleEventCapture
 			return;   // nobody to attribute it to yet; the batch keeps
 		}
 		Map<String, JsonArray> bySource = new HashMap<>();
+		// the distinct kills each source's stacks fell from, by kill tick
+		Map<String, Set<Integer>> killsBySource = new HashMap<>();
 		for (UntakenItem it : untakenBatch)
 		{
 			if (!owner.equals(it.owner))
@@ -406,8 +419,12 @@ public class ChronicleEventCapture
 			JsonObject o = new JsonObject();
 			o.addProperty("id", it.id);
 			o.addProperty("quantity", it.qty);
-			bySource.computeIfAbsent(it.source == null ? "" : it.source,
-				k -> new JsonArray()).add(o);
+			String src = it.source == null ? "" : it.source;
+			bySource.computeIfAbsent(src, k -> new JsonArray()).add(o);
+			if (it.killTick >= 0)
+			{
+				killsBySource.computeIfAbsent(src, k -> new HashSet<>()).add(it.killTick);
+			}
 		}
 		untakenBatch.clear();
 		for (Map.Entry<String, JsonArray> e : bySource.entrySet())
@@ -418,6 +435,13 @@ public class ChronicleEventCapture
 				data.addProperty("source", e.getKey());
 			}
 			data.add("items", e.getValue());
+			// The kills that left something: the distinct kill ticks among the
+			// source's stacks, however many stacks each left. A stack knows its kill
+			// by tick alone, so two kills of one source on the same tick (an AoE
+			// burst) collapse to one kill here; a stack whose kill is unknown
+			// counts none.
+			Set<Integer> ticks = killsBySource.get(e.getKey());
+			data.addProperty("kills", ticks == null ? 0 : ticks.size());
 			emit("LOOT_UNTAKEN", data);
 		}
 	}
@@ -441,7 +465,7 @@ public class ChronicleEventCapture
 			RecentKill kill = killFor(g);
 			if (kill != null)
 			{
-				groundLoot.put(e.getKey(), g.withSource(kill.source));   // confirmed kill loot
+				groundLoot.put(e.getKey(), g.withKill(kill));   // confirmed kill loot
 				done.add(e.getKey());
 			}
 			else if (now - g.spawnTick > KILL_ARM_TICKS)
@@ -616,7 +640,7 @@ public class ChronicleEventCapture
 		boolean left = g.despawnTick > 0 && now >= g.despawnTick - 1;
 		if (left)
 		{
-			untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner));
+			untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner, g.killTick));
 		}
 	}
 
@@ -1336,7 +1360,7 @@ public class ChronicleEventCapture
 			// a pickup.
 			for (GroundLoot g : groundLoot.values())
 			{
-				untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner));
+				untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner, g.killTick));
 			}
 			groundLoot.clear();
 		}

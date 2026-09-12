@@ -58,14 +58,14 @@ public final class StatRegistry
 		"bowsFletched",
 		"resourcesDroppedValue"));
 	// spine-only totals: the plugin derives them from the journal (loot events,
-	// loot left on the floor, kills, slayer tasks, collection log slots) and
-	// writes them beside the counters on each history line, never into the
-	// trackers. The History summary reads them by name; they are hidden from
-	// every Stats family. The lootLeft pair is not the untakenLoot pair: that one
-	// is a lifetime figure carried in from an older record, and the spine copy
-	// must not step on it.
+	// loot left on the floor and the kills that left it, kills, slayer tasks,
+	// collection log slots) and writes them beside the counters on each history
+	// line, never into the trackers. The History summary reads them by name; they
+	// are hidden from every Stats family. The lootLeft keys are not the
+	// untakenLoot pair: that one is a lifetime figure carried in from an older
+	// record, and the spine copy must not step on it.
 	private static final Set<String> SUMMARY = new HashSet<>(Arrays.asList(
-		"dropsReceived", "lootValue", "lootLeftCount", "lootLeftValue", "kills",
+		"dropsReceived", "lootValue", "lootLeftCount", "lootLeftValue", "lootLeftKills", "kills",
 		"slayerTasksCompleted", "clogSlotsObtained"));
 	// high-water counters (highest hit): a period delta of one means nothing.
 	// LocalStore.MAX_KEYS holds the same names for the lifetime arithmetic.
@@ -234,10 +234,16 @@ public final class StatRegistry
 		LABELS.put("clogSlotsObtained", "Collection log slots");
 		LABELS.put("lootLeftCount", "Left on the floor");
 		LABELS.put("lootLeftValue", "Value left on the floor");
+		// the kills that left at least one stack: never a line of its own, it is
+		// what "Drops taken" subtracts
+		LABELS.put("lootLeftKills", "Kills that left loot");
 		LABELS.put("kills", "Kills");
 		// derived on the History tab from lootValue and lootLeftValue; named here
 		// so every figure on that tab reads off one table
 		LABELS.put("lootKept", "Loot kept");
+		// derived from dropsReceived and lootLeftKills, on the History tab and the
+		// Home strip alike
+		LABELS.put("dropsTaken", "Drops taken");
 
 		// destinations whose real name the camelCase split can't get back to
 		TELE_NAMES.put("teleportsSeersVillage", "Seers' Village");

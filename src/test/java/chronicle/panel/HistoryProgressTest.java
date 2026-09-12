@@ -99,7 +99,8 @@ public class HistoryProgressTest
 			"deaths", 8, "damageDealtMagic", 1, "damageDealtRanged", 2,
 			"damageDealtMelee", 4, "damageDealt", 7, "slayerKills", 5, "slayerTasksCompleted", 6,
 			"kills", 3,
-			"lootLeftValue", 5, "lootLeftCount", 4, "lootValue", 2000, "dropsReceived", 1);
+			"lootLeftKills", 1, "lootLeftValue", 5, "lootLeftCount", 4, "lootValue", 2000,
+			"dropsReceived", 3);
 	}
 
 	@Test
@@ -107,7 +108,7 @@ public class HistoryProgressTest
 	{
 		HistoryProgress p = of(everything());
 		assertEquals(Arrays.asList(
-			"Drops received", "Loot value", "Left on the floor", "Loot kept", "Kills",
+			"Drops received", "Drops taken", "Loot value", "Left on the floor", "Loot kept", "Kills",
 			"Slayer tasks completed", "Slayer kills", "Damage dealt", "· by melee", "· by ranged",
 			"· by magic",
 			"Deaths", "Pets", "Quests completed", "Diaries completed", "Combat achievements",
@@ -135,7 +136,7 @@ public class HistoryProgressTest
 		// one table names a key for both tabs: the summary never words a key
 		// itself
 		HistoryProgress p = of(everything());
-		assertEquals(26, p.summary().size());
+		assertEquals(27, p.summary().size());
 		for (HistoryProgress.Row r : p.summary())
 		{
 			assertEquals(r.key(), StatRegistry.label(r.key()), r.label());
@@ -208,6 +209,50 @@ public class HistoryProgressTest
 		// more left than received: nothing was kept
 		HistoryProgress upside = of(map("lootValue", 100, "lootLeftCount", 1, "lootLeftValue", 150));
 		assertNull(row(upside, "Loot kept"));
+	}
+
+	@Test
+	public void dropsTakenIsReceivedLessTheKillsThatLeftLoot()
+	{
+		// one unit both ways: the loot events less the kills that left a stack,
+		// never the items on the floor
+		HistoryProgress p = of(map("dropsReceived", 10, "lootLeftKills", 3, "lootLeftCount", 40));
+		assertEquals(Arrays.asList("Drops received", "Drops taken", "Left on the floor"),
+			labels(p.summary()));
+		HistoryProgress.Row taken = row(p, "Drops taken");
+		assertEquals("dropsTaken", taken.key());
+		assertEquals(7, taken.value());
+		assertFalse(taken.gp());
+		assertEquals(0, taken.gpNote());
+		assertTrue(p.sections().isEmpty());
+
+		// it sits right after Drops received, before the gp lines
+		HistoryProgress full = of(map("lootValue", 500, "kills", 4, "dropsReceived", 10,
+			"lootLeftKills", 3));
+		assertEquals(Arrays.asList("Drops received", "Drops taken", "Loot value", "Loot kept",
+			"Kills"), labels(full.summary()));
+
+		// nothing left behind: every drop was taken
+		assertEquals(10, row(of(map("dropsReceived", 10)), "Drops taken").value());
+
+		// more kills left something than the period received: floored, and still
+		// drawn, since the period did receive
+		HistoryProgress floor = of(map("dropsReceived", 2, "lootLeftKills", 5));
+		assertEquals(Arrays.asList("Drops received", "Drops taken"), labels(floor.summary()));
+		assertEquals(0, row(floor, "Drops taken").value());
+
+		// nothing received: no line, and the kills figure is a summary key that
+		// never files as a section of its own
+		HistoryProgress none = of(map("lootLeftKills", 5));
+		assertTrue(none.summary().isEmpty());
+		assertTrue(none.sections().isEmpty());
+		assertTrue(HistoryProgress.summaryKey("lootLeftKills"));
+		assertFalse(HistoryProgress.summaryKey("dropsTaken"));
+
+		// a retroactive figure for the kills replaces the spine's delta
+		HistoryProgress retro = HistoryProgress.of(map("dropsReceived", 10, "lootLeftKills", 3),
+			StatRegistry::isGp, map("lootLeftKills", 1));
+		assertEquals(9, row(retro, "Drops taken").value());
 	}
 
 	@Test
@@ -285,7 +330,7 @@ public class HistoryProgressTest
 	{
 		Map<String, Long> c = everything();
 		HistoryProgress p = of(c);
-		assertEquals(26, p.summary().size());
+		assertEquals(27, p.summary().size());
 		assertTrue(p.sections().toString(), p.sections().isEmpty());
 		for (String k : c.keySet())
 		{

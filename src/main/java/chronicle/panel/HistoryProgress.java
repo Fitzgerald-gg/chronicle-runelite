@@ -31,11 +31,14 @@ import java.util.function.Predicate;
  * tasks, collection log slots). Nothing here reads the spine or the journal,
  * and nothing here is Swing.
  *
- * <p>"Loot kept" is the owner's "drops picked up", expressed in gp: loot events
- * and items left on the floor are different units (one event can leave several
- * items on the ground, and one item can be part of an event), so the only
- * subtraction that means anything is the value received minus the value left
- * on the floor.
+ * <p>"Drops taken" is the owner's "drops received minus drops left behind",
+ * kept to one unit: the loot events (kills that dropped something) less the
+ * kills that left at least one stack on the floor, which the plugin counts
+ * beside the untaken ledger as lootLeftKills. "Left on the floor" counts items,
+ * not kills (one event can leave several items on the ground, and one item can
+ * be part of an event), so it is never what "Drops taken" subtracts; the same
+ * mismatch is why "Loot kept" states the difference in gp instead, the value
+ * received minus the value left on the floor.
  *
  * <p>Every label comes from {@link StatRegistry}, so a key reads the same here
  * as on the Stats tab. Sections mirror the Stats tab: a key's family and
@@ -200,9 +203,10 @@ public final class HistoryProgress
 		}
 	}
 
-	// the counter keys the summary consumes, in summary order. "Left on the
-	// floor" reads lootLeftCount and lootLeftValue together, "Loot kept" is
-	// derived from lootValue and lootLeftValue, the damage split rides under
+	// the counter keys the summary consumes, in summary order. "Drops taken" is
+	// derived from dropsReceived and lootLeftKills, "Left on the floor" reads
+	// lootLeftCount and lootLeftValue together, "Loot kept" is derived from
+	// lootValue and lootLeftValue, the damage split rides under
 	// "Damage dealt", and resourcesDroppedValue is the note on the gathered
 	// row, so the list is the keys and not the rows. slayerKills never rides the
 	// spine: the History tab reads it off the slayer journey for the period and
@@ -213,7 +217,7 @@ public final class HistoryProgress
 	// Teleports section carries the period's total with its "Other means", one
 	// place for one figure.
 	private static final Set<String> SUMMARY_KEYS = new HashSet<>(Arrays.asList(
-		"dropsReceived", "lootValue", "lootLeftCount", "lootLeftValue", "kills",
+		"dropsReceived", "lootValue", "lootLeftCount", "lootLeftValue", "lootLeftKills", "kills",
 		"slayerTasksCompleted", "slayerKills", "damageDealt", "damageDealtMelee",
 		"damageDealtRanged",
 		"damageDealtMagic", "deaths", "petsObtained", "questsCompleted", "diariesCompleted",
@@ -303,6 +307,15 @@ public final class HistoryProgress
 	{
 		List<Row> out = new ArrayList<>();
 		add(out, c, gp, "dropsReceived");
+		// the kills whose loot was all picked up: received less the kills that
+		// left a stack, floored where more kills left something than the period
+		// counted, and drawn whenever the period received anything
+		long received = at(c, "dropsReceived");
+		if (received > 0)
+		{
+			out.add(new Row("dropsTaken", StatRegistry.label("dropsTaken"),
+				Math.max(0, received - at(c, "lootLeftKills")), gp.test("dropsTaken")));
+		}
 		add(out, c, gp, "lootValue");
 		long left = at(c, "lootLeftCount");
 		long leftGp = at(c, "lootLeftValue");

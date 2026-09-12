@@ -1089,6 +1089,11 @@ public class ChroniclePlugin extends Plugin
 		return localStore.sessionUntakenTally();
 	}
 
+	int sessionUntakenKills()
+	{
+		return localStore.sessionUntakenKills();
+	}
+
 	// Session counters shaped for display: a peak key survives only when this session
 	// beat the journal's lifetime record. Otherwise an old peak reads as a session feat.
 	Map<String, Integer> sessionDisplayCounters()

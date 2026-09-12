@@ -10,6 +10,7 @@ package chronicle;
 
 import chronicle.panel.StatRegistry;
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -62,8 +63,10 @@ public class SpineExtrasTest
 	{
 		journal("{\"schema\":1,\"rsn\":\"Tester\","
 			+ DROPS + ","
-			// the untaken ledger, per source: items left and what they were worth
-			+ "\"untaken\":{\"Nechryael\":{\"qty\":40,\"value\":120},\"Zulrah\":{\"qty\":2,\"value\":30}},"
+			// the untaken ledger, per source: items left, what they were worth, and
+			// the kills that left them
+			+ "\"untaken\":{\"Nechryael\":{\"qty\":40,\"value\":120,\"kills\":5},"
+			+ "\"Zulrah\":{\"qty\":2,\"value\":30,\"kills\":1}},"
 			+ "\"slayer\":{\"completed\":7,\"tasks\":[]},"
 			+ "\"collection_log\":{"
 			+ "\"clog_items\":{\"Abyssal whip\":1,\"Abyssal head\":1},"
@@ -75,13 +78,14 @@ public class SpineExtrasTest
 		assertEquals(Long.valueOf(750), x.get("lootValue"));
 		assertEquals(Long.valueOf(42), x.get("lootLeftCount"));
 		assertEquals(Long.valueOf(150), x.get("lootLeftValue"));
+		assertEquals(Long.valueOf(6), x.get("lootLeftKills"));
 		// kills share the Kills list's per-source base: each source at the most
 		// of its kill-count line and its loot events (9 and 2 here), never a log
 		// page the ledger has no source for
 		assertEquals(Long.valueOf(11), x.get("kills"));
 		assertEquals(Long.valueOf(7), x.get("slayerTasksCompleted"));
 		assertEquals(Long.valueOf(3), x.get("clogSlotsObtained"));
-		assertEquals(7, x.size());
+		assertEquals(8, x.size());
 
 		// every extra has its home in the registry, and none of them is a tracker
 		Map<String, Long> trackers = store.trackersSnapshot();
@@ -123,10 +127,34 @@ public class SpineExtrasTest
 	}
 
 	@Test
+	public void leftKillsSumTheLedgerAndARowWithoutTheFigureReadsAsNone() throws Exception
+	{
+		// a source written by an older build carries no kills: its stacks still
+		// count, its kills read as none
+		journal("{\"schema\":1,\"rsn\":\"Tester\","
+			+ "\"untaken\":{\"Nechryael\":{\"qty\":40,\"value\":120,\"kills\":5},"
+			+ "\"Zulrah\":{\"qty\":2,\"value\":30}}}");
+		LocalStore store = mounted();
+		Map<String, Long> x = store.spineExtras();
+		assertEquals(Long.valueOf(5), x.get("lootLeftKills"));
+		assertEquals(Long.valueOf(42), x.get("lootLeftCount"));
+
+		// an import floors the figure up like the row's other two, never down
+		JsonObject higher = new Gson().fromJson("{\"untaken\":{\"Nechryael\":"
+			+ "{\"qty\":40,\"value\":120,\"kills\":9}}}", JsonObject.class);
+		store.importJournal(higher, RSN);
+		assertEquals(Long.valueOf(9), store.spineExtras().get("lootLeftKills"));
+		JsonObject lower = new Gson().fromJson("{\"untaken\":{\"Nechryael\":"
+			+ "{\"qty\":40,\"value\":120,\"kills\":2}}}", JsonObject.class);
+		store.importJournal(lower, RSN);
+		assertEquals(Long.valueOf(9), store.spineExtras().get("lootLeftKills"));
+	}
+
+	@Test
 	public void aFreshJournalReadsAsZeroes() throws Exception
 	{
 		Map<String, Long> x = mounted().spineExtras();
-		assertEquals(7, x.size());
+		assertEquals(8, x.size());
 		for (Map.Entry<String, Long> e : x.entrySet())
 		{
 			assertEquals(e.getKey(), Long.valueOf(0), e.getValue());
@@ -165,7 +193,7 @@ public class SpineExtrasTest
 		assertEquals(Long.valueOf(5), line.get("dropsReceived"));
 		assertEquals(Long.valueOf(750), line.get("lootValue"));
 		assertEquals(Long.valueOf(11), line.get("kills"));
-		assertEquals(2 + 7, line.size());
+		assertEquals(2 + 8, line.size());
 		// a copy: the trackers themselves never take the extras
 		assertEquals(2, store.trackersSnapshot().size());
 		assertFalse(store.trackersSnapshot().containsKey("dropsReceived"));

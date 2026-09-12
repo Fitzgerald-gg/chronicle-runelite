@@ -68,6 +68,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private long sessionLootValue;
 	private int sessionUntaken;
 	private long sessionUntakenValue;
+	// the kills that left at least one stack on the floor, the capture's own count
+	private int sessionUntakenKills;
 	private final java.util.ArrayDeque<RecentDrop> recentDrops = new java.util.ArrayDeque<>();
 
 	// runaway guard; every log, ore, fish and gem in the game is a few hundred ids,
@@ -207,6 +209,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			sessionLootValue = 0;
 			sessionUntaken = 0;
 			sessionUntakenValue = 0;
+			sessionUntakenKills = 0;
 			recentDrops.clear();
 			// Account-scoped. load() reads it back from the record.
 			gatheredItems.clear();
@@ -1001,7 +1004,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** Left-behind loot, priced at record like drops and aggregated per source
-	 *  ({@code untaken: {source: {qty, value}}}). */
+	 *  ({@code untaken: {source: {qty, value, kills}}}). {@code kills} is the
+	 *  capture's count of the kills that left at least one of the event's stacks,
+	 *  the unit "Drops taken" subtracts in; an imported or older event carries none
+	 *  and reads as 0. */
 	private void recordUntaken(JsonObject data)
 	{
 		String source = data.has("source") && !data.get("source").isJsonNull()
@@ -1012,6 +1018,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
+		int kills = (int) Math.max(0, data.has("kills") ? asLong(data.get("kills")) : 0);
 		long qty = 0;
 		long value = 0;
 		java.util.List<BagItem> perItem = new java.util.ArrayList<>();
@@ -1036,6 +1043,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				? untaken.getAsJsonObject(source) : new JsonObject();
 			src.addProperty("qty", (src.has("qty") ? src.get("qty").getAsLong() : 0) + qty);
 			src.addProperty("value", (src.has("value") ? src.get("value").getAsLong() : 0) + value);
+			src.addProperty("kills", (src.has("kills") ? asLong(src.get("kills")) : 0) + kills);
 			untaken.add(source, src);
 			root.add("untaken", untaken);
 			// the same tally keyed by item name
@@ -1069,22 +1077,31 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			root.add("untaken_pairs", pairs);
 			sessionUntaken += qty;
 			sessionUntakenValue += value;
+			sessionUntakenKills += kills;
 			root.addProperty("updated_at", nowSec());
 		}
 	}
 
-	/** A name/qty/value row: untaken sources, untaken items, task monsters. */
+	/** A name/qty/value row: untaken sources, untaken items, task monsters. An
+	 *  untaken source also carries the kills that left its stacks; 0 elsewhere. */
 	static final class UntakenRow
 	{
 		final String name;
 		final long qty;
 		final long value;
+		final long kills;
 
 		UntakenRow(String name, long qty, long value)
+		{
+			this(name, qty, value, 0);
+		}
+
+		UntakenRow(String name, long qty, long value, long kills)
 		{
 			this.name = name;
 			this.qty = qty;
 			this.value = value;
+			this.kills = kills;
 		}
 	}
 
@@ -1598,7 +1615,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				JsonObject src = e.getValue().getAsJsonObject();
 				out.add(new UntakenRow(e.getKey(),
 					src.has("qty") ? src.get("qty").getAsLong() : 0,
-					src.has("value") ? src.get("value").getAsLong() : 0));
+					src.has("value") ? src.get("value").getAsLong() : 0,
+					src.has("kills") ? asLong(src.get("kills")) : 0));
 			}
 		}
 		return out;
@@ -1609,6 +1627,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		synchronized (lock)
 		{
 			return new long[]{sessionUntaken, sessionUntakenValue};
+		}
+	}
+
+	/** This session's kills that left at least one stack on the floor: what the
+	 *  Home strip takes off the loot events for "Drops taken". */
+	int sessionUntakenKills()
+	{
+		synchronized (lock)
+		{
+			return sessionUntakenKills;
 		}
 	}
 
@@ -2273,6 +2301,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					? cur.getAsJsonObject(e.getKey()) : new JsonObject();
 				floorNumber(curRow, incRow, "qty");
 				floorNumber(curRow, incRow, "value");
+				floorNumber(curRow, incRow, "kills");   // the untaken store's third figure
 				cur.add(e.getKey(), curRow);
 			}
 			else
@@ -2817,7 +2846,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * Journal-derived totals for the history spine, keyed as the History summary
 	 * reads them: dropsReceived (loot events across every source), lootValue (their
 	 * gp), lootLeftCount and lootLeftValue (items left on the floor and their gp,
-	 * from the untaken ledger, the same tally the Left behind lens shows), kills
+	 * from the untaken ledger, the same tally the Left behind lens shows),
+	 * lootLeftKills (the kills that left at least one stack, from the same ledger,
+	 * the figure "Drops taken" subtracts from dropsReceived in one unit), kills
 	 * (every source's kills summed, the per-source figure {@link #sourceKills}
 	 * gives the History tab's Kills list, so the summary line and the list share
 	 * one base; a collection log page the ledger never saw loot from is not
@@ -2844,10 +2875,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 		long left = 0;
 		long leftValue = 0;
+		long leftKills = 0;
 		for (UntakenRow u : untakenSources())
 		{
 			left += u.qty;
 			leftValue += u.value;
+			leftKills += u.kills;
 		}
 		chronicle.ChronicleApiClient.SlayerJourney journey = slayerJourney();
 		int finished = clogFraction()[0];
@@ -2856,6 +2889,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		out.put("lootValue", value);
 		out.put("lootLeftCount", left);
 		out.put("lootLeftValue", leftValue);
+		out.put("lootLeftKills", leftKills);
 		out.put("kills", kills);
 		out.put("slayerTasksCompleted", journey != null ? journey.completedTasks : 0L);
 		out.put("clogSlotsObtained", (long) (finished > 0 ? finished : obtainedSlots(clogSnapshot())));

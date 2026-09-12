@@ -393,6 +393,8 @@ public class PanelPreviewTest
 		s.sessionLoots = 37;
 		s.sessionLootValue = 1_204_113L;
 		s.sessionUntaken = new long[]{9, 44_120L};
+		// six of the 37 kills left a stack, so "Drops taken" reads 31
+		s.sessionUntakenKills = 6;
 
 		s.sources.add(new LocalStore.SourceRow("Abyssal demons", 4_112, 3_890, 61_204_113L, null, 0, 0));
 		s.sources.add(new LocalStore.SourceRow("Nechryael", 2_204, 2_090, 24_113_005L, null, 0, 0));
@@ -609,6 +611,7 @@ public class PanelPreviewTest
 			b.counters.put("lootValue", 61_000_000L + (35 - i) * 412_000L);
 			b.counters.put("lootLeftCount", 120L + (35 - i) * 2L);
 			b.counters.put("lootLeftValue", 800_000L + (35 - i) * 12_500L);
+			b.counters.put("lootLeftKills", 90L + (35 - i));
 			b.counters.put("kills", 60_000L + (35 - i) * 14L);
 			b.counters.put("slayerTasksCompleted", 200L + (35 - i) / 3);
 			b.counters.put("clogSlotsObtained", 400L + (35 - i) / 5);
@@ -754,6 +757,7 @@ public class PanelPreviewTest
 		int sessionLoots;
 		long sessionLootValue;
 		long[] sessionUntaken = {0, 0};
+		int sessionUntakenKills;
 		List<LocalStore.SourceRow> sources = new ArrayList<>();
 		Map<String, List<LocalStore.BagItem>> bags = new LinkedHashMap<>();
 		List<LocalStore.UntakenRow> untaken = new ArrayList<>();
@@ -834,6 +838,12 @@ public class PanelPreviewTest
 		long[] sessionUntakenTally()
 		{
 			return sessionUntaken;
+		}
+
+		@Override
+		int sessionUntakenKills()
+		{
+			return sessionUntakenKills;
 		}
 
 		@Override
