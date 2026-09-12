@@ -1476,6 +1476,7 @@ public class HistoryProgressCardTest
 		edt(() -> holder[0] = new ChroniclePanel(s));
 		awaitGather(holder[0]);
 		set(holder[0], "histFacet", "Trackers");
+		set(holder[0], "histGranularity", "Week");
 		assertEquals("+2",
 			beside(headline(labels(history(holder[0]))), "Slayer tasks completed"));
 	}
@@ -3023,5 +3024,29 @@ public class HistoryProgressCardTest
 		assertTrue("no family pills: " + lifetime, lifetime.contains("Ledger & Roads"));
 		assertTrue(lifetime.toString(), lifetime.contains("Skilling"));
 		assertFalse(lifetime.toString(), lifetime.contains("TRACKED PROGRESS"));
+	}
+
+	@Test
+	public void aLifetimeIsTheTotalsAndNotADeltaFromTheFirstLine() throws Exception
+	{
+		// a delta measured from the first line reports nothing for every total
+		// that joined the spine later: a board listing 166M of loot once sat
+		// under a headline reading zero
+		LocalDate today = LocalDate.now();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		HistoryLog.Baseline first = new HistoryLog.Baseline();
+		first.skills.put("attack", 900_000L);
+		s.history.put(today.minusDays(90), first);   // carries no counter at all
+		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "PvM");
+
+		set(p, "histGranularity", "Week");
+		assertEquals("the week is a delta", "+12",
+			beside(headline(labels(history(p))), "Monsters slain"));
+
+		set(p, "histGranularity", "Lifetime");
+		// the closing line stands at 312 kills, which is what a lifetime means
+		assertEquals("the lifetime is the total", "+312",
+			beside(headline(labels(history(p))), "Monsters slain"));
 	}
 }

@@ -4736,10 +4736,17 @@ class ChroniclePanel extends PluginPanel
 			boolean leftDated = sessionsSpeak[0]
 				? sessionsHoldTheFloor[0]
 				: (leftFrom != null && !leftFrom.isAfter(from.getKey()));
+			// A window is a delta between the spine's two ends. A lifetime has no
+			// earlier end, and a delta measured from the first line the record
+			// holds reports nothing for every total that joined the spine later:
+			// a board listing 166M of loot sat under a headline reading zero.
+			// So a lifetime is the totals themselves.
+			boolean whole = "Lifetime".equals(histGranularity) && histFrom == null;
 			HistoryProgress progress = HistoryProgress.of(
-				HistoryLog.gained(opening.counters, earliest.counters,
-					closing.counters),
-				null, retro, leftDated);
+				whole ? closing.counters
+					: HistoryLog.gained(opening.counters, earliest.counters,
+						closing.counters),
+				null, whole ? new java.util.HashMap<>() : retro, leftDated || whole);
 			SkillStand stand = skillStand(closing, live);
 			HistoryLog.Levels opened = HistoryLog.levels(opening, stand.keys);
 			p.add(headline(progress, gains, stand, opened, played));
