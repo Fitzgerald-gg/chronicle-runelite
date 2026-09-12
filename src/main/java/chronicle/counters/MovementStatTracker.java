@@ -56,6 +56,11 @@ public class MovementStatTracker implements StatTracker
 	// How long a teleport click stays armed. The slowest cast animates ~5 ticks
 	// before the move.
 	private static final int TELEPORT_PENDING_WINDOW_TICKS = 10;
+	// A pending whose destination is still to be chosen waits far longer than one
+	// already cast. Six seconds is not long enough to read a list of ten places,
+	// and the client shows some of those lists in interfaces this code cannot
+	// name, so it cannot rely on seeing one open to know it should wait.
+	private static final int MENU_PENDING_WINDOW_TICKS = 50;
 
 	// One-tick move (Chebyshev tiles) that counts as a teleport landing on its own.
 	// Sits above the agility-shortcut ceiling (~8-10 tiles) so a grapple or dive can't
@@ -289,11 +294,21 @@ public class MovementStatTracker implements StatTracker
 			return;
 		}
 
-		// a row of either chat menu: the scrollable list a cape's "Teleport" opens, or
-		// the chatbox options a rubbed ring or amulet shows
+		// A row of the list the destination is chosen from. The chatbox options a
+		// rubbed ring shows are group 219 and the scrollable list is 187, but a
+		// cape's own list need not be either of them, and naming every interface
+		// the client might use is a game of catch-up. So any click at all is
+		// offered to the chooser while a teleport is waiting to be told where it
+		// went: it takes the click only when a pending is open and the row names
+		// a place the table knows, and leaves it alone otherwise.
 		if (group == InterfaceID.MENU || group == InterfaceID.CHATMENU)
 		{
-			chooseMenuRow(rowLabel(event, optLow, tgtLow));
+			chooseMenuRow(rowLabel(event, optLow, tgtLow), true);
+			return;
+		}
+		if (teleportPending() && awaitsAMenu()
+			&& chooseMenuRow(rowLabel(event, optLow, tgtLow), false))
+		{
 			return;
 		}
 
@@ -509,32 +524,47 @@ public class MovementStatTracker implements StatTracker
 	// arm was missed is the one case that arms from nothing, gated on rubTick; the
 	// rub's menu is answered by exactly one row, so that gate closes on whichever row
 	// it is, matched or not ("Nowhere" is the glory's own cancel).
-	private void chooseMenuRow(String row)
+	private boolean chooseMenuRow(String row, boolean fromChatMenu)
 	{
 		boolean rubbed = rubTick >= 0 && client.getTickCount() - rubTick <= RUB_MENU_WINDOW_TICKS;
 		if (!teleportPending() && !rubbed)
 		{
-			return;
-		}
-		if (rubbed)
-		{
-			rubTick = -1;
+			return false;
 		}
 		// a spirit tree's list is stops on one network, like fairy rings: the hop
 		// stays credited to the tree, whatever place the row names
 		if (teleportPending() && "spirit tree".equals(pendingLabel))
 		{
-			return;
+			return false;
 		}
 		String place = isHomeRow(row) ? "house" : row;
-		if (matchDestinationKey(place) == null)
+		boolean placed = matchDestinationKey(place) != null;
+		// The rub's own menu is answered by exactly one row, so its gate closes on
+		// whichever row that is. One naming no place is the cancel: "Nowhere" is
+		// the glory's, and nothing was cast, so the pending goes with it. A click
+		// from anywhere else is only a guess at the choice and leaves it alone.
+		if (fromChatMenu && rubbed)
 		{
-			return;
+			rubTick = -1;
+			if (!placed)
+			{
+				clearPending();
+				return false;
+			}
+		}
+		if (!placed)
+		{
+			return false;
+		}
+		if (rubbed)
+		{
+			rubTick = -1;
 		}
 		String method = pendingMethod != null ? pendingMethod
 			: (rubbed ? TELEPORTS_VIA_JEWELLERY : null);
 		armTeleport(place, false);
 		pendingMethod = method;
+		return true;
 	}
 
 	// the word "home" on its own in a row, whatever keybind prefix or click verb
@@ -717,7 +747,7 @@ public class MovementStatTracker implements StatTracker
 
 		// expire a pending that never landed: a cancelled cast, a non-teleport nexus
 		// click. Left standing it attaches itself to whatever movement comes next.
-		if (pendingTick >= 0 && client.getTickCount() - pendingTick > TELEPORT_PENDING_WINDOW_TICKS)
+		if (pendingTick >= 0 && client.getTickCount() - pendingTick > pendingWindow())
 		{
 			clearPending();
 		}
@@ -733,7 +763,15 @@ public class MovementStatTracker implements StatTracker
 
 	private boolean teleportPending()
 	{
-		return pendingTick >= 0 && client.getTickCount() - pendingTick <= TELEPORT_PENDING_WINDOW_TICKS;
+		return pendingTick >= 0 && client.getTickCount() - pendingTick <= pendingWindow();
+	}
+
+	// How long a pending stands. One already cast lands within a few ticks or
+	// never; one still waiting to be told where it went waits on a reader, and
+	// six seconds is not long enough to read a list of ten places.
+	private int pendingWindow()
+	{
+		return awaitsAMenu() ? MENU_PENDING_WINDOW_TICKS : TELEPORT_PENDING_WINDOW_TICKS;
 	}
 
 	// credit the pending teleport to its place, or to the Nexus catch-all

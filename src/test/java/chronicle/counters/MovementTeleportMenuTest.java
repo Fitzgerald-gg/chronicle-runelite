@@ -490,10 +490,12 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aPendingStillExpiresWhenNoMenuIsOnScreen()
 	{
-		// the refresh is only for a menu that is showing; a cancelled cape click ages out
+		// a cancelled cape click ages out. It is given long enough to read a list
+		// of ten places, since the client shows some of those lists in interfaces
+		// this code cannot name, and no longer than that.
 		click("Teleport", "Construct. cape(t)");
-		idleUntil(11);
-		jumpAt(12);
+		idleUntil(51);
+		jumpAt(52);
 
 		assertEquals(0, stat(TELEPORTS_TOTAL));
 		assertEquals(0, stat(TELEPORTS_VIA_CAPE));
@@ -507,8 +509,8 @@ public class MovementTeleportMenuTest
 		Widget root = Mockito.mock(Widget.class);
 		Mockito.when(root.isHidden()).thenReturn(true);
 		Mockito.when(client.getWidget(InterfaceID.Menu.LJ_LAYER2)).thenReturn(root);
-		idleUntil(11);
-		jumpAt(12);
+		idleUntil(51);
+		jumpAt(52);
 
 		assertEquals(0, stat(TELEPORTS_TOTAL));
 	}
@@ -792,5 +794,64 @@ public class MovementTeleportMenuTest
 		jumpAt(3);
 		assertEquals(0, stat(TELEPORTS_TOTAL));
 		assertEquals(places().toString(), 0, places().size());
+	}
+
+	@Test
+	public void aCapeListTakesAsLongAsItTakesToRead()
+	{
+		// report 3, raised twice more: the construction cape's "Teleport" opens a
+		// list of ten house locations. Six seconds is not long enough to read one,
+		// and the pending died before the place was ever picked, so nothing at all
+		// was counted.
+		click("Teleport", "Construct. cape(t)");
+		idleUntil(28);
+		rowClick(InterfaceID.Menu.LJ_LAYER1, 3, "Pollnivneach", "Continue");
+		jumpAt(29);
+
+		assertEquals(1, stat(TELEPORTS_POLLNIVNEACH));
+		assertEquals(1, stat(TELEPORTS_VIA_CAPE));
+		assertEquals(1, stat(TELEPORTS_TOTAL));
+	}
+
+	@Test
+	public void theChoiceCountsFromWhicheverInterfaceTheClientShowsIt()
+	{
+		// the chat menus are groups 187 and 219; a cape's own list need not be
+		// either, and naming every interface the client might use is a game of
+		// catch-up. Any click naming a place is taken while a teleport waits.
+		int elsewhere = (90 << 16) | 4;
+		click("Teleport", "Construct. cape(t)");
+		rowClick(elsewhere, 2, "Taverley", "Continue");
+		jumpAt(6);
+
+		assertEquals(1, stat(TELEPORTS_TAVERLEY));
+		assertEquals(1, stat(TELEPORTS_VIA_CAPE));
+	}
+
+	@Test
+	public void aClickNamingNoPlaceLeavesThePendingAsItWas()
+	{
+		// the widened gate takes a click only when it names a place the table
+		// knows, so an unrelated click cannot steal or cancel the choice
+		int elsewhere = (90 << 16) | 4;
+		click("Teleport", "Construct. cape(t)");
+		rowClick(elsewhere, 1, "Close", "Continue");
+		rowClick(elsewhere, 2, "Rellekka", "Continue");
+		jumpAt(6);
+
+		assertEquals(1, stat(TELEPORTS_RELLEKKA));
+		assertEquals(1, stat(TELEPORTS_TOTAL));
+	}
+
+	@Test
+	public void aCastThatNeverLandedStillExpires()
+	{
+		// only a pending waiting on a list gets the long window; a cast that was
+		// never going to land must not ride out half a minute and claim the next
+		// region hop
+		click("Cast", "Varrock Teleport");
+		idleUntil(14);
+		jumpAt(15);
+		assertEquals(0, stat(TELEPORTS_TOTAL));
 	}
 }
