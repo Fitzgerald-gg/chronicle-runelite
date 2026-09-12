@@ -2220,6 +2220,73 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void theFloorAndTheTakeAreReadFromTheSameSittings() throws Exception
+	{
+		// the spine carries the record's lifetime floor and the sittings carry
+		// a part of the period; reading the take off one and the floor off the
+		// other sets a part against a whole, and the subtraction then reports
+		// more drops picked up than the period ever received
+		long now = System.currentTimeMillis();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		JsonObject sat = session(now - DAY_MS, 60);
+		sat.getAsJsonObject("data").addProperty("drops", 400);
+		sat.getAsJsonObject("data").addProperty("dropsGp", 2_000_000);
+		s.feed.add(sat);
+		ChroniclePanel p = panel(s);
+		openFolds(p).add("history:Loot");
+		List<String> card = card(labels(history(p)));
+		assertEquals(card.toString(), "+400", beside(card, "Drops received"));
+		assertEquals(card.toString(), "+2.0M gp", beside(card, "Loot value"));
+		// the spine's own floor stood at three stacks over nine kills; none of
+		// it is this sitting's, so none of it is drawn
+		assertFalse(card.toString(), card.contains("Left on the floor"));
+		assertFalse(card.toString(), card.contains("Drops taken"));
+		assertFalse(card.toString(), card.contains("Loot kept"));
+	}
+
+	@Test
+	public void aFloorOnlySomeSittingsCountedIsNotThePeriodsFloor() throws Exception
+	{
+		// one sitting counted what it left and the other never did: taking the
+		// two together reads the older one as a sitting that left nothing, and
+		// the period would be told it picked up everything that one received
+		long now = System.currentTimeMillis();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
+		JsonObject older = session(now - 2 * DAY_MS, 30);
+		older.getAsJsonObject("data").addProperty("drops", 286);
+		older.getAsJsonObject("data").addProperty("dropsGp", 1_000_000);
+		s.feed.add(older);
+		ChroniclePanel p = panel(s);
+		openFolds(p).add("history:Loot");
+		List<String> card = card(labels(history(p)));
+		assertEquals(card.toString(), "+686", beside(card, "Drops received"));
+		assertEquals(card.toString(), "+3.0M gp", beside(card, "Loot value"));
+		assertFalse(card.toString(), card.contains("Drops taken"));
+		assertFalse(card.toString(), card.contains("Loot kept"));
+	}
+
+	@Test
+	public void aPeriodWhoseSittingsBeginAfterItDoesSaysSo() throws Exception
+	{
+		// the year is the window and the record holds a fortnight of sittings:
+		// the loot figures are theirs, so the line names the day they start and
+		// not the day the spine began carrying the journal's own totals
+		long now = System.currentTimeMillis();
+		LocalDate today = LocalDate.now();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
+		s.feed.add(session(now - 2 * DAY_MS, 30, 286, 1_000_000, 5, 20_000, 3));
+		ChroniclePanel p = panel(s);
+		set(p, "histGranularity", "Year");
+		assertEquals("Loot since " + today.minusDays(2).format(FULL),
+			noteHolding(history(p), "Loot since"));
+	}
+
+	@Test
 	public void theSessionRecordCarriesWhatWasLeftBehind() throws Exception
 	{
 		// the one seam no harness reaches: the session summary is written by the

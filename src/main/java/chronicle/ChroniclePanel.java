@@ -3078,12 +3078,22 @@ class ChroniclePanel extends PluginPanel
 	// journal-derived loot and kill totals joined it later still. Null when both
 	// go back to the start line. The spine handed in ends where the period
 	// does, so a key that joined after the period closed is not on it.
+	/**
+	 * The dates the period's figures reach back to, where that is later than the
+	 * period's own opening line and the figures are therefore a part of it.
+	 *
+	 * @param lootFrom the day the loot rows reach back to when the sittings
+	 * supplied them, or null when they cover the period
+	 * @param lootFromSittings whether the sittings supplied the loot rows; the
+	 * spine is then not their source and its own start date says nothing of them
+	 */
 	private static String countersSince(
 		java.util.SortedMap<java.time.LocalDate, HistoryLog.Baseline> spine,
-		java.time.LocalDate startLine)
+		java.time.LocalDate startLine, java.time.LocalDate lootFrom, boolean lootFromSittings)
 	{
 		java.time.LocalDate counters = HistoryLog.firstCarrying(spine, null);
-		java.time.LocalDate loot = HistoryLog.firstCarrying(spine, "dropsReceived");
+		java.time.LocalDate loot = lootFromSittings
+			? lootFrom : HistoryLog.firstCarrying(spine, "dropsReceived");
 		StringBuilder note = new StringBuilder();
 		java.time.LocalDate since = startLine;
 		if (counters != null && (since == null || counters.isAfter(since)))
@@ -3093,7 +3103,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (loot != null && (since == null || loot.isAfter(since)))
 		{
-			note.append(note.length() == 0 ? "Loot and kills since " : " · loot and kills since ")
+			String what = lootFromSittings ? "loot" : "loot and kills";
+			note.append(note.length() == 0
+				? Character.toUpperCase(what.charAt(0)) + what.substring(1) + " since "
+				: " · " + what + " since ")
 				.append(loot.format(FULL_DAY));
 		}
 		return note.length() == 0 ? null : note.toString();
@@ -3954,8 +3967,13 @@ class ChroniclePanel extends PluginPanel
 			Map<String, List<String[]>> named = new LinkedHashMap<>();
 			long[] played = {0, 0};   // minutes, sessions
 			// the sessions' own take: drops, their gp, the stacks left, their gp,
-			// the kills that left one, and whether any sitting recorded the floor
+			// the kills that left one, and how many of the sittings counted the
+			// floor at all. The floor is only an account of this period when
+			// every one of them did.
 			long[] took = {0, 0, 0, 0, 0, 0};
+			// the first sitting the period holds, which is as far back as a
+			// figure read off the sittings can reach
+			long[] firstSitting = {0};
 			for (JsonObject e : historyFeed)
 			{
 				long ts = safeLong(e.get("ts"));
@@ -3984,6 +4002,10 @@ class ChroniclePanel extends PluginPanel
 					{
 						played[0] += sessionMinutes(e);
 						played[1]++;
+						if (firstSitting[0] == 0 || ts < firstSitting[0])
+						{
+							firstSitting[0] = ts;
+						}
 						// A session closes with what it took: the loot events it
 						// saw and what they were worth. Dated, one line per
 						// sitting, and the only account of the take that reaches
@@ -4000,7 +4022,7 @@ class ChroniclePanel extends PluginPanel
 							took[4] += safeLong(d.get("leftKills"));
 							if (d.has("leftKills"))
 							{
-								took[5] = 1;   // this sitting can speak for the floor
+								took[5]++;   // this sitting can speak for the floor
 							}
 						}
 					}
@@ -4008,6 +4030,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			Map<String, Long> retro = new java.util.HashMap<>();
 			boolean[] sessionsHoldTheFloor = {false};
+			boolean[] sessionsSpeak = {false};
 			if (historyJourney != null)
 			{
 				retro.put("slayerTasksCompleted", closedTasksBetween(historyJourney, fromMs, toMs));
@@ -4032,17 +4055,26 @@ class ChroniclePanel extends PluginPanel
 				// carries the journal's lifetime totals and can only speak for
 				// a period once two of its lines hold them, while a session
 				// says what it took on the day it ran.
-				if (played[1] > 0)
+				if (played[1] > 0 && took[0] > 0)
 				{
+					// One basis for the whole of the loot, or the card sets two
+					// accounts against each other. The spine carries the record's
+					// lifetime totals and can only date them from the day it
+					// began holding them; the sittings say what they took on the
+					// day they ran, and a period's sittings may be a part of it.
+					// Reading the take off the sittings and the floor off the
+					// spine sets a part against the whole, and the subtraction
+					// then reports more picked up than was ever received.
+					sessionsSpeak[0] = true;
 					retro.put("dropsReceived", took[0]);
 					retro.put("lootValue", took[1]);
-					if (took[5] > 0)
-					{
-						retro.put("lootLeftCount", took[2]);
-						retro.put("lootLeftValue", took[3]);
-						retro.put("lootLeftKills", took[4]);
-						sessionsHoldTheFloor[0] = true;
-					}
+					retro.put("lootLeftCount", took[2]);
+					retro.put("lootLeftValue", took[3]);
+					retro.put("lootLeftKills", took[4]);
+					// and the floor is this period's only when every one of the
+					// sittings counted it: an older sitting that never did would
+					// be read as one that left nothing behind
+					sessionsHoldTheFloor[0] = took[5] == played[1];
 				}
 			}
 			else
@@ -4069,8 +4101,9 @@ class ChroniclePanel extends PluginPanel
 			// period that opens before it cannot be told what it kept.
 			java.time.LocalDate leftFrom = HistoryLog.firstCarrying(
 				hist.headMap(at.getKey(), true), "lootLeftKills");
-			boolean leftDated = sessionsHoldTheFloor[0]
-				|| (leftFrom != null && !leftFrom.isAfter(from.getKey()));
+			boolean leftDated = sessionsSpeak[0]
+				? sessionsHoldTheFloor[0]
+				: (leftFrom != null && !leftFrom.isAfter(from.getKey()));
 			HistoryProgress progress = HistoryProgress.of(
 				HistoryLog.gained(opening.counters, earliest.counters,
 					closing.counters),
@@ -4079,7 +4112,22 @@ class ChroniclePanel extends PluginPanel
 			HistoryLog.Levels opened = HistoryLog.levels(opening, stand.keys);
 			p.add(headline(progress, gains, stand, opened, played));
 			p.add(vgap(5));
-			String since = countersSince(hist.headMap(at.getKey(), true), from.getKey());
+			// What the loot rows actually reach back to. When the sittings
+			// supplied them the spine is not their source, so its own start date
+			// says nothing about them; a period whose sittings begin after it
+			// did says so, and one they cover says nothing at all.
+			java.time.LocalDate lootSince = null;
+			if (sessionsSpeak[0] && firstSitting[0] > 0)
+			{
+				java.time.LocalDate sat = Instant.ofEpochMilli(firstSitting[0])
+					.atZone(ZoneId.systemDefault()).toLocalDate();
+				if (sat.isAfter(pStart))
+				{
+					lootSince = sat;
+				}
+			}
+			String since = countersSince(hist.headMap(at.getKey(), true), from.getKey(),
+				lootSince, sessionsSpeak[0]);
 			if (since != null)
 			{
 				p.add(note(since));
