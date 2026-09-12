@@ -283,11 +283,37 @@ public class HistoryProgressCardTest
 
 	// the labels of the skill grid alone: from the first cell's icon text to
 	// the end of the last cell
+	/**
+	 * The skill grid flattened the way it reads: the three letter code that
+	 * stands in for each icon, then the level (or the pair it climbed through),
+	 * and nothing else. The tile also carries the skill's name and its xp now,
+	 * and every test written against the older two line tile counts positions,
+	 * so those two are dropped here rather than in thirty assertions.
+	 */
 	private static List<String> grid(List<String> all)
 	{
 		int at = all.indexOf("ATT");
 		assertTrue(all.toString(), at >= 0);
-		return all.subList(at, all.size());
+		List<String> cells = all.subList(at, all.size());
+		java.util.Set<String> codes = new java.util.LinkedHashSet<>();
+		for (net.runelite.api.Skill sk : net.runelite.api.Skill.values())
+		{
+			codes.add(sk.name().substring(0, Math.min(3, sk.name().length())));
+		}
+		List<String> out = new ArrayList<>();
+		for (int i = 0; i < cells.size(); i++)
+		{
+			if (!codes.contains(cells.get(i)))
+			{
+				continue;
+			}
+			out.add(cells.get(i));
+			if (i + 1 < cells.size())
+			{
+				out.add(cells.get(i + 1));
+			}
+		}
+		return out;
 	}
 
 	private static JsonObject entry(long ts, String type, String key, String val)
@@ -336,6 +362,9 @@ public class HistoryProgressCardTest
 		set(p, "historyFeedTs", stub.feed.isEmpty() ? 0L : stub.feed.get(0).get("ts").getAsLong());
 		set(p, "historyDay", LocalDate.now());
 		set(p, "histGranularity", "Week");
+		// the card most tests read lives on the Trackers facet; the skill grid and
+		// the boards have tests of their own that ask for theirs
+		set(p, "histFacet", "Trackers");
 		return p;
 	}
 
@@ -383,6 +412,22 @@ public class HistoryProgressCardTest
 	// The tab as a reader sees it: the window controls, which buildHistory now
 	// hands up to the panel so they can hang above the scroll, and the body under
 	// them.
+	// the tab read on its PvM facet, for tests that want the kills, the deaths
+	// or the slayer tasks the headline used to carry for every facet at once
+	private static JPanel skills(PanelPreviewTest.StubPlugin stub) throws Exception
+	{
+		ChroniclePanel p = panel(stub);
+		set(p, "histFacet", "Skills");
+		return history(p);
+	}
+
+	private static JPanel pvm(PanelPreviewTest.StubPlugin stub) throws Exception
+	{
+		ChroniclePanel p = panel(stub);
+		set(p, "histFacet", "PvM");
+		return history(p);
+	}
+
 	private static JPanel history(ChroniclePanel panel) throws Exception
 	{
 		final JPanel[] out = new JPanel[1];
@@ -547,8 +592,11 @@ public class HistoryProgressCardTest
 		{
 			String label = all.get(i);
 			if (label.equals("ATT") || label.equals("TRACKED PROGRESS")
-				|| label.equals("BOSSES AND ACTIVITIES")
-				|| label.equals("EVERYTHING ELSE COUNTED") || label.startsWith("MILESTONES"))
+				|| label.equals("BOSSES AND ACTIVITIES") || label.equals("ACTIVITIES")
+				|| label.equals("EVERYTHING ELSE COUNTED") || label.startsWith("MILESTONES")
+				// the boards' own empty states, which are body and not headline
+				|| label.startsWith("No kill counts") || label.startsWith("Kill counts")
+				|| label.startsWith("No activity"))
 			{
 				end = i;
 				break;
@@ -559,9 +607,11 @@ public class HistoryProgressCardTest
 
 	// the figure the total level line closes on, whether or not it names the
 	// level it opened from
+	// The total level moved out of the headline and onto its own tile under the
+	// skill grid, where the owner asked for it. It reads the same either way.
 	private static String standingLevel(List<String> all)
 	{
-		String total = beside(headline(all), "Total level");
+		String total = beside(all, "Total level");
 		assertNotNull(all.toString(), total);
 		int at = total.indexOf(" to ");
 		String to = at < 0 ? total : total.substring(at + 4);
@@ -746,7 +796,7 @@ public class HistoryProgressCardTest
 	@Test
 	public void theHeadlineReadsInOrderWithItsFigures() throws Exception
 	{
-		List<String> head = headline(labels(history(panel(stub(true)))));
+		List<String> head = headline(labels(pvm(stub(true))));
 		// the figures a reader wants first, each a plain labelled row and no
 		// sentence: what the period cost, what it added, where it left the
 		// sheet, and the counts the groups below break down. The drops carry
@@ -756,7 +806,6 @@ public class HistoryProgressCardTest
 		assertEquals(Arrays.asList(
 			"THE PERIOD",
 			"Experience", "+50k",
-			"Total level", "73",
 			"Kills", "+12",
 			"Slayer tasks completed", "+5",
 			"Drops received", "+12 · 2.5M gp",
@@ -1313,6 +1362,7 @@ public class HistoryProgressCardTest
 	public void slayerTasksCountTheClosedSegmentsDatedInsideThePeriod() throws Exception
 	{
 		ChroniclePanel p = panel(stub(true));
+		set(p, "histFacet", "PvM");
 		// no journey read yet: the spine's delta stands
 		assertEquals("+5", beside(headline(labels(history(p))), "Slayer tasks completed"));
 
@@ -1374,12 +1424,13 @@ public class HistoryProgressCardTest
 		s.ledgerKcs.put("Nechryael", 622L);
 		ChroniclePanel p = panel(s);
 		List<String> all = labels(history(p));
-		assertEquals(all.toString(), all.indexOf("Skills") + 1, all.indexOf("Kills"));
+		assertEquals(all.toString(), Arrays.asList("Skills", "PvM", "Activities", "Trackers"),
+			all.subList(all.indexOf("Skills"), all.indexOf("Skills") + 4));
 		assertFalse(all.toString(), all.contains("Bosses"));
 
 		// under it, the log's pages first and the ledger's own sources apart,
 		// each at its standing count with the period's gain beside
-		set(p, "histBosses", true);
+		set(p, "histFacet", "PvM");
 		all = labels(history(p));
 		int bosses = all.indexOf("BOSSES AND ACTIVITIES");
 		int rest = all.indexOf("EVERYTHING ELSE COUNTED");
@@ -1400,7 +1451,7 @@ public class HistoryProgressCardTest
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.kcs.put("Zulrah", 108L);
 		ChroniclePanel p = panel(s);
-		set(p, "histBosses", true);
+		set(p, "histFacet", "PvM");
 		List<String> all = labels(history(p));
 		assertEquals(all.toString(), "+12", beside(headline(all), "Kills"));
 		assertTrue(all.toString(), all.indexOf("THE PERIOD")
@@ -1447,6 +1498,7 @@ public class HistoryProgressCardTest
 		s.feed.add(entry(fromMs, "COLLECTION", "itemName", "Kraken tentacle"));
 		s.feed.add(entry(fromMs - 1_000, "COLLECTION", "itemName", "Dragon pickaxe"));
 		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "Trackers");
 		openFolds(p).add("history:Loot");
 		set(p, "historyJourney", journey(
 			task("Gargoyles", toMs / 1000.0, false),
@@ -1500,19 +1552,19 @@ public class HistoryProgressCardTest
 		s.feed.add(entry(now - 20 * DAY_MS, "DEATH", "killerName", "Vorkath"));
 		// the feed reaches back past the week's start: its five deaths inside
 		// the week beat the spine's three, and the one before the week is out
-		assertEquals("+5", beside(headline(labels(history(panel(s)))), "Deaths"));
+		assertEquals("+5", beside(headline(labels(pvm(s))), "Deaths"));
 
 		// a feed that begins inside the week cannot say what it missed: the
 		// spine's delta stands
 		s.feed.remove(6);
-		assertEquals("+3", beside(headline(labels(history(panel(s)))), "Deaths"));
+		assertEquals("+3", beside(headline(labels(pvm(s))), "Deaths"));
 
 		// reaching back with no death inside the week: no line, whatever the
 		// spine's delta says
 		s.feed.clear();
 		s.feed.add(entry(now - DAY_MS, "COLLECTION", "itemName", "Abyssal head"));
 		s.feed.add(entry(now - 20 * DAY_MS, "DEATH", "killerName", "Vorkath"));
-		assertNull(beside(headline(labels(history(panel(s)))), "Deaths"));
+		assertNull(beside(headline(labels(pvm(s))), "Deaths"));
 	}
 
 	@Test
@@ -1647,18 +1699,18 @@ public class HistoryProgressCardTest
 		// levels from end to end, not the sheet's
 		LocalDate today = LocalDate.now();
 		ChroniclePanel p = panel(spanned(true, true));
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
 		List<String> grid = grid(all);
-		assertEquals(grid.toString(), "75", grid.get(1));
-		assertEquals(grid.toString(), "+250k", grid.get(2));
-		assertEquals(grid.toString(), "75", beside(grid, "SAI"));
+		assertEquals(grid.toString(), "73 to 75", grid.get(1));
+		assertEquals(grid.toString(), "73 to 75", beside(grid, "SAI"));
 		assertFalse(grid.toString(), grid.contains("99"));
 		assertEquals(all.toString(),
 			fmt(73L * skillCount()) + " to " + fmt(75L * skillCount())
 				+ " · +" + fmt(2L * skillCount()),
-			beside(headline(all), "Total level"));
+			beside(all, "Total level"));
 	}
 
 	@Test
@@ -1670,21 +1722,23 @@ public class HistoryProgressCardTest
 		LocalDate today = LocalDate.now();
 		String standing = fmt(99L * skillCount());
 		ChroniclePanel p = panel(spanned(true, true));
+		set(p, "histFacet", "Skills");
 		List<String> all = labels(history(p));
-		assertEquals(all.toString(), "99", grid(all).get(1));
+		// the week opens on the line five days back, which stood at 75
+		assertEquals(all.toString(), "75 to 99", grid(all).get(1));
 		assertEquals(all.toString(), standing, standingLevel(all));
 
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today);
 		all = labels(history(p));
-		assertEquals(all.toString(), "99", grid(all).get(1));
+		assertEquals(all.toString(), "73 to 99", grid(all).get(1));
 		assertEquals(all.toString(), standing, standingLevel(all));
 
 		set(p, "histFrom", null);
 		set(p, "histTo", null);
 		set(p, "histGranularity", "Year");
 		all = labels(history(p));
-		assertEquals(all.toString(), "99", grid(all).get(1));
+		assertEquals(all.toString(), "73 to 99", grid(all).get(1));
 		assertEquals(all.toString(), standing, standingLevel(all));
 	}
 
@@ -1696,12 +1750,13 @@ public class HistoryProgressCardTest
 		// draws 73 while the rest stand at 75, and the headline totals all of them
 		LocalDate today = LocalDate.now();
 		ChroniclePanel p = panel(spanned(false, true));
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
 		List<String> grid = grid(all);
 		assertEquals(grid.toString(), "73", beside(grid, "SAI"));
-		assertEquals(grid.toString(), "75", grid.get(1));
+		assertEquals(grid.toString(), "73 to 75", grid.get(1));
 		assertEquals(all.toString(), fmt(75L * (skillCount() - 1) + 73L), standingLevel(all));
 	}
 
@@ -1712,12 +1767,13 @@ public class HistoryProgressCardTest
 		// account for the overall it carries, so every other skill stood at
 		// zero: attack gains all 13,034,431 rather than nothing
 		ChroniclePanel p = panel(firstYear());
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", LocalDate.parse("2022-01-01"));
 		set(p, "histTo", LocalDate.parse("2022-12-31"));
 		List<String> all = labels(history(p));
 		List<String> grid = grid(all);
-		assertEquals(grid.toString(), Arrays.asList("ATT", "99", "+13.0M", "HIT", "75", "+1.2M"),
-			grid.subList(0, 6));
+		assertEquals(grid.toString(), Arrays.asList("ATT", "1 to 99", "HIT", "10 to 75"),
+			grid.subList(0, 4));
 		assertEquals(all.toString(), "+14.3M", beside(headline(all), "Experience"));
 	}
 
@@ -1729,6 +1785,7 @@ public class HistoryProgressCardTest
 		// for every xp there was, so each stood at zero, which is level 1: no
 		// cell is blank and the total counts every skill in the game
 		ChroniclePanel p = panel(firstYear());
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", LocalDate.parse("2022-01-01"));
 		set(p, "histTo", LocalDate.parse("2022-12-31"));
 		List<String> all = labels(history(p));
@@ -1747,6 +1804,7 @@ public class HistoryProgressCardTest
 		// one 99 was reached. This is the year the site publishes as 33 to
 		// 1,206, and the opening is that same 33 in miniature.
 		ChroniclePanel p = panel(firstYear());
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", LocalDate.parse("2022-01-01"));
 		set(p, "histTo", LocalDate.parse("2022-12-31"));
 		List<String> all = labels(history(p));
@@ -1754,7 +1812,7 @@ public class HistoryProgressCardTest
 		long closing = 99L + 75L + skillCount() - 2;
 		assertEquals(all.toString(),
 			fmt(opening) + " to " + fmt(closing) + " · +" + fmt(closing - opening),
-			beside(headline(all), "Total level"));
+			beside(all, "Total level"));
 		assertEquals(all.toString(), "1", beside(headline(all), "99s reached"));
 	}
 
@@ -1772,6 +1830,7 @@ public class HistoryProgressCardTest
 			"{\"date\":\"2026-06-01\",\"skills\":{\"attack\":13034431,\"hitpoints\":1151,"
 				+ "\"overall\":13035582}}");
 		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", LocalDate.parse("2026-01-01"));
 		set(p, "histTo", LocalDate.parse("2026-06-30"));
 		List<String> all = labels(history(p));
@@ -1780,7 +1839,7 @@ public class HistoryProgressCardTest
 		long closing = 99L + 10L + skillCount() - 2;
 		assertEquals(all.toString(),
 			fmt(opening) + " to " + fmt(closing) + " · +" + fmt(closing - opening),
-			beside(headline(all), "Total level"));
+			beside(all, "Total level"));
 	}
 
 	@Test
@@ -1790,6 +1849,7 @@ public class HistoryProgressCardTest
 		// taken at the earliest line on record, the one the note names, and not
 		// at the empty state the window's own start day stands at
 		ChroniclePanel p = panel(firstYear());
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", LocalDate.parse("2021-06-01"));
 		set(p, "histTo", LocalDate.parse("2022-12-31"));
 		JPanel view = history(p);
@@ -1799,7 +1859,7 @@ public class HistoryProgressCardTest
 		long closing = 99L + 75L + skillCount() - 2;
 		assertEquals(all.toString(),
 			fmt(opening) + " to " + fmt(closing) + " · +" + fmt(closing - opening),
-			beside(headline(all), "Total level"));
+			beside(all, "Total level"));
 	}
 
 	@Test
@@ -1835,12 +1895,13 @@ public class HistoryProgressCardTest
 		// gain that do not reach the standing figure would read as broken
 		LocalDate today = LocalDate.now();
 		ChroniclePanel p = panel(spanned(true, true));
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today);
 		List<String> all = labels(history(p));
 		assertEquals(all.toString(),
 			fmt(99L * skillCount()) + " · +" + fmt(3L * skillCount()),
-			beside(headline(all), "Total level"));
+			beside(all, "Total level"));
 		// and the sheet's own 99s are nobody's gain: the closing line has none
 		assertNull(all.toString(), beside(headline(all), "99s reached"));
 	}
@@ -1853,13 +1914,14 @@ public class HistoryProgressCardTest
 		// distance between them
 		LocalDate today = LocalDate.now();
 		ChroniclePanel p = panel(spanned(true, true));
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
 		assertEquals(all.toString(),
 			fmt(73L * skillCount()) + " to " + fmt(75L * skillCount())
 				+ " · +" + fmt(2L * skillCount()),
-			beside(headline(all), "Total level"));
+			beside(all, "Total level"));
 	}
 
 	@Test
@@ -1878,6 +1940,7 @@ public class HistoryProgressCardTest
 			"{\"date\":\"2026-03-15\",\"counters\":{\"kills\":40}}",
 			"{\"date\":\"2026-04-01\",\"counters\":{\"dropsReceived\":150}}");
 		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "PvM");
 		set(p, "histFrom", LocalDate.parse("2026-03-02"));
 		set(p, "histTo", LocalDate.parse("2026-04-30"));
 		List<String> head = headline(labels(history(p)));
@@ -1901,11 +1964,13 @@ public class HistoryProgressCardTest
 			"{\"date\":\"2026-03-01\",\"skills\":{\"attack\":1100000}}",
 			"{\"date\":\"2026-04-01\",\"skills\":{\"attack\":1200000,\"mining\":1600000}}");
 		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", LocalDate.parse("2026-03-02"));
 		set(p, "histTo", LocalDate.parse("2026-04-30"));
 		List<String> grid = grid(labels(history(p)));
-		assertEquals(grid.toString(), "+100k", grid.get(grid.indexOf("MIN") + 2));
-		assertEquals(grid.toString(), "+100k", grid.get(grid.indexOf("ATT") + 2));
+		// each names where it came from as well as where it ended
+		assertEquals(grid.toString(), "74", grid.get(grid.indexOf("ATT") + 1));
+		assertEquals(grid.toString(), "77", grid.get(grid.indexOf("MIN") + 1));
 	}
 
 	@Test
@@ -1923,14 +1988,15 @@ public class HistoryProgressCardTest
 			"{\"date\":\"2026-06-01\",\"skills\":{\"attack\":13034431,\"hitpoints\":1300000,"
 				+ "\"overall\":14334431}}");
 		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", LocalDate.parse("2026-05-02"));
 		set(p, "histTo", LocalDate.parse("2026-06-30"));
 		List<String> all = labels(history(p));
-		String total = beside(headline(all), "Total level");
+		String total = beside(all, "Total level");
 		assertFalse(all.toString(), total.contains(" to "));
 		assertFalse(all.toString(), total.contains("+"));
 		assertFalse(all.toString(), all.contains("99s reached"));
-		assertEquals(all.toString(), "99", grid(all).get(1));
+		assertEquals(all.toString(), "73 to 99", grid(all).get(1));
 		assertTrue(all.toString(), all.contains("+12.0M"));
 	}
 
@@ -1944,11 +2010,12 @@ public class HistoryProgressCardTest
 		s.history.get(today.minusDays(10)).skills
 			.putAll(s.history.get(today.minusDays(20)).skills);
 		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
 		assertEquals(all.toString(), fmt(73L * skillCount()),
-			beside(headline(all), "Total level"));
+			beside(all, "Total level"));
 		assertFalse(all.toString(), all.contains("99s reached"));
 	}
 
@@ -1961,7 +2028,7 @@ public class HistoryProgressCardTest
 		PanelPreviewTest.StubPlugin s = spanned(true, true);
 		s.history.get(today.minusDays(10)).kcs.remove("Zulrah");
 		ChroniclePanel p = panel(s);
-		set(p, "histBosses", true);
+		set(p, "histFacet", "PvM");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
@@ -1979,12 +2046,13 @@ public class HistoryProgressCardTest
 		PanelPreviewTest.StubPlugin s = spanned(false, true);
 		s.history.get(today.minusDays(20)).skills.remove("sailing");
 		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
 		List<String> grid = grid(all);
 		assertEquals(grid.toString(), "-", beside(grid, "SAI"));
-		assertEquals(grid.toString(), "75", grid.get(1));
+		assertEquals(grid.toString(), "73 to 75", grid.get(1));
 		assertEquals(all.toString(), fmt(75L * (skillCount() - 1)), standingLevel(all));
 	}
 
@@ -1996,7 +2064,7 @@ public class HistoryProgressCardTest
 		// is anywhere on a past window
 		LocalDate today = LocalDate.now();
 		ChroniclePanel p = panel(spanned(true, true));
-		set(p, "histBosses", true);
+		set(p, "histFacet", "PvM");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
@@ -2024,7 +2092,7 @@ public class HistoryProgressCardTest
 		// name there. The week reaching today reads the ledger.
 		LocalDate today = LocalDate.now();
 		ChroniclePanel p = panel(spanned(true, true));
-		set(p, "histBosses", true);
+		set(p, "histFacet", "PvM");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
@@ -2052,7 +2120,7 @@ public class HistoryProgressCardTest
 		// the first line that does, and today's ledger stays off the past
 		LocalDate today = LocalDate.now();
 		ChroniclePanel p = panel(spanned(true, false));
-		set(p, "histBosses", true);
+		set(p, "histFacet", "PvM");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
@@ -2072,6 +2140,7 @@ public class HistoryProgressCardTest
 		// trackers join later and the journal-derived loot totals later still:
 		// both dates, one line, under the headline and above the grid
 		ChroniclePanel p = panel(staged(true));
+		set(p, "histFacet", "Skills");
 		set(p, "histFrom", today.minusDays(40));
 		set(p, "histTo", today);
 		JPanel view = history(p);
@@ -2474,7 +2543,7 @@ public class HistoryProgressCardTest
 			s.kcs.put("Boss " + (char) ('A' + i), 100L + i);
 		}
 		ChroniclePanel p = panel(s);
-		set(p, "histBosses", true);
+		set(p, "histFacet", "PvM");
 		List<String> all = labels(history(p));
 		int board = all.indexOf("BOSSES AND ACTIVITIES");
 		assertTrue(all.toString(), board >= 0);
@@ -2512,7 +2581,7 @@ public class HistoryProgressCardTest
 		JPanel controls = (JPanel) f.get(p);
 		assertNotNull("buildHistory handed up no controls", controls);
 		List<String> up = labels(controls);
-		for (String control : new String[]{"Period", "Skills", "Kills"})
+		for (String control : new String[]{"Period", "Skills", "PvM", "Activities", "Trackers"})
 		{
 			assertTrue(control + " is not among the controls: " + up, up.contains(control));
 		}
@@ -2802,5 +2871,94 @@ public class HistoryProgressCardTest
 		Field f = ChroniclePanel.class.getDeclaredField("histGranularity");
 		f.setAccessible(true);
 		assertEquals("Lifetime", f.get(holder[0]));
+	}
+
+	// ---- the four readings of a period -----------------------------------
+
+	@Test
+	public void theStripChoosesWhatThePeriodIsRead() throws Exception
+	{
+		// four facets, each owning its own figures, so a reader after a skill is
+		// not scrolling past a boss board to reach it
+		ChroniclePanel p = panel(stub(true));
+		set(p, "histFacet", "Skills");
+		List<String> skills = labels(history(p));
+		assertTrue(skills.toString(), skills.contains("ATT"));
+		assertFalse(skills.toString(), skills.contains("TRACKED PROGRESS"));
+
+		set(p, "histFacet", "Trackers");
+		List<String> trackers = labels(history(p));
+		assertTrue(trackers.toString(), trackers.contains("TRACKED PROGRESS"));
+		assertFalse(trackers.toString(), trackers.contains("ATT"));
+
+		set(p, "histFacet", "PvM");
+		List<String> pvm = labels(history(p));
+		assertFalse(pvm.toString(), pvm.contains("ATT"));
+		assertFalse(pvm.toString(), pvm.contains("TRACKED PROGRESS"));
+
+		// and the headline stands above all of them
+		for (String facet : new String[]{"Skills", "PvM", "Activities", "Trackers"})
+		{
+			set(p, "histFacet", facet);
+			assertTrue(facet, labels(history(p)).contains("THE PERIOD"));
+		}
+	}
+
+	@Test
+	public void aSkillTileNamesItselfAndSaysWhereItCameFrom() throws Exception
+	{
+		// the site's tile carries the icon, the levels it moved between, the
+		// skill's own name and the xp. Three across leaves 62px and
+		// "Construction" alone wants 64, so the grid is two across.
+		LocalDate today = LocalDate.now();
+		ChroniclePanel p = panel(spanned(false, false));
+		set(p, "histFacet", "Skills");
+		set(p, "histFrom", today.minusDays(15));
+		set(p, "histTo", today.minusDays(5));
+		List<String> all = labels(history(p));
+		int at = all.indexOf("ATT");
+		assertTrue(all.toString(), at >= 0);
+		// icon, the pair, the name, the xp
+		assertEquals(all.toString(), Arrays.asList("ATT", "73 to 75", "Attack", "+250k xp"),
+			all.subList(at, at + 4));
+	}
+
+	@Test
+	public void theWholeSheetHasATileOfItsOwn() throws Exception
+	{
+		// with an odd number of skills a twenty fifth cell would sit alone in a
+		// half empty row, so the total stands under the grid rather than in it
+		LocalDate today = LocalDate.now();
+		ChroniclePanel p = panel(spanned(false, false));
+		set(p, "histFacet", "Skills");
+		set(p, "histFrom", today.minusDays(15));
+		set(p, "histTo", today.minusDays(5));
+		List<String> all = labels(history(p));
+		int at = all.indexOf("Total level");
+		assertTrue("no total level tile: " + all, at >= 0);
+		// it opens where the sheet opened and says what the period added
+		String tile = all.get(at + 1);
+		assertTrue(tile, tile.startsWith(fmt(73L * skillCount()) + " to "));
+		assertTrue(tile, tile.contains(" · +"));
+		// and it sits after the last skill, not among them
+		assertTrue(all.toString(), at > all.indexOf("ATT"));
+	}
+
+	@Test
+	public void activitiesAreTheLogsOwnPagesAndNotTheBosses() throws Exception
+	{
+		// the site reads these off Jagex's hiscores, which this plugin has never
+		// asked for. The collection log is the record's own account of the same
+		// ground, so a minigame page counts and a boss page does not.
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.kcs.put("Tempoross", 455L);
+		s.kcs.put("Zulrah", 108L);
+		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "Activities");
+		List<String> all = labels(history(p));
+		assertFalse("a boss is not an activity: " + all, all.contains("Zulrah"));
+
+		set(p, "histFacet", "PvM");
+		assertTrue(labels(history(p)).toString(), labels(history(p)).contains("Zulrah"));
 	}
 }

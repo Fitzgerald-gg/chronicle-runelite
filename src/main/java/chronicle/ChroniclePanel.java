@@ -113,6 +113,7 @@ class ChroniclePanel extends PluginPanel
 	private String clogTab = "Bosses";
 	private String clogPageSel;
 	// History's Skills/Bosses lens. Both read the period the stepper is on.
+	// kept for the preview harness, which reaches it by name
 	private boolean histBosses;
 
 	private JLabel manage;
@@ -3720,7 +3721,68 @@ class ChroniclePanel extends PluginPanel
 		p.add(vgap(6));
 	}
 
-	// One counted thing: what it stands at, and what the period added.
+	/**
+	 * The period's activities: the collection log's own minigame, skilling and
+	 * treasure trail pages, each at the count it stands on with what the period
+	 * added. The site reads these off Jagex's hiscores, which this plugin has
+	 * never asked for and should not start asking for; the log is the record's
+	 * own account of the same ground.
+	 */
+	private void addActivities(JPanel p, Map<String, Long> beforeKc,
+		Map<String, Long> earliestKc, Map<String, Long> nowKc, boolean live,
+		java.time.LocalDate kcsSince)
+	{
+		Map<String, Long> standing = live ? plugin.killCounts() : nowKc;
+		Map<String, Long> gained = HistoryLog.gained(beforeKc, earliestKc, nowKc);
+		List<Map.Entry<String, Long>> rows = new ArrayList<>();
+		for (Map.Entry<String, Long> e : standing.entrySet())
+		{
+			if (isActivityPage(e.getKey()))
+			{
+				rows.add(e);
+			}
+		}
+		if (rows.isEmpty())
+		{
+			p.add(note("No activity has a count on the record yet."
+				+ (kcsSince != null ? " Counts begin on " + kcsSince.format(FULL_DAY) + "." : "")));
+			return;
+		}
+		rows.sort((a, b) ->
+		{
+			long ga = gained.getOrDefault(a.getKey(), 0L);
+			long gb = gained.getOrDefault(b.getKey(), 0L);
+			return ga != gb ? Long.compare(gb, ga) : Long.compare(b.getValue(), a.getValue());
+		});
+		addKcBoard(p, "Activities", "history:list:activities", rows, gained);
+	}
+
+	/**
+	 * Whether a collection log page is an activity rather than a monster. The
+	 * bundled taxonomy files every page under a tab; Minigames and Clues are the
+	 * activities, and where the taxonomy cannot be read the page names that end
+	 * in a treasure trail tier stand in, so the tab is never wholly empty.
+	 */
+	private boolean isActivityPage(String page)
+	{
+		Map<String, Map<String, List<String>>> tax = taxonomy(plugin.gson());
+		if (tax != null)
+		{
+			for (Map.Entry<String, Map<String, List<String>>> tab : tax.entrySet())
+			{
+				String name = tab.getKey().toLowerCase(Locale.ROOT);
+				if ((name.contains("minigame") || name.contains("clue"))
+					&& tab.getValue().containsKey(page))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		return page.toLowerCase(Locale.ROOT).contains("treasure trails");
+	}
+
+	// One counted thing: what it stands at, and what the period added.	// One counted thing: what it stands at, and what the period added.
 	private JPanel kcRow(String name, long standing, Long gained)
 	{
 		JPanel r = row(name, fmt(standing) + (gained != null ? "  +" + fmt(gained) : ""),
@@ -3869,16 +3931,10 @@ class ChroniclePanel extends PluginPanel
 		// measured to, so the three never read as an arithmetic that does not
 		// reach its own end: a live sheet standing past the closing line draws
 		// the standing and the movement, each as itself.
+		// The total level is not here: it has a tile of its own under the skill
+		// grid, where the whole sheet is already being read.
 		HistoryLog.Levels closed = stand.closed;
 		boolean paired = closed.drawn == opened.drawn;
-		long levels = closed.total - opened.total;
-		String total = fmt(stand.standing);
-		if (paired && levels > 0)
-		{
-			total = (stand.standing == closed.total ? fmt(opened.total) + " to " + total : total)
-				+ " · +" + fmt(levels);
-		}
-		card.add(row("Total level", total, null));
 		if (paired && closed.nines > opened.nines)
 		{
 			card.add(row("99s reached", fmt(closed.nines - opened.nines), null));
@@ -3933,7 +3989,8 @@ class ChroniclePanel extends PluginPanel
 	// The hiscores grid: every skill's level at the period's close and the
 	// period's gain. A skill that didn't move keeps its place and says nothing.
 	// The headline above it carries the totals.
-	private void addSkillGrid(JPanel p, List<Map.Entry<String, Long>> gains, SkillStand stand)
+	private void addSkillGrid(JPanel p, List<Map.Entry<String, Long>> gains, SkillStand stand,
+		HistoryLog.Levels opened)
 	{
 		Map<String, Long> gain = new LinkedHashMap<>();
 		for (Map.Entry<String, Long> g : gains)
@@ -3943,19 +4000,66 @@ class ChroniclePanel extends PluginPanel
 		List<net.runelite.api.Skill> order = stand.order;
 		Map<net.runelite.api.Skill, Long> levels = stand.levels;
 
-		JPanel grid = new JPanel(new GridLayout(0, 3, 2, 2));
+		// Two across, not three. At three a tile is 62px wide and the shortest
+		// thing that has to fit on it is the skill's own name: "Construction"
+		// alone wants 64. At two it is 95 and the icon, the levels, the name and
+		// the xp all sit down together.
+		JPanel grid = new JPanel(new GridLayout(0, 2, 2, 2));
 		grid.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
 		for (net.runelite.api.Skill sk : order)
 		{
-			grid.add(skillCell(sk, levels.get(sk), gain.get(sk.name().toLowerCase(Locale.ROOT))));
+			String key = sk.name().toLowerCase(Locale.ROOT);
+			Integer was = opened == null ? null : opened.of.get(key);
+			Long from = was == null ? null : Long.valueOf(was.longValue());
+			grid.add(skillCell(sk, levels.get(sk), gain.get(key), from));
 		}
 		p.add(grid);
+		p.add(vgap(3));
+		p.add(totalLevelTile(stand, opened));
 		p.add(vgap(6));
 	}
 
-	// One skill: its icon, the level it stands at, and the period's gain.
-	private JPanel skillCell(net.runelite.api.Skill sk, long level, Long gained)
+	/**
+	 * The whole sheet in one tile, under the grid rather than in it: with an odd
+	 * number of skills a twenty fifth cell would sit alone in a half empty row.
+	 */
+	private JPanel totalLevelTile(SkillStand stand, HistoryLog.Levels opened)
+	{
+		// The same reading the headline gave it: an opening is named beside the
+		// close only where that close is the figure the movement was measured
+		// to, so the three never read as an arithmetic that does not reach its
+		// own end, and ends that drew different skills are not compared at all.
+		HistoryLog.Levels shut = stand.closed;
+		boolean paired = opened != null && shut.drawn == opened.drawn;
+		long levels = opened == null ? 0 : shut.total - opened.total;
+		String figure = fmt(stand.standing);
+		if (paired && levels > 0)
+		{
+			figure = (stand.standing == shut.total
+				? fmt(opened.total) + " to " + figure : figure) + " · +" + fmt(levels);
+		}
+		JPanel cell = new JPanel(new BorderLayout(3, 0));
+		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		cell.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+		cell.setAlignmentX(Component.LEFT_ALIGNMENT);
+		cell.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+
+		JLabel name = new JLabel("Total level");
+		name.setFont(FontManager.getRunescapeSmallFont());
+		name.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+		cell.add(name, BorderLayout.WEST);
+
+		JLabel fig = new JLabel(figure, JLabel.RIGHT);
+		fig.setFont(FontManager.getRunescapeSmallFont());
+		fig.setForeground(paired && levels > 0 ? accent() : Color.WHITE);
+		cell.add(fig, BorderLayout.EAST);
+		return cell;
+	}
+
+	// One skill: its icon, where it began and where it ended, its name, and the
+	// period's gain.
+	private JPanel skillCell(net.runelite.api.Skill sk, long level, Long gained, Long from)
 	{
 		JPanel cell = new JPanel(new BorderLayout(3, 0));
 		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -3979,16 +4083,24 @@ class ChroniclePanel extends PluginPanel
 		}
 		cell.add(icon, BorderLayout.WEST);
 
-		JPanel text = new JPanel(new GridLayout(gained != null ? 2 : 1, 1));
+		JPanel text = new JPanel(new GridLayout(gained != null ? 3 : 2, 1));
 		text.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		JLabel lvl = new JLabel(level > 0 ? String.valueOf(level) : "-");
+		// where it began and where it ended, when it moved between them
+		boolean climbed = from != null && level > from;
+		JLabel lvl = new JLabel(level <= 0 ? "-"
+			: climbed ? fmt(from) + " to " + fmt(level) : String.valueOf(level));
 		lvl.setFont(FontManager.getRunescapeSmallFont());
-		// A skill that moved is lit; the rest stay quiet.
 		lvl.setForeground(gained != null ? Color.WHITE : ColorScheme.LIGHT_GRAY_COLOR.darker());
 		text.add(lvl);
+
+		JLabel name = new JLabel(StatRegistry.prettify(sk.name().toLowerCase(Locale.ROOT)));
+		name.setFont(FontManager.getRunescapeSmallFont());
+		name.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+		text.add(name);
+
 		if (gained != null)
 		{
-			JLabel g = new JLabel("+" + gp(gained));
+			JLabel g = new JLabel("+" + gp(gained) + " xp");
 			g.setFont(FontManager.getRunescapeSmallFont());
 			g.setForeground(accent());
 			text.add(g);
@@ -4017,7 +4129,41 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 
-	/** The periods the tab offers, widest first, as the list reads them. */
+	/**
+	 * The four readings of a period and the game sprite each wears. The ids are
+	 * the live sidebar tabs: RuneLite's own interfacestyles plugin overrides
+	 * exactly these four when it redresses the client.
+	 */
+	static final String[][] FACETS = {
+		{"Skills", "775"},        // SideiconsInterface.STATS, the bar chart
+		{"PvM", "774"},           // SideiconsInterface.COMBAT, the crossed swords
+		{"Activities", "1053"},   // SideiconsInterface.MINIGAMES, the red star
+		{"Trackers", "2309"},     // SideiconsInterface.CHARACTER_SUMMARY
+	};
+
+	private String histFacet = "Skills";
+
+	private final Map<Integer, javax.swing.ImageIcon> facetIcons = new LinkedHashMap<>();
+
+	// one sprite as a tab icon, or null where there is no cache to ask
+	private javax.swing.ImageIcon facetIcon(int spriteId)
+	{
+		return facetIcons.computeIfAbsent(spriteId, id ->
+		{
+			try
+			{
+				net.runelite.client.game.SpriteManager sm = plugin.sprites();
+				java.awt.image.BufferedImage img = sm == null ? null : sm.getSprite(id, 0);
+				return img == null ? null : new javax.swing.ImageIcon(img);
+			}
+			catch (RuntimeException e)
+			{
+				return null;
+			}
+		});
+	}
+
+	/** The periods the tab offers, widest first, as the list reads them. */	/** The periods the tab offers, widest first, as the list reads them. */
 	static final String[] PERIODS = {"Lifetime", "Year", "Month", "Week", "Day"};
 
 	// the choices, built fresh so the tick sits on whichever is current
@@ -4052,9 +4198,6 @@ class ChroniclePanel extends PluginPanel
 		// on screen while the period's figures move under them
 		JPanel controls = column();
 
-		// granularity pills
-		// three across, two rows. Five in one row gives each pill 31px of text
-		// and "Lifetime" needs 39, so it clipped.
 		// The period, one line that opens on the choices. Five of them across a
 		// 225px panel left the longest word 31px to say itself in and it needs
 		// 39, and a list has no such trouble however many there come to be.
@@ -4065,23 +4208,38 @@ class ChroniclePanel extends PluginPanel
 		controls.add(picker);
 		controls.add(vgap(3));
 
-		JPanel lens = new JPanel(new GridLayout(1, 2, 3, 3));
+		// The four readings of a period, as the game's own sidebar icons. The
+		// words do not fit: "Activities" wants 48px of a 42px cell and
+		// "Trackers" 43, so a strip of words clips two of the four. Where the
+		// sprite cache is not there to ask, the words stand in anyway, since a
+		// blank strip is worse than a clipped one.
+		JPanel lens = new JPanel(new GridLayout(1, FACETS.length, 3, 3));
 		lens.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		// "Kills" lists every monster the record counted, not bosses alone; the
-		// field keeps its old name.
-		for (String which : new String[]{"Skills", "Kills"})
+		for (String[] facet : FACETS)
 		{
-			boolean on = "Kills".equals(which) == histBosses;
-			JLabel t = new JLabel(which, JLabel.CENTER);
+			boolean on = facet[0].equals(histFacet);
+			JLabel t = new JLabel("", JLabel.CENTER);
+			javax.swing.ImageIcon icon = facetIcon(Integer.parseInt(facet[1]));
+			if (icon != null)
+			{
+				t.setIcon(icon);
+			}
+			else
+			{
+				t.setText(facet[0]);
+			}
+			t.setToolTipText(facet[0]);
 			t.setOpaque(true);
-			t.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+			t.setBorder(BorderFactory.createEmptyBorder(3, 4, 3, 4));
 			t.setFont(FontManager.getRunescapeSmallFont());
-			t.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			t.setBackground(on ? ColorScheme.DARK_GRAY_HOVER_COLOR
+				: ColorScheme.DARKER_GRAY_COLOR);
 			t.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+			t.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 			t.addMouseListener(clicker(() ->
 			{
-				histBosses = "Kills".equals(which);
-				rebuild();
+				histFacet = facet[0];
+				rebuildInPlace();
 			}));
 			lens.add(t);
 		}
@@ -4507,20 +4665,30 @@ class ChroniclePanel extends PluginPanel
 				p.add(vgap(5));
 			}
 
-			if (histBosses)
+			// Four readings of the one period. Each owns its own figures, so a
+			// reader looking for a skill is not scrolling past a boss board to
+			// find it.
+			if ("PvM".equals(histFacet))
 			{
 				addKillCounts(p, opening.kcs, earliest.kcs, closing.kcs, live,
 					firstCarryingKcs(hist));
 			}
+			else if ("Activities".equals(histFacet))
+			{
+				addActivities(p, opening.kcs, earliest.kcs, closing.kcs, live,
+					firstCarryingKcs(hist));
+			}
+			else if ("Trackers".equals(histFacet))
+			{
+				if (!progress.groups().isEmpty() || !gains.isEmpty())
+				{
+					p.add(trackedProgress(progress, gains, named));
+					p.add(vgap(5));
+				}
+			}
 			else
 			{
-				addSkillGrid(p, gains, stand);
-			}
-
-			if (!progress.groups().isEmpty() || !gains.isEmpty())
-			{
-				p.add(trackedProgress(progress, gains, named));
-				p.add(vgap(5));
+				addSkillGrid(p, gains, stand, opened);
 			}
 
 			if (!milestones.isEmpty())

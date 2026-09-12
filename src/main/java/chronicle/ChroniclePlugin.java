@@ -112,6 +112,9 @@ public class ChroniclePlugin extends Plugin
 	@Inject
 	private net.runelite.client.game.SkillIconManager skillIcons;
 
+	@Inject
+	private net.runelite.client.game.SpriteManager sprites;
+
 	// Injected: Hub review rejects a plugin that builds its own Gson.
 	@Inject
 	private com.google.gson.Gson gson;
@@ -915,6 +918,13 @@ public class ChroniclePlugin extends Plugin
 	net.runelite.client.game.SkillIconManager skillIcons()
 	{
 		return skillIcons;
+	}
+
+	// The game's own sprites, for the History tab's facet strip. Null in a dev
+	// client with no cache, which the panel falls back from.
+	net.runelite.client.game.SpriteManager sprites()
+	{
+		return sprites;
 	}
 
 	// Everything counted, keyed as the History spine stores it: the collection

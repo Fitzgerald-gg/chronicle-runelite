@@ -237,9 +237,9 @@ public class PanelPreviewTest
 			stub.feed = stub.historyFeed != null ? stub.historyFeed : feed;
 			regatherHistory(panel);
 		}
-		set(panel, "histBosses", true);
+		set(panel, "histFacet", "PvM");
 		shoot(panel, out, prefix + "-history-bosses", "HISTORY");
-		set(panel, "histBosses", false);
+		set(panel, "histFacet", "Skills");
 		for (String g : new String[]{"Day", "Week", "Month", "Year"})
 		{
 			set(panel, "histGranularity", g);
@@ -1363,6 +1363,12 @@ public class PanelPreviewTest
 		final Map<String, Long> ledgerKcs = new LinkedHashMap<>();
 
 		final Map<String, Long> kcs = new LinkedHashMap<>();
+
+		@Override
+		net.runelite.client.game.SpriteManager sprites()
+		{
+			return null;   // headless: the facet strip falls back to its words
+		}
 
 		@Override
 		net.runelite.client.game.SkillIconManager skillIcons()
