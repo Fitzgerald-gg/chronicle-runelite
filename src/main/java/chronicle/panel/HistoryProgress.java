@@ -54,6 +54,11 @@ import java.util.function.Predicate;
  * units and so carries no figure. Summary keys, hidden keys and peak keys
  * (whose delta means nothing) never file.
  *
+ * <p>{@link #groups()} files the same rows and sections into the groups the
+ * History tab draws: every summary key belongs to exactly one group and every
+ * section to exactly one, "The rest" taking whatever the named groups do not
+ * claim, so no counter the plugin tracks is out of reach.
+ *
  * <p>Some summary figures may be read off the journal itself instead of the
  * spine (the slayer lines, and the feed's dated entries counted by type): the
  * caller hands them in as retroactive figures, and a key handed in replaces
@@ -203,6 +208,88 @@ public final class HistoryProgress
 		}
 	}
 
+	/**
+	 * One group of the History tab: the figures a reader files under one head,
+	 * and the sections that open under them.
+	 *
+	 * <p>The rows are the summary figures the group claims, in the group's own
+	 * order, with a family's sectionless rows (Combat's hits and misses,
+	 * Living's vials) run on after them rather than folded away behind a head
+	 * named after the family the group already names. The sections are the
+	 * registry's own, each still carrying its family so a fold keeps the key it
+	 * had.
+	 */
+	public static final class Group
+	{
+		private final String name;
+		private final List<Row> rows;
+		private final List<Section> sections;
+
+		Group(String name, List<Row> rows, List<Section> sections)
+		{
+			this.name = name;
+			this.rows = Collections.unmodifiableList(rows);
+			this.sections = Collections.unmodifiableList(sections);
+		}
+
+		/** The group's name, one of {@link HistoryProgress#GROUPS}. */
+		public String name()
+		{
+			return name;
+		}
+
+		/** The group's own figures, in the group's fixed order. */
+		public List<Row> rows()
+		{
+			return rows;
+		}
+
+		/** The folds under them, in the order {@link HistoryProgress#sections()} gives. */
+		public List<Section> sections()
+		{
+			return sections;
+		}
+	}
+
+	/**
+	 * The groups the History tab draws, in order. A group is drawn only when it
+	 * holds something, and every summary key and every section files under
+	 * exactly one of them, so nothing the plugin tracks is unreachable.
+	 */
+	public static final String[] GROUPS = {
+		"Experience", "Combat", "Loot", "Skilling", "Upkeep", "Travel", "Achievement",
+		"The rest"
+	};
+
+	// which group each summary key files under, and the order the group reads
+	// its rows in. Every key in SUMMARY_KEYS that summary() draws a row for is
+	// here exactly once, the derived rows (dropsTaken, lootKept) included;
+	// lootLeftValue and lootLeftKills are read into other rows and draw none.
+	private static final Map<String, List<String>> GROUP_ROWS = new LinkedHashMap<>();
+
+	static
+	{
+		// levels stand under Experience as the feed's dated count, beside the
+		// per-skill gains the tab ranks there
+		GROUP_ROWS.put("Experience", Collections.singletonList("levelsGained"));
+		GROUP_ROWS.put("Combat", Arrays.asList("kills", "slayerTasksCompleted", "slayerKills",
+			"damageDealt", "damageDealtMelee", "damageDealtRanged", "damageDealtMagic",
+			"deaths"));
+		GROUP_ROWS.put("Loot", Arrays.asList("dropsReceived", "dropsTaken", "lootLeftCount",
+			"lootValue", "lootKept", "petsObtained", "clogSlotsObtained"));
+		GROUP_ROWS.put("Skilling", Collections.<String>emptyList());
+		GROUP_ROWS.put("Upkeep", Collections.singletonList("consumedValue"));
+		GROUP_ROWS.put("Travel", Arrays.asList("distanceRan", "distanceWalked"));
+		GROUP_ROWS.put("Achievement", Arrays.asList("questsCompleted", "diariesCompleted",
+			"combatAchievements"));
+		GROUP_ROWS.put("The rest", Arrays.asList("resourcesGatheredValue", "itemsDroppedValue",
+			"coinsFromAlchemy", "coinsSpentAtShops", "coinsEarnedAtShops"));
+	}
+
+	// the Ledger & Roads sections that are travel rather than ledger
+	private static final Set<String> TRAVEL_SECTIONS =
+		new HashSet<>(Arrays.asList("Teleports", "Destinations", "On foot"));
+
 	// the counter keys the summary consumes, in summary order. "Drops taken" is
 	// derived from dropsReceived and lootLeftKills, "Left on the floor" reads
 	// lootLeftCount and lootLeftValue together, "Loot kept" is derived from
@@ -228,11 +315,13 @@ public final class HistoryProgress
 
 	private final List<Row> summary;
 	private final List<Section> sections;
+	private final List<Group> groups;
 
 	private HistoryProgress(List<Row> summary, List<Section> sections)
 	{
 		this.summary = Collections.unmodifiableList(summary);
 		this.sections = Collections.unmodifiableList(sections);
+		this.groups = Collections.unmodifiableList(grouped(summary, sections));
 	}
 
 	/** The headline figures, in their fixed order; only those above zero. */
@@ -245,6 +334,108 @@ public final class HistoryProgress
 	public List<Section> sections()
 	{
 		return sections;
+	}
+
+	/**
+	 * The same figures filed into the tab's groups, in {@link #GROUPS} order; a
+	 * group holding nothing is absent.
+	 */
+	public List<Group> groups()
+	{
+		return groups;
+	}
+
+	/** One group by name, or null when the period put nothing in it. */
+	public Group group(String name)
+	{
+		for (Group g : groups)
+		{
+			if (g.name().equals(name))
+			{
+				return g;
+			}
+		}
+		return null;
+	}
+
+	/** Which group a section files under; the tab draws it there. */
+	public static String groupOf(Section s)
+	{
+		switch (s.family())
+		{
+			case "Combat":
+				return "Combat";
+			case "Skilling":
+				return "Skilling";
+			case "Living":
+				return "Upkeep";
+			default:
+				return TRAVEL_SECTIONS.contains(s.name()) ? "Travel" : "The rest";
+		}
+	}
+
+	/** Which group a summary key files under, or null when no row draws it. */
+	public static String groupOfKey(String key)
+	{
+		for (Map.Entry<String, List<String>> e : GROUP_ROWS.entrySet())
+		{
+			if (e.getValue().contains(key))
+			{
+				return e.getKey();
+			}
+		}
+		return null;
+	}
+
+	// The summary rows and the sections, filed by group. A family's flat list
+	// (the section named after its own family) is run on as the group's rows
+	// rather than folded behind a head repeating the group's name; it holds no
+	// floor, so there is never a remainder to lose, and the guard keeps the
+	// fold if one ever appears.
+	private static List<Group> grouped(List<Row> summary, List<Section> sections)
+	{
+		Map<String, Row> byKey = new LinkedHashMap<>();
+		for (Row r : summary)
+		{
+			byKey.put(r.key(), r);
+		}
+		Map<String, List<Row>> rows = new LinkedHashMap<>();
+		Map<String, List<Section>> secs = new LinkedHashMap<>();
+		for (String g : GROUPS)
+		{
+			List<Row> mine = new ArrayList<>();
+			for (String key : GROUP_ROWS.get(g))
+			{
+				Row r = byKey.get(key);
+				if (r != null)
+				{
+					mine.add(r);
+				}
+			}
+			rows.put(g, mine);
+			secs.put(g, new ArrayList<>());
+		}
+		for (Section s : sections)
+		{
+			String g = groupOf(s);
+			if (s.name().equals(s.family()) && s.ghost() == 0)
+			{
+				rows.get(g).addAll(s.rows());
+			}
+			else
+			{
+				secs.get(g).add(s);
+			}
+		}
+		List<Group> out = new ArrayList<>();
+		for (String g : GROUPS)
+		{
+			if (!rows.get(g).isEmpty() || !secs.get(g).isEmpty())
+			{
+				out.add(new Group(g, rows.get(g), secs.get(g)));
+			}
+		}
+		return out;
 	}
 
 	/** Whether the summary consumes a counter key, keeping it out of the sections. */

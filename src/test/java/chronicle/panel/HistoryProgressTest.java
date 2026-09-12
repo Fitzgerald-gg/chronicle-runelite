@@ -76,6 +76,26 @@ public class HistoryProgressTest
 		return null;
 	}
 
+	private static List<String> names(HistoryProgress p)
+	{
+		List<String> out = new ArrayList<>();
+		for (HistoryProgress.Group g : p.groups())
+		{
+			out.add(g.name());
+		}
+		return out;
+	}
+
+	private static List<String> sectionNames(List<HistoryProgress.Section> sections)
+	{
+		List<String> out = new ArrayList<>();
+		for (HistoryProgress.Section s : sections)
+		{
+			out.add(s.name());
+		}
+		return out;
+	}
+
 	private static List<String> sectionNames(HistoryProgress p)
 	{
 		List<String> out = new ArrayList<>();
@@ -569,5 +589,127 @@ public class HistoryProgressTest
 		HistoryProgress nulls = HistoryProgress.of(null, null);
 		assertTrue(nulls.summary().isEmpty());
 		assertTrue(nulls.sections().isEmpty());
+	}
+	@Test
+	public void everySummaryKeyFilesUnderExactlyOneGroup()
+	{
+		HistoryProgress p = of(everything());
+		// nothing the summary draws is out of reach, and nothing is drawn twice
+		List<String> filed = new ArrayList<>();
+		for (HistoryProgress.Group g : p.groups())
+		{
+			for (HistoryProgress.Row r : g.rows())
+			{
+				assertFalse(r.key() + " files twice", filed.contains(r.key()));
+				filed.add(r.key());
+			}
+		}
+		List<String> summary = new ArrayList<>();
+		for (HistoryProgress.Row r : p.summary())
+		{
+			summary.add(r.key());
+		}
+		Collections.sort(filed);
+		Collections.sort(summary);
+		assertEquals(summary, filed);
+		// and each names the group it files under
+		for (HistoryProgress.Group g : p.groups())
+		{
+			for (HistoryProgress.Row r : g.rows())
+			{
+				assertEquals(r.key(), g.name(), HistoryProgress.groupOfKey(r.key()));
+			}
+		}
+	}
+
+	@Test
+	public void theGroupsReadInTheirFixedOrderAndHoldTheirOwn()
+	{
+		Map<String, Long> all = everything();
+		all.put("fishCaught", 50L);   // the one group the summary keys cannot fill
+		HistoryProgress p = of(all);
+		assertEquals(Arrays.asList(HistoryProgress.GROUPS), names(p));
+		assertEquals(Collections.singletonList("Levels gained"),
+			labels(p.group("Experience").rows()));
+		assertEquals(Arrays.asList("Kills", "Slayer tasks completed", "Slayer kills",
+			"Damage dealt", "· by melee", "· by ranged", "· by magic", "Deaths"),
+			labels(p.group("Combat").rows()));
+		assertEquals(Arrays.asList("Drops received", "Drops taken", "Left on the floor",
+			"Loot value", "Loot kept", "Pets", "Collection log slots"),
+			labels(p.group("Loot").rows()));
+		assertEquals(Collections.singletonList("Consumed value"),
+			labels(p.group("Upkeep").rows()));
+		assertEquals(Arrays.asList("Distance run", "Distance walked"),
+			labels(p.group("Travel").rows()));
+		assertEquals(Arrays.asList("Quests completed", "Diaries completed",
+			"Combat achievements"), labels(p.group("Achievement").rows()));
+		assertEquals(Arrays.asList("Gathered", "Value dropped", "Coins from alchemy",
+			"Spent at shops", "Earned at shops"), labels(p.group("The rest").rows()));
+	}
+
+	@Test
+	public void aGroupWithNothingInItIsAbsent()
+	{
+		HistoryProgress p = of(map("kills", 12, "fishCaught", 50));
+		assertEquals(Arrays.asList("Combat", "Skilling"), names(p));
+		assertNull(p.group("Loot"));
+		assertNull(p.group("The rest"));
+		assertTrue(HistoryProgress.of(map(), StatRegistry::isGp).groups().isEmpty());
+	}
+
+	@Test
+	public void everySectionFilesUnderExactlyOneGroup()
+	{
+		HistoryProgress p = of(map(
+			"damageTaken", 40_000, "thrallsSummoned", 20, "lesserGhostlyThrallsSummoned", 12,
+			"fishCaught", 50, "sharkCaught", 30,
+			"foodEaten", 20, "sharkEaten", 16, "vialsShattered", 3,
+			"untakenLootValue", 900_000, "examines", 30,
+			"teleportsTotal", 60, "teleportsVarrock", 18, "tilesRan", 40_000));
+		// every section the model files is inside one group, and the group is
+		// the one the model names for it
+		int filed = 0;
+		for (HistoryProgress.Group g : p.groups())
+		{
+			for (HistoryProgress.Section s : g.sections())
+			{
+				assertEquals(s.name(), g.name(), HistoryProgress.groupOf(s));
+				filed++;
+			}
+		}
+		// Combat's and Living's flat lists are rows of their group rather than
+		// sections, so two of the model's sections file as rows instead
+		assertEquals(p.sections().size() - 2, filed);
+		assertEquals(Collections.singletonList("Thralls"),
+			sectionNames(p.group("Combat").sections()));
+		assertEquals(Collections.singletonList("Fishing"),
+			sectionNames(p.group("Skilling").sections()));
+		assertEquals(Collections.singletonList("Food"),
+			sectionNames(p.group("Upkeep").sections()));
+		assertEquals(Arrays.asList("On foot", "Teleports", "Destinations"),
+			sectionNames(p.group("Travel").sections()));
+		assertEquals(Arrays.asList("The purse", "Odds & ends"),
+			sectionNames(p.group("The rest").sections()));
+	}
+
+	@Test
+	public void aFamilysFlatListRunsOnAsItsGroupsRows()
+	{
+		HistoryProgress p = of(map(
+			"damageDealt", 60_000, "damageTaken", 40_000, "hitsMissed", 600,
+			"consumedValue", 90_000, "vialsShattered", 3, "foodEaten", 20));
+		// the flat rows follow the group's own figures, biggest first, and no
+		// section repeats the family's name
+		assertEquals(Arrays.asList("Damage dealt", "Damage taken", "Hits missed"),
+			labels(p.group("Combat").rows()));
+		assertTrue(p.group("Combat").sections().isEmpty());
+		assertEquals(Arrays.asList("Consumed value", "Vials shattered"),
+			labels(p.group("Upkeep").rows()));
+		assertEquals(Collections.singletonList("Food"),
+			sectionNames(p.group("Upkeep").sections()));
+		// while the model's own sections are unchanged: the flat list is still
+		// a section there, for the Stats tab's sake
+		assertTrue(sectionNames(p.sections()).contains("Combat"));
+		assertTrue(sectionNames(p.sections()).contains("Living"));
 	}
 }

@@ -142,6 +142,72 @@ class HistoryLog
 		final Map<String, Long> skills = new java.util.HashMap<>();
 		final Map<String, Long> counters = new java.util.HashMap<>();
 		final Map<String, Long> kcs = new java.util.HashMap<>();
+		/**
+		 * A complete snapshot: the line carries "overall" and the skills it
+		 * lists sum exactly to it, so a skill it does not list stood at zero
+		 * that day. A line with no overall, or one whose parts do not add up to
+		 * the overall it carries, speaks only for the skills it names. Derived
+		 * as the line is parsed; the stored format carries no such field.
+		 */
+		boolean complete;
+	}
+
+	// Whether the skills a line lists account for the overall it carries.
+	private static boolean whole(Map<String, Long> skills)
+	{
+		Long overall = skills.get("overall");
+		if (overall == null)
+		{
+			return false;
+		}
+		long sum = 0;
+		for (Map.Entry<String, Long> e : skills.entrySet())
+		{
+			if (!"overall".equals(e.getKey()) && e.getValue() != null)
+			{
+				sum += e.getValue();
+			}
+		}
+		return sum == overall;
+	}
+
+	/**
+	 * The state standing on {@code on}: every line dated up to and including it,
+	 * applied in date order. A complete snapshot replaces the skills wholly, a
+	 * skill it does not list having been at zero that day, so every skill the
+	 * record had carried by then is written down at zero and the line's own
+	 * figures stand over them. A partial line merges instead: a skill it does not
+	 * list keeps the value carried to it. Counters and kill counts always merge,
+	 * being cumulative. A key no line has recorded by then stays absent, and the
+	 * state says whether it rests on a complete snapshot, which is what makes an
+	 * absent skill readable as zero rather than as silence.
+	 *
+	 * <p>A fresh state, never one of the spine's own baselines: the caller may
+	 * hold it as long as it likes.
+	 */
+	static Baseline stateAt(java.util.TreeMap<LocalDate, Baseline> spine, LocalDate on)
+	{
+		Baseline out = new Baseline();
+		if (spine == null || on == null)
+		{
+			return out;
+		}
+		for (Baseline b : spine.headMap(on, true).values())
+		{
+			if (b == null)
+			{
+				continue;
+			}
+			if (b.complete)
+			{
+				out.skills.replaceAll((key, value) -> 0L);
+				out.complete = true;
+			}
+			out.skills.putAll(b.skills);
+			out.counters.putAll(b.counters);
+			out.kcs.putAll(b.kcs);
+		}
+		return out;
 	}
 
 	/**
@@ -230,6 +296,19 @@ class HistoryLog
 	static Map<String, Long> gained(Map<String, Long> start, Map<String, Long> earliest,
 		Map<String, Long> end)
 	{
+		return gained(start, earliest, end, false);
+	}
+
+	/**
+	 * The same, measured from a state that rests on a complete snapshot: a key
+	 * the start side lacks was at zero there, so it measures its whole standing
+	 * figure. Only skills are read this way. A counter or a kill count absent
+	 * from a complete line was never recorded rather than zero, and keeps the
+	 * earliest-recorded base.
+	 */
+	static Map<String, Long> gained(Map<String, Long> start, Map<String, Long> earliest,
+		Map<String, Long> end, boolean startComplete)
+	{
 		Map<String, Long> out = new java.util.LinkedHashMap<>();
 		if (end == null)
 		{
@@ -242,6 +321,10 @@ class HistoryLog
 				continue;
 			}
 			Long base = start != null ? start.get(e.getKey()) : null;
+			if (base == null && startComplete)
+			{
+				base = 0L;
+			}
 			if (base == null && earliest != null)
 			{
 				base = earliest.get(e.getKey());
@@ -254,6 +337,71 @@ class HistoryLog
 			if (d > 0)
 			{
 				out.put(e.getKey(), d);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * The levels a state draws: one per skill asked for, the total they sum to,
+	 * how many drew a level at all and how many stand at 99. A level of 0 is a
+	 * skill the state cannot speak for.
+	 */
+	static final class Levels
+	{
+		final Map<String, Integer> of = new java.util.LinkedHashMap<>();
+		int total;
+		int drawn;
+		int nines;
+	}
+
+	// The one skill no account can stand below: a new character is made at
+	// 1,154 hitpoints xp, level 10. PaceBook.levelAt stays the pure curve,
+	// since its own next-level arithmetic needs it unclamped.
+	private static final String HITPOINTS = "hitpoints";
+	private static final int HITPOINTS_FLOOR = 10;
+
+	/**
+	 * Read {@code skills} off {@code state}, in the order asked for. A skill the
+	 * state carries draws the level its xp has reached. A skill it does not
+	 * carry draws level 1 when the state rests on a complete snapshot: a
+	 * complete line lists every skill that had any xp at all, so one no line
+	 * ever listed stood at zero, and zero xp is level 1. The total then counts
+	 * every skill in the game, which is how the site reads it. On a record of
+	 * partial lines alone the skill draws nothing, absence there being silence
+	 * rather than zero.
+	 *
+	 * <p>Hitpoints alone has a floor. Every account is made at 1,154 hitpoints
+	 * xp, which is level 10, so a state reading below that is reading below the
+	 * game's own minimum: an imported line carrying a rounded figure, or a
+	 * complete line omitting hitpoints, which says zero xp and is the same
+	 * impossibility. Wherever the state speaks for hitpoints at all it draws
+	 * 10 at the least, which is what the site publishes.
+	 */
+	static Levels levels(Baseline state, java.util.List<String> skills)
+	{
+		Levels out = new Levels();
+		if (state == null || skills == null)
+		{
+			return out;
+		}
+		for (String key : skills)
+		{
+			Long xp = state.skills.get(key);
+			int level = xp != null ? PaceBook.levelAt(xp) : state.complete ? 1 : 0;
+			if (HITPOINTS.equals(key) && level > 0)
+			{
+				level = Math.max(HITPOINTS_FLOOR, level);
+			}
+			out.of.put(key, level);
+			out.total += level;
+			if (level > 0)
+			{
+				out.drawn++;
+			}
+			if (level >= 99)
+			{
+				out.nines++;
 			}
 		}
 		return out;
@@ -316,11 +464,19 @@ class HistoryLog
 	}
 
 	/**
-	 * Rewrite the spine keeping one line per date, the last. Only touches a file
-	 * that actually repeats a date, which older builds produced by appending at
-	 * login, rollover and logout. Writes a sibling first and renames over the top,
-	 * so an interrupted compaction leaves the original standing. Returns the number
-	 * of lines dropped.
+	 * Rewrite the spine keeping one line per date, the last, in date order. Only
+	 * touches a file that repeats a date, which older builds produced by
+	 * appending at login, rollover and logout, or one whose dates are out of
+	 * order, which an import leaves behind. Writes a sibling first and renames
+	 * over the top, so an interrupted compaction leaves the original standing.
+	 * A line's own content is never touched, only its place in the file.
+	 * Returns the number of lines dropped.
+	 *
+	 * <p>A rewrite can only write back what it could read, so a file holding a
+	 * line this cannot parse is left standing: a torn write or a hand-edited
+	 * line would be destroyed by the rename, and the spine is the only copy of
+	 * the record. The reader skips such a line and the file still reads; the
+	 * repeated dates it also holds cost nothing but their bytes.
 	 */
 	synchronized int compact(File dir, String rsn)
 	{
@@ -333,8 +489,12 @@ class HistoryLog
 		{
 			return 0;
 		}
-		java.util.LinkedHashMap<String, String> keep = new java.util.LinkedHashMap<>();
+		java.util.TreeMap<String, String> keep = new java.util.TreeMap<>();
 		int seen = 0;
+		int unreadable = 0;
+		// ISO dates sort as text, so the map's own order is the calendar's.
+		String previous = null;
+		boolean ordered = true;
 		try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(
 			new java.io.FileInputStream(f), StandardCharsets.UTF_8)))
 		{
@@ -353,13 +513,20 @@ class HistoryLog
 				}
 				catch (RuntimeException torn)
 				{
-					continue;   // same torn line the reader skips
+					unreadable++;   // same torn line the reader skips
+					continue;
 				}
 				if (date == null)
 				{
+					unreadable++;   // a line with no day has no place to be put
 					continue;
 				}
 				seen++;
+				if (previous != null && date.compareTo(previous) < 0)
+				{
+					ordered = false;
+				}
+				previous = date;
 				keep.put(date, line);   // last for a date wins, as the reader has it
 			}
 		}
@@ -369,18 +536,28 @@ class HistoryLog
 			return 0;
 		}
 		int dropped = seen - keep.size();
-		if (dropped <= 0)
+		if (dropped <= 0 && ordered)
 		{
 			return 0;
 		}
+		if (unreadable > 0)
+		{
+			log.debug("history spine: {} lines this cannot parse, left as it stands", unreadable);
+			return 0;
+		}
 		File tmp = new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX + ".compact");
-		try (Writer w = new OutputStreamWriter(new FileOutputStream(tmp), StandardCharsets.UTF_8))
+		try (FileOutputStream out = new FileOutputStream(tmp);
+			Writer w = new OutputStreamWriter(out, StandardCharsets.UTF_8))
 		{
 			for (String line : keep.values())
 			{
 				w.write(line);
 				w.write('\n');
 			}
+			// on the platter before the rename, or a crash between the two
+			// leaves the record standing as an empty file
+			w.flush();
+			out.getFD().sync();
 		}
 		catch (Exception e)
 		{
@@ -397,7 +574,8 @@ class HistoryLog
 			log.debug("history compaction rename failed", e);
 			return 0;
 		}
-		log.debug("history spine: dropped {} repeated day lines", dropped);
+		log.debug("history spine: dropped {} repeated day lines, {} dates in order",
+			dropped, keep.size());
 		return dropped;
 	}
 
@@ -427,6 +605,7 @@ class HistoryLog
 					fill(o, "skills", b.skills);
 					fill(o, "counters", b.counters);
 					fill(o, "kcs", b.kcs);
+					b.complete = whole(b.skills);
 					out.put(date, b);   // later lines for a date overwrite: last wins
 				}
 				catch (RuntimeException torn)

@@ -253,13 +253,43 @@ public class PanelPreviewTest
 			shoot(panel, out, prefix + "-history-" + g.toLowerCase(), "HISTORY");
 		}
 		set(panel, "histCursor", LocalDate.now());
-		// one tracked-progress fold open: its rows and the leftover "Other" only
-		// exist in this state, and the folds are keyed apart from the Stats tab's.
-		// Cooking holds two verbs, so each row names its own.
+		// The groups open, each showing a level of the shape the shut shots
+		// cannot: a group's own figures, a figure opened to the names the
+		// journal holds for it, a section reconciling to its floor with the
+		// leftover "Other", and the ranked per-skill gains. Cooking holds two
+		// verbs, so each row there names its own. The folds are keyed apart
+		// from the Stats tab's.
 		set(panel, "histGranularity", "Week");
-		expandSection(panel, "history:Skilling:Cooking");
+		expandSection(panel, "history:Experience");
+		expandSection(panel, "history:Combat");
+		expandSection(panel, "history:list:slayerTasksCompleted");
+		expandSection(panel, "history:Loot");
+		expandSection(panel, "history:list:clogSlotsObtained");
 		shoot(panel, out, prefix + "-history-progress-open", "HISTORY");
 		collapseAll(panel);
+		expandSection(panel, "history:Skilling");
+		expandSection(panel, "history:Skilling:Cooking");
+		expandSection(panel, "history:Upkeep");
+		expandSection(panel, "history:Living:Potions");
+		expandSection(panel, "history:Travel");
+		expandSection(panel, "history:Ledger & Roads:Teleports");
+		expandSection(panel, "history:Achievement");
+		expandSection(panel, "history:The rest");
+		shoot(panel, out, prefix + "-history-groups-open", "HISTORY");
+		collapseAll(panel);
+		// The year before, with its groups open: the window the tab steps back
+		// into holds longer lists, and their "Show N more" tails only exist
+		// there.
+		set(panel, "histGranularity", "Year");
+		set(panel, "histCursor", LocalDate.now().withDayOfYear(1).minusDays(1));
+		expandSection(panel, "history:Experience");
+		expandSection(panel, "history:list:levelsGained");
+		expandSection(panel, "history:Loot");
+		expandSection(panel, "history:list:clogSlotsObtained");
+		shoot(panel, out, prefix + "-history-year-open", "HISTORY");
+		collapseAll(panel);
+		set(panel, "histCursor", LocalDate.now());
+		set(panel, "histGranularity", "Week");
 		if (grown)
 		{
 			stub.journey = journey;
@@ -518,6 +548,16 @@ public class PanelPreviewTest
 		s.clogFinished = 412;
 		s.clogAvailable = 1_568;
 
+		// What the ledger and the log count between them, a few kills past the
+		// spine's last line: the History tab's Kills lens reads this on a period
+		// that reaches today, and the spine's own counts on any earlier one.
+		// Nechryael is the ledger's alone, so it stands apart from the log's
+		// pages there.
+		s.kcs.put("Abyssal demons", 4_425L);
+		s.kcs.put("Zulrah", 552L);
+		s.kcs.put("Nechryael", 2_204L);
+		s.ledgerKcs.put("Nechryael", 2_204L);
+
 		// feed: a few days of milestones
 		long now = System.currentTimeMillis();
 		s.feed.add(feedEntry(now - 3_600_000L, "PET", "petName", "Abyssal orphan"));
@@ -538,24 +578,116 @@ public class PanelPreviewTest
 		// a level), inside the week, so every line the feed alone can draw is
 		// on the shot. The Slayer, Journal and Search surfaces draw the journey
 		// and the feed above, and their pictures stay put.
+		LocalDate day = LocalDate.now();
+		LocalDate priorYear = day.minusYears(1);
 		List<ChronicleApiClient.SlayerTask> grown = new ArrayList<>(tasks);
 		grown.add(1, new ChronicleApiClient.SlayerTask("Gargoyles", 152, 0, 3,
 			System.currentTimeMillis() / 1000.0 - 150_000, 612_113L, false));
 		grown.add(2, new ChronicleApiClient.SlayerTask("Bloodvelds", 188, 0, 0,
 			System.currentTimeMillis() / 1000.0 - 300_000, 402_113L, false));
+		// two closed today, so the Day shot has its own tasks, and eight through
+		// the year before, so the Year shot's list runs past its cap
+		grown.add(1, new ChronicleApiClient.SlayerTask("Dust devils", 174, 0, 2,
+			noon(day) / 1000.0, 512_004L, false));
+		grown.add(2, new ChronicleApiClient.SlayerTask("Kalphites", 141, 0, 0,
+			(noon(day) - 5_400_000L) / 1000.0, 204_113L, false));
+		String[] older = {"Aberrant spectres", "Black demons", "Dagannoth", "Fire giants",
+			"Greater demons", "Hellhounds", "Kurask", "Smoke devils"};
+		for (int i = 0; i < older.length; i++)
+		{
+			grown.add(new ChronicleApiClient.SlayerTask(older[i], 120 + i * 13L, 0, 0,
+				noon(priorYear.withMonth(2 + i).withDayOfMonth(9 + i)) / 1000.0,
+				180_000L + i * 41_000L, false));
+		}
 		s.historyJourney = new ChronicleApiClient.SlayerJourney(214, 48_231, 61_204_113L,
 			8_204_113L, grown);
+
+		// The feed the History tab reads. Every window the tab's shots step to
+		// (today, this week, this month, the year before) holds dated entries of
+		// its own, and one entry sits two and a half years back so the slice
+		// reaches past every one of those windows' starts: a slice that begins
+		// inside a window cannot say what it missed, and the tab draws no count
+		// and no list from it.
 		s.historyFeed = new ArrayList<>(s.feed);
-		s.historyFeed.add(feedEntry(now - 100_000_000L, "COLLECTION", "itemName", "Abyssal whip"));
-		s.historyFeed.add(feedEntry(now - 260_000_000L, "COLLECTION", "itemName", "Kraken tentacle"));
-		s.historyFeed.add(feedEntry(now - 700_000_000L, "COLLECTION", "itemName", "Dragon pickaxe"));
-		s.historyFeed.add(feedEntry(now - 40_000_000L, "DEATH", "killerName", "Vorkath"));
-		s.historyFeed.add(feedEntry(now - 50_000_000L, "PET", "petName", "Vorki"));
-		s.historyFeed.add(feedEntry(now - 60_000_000L, "QUEST", "questName", "Desert Treasure II"));
-		s.historyFeed.add(feedEntry(now - 70_000_000L, "DIARY", "area", "Kandarin"));
-		s.historyFeed.add(feedEntry(now - 80_000_000L, "COMBAT_ACHIEVEMENT", "task",
-			"Vorkath Speed-Chaser"));
-		s.historyFeed.add(feedEntry(now - 120_000_000L, "LEVEL", "skill", "Slayer"));
+		s.historyFeed.add(feedEntry(noon(day.minusYears(2).minusMonths(6)), "COLLECTION",
+			"itemName", "Rune platebody"));
+		// today
+		s.historyFeed.add(session(noon(day) - 3_600_000L, 95, 412_004, 31, 2_204_113L));
+		s.historyFeed.add(session(noon(day) - 18_000_000L, 42, 96_400, 12, 812_400L));
+		s.historyFeed.add(feedEntry(noon(day), "COLLECTION", "itemName", "Kraken tentacle"));
+		s.historyFeed.add(feedEntry(noon(day) - 1_800_000L, "LEVEL", "skill", "Slayer", "level", "92"));
+		s.historyFeed.add(feedEntry(noon(day) - 5_400_000L, "PET", "petName", "Pet kraken"));
+		s.historyFeed.add(feedEntry(noon(day) - 7_200_000L, "QUEST", "questName", "Dragon Slayer II"));
+		s.historyFeed.add(feedEntry(noon(day) - 9_000_000L, "DIARY", "area", "Karamja",
+			"difficulty", "Elite"));
+		s.historyFeed.add(feedEntry(noon(day) - 10_800_000L, "COMBAT_ACHIEVEMENT", "task",
+			"Vorkath Speed-Chaser", "tier", "MASTER"));
+		s.historyFeed.add(feedEntry(noon(day) - 12_600_000L, "DEATH", "killerName", "Vorkath"));
+		// the rest of the week
+		s.historyFeed.add(session(noon(day.minusDays(2)), 110, 604_113, 48, 3_112_400L));
+		s.historyFeed.add(session(noon(day.minusDays(4)), 65, 188_204, 19, 904_113L));
+		s.historyFeed.add(feedEntry(noon(day.minusDays(2)), "COLLECTION", "itemName",
+			"Abyssal dagger"));
+		s.historyFeed.add(feedEntry(noon(day.minusDays(3)), "LEVEL", "skill", "Runecraft",
+			"level", "88"));
+		s.historyFeed.add(feedEntry(noon(day.minusDays(3)), "COMBAT_ACHIEVEMENT", "task",
+			"Perfect Zulrah", "tier", "ELITE"));
+		s.historyFeed.add(feedEntry(noon(day.minusDays(5)), "PET", "petName", "Vorki"));
+		s.historyFeed.add(feedEntry(noon(day.minusDays(5)), "QUEST", "questName",
+			"Desert Treasure II"));
+		s.historyFeed.add(feedEntry(noon(day.minusDays(6)), "DEATH", "killerName", "Zulrah"));
+		// the rest of the month: the first of it, whatever day the suite runs on
+		s.historyFeed.add(session(noon(day.withDayOfMonth(1)), 140, 812_004, 61, 4_112_005L));
+		s.historyFeed.add(feedEntry(noon(day.withDayOfMonth(1)), "COLLECTION", "itemName",
+			"Dragon pickaxe"));
+		s.historyFeed.add(feedEntry(noon(day.withDayOfMonth(1)), "DIARY", "area", "Kandarin",
+			"difficulty", "Hard"));
+		// the year before, which the Year shot steps back into: enough of each
+		// to run a list past its cap and show the "Show N more" tail
+		String[] logSlots = {"Bandos chestplate", "Armadyl helmet", "Zamorakian spear",
+			"Saradomin sword", "Dragon warhammer", "Kraken tentacle", "Occult necklace"};
+		String[] levelled = {"Attack", "Hitpoints", "Mining", "Slayer", "Farming", "Herblore",
+			"Fletching", "Construction"};
+		for (int m = 1; m <= 12; m++)
+		{
+			LocalDate on = priorYear.withMonth(m).withDayOfMonth(14);
+			s.historyFeed.add(session(noon(on), 40 + m * 11L, 120_000L + m * 31_000L,
+				9 + m * 3L, 204_113L + m * 61_000L));
+			if (m <= logSlots.length)
+			{
+				s.historyFeed.add(feedEntry(noon(on) + 3_600_000L, "COLLECTION", "itemName",
+					logSlots[m - 1]));
+			}
+			if (m <= levelled.length)
+			{
+				s.historyFeed.add(feedEntry(noon(on) + 7_200_000L, "LEVEL", "skill", levelled[m - 1],
+					"level", String.valueOf(70 + m)));
+			}
+		}
+		s.historyFeed.add(feedEntry(noon(priorYear.withMonth(4).withDayOfMonth(2)), "PET",
+			"petName", "Tiny tempor"));
+		s.historyFeed.add(feedEntry(noon(priorYear.withMonth(9).withDayOfMonth(19)), "PET",
+			"petName", "Baby mole"));
+		s.historyFeed.add(feedEntry(noon(priorYear.withMonth(3).withDayOfMonth(5)), "QUEST",
+			"questName", "Song of the Elves"));
+		s.historyFeed.add(feedEntry(noon(priorYear.withMonth(6).withDayOfMonth(21)), "QUEST",
+			"questName", "Sins of the Father"));
+		s.historyFeed.add(feedEntry(noon(priorYear.withMonth(8).withDayOfMonth(8)), "DIARY",
+			"area", "Western Provinces", "difficulty", "Elite"));
+		s.historyFeed.add(feedEntry(noon(priorYear.withMonth(11).withDayOfMonth(3)), "DIARY",
+			"area", "Wilderness", "difficulty", "Hard"));
+		String[] cas = {"Zulrah Speed-Chaser", "Perfect Vorkath", "Kree'arra Adept",
+			"Hunllef Master"};
+		for (int i = 0; i < cas.length; i++)
+		{
+			s.historyFeed.add(feedEntry(noon(priorYear.withMonth(2 + i * 3).withDayOfMonth(17)),
+				"COMBAT_ACHIEVEMENT", "task", cas[i], "tier",
+				new String[]{"HARD", "ELITE", "MASTER", "GRANDMASTER"}[i]));
+		}
+		s.historyFeed.add(feedEntry(noon(priorYear.withMonth(5).withDayOfMonth(26)), "DEATH",
+			"killerName", "Commander Zilyana"));
+		s.historyFeed.add(feedEntry(noon(priorYear.withMonth(10).withDayOfMonth(12)), "DEATH",
+			"killerName", "Cerberus"));
 		// newest first, the order the journal keeps
 		s.historyFeed.sort((a, b) -> Long.compare(b.get("ts").getAsLong(), a.get("ts").getAsLong()));
 
@@ -617,6 +749,56 @@ public class PanelPreviewTest
 			LocalDate quarterEnd = lastYear.withMonth(3 * (q + 1));
 			s.history.put(quarterEnd.withDayOfMonth(quarterEnd.lengthOfMonth()), imported);
 		}
+		// The plugin's own lines through the back half of that year, monthly, so
+		// the Year shot the tab steps back into has counters and kill counts to
+		// group rather than skills alone. They begin in April, after the first
+		// imported quarter the year opens on, so that shot also carries the line
+		// saying what its counters are measured from.
+		for (int m = 4; m <= 12; m++)
+		{
+			HistoryLog.Baseline b = new HistoryLog.Baseline();
+			long step = m - 4;
+			b.counters.put("damageDealt", 900_000L + step * 61_000L);
+			b.counters.put("damageDealtMelee", 600_000L + step * 40_000L);
+			b.counters.put("damageDealtMagic", 200_000L + step * 14_000L);
+			b.counters.put("damageTaken", 400_000L + step * 28_000L);
+			b.counters.put("hitsMissed", 22_000L + step * 1_400L);
+			b.counters.put("deaths", 40L + step);
+			b.counters.put("kills", 40_000L + step * 1_900L);
+			b.counters.put("dropsReceived", 5_000L + step * 280L);
+			b.counters.put("lootValue", 38_000_000L + step * 2_100_000L);
+			b.counters.put("lootLeftCount", 70L + step * 6L);
+			b.counters.put("lootLeftValue", 400_000L + step * 41_000L);
+			b.counters.put("lootLeftKills", 55L + step * 4L);
+			b.counters.put("clogSlotsObtained", 360L + step * 2L);
+			b.counters.put("slayerTasksCompleted", 160L + step * 3L);
+			b.counters.put("fishCaught", 2_400L + step * 140L);
+			b.counters.put("sharkCaught", 1_500L + step * 90L);
+			b.counters.put("logsChopped", 5_600L + step * 310L);
+			b.counters.put("yewLogsChopped", 4_100L + step * 240L);
+			b.counters.put("foodEaten", 3_100L + step * 160L);
+			b.counters.put("sharkEaten", 2_400L + step * 130L);
+			b.counters.put("potionDoses", 3_800L + step * 210L);
+			b.counters.put("prayerDoses", 2_100L + step * 120L);
+			b.counters.put("vialsShattered", 600L + step * 24L);
+			b.counters.put("consumedValue", 1_100_000L + step * 92_000L);
+			b.counters.put("teleportsTotal", 700L + step * 38L);
+			b.counters.put("teleportsViaJewellery", 300L + step * 17L);
+			b.counters.put("teleportsCastleWars", 240L + step * 13L);
+			b.counters.put("distanceRan", 240_000L + step * 14_000L);
+			b.counters.put("distanceWalked", 120_000L + step * 7_000L);
+			b.counters.put("tilesRan", 560_000L + step * 31_000L);
+			b.counters.put("resourcesGatheredValue", 5_200_000L + step * 320_000L);
+			b.counters.put("resourcesDroppedValue", 410_000L + step * 22_000L);
+			b.counters.put("coinsFromAlchemy", 4_800_000L + step * 290_000L);
+			b.counters.put("coinsSpentAtShops", 520_000L + step * 38_000L);
+			b.counters.put("itemsDroppedValue", 700_000L + step * 44_000L);
+			b.counters.put("examines", 400L + step * 22L);
+			b.counters.put("cabbagesPicked", 30L + step * 2L);
+			b.kcs.put("Abyssal demons", 2_800L + step * 90L);
+			b.kcs.put("Zulrah", 380L + step * 8L);
+			s.history.put(lastYear.withMonth(m).withDayOfMonth(14), b);
+		}
 		long base = 13_204_113L;
 		for (int i = 35; i >= 0; i--)
 		{
@@ -663,6 +845,17 @@ public class PanelPreviewTest
 			b.counters.put("teleportsTotal", 1_100L + (35 - i) * 9L);
 			b.counters.put("teleportsViaJewellery", 500L + (35 - i) * 5L);
 			b.counters.put("teleportsCastleWars", 400L + (35 - i) * 4L);
+			b.counters.put("distanceRan", 400_000L + (35 - i) * 3_000L);
+			b.counters.put("distanceWalked", 200_000L + (35 - i) * 1_500L);
+			// the upkeep bill and the purse, so those two groups draw their own
+			// gp figures beside the counts
+			b.counters.put("consumedValue", 2_000_000L + (35 - i) * 18_000L);
+			b.counters.put("coinsFromAlchemy", 8_000_000L + (35 - i) * 120_000L);
+			b.counters.put("coinsSpentAtShops", 900_000L + (35 - i) * 11_000L);
+			b.counters.put("itemsDroppedValue", 1_200_000L + (35 - i) * 9_000L);
+			b.counters.put("specialAttacksUsed", 2_000L + (35 - i) * 12L);
+			b.counters.put("examines", 800L + (35 - i) * 3L);
+			b.counters.put("cabbagesPicked", 60L + (35 - i));
 			if (i > 20)
 			{
 				continue;
@@ -689,6 +882,38 @@ public class PanelPreviewTest
 		data.addProperty(key, val);
 		e.add("data", data);
 		return e;
+	}
+
+	// the same with a second field: the level a skill reached, a diary's
+	// difficulty, a combat achievement's tier
+	private static JsonObject feedEntry(long ts, String type, String key, String val,
+		String key2, String val2)
+	{
+		JsonObject e = feedEntry(ts, type, key, val);
+		e.getAsJsonObject("data").addProperty(key2, val2);
+		return e;
+	}
+
+	// one played session: the minutes it ran and what it brought in
+	private static JsonObject session(long ts, long minutes, long xp, long drops, long dropsGp)
+	{
+		JsonObject e = new JsonObject();
+		e.addProperty("ts", ts);
+		e.addProperty("type", "SESSION");
+		JsonObject data = new JsonObject();
+		data.addProperty("minutes", minutes);
+		data.addProperty("xp", xp);
+		data.addProperty("drops", drops);
+		data.addProperty("dropsGp", dropsGp);
+		e.add("data", data);
+		return e;
+	}
+
+	// noon on a day, so a dated entry lands inside its own window whatever the
+	// clock reads when the suite runs
+	private static long noon(LocalDate d)
+	{
+		return d.atTime(12, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
 	}
 
 	// a second stub fed from the real journal on this machine, when there is one

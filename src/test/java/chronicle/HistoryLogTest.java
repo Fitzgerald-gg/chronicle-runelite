@@ -240,6 +240,40 @@ public class HistoryLogTest
 	}
 
 	@Test
+	public void compactionLeavesAFileHoldingALineItCannotReadAlone() throws Exception
+	{
+		// a repeated day and an unordered one, either of which would have it
+		// rewrite, beside a torn line and a line with no date. The rewrite can
+		// only write back what it could read, and the spine is the only copy of
+		// the record: the file stands exactly as it was, and nothing is claimed
+		// to have been dropped.
+		rawLine(RSN, dayLine("2026-01-02", 1L), true);
+		rawLine(RSN, dayLine("2026-01-01", 2L), true);
+		rawLine(RSN, dayLine("2026-01-01", 3L), true);
+		rawLine(RSN, "{\"date\":\"2026-01-03\",\"skills\":{\"attack\":4", true);
+		rawLine(RSN, "{\"skills\":{\"attack\":5}}", true);
+		byte[] before = java.nio.file.Files.readAllBytes(spine(RSN).toPath());
+		assertEquals(0, log.compact(dir, RSN));
+		org.junit.Assert.assertArrayEquals(before,
+			java.nio.file.Files.readAllBytes(spine(RSN).toPath()));
+	}
+
+	@Test
+	public void compactionStillFoldsAFileItCanReadWholly() throws Exception
+	{
+		// the same shape with nothing torn in it: an out-of-order file with a
+		// repeat is rewritten in calendar order, the repeat folded
+		rawLine(RSN, dayLine("2026-01-02", 1L), true);
+		rawLine(RSN, dayLine("2026-01-01", 2L), true);
+		rawLine(RSN, dayLine("2026-01-01", 3L), true);
+		assertEquals(1, log.compact(dir, RSN));
+		assertEquals(2, lineCount());
+		assertEquals("2026-01-01",
+			java.nio.file.Files.readAllLines(spine(RSN).toPath()).get(0)
+				.replaceAll(".*\"date\":\"([^\"]+)\".*", "$1"));
+	}
+
+	@Test
 	public void compactionLeavesAFileWithoutRepeatsAlone() throws Exception
 	{
 		rawLine(RSN, dayLine("2026-01-01", 1L), true);

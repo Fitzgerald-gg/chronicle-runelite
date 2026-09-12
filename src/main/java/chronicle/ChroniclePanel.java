@@ -363,6 +363,7 @@ class ChroniclePanel extends PluginPanel
 		dropsShown = ROW_CAP;
 		slayerShown = ROW_CAP;
 		drillShown.clear();
+		histListShown.clear();
 		detailItem = null;
 		detailSource = null;
 		detailTask = -1;
@@ -904,6 +905,7 @@ class ChroniclePanel extends PluginPanel
 		detailSource = null;
 		detailStack.clear();
 		drillShown.clear();
+		histListShown.clear();
 		openFolds.clear();
 		gatherHistory();
 		rebuild();
@@ -2830,57 +2832,215 @@ class ChroniclePanel extends PluginPanel
 		return feed.isEmpty() ? 0 : safeLong(feed.get(0).get("ts"));
 	}
 
-	// The period's tracked progress: the headline figures, a line saying what
-	// they measure from when that is later than the period's start, then every
-	// other counter as one list of folds in the Stats tab's family-then-section
-	// order, with no heading between families. A family's flat rows (Living's
-	// meals and doses, Combat's hits and damage taken) fold under the family's
-	// own name. Each fold starts shut, its head carries the section's period
-	// total where the rows add up to one figure, and a click opens it to its
-	// rows and the leftover "Other". The folds are keyed apart from the Stats
-	// tab's, so a reader's fold on one tab leaves the other tab as it was.
-	private JPanel trackedProgress(HistoryProgress progress, String since)
+	// Rows mounted inside a group's list before its "Show more" tail.
+	private static final int HIST_LIST_CAP = 6;
+	// How much of one capped list is mounted, keyed by the list. A click on the
+	// tail raises it; the register is cleared when a journal mounts.
+	private final Map<String, Integer> histListShown = new LinkedHashMap<>();
+
+	/**
+	 * The period filed into its groups: experience, combat, loot, skilling,
+	 * upkeep, travel, achievement, and everything else the plugin tracks, in
+	 * that order and only where the period holds something. Each group is a
+	 * fold whose head carries the number of lines inside it, the way the site's
+	 * tab bar counts a tab.
+	 *
+	 * <p>Inside a group: its own figures first, then the sections the Stats tab
+	 * files the rest of the counters into, each its own fold reconciling to its
+	 * floor with the remainder as a ghost "Other". A figure the journal can
+	 * name (the slayer tasks, the pets, the log slots, the quests, the diaries,
+	 * the combat achievements, the levels) is itself a fold: a click opens it
+	 * to those names and their dates. Experience opens to the per-skill gains
+	 * ranked. A list longer than {@link #HIST_LIST_CAP} shows its top rows and
+	 * a "Show N more" tail.
+	 *
+	 * <p>Every fold starts shut and is keyed under "history:", apart from the
+	 * Stats tab's, so a reader's fold on one tab leaves the other as it was.
+	 */
+	private JPanel trackedProgress(HistoryProgress progress,
+		List<Map.Entry<String, Long>> gains, Map<String, List<String[]>> named)
 	{
 		JPanel card = card("Tracked progress");
-		if (since != null)
+		for (String name : HistoryProgress.GROUPS)
 		{
-			card.add(note(since));
-			card.add(vgap(3));
-		}
-		for (HistoryProgress.Row r : progress.summary())
-		{
-			card.add(row(r.label(), "+" + figure(r), null));
-		}
-		for (HistoryProgress.Section s : progress.sections())
-		{
-			String stateKey = "history:" + s.family() + ":" + s.name();
-			boolean open = foldOpen(stateKey);
-			// a section of gp rows totals in gp; every other section counts, and
-			// one whose rows mix units carries no figure at all
-			String total = !s.summed() ? ""
-				: "+" + (s.gp() ? gp(s.total()) + " gp" : fmt(s.total()));
-			JPanel head = row(s.name().toUpperCase(Locale.ROOT), total, open ? accent() : null);
-			JLabel headName = (JLabel) ((BorderLayout) head.getLayout())
-				.getLayoutComponent(BorderLayout.CENTER);
-			headName.setFont(FontManager.getRunescapeSmallFont());
-			headName.setForeground(open ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
-			head.setBorder(BorderFactory.createEmptyBorder(6, 2, 2, 2));
-			head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-			head.addMouseListener(clicker(() -> toggleFold(stateKey)));
-			card.add(head);
-			if (open)
+			HistoryProgress.Group g = progress.group(name);
+			boolean experience = "Experience".equals(name);
+			List<HistoryProgress.Row> rows = g != null ? g.rows()
+				: java.util.Collections.<HistoryProgress.Row>emptyList();
+			List<HistoryProgress.Section> secs = g != null ? g.sections()
+				: java.util.Collections.<HistoryProgress.Section>emptyList();
+			int lines = rows.size() + secs.size() + (experience ? gains.size() : 0);
+			if (lines == 0)
 			{
-				for (HistoryProgress.Row r : s.rows())
+				continue;
+			}
+			String stateKey = "history:" + name;
+			boolean open = foldOpen(stateKey);
+			card.add(groupHead(name, fmt(lines), stateKey, open));
+			if (!open)
+			{
+				continue;
+			}
+			if (experience)
+			{
+				int cap = shownCap(GAINS_LIST);
+				int mounted = 0;
+				for (Map.Entry<String, Long> e : gains)
 				{
-					card.add(row(r.label(), "+" + figure(r), null));
+					if (mounted++ >= cap)
+					{
+						break;
+					}
+					card.add(row(StatRegistry.prettify(e.getKey()), "+" + gp(e.getValue()), null));
 				}
-				if (s.ghost() > 0)
-				{
-					card.add(ghostRow(s.ghostLabel(), "+" + fmt(s.ghost())));
-				}
+				// the gains are the group's own rows, not a list one step in,
+				// so their tail pages at the same indent they do
+				addMore(card, GAINS_LIST, gains.size(), cap, false);
+			}
+			for (HistoryProgress.Row r : rows)
+			{
+				addGroupRow(card, r, named.get(r.key()));
+			}
+			for (HistoryProgress.Section s : secs)
+			{
+				addGroupSection(card, s);
 			}
 		}
 		return card;
+	}
+
+	// the cap register's key for Experience's ranked gains, which are no
+	// counter's rows and so have no key of their own
+	private static final String GAINS_LIST = "history:xp";
+
+	// One of a group's figures. Where the journal can name what the figure
+	// counts, the row is a fold: its value takes the accent while it is open
+	// and the names sit under it, each with the day it happened. An entry the
+	// journal counted but cannot name closes the list as a ghost, the way a
+	// section closes with its "Other": the head's figure is then accounted for
+	// on screen rather than opening to a shorter list than it claims.
+	private void addGroupRow(JPanel card, HistoryProgress.Row r, List<String[]> list)
+	{
+		if (list == null || list.isEmpty())
+		{
+			card.add(row(r.label(), "+" + figure(r), null));
+			return;
+		}
+		String listKey = "history:list:" + r.key();
+		boolean open = foldOpen(listKey);
+		JPanel head = row(r.label(), "+" + figure(r), open ? accent() : null);
+		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		head.addMouseListener(clicker(() -> toggleFold(listKey)));
+		card.add(head);
+		if (open)
+		{
+			int cap = shownCap(listKey);
+			int mounted = 0;
+			for (String[] entry : list)
+			{
+				if (mounted++ >= cap)
+				{
+					break;
+				}
+				card.add(nested(ghostRow(entry[0], entry[1])));
+			}
+			addMore(card, listKey, list.size(), cap);
+			long unnamed = r.value() - list.size();
+			if (unnamed > 0)
+			{
+				card.add(nested(ghostRow("Not named in the record", "+" + fmt(unnamed))));
+			}
+		}
+	}
+
+	// One of a group's sections, the fold the Stats tab files these counters
+	// into: its head carries the section's period total where the rows add up
+	// to one figure, and a click opens it to the rows and the leftover "Other".
+	private void addGroupSection(JPanel card, HistoryProgress.Section s)
+	{
+		String stateKey = "history:" + s.family() + ":" + s.name();
+		boolean open = foldOpen(stateKey);
+		// a section of gp rows totals in gp; every other section counts, and
+		// one whose rows mix units carries no figure at all
+		String total = !s.summed() ? ""
+			: "+" + (s.gp() ? gp(s.total()) + " gp" : fmt(s.total()));
+		card.add(subHead(s.name(), total, stateKey, open));
+		if (!open)
+		{
+			return;
+		}
+		int cap = shownCap(stateKey);
+		int mounted = 0;
+		for (HistoryProgress.Row r : s.rows())
+		{
+			if (mounted++ >= cap)
+			{
+				break;
+			}
+			card.add(nested(row(r.label(), "+" + figure(r), null)));
+		}
+		addMore(card, stateKey, s.rows().size(), cap);
+		if (s.ghost() > 0)
+		{
+			card.add(nested(ghostRow(s.ghostLabel(), "+" + fmt(s.ghost()))));
+		}
+	}
+
+	// A row one step in from the fold it sits under, so a section's rows read
+	// as that section's and not as the group's own.
+	private static JPanel nested(JPanel r)
+	{
+		r.setBorder(BorderFactory.createEmptyBorder(1, ROW_INSET + 12, 1, ROW_INSET));
+		return r;
+	}
+
+	// A group's head: its name and the number of lines it opens to, in the
+	// Stats tab's fold-head styling.
+	private JPanel groupHead(String name, String count, String stateKey, boolean open)
+	{
+		JPanel head = row(name.toUpperCase(Locale.ROOT), count, open ? accent() : null);
+		JLabel headName = (JLabel) ((BorderLayout) head.getLayout())
+			.getLayoutComponent(BorderLayout.CENTER);
+		headName.setFont(FontManager.getRunescapeSmallFont());
+		headName.setForeground(open ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+		head.setBorder(BorderFactory.createEmptyBorder(6, 2, 2, 2));
+		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		head.addMouseListener(clicker(() -> toggleFold(stateKey)));
+		return head;
+	}
+
+	private int shownCap(String key)
+	{
+		Integer n = histListShown.get(key);
+		return n == null ? HIST_LIST_CAP : n;
+	}
+
+	// The tail under a capped list: what is still folded away, and the click
+	// that brings it.
+	private void addMore(JPanel card, String key, int size, int cap)
+	{
+		addMore(card, key, size, cap, true);
+	}
+
+	// The same tail, drawn at the indent of the rows it pages: one step in
+	// under a list or a section, and flush under the group's own rows.
+	private void addMore(JPanel card, String key, int size, int cap, boolean inset)
+	{
+		if (size <= cap)
+		{
+			return;
+		}
+		// The tail names everything still folded away, and one click brings all of
+		// it: a list of ninety tasks should not be fifteen clicks that each say six.
+		JPanel tail = ghostRow("Show " + fmt(size - cap) + " more", "");
+		JPanel more = inset ? nested(tail) : tail;
+		more.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		more.addMouseListener(clicker(() ->
+		{
+			histListShown.put(key, size);
+			rebuild();
+		}));
+		card.add(more);
 	}
 
 	// What the card measures from, when that is later than the period's start
@@ -2963,6 +3123,101 @@ class ChroniclePanel extends PluginPanel
 		return !t.inProgress && ms >= fromMs && ms < toMs;
 	}
 
+	// Those same segments by name, newest first, each with the kills it took
+	// and the day it closed: what the Combat group's tasks line opens to.
+	private static List<String[]> closedTaskNames(ChronicleApiClient.SlayerJourney j,
+		long fromMs, long toMs)
+	{
+		List<ChronicleApiClient.SlayerTask> closed = new ArrayList<>();
+		for (ChronicleApiClient.SlayerTask t : j.tasks)
+		{
+			if (closedInside(t, fromMs, toMs))
+			{
+				closed.add(t);
+			}
+		}
+		closed.sort((a, b) -> Double.compare(b.ts, a.ts));
+		List<String[]> out = new ArrayList<>(closed.size());
+		for (ChronicleApiClient.SlayerTask t : closed)
+		{
+			long ms = (long) (t.ts * 1000);
+			out.add(new String[]{t.task, fmt(t.kills) + " · " + DAY.format(Instant.ofEpochMilli(ms))});
+		}
+		return out;
+	}
+
+	// What one feed entry names, for the list its figure opens to: the item,
+	// the pet, the quest, the diary, the task and its tier, the skill and the
+	// level it reached. Null where the entry names nothing, which is what an
+	// imported milestone carries: the figure still counts it, and the list
+	// holds only what the record can actually name.
+	// The quest itself, out of the line the game announced it in ("You have
+	// completed Fallen From Grace!"). A name that arrives clean is left alone.
+	static String questName(String raw)
+	{
+		String q = raw == null ? "" : raw.trim();
+		int at = q.toLowerCase(Locale.ROOT).indexOf("you have completed ");
+		if (at >= 0)
+		{
+			q = q.substring(at + "you have completed ".length()).trim();
+		}
+		while (q.endsWith("!") || q.endsWith("."))
+		{
+			q = q.substring(0, q.length() - 1).trim();
+		}
+		return q.isEmpty() ? raw : q;
+	}
+
+	private static String feedName(JsonObject e)
+	{
+		String type = e.has("type") ? e.get("type").getAsString() : "";
+		JsonObject d = e.has("data") && e.get("data").isJsonObject()
+			? e.getAsJsonObject("data") : new JsonObject();
+		switch (type)
+		{
+			case "PET":
+				return has(d, "petName") ? d.get("petName").getAsString() : null;
+			case "COLLECTION":
+				return has(d, "itemName") ? d.get("itemName").getAsString() : null;
+			case "QUEST":
+				return has(d, "questName") ? questName(d.get("questName").getAsString())
+					: has(d, "quest") ? questName(d.get("quest").getAsString()) : null;
+			case "DIARY":
+				return has(d, "area")
+					? d.get("area").getAsString()
+					+ (has(d, "difficulty") ? " " + d.get("difficulty").getAsString() : "")
+					: null;
+			case "COMBAT_ACHIEVEMENT":
+				return has(d, "task")
+					? (has(d, "tier")
+					? StatRegistry.prettify(d.get("tier").getAsString().toLowerCase(Locale.ROOT))
+					+ " · " : "") + d.get("task").getAsString()
+					: null;
+			case "LEVEL":
+				return has(d, "skill")
+					? StatRegistry.prettify(d.get("skill").getAsString().toLowerCase(Locale.ROOT))
+					+ (has(d, "level") ? " " + d.get("level").getAsString() : "")
+					: null;
+			default:
+				return null;
+		}
+	}
+
+	// A field that is there and says something.
+	private static boolean has(JsonObject o, String key)
+	{
+		return o.has(key) && !o.get(key).isJsonNull()
+			&& !o.get(key).getAsString().trim().isEmpty();
+	}
+
+	// The minutes one played session stands for; 0 when it carries none.
+	private static long sessionMinutes(JsonObject e)
+	{
+		JsonObject d = e.has("data") && e.get("data").isJsonObject()
+			? e.getAsJsonObject("data") : new JsonObject();
+		return Math.max(0, safeLong(d.get("minutes")));
+	}
+
 	// The feed's dated entry types the progress card counts, each under the
 	// summary key its line reads. Where the spine carries the key too (deaths,
 	// collection log slots) the feed's count lays over its delta; the rest
@@ -3014,7 +3269,10 @@ class ChroniclePanel extends PluginPanel
 	 * <p>Kill counts only entered the daily baseline later, so a period bounded
 	 * by an older line measures each count from the first line that carries it
 	 * ({@code earliestKc}), and a period wholly before that reports the standing
-	 * count and no gain.
+	 * count and no gain. The two counts handed in are the states standing at
+	 * each end of the window rather than the bare lines: kill counts are
+	 * cumulative, so a count a later line stops carrying still stands at what it
+	 * reached.
 	 *
 	 * <p>The standing column is the period's close ({@code nowKc}), the way the
 	 * site drew every period as a snapshot. Only a period that reaches today
@@ -3044,19 +3302,7 @@ class ChroniclePanel extends PluginPanel
 			return;
 		}
 		Map<String, Long> gained = HistoryLog.gained(beforeKc, earliestKc, nowKc);
-		if (!gained.isEmpty())
-		{
-			long total = 0;
-			for (long v : gained.values())
-			{
-				total += v;
-			}
-			JPanel head = card("The period");
-			head.add(row("Kills", "+" + fmt(total), accent()));
-			p.add(head);
-			p.add(vgap(5));
-		}
-		else if (beforeKc == null || beforeKc.isEmpty())
+		if (gained.isEmpty() && (beforeKc == null || beforeKc.isEmpty()))
 		{
 			p.add(note("Kill counts begin their record now. This period has no "
 				+ "earlier count to measure against."));
@@ -3170,63 +3416,183 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
-	// The hiscores grid: every skill's level at the period's close and the
-	// period's gain. A skill that didn't move keeps its place and says nothing.
-	//
-	// The levels are read off the closing line's xp, the way the site drew every
-	// period as a snapshot: the year 2022 shows the levels 2022 ended on. A skill
-	// the closing line lacks draws no level, and the head sums the drawn levels
-	// into a total. That total is short, and the head reads "Experience"
-	// instead, only when a skill the record had already begun to carry is
-	// missing from the close (carried: every skill on any line up to it). A
-	// skill the record had not yet begun to carry is no shortfall, so the
-	// imported past, which predates Sailing, keeps its total. Only a period
-	// that reaches today reads the live sheet instead (live): its closing line
-	// is the newest one, and the sheet is that same state a few minutes fresher.
-	private void addSkillGrid(JPanel p, List<Map.Entry<String, Long>> gains,
-		Map<String, Long> closingXp, java.util.Set<String> carried, boolean live)
+	/**
+	 * Where the skills stand when the period closes: the grid's own cells, the
+	 * standing total beside them, and the closing state the period's movement
+	 * is measured against.
+	 *
+	 * <p>The levels come from the closing state's xp, the way the site drew
+	 * every period as a snapshot: the year 2022 shows the levels 2022 ended on.
+	 * The state carries what the closing line itself omits, and a skill no
+	 * complete line ever listed stands at level 1, so the total counts every
+	 * skill in the game. Only a period that reaches today reads the live sheet
+	 * instead: its closing line is the newest one, and the sheet is that same
+	 * state a few minutes fresher. {@code standing} is the sheet's own overall
+	 * where it has one, and the summed levels otherwise.
+	 *
+	 * <p>{@code closed} is the same levels read off the closing line alone,
+	 * whatever the sheet says. A period's movement is measured against it and
+	 * never against the sheet: the sheet stands a session past the closing
+	 * line, and a delta taken from it reads that session's levels into a window
+	 * that ended at the line, while the experience beside it stops there.
+	 */
+	private static final class SkillStand
 	{
-		Map<String, Long> gain = new LinkedHashMap<>();
-		long totalGained = 0;
-		for (Map.Entry<String, Long> g : gains)
-		{
-			gain.put(g.getKey(), g.getValue());
-			totalGained += g.getValue();
-		}
-		Map<String, long[]> sheet = live ? plugin.skillSheet() : java.util.Collections.emptyMap();
+		final List<net.runelite.api.Skill> order;
+		final List<String> keys;
+		final Map<net.runelite.api.Skill, Long> levels;
+		final long standing;
+		final HistoryLog.Levels closed;
 
+		SkillStand(List<net.runelite.api.Skill> order, List<String> keys,
+			Map<net.runelite.api.Skill, Long> levels, long standing, HistoryLog.Levels closed)
+		{
+			this.order = order;
+			this.keys = keys;
+			this.levels = levels;
+			this.standing = standing;
+			this.closed = closed;
+		}
+	}
+
+	private SkillStand skillStand(HistoryLog.Baseline closing, boolean live)
+	{
+		Map<String, long[]> sheet = live ? plugin.skillSheet() : java.util.Collections.emptyMap();
 		List<net.runelite.api.Skill> order = skillOrder();
+		List<String> keys = new ArrayList<>();
+		for (net.runelite.api.Skill sk : order)
+		{
+			keys.add(sk.name().toLowerCase(Locale.ROOT));
+		}
+		HistoryLog.Levels closed = HistoryLog.levels(closing, keys);
 		Map<net.runelite.api.Skill, Long> levels =
 			new java.util.EnumMap<>(net.runelite.api.Skill.class);
 		long total = 0;
-		boolean complete = true;
 		for (net.runelite.api.Skill sk : order)
 		{
 			String key = sk.name().toLowerCase(Locale.ROOT);
 			long[] cur = sheet.get(key);
-			Long xp = closingXp.get(key);
-			long level = cur != null && cur[0] > 0 ? cur[0]
-				: xp != null ? PaceBook.levelAt(xp) : 0;
+			long level = cur != null && cur[0] > 0 ? cur[0] : closed.of.get(key);
 			levels.put(sk, level);
 			total += level;
-			complete &= level > 0 || !carried.contains(key);
 		}
-
-		JPanel head = card("The period");
 		long[] ov = sheet.get("overall");
-		String standing = ov != null && ov[0] > 0 ? "Total level " + fmt(ov[0])
-			: complete ? "Total level " + fmt(total) : "Experience";
-		head.add(row(standing,
-			totalGained > 0 ? "+" + gp(totalGained) : "nothing gained",
-			totalGained > 0 ? accent() : null));
-		if (!gains.isEmpty())
+		return new SkillStand(order, keys, levels,
+			ov != null && ov[0] > 0 ? ov[0] : total, closed);
+	}
+
+	// The headline keys that read straight off the summary, in the order the
+	// strip reads them. The drops line sits between them and carries the loot
+	// value beside its count, one line for the pair.
+	private static final String[] HEADLINE_KEYS = {"kills", "slayerTasksCompleted"};
+
+	/**
+	 * The figures a reader wants first, each a plain labelled row: what the
+	 * period cost in time, what it added in experience and levels, and the
+	 * counts the rest of the tab breaks down. Only what the period holds.
+	 *
+	 * <p>The levels and the 99s are drawn only while the same number of skills
+	 * speak at each end of the window: a count taken across a hole one side
+	 * alone has would read that hole as a gain.
+	 */
+	private JPanel headline(HistoryProgress progress, List<Map.Entry<String, Long>> gains,
+		SkillStand stand, HistoryLog.Levels opened, long[] played)
+	{
+		JPanel card = card("The period");
+		if (played[1] > 0)
 		{
-			Map.Entry<String, Long> top = gains.get(0);
-			head.add(row("Biggest gain", StatRegistry.prettify(top.getKey())
-				+ " +" + gp(top.getValue()), null));
+			card.add(row("Time played", hoursMinutes(played[0]), null));
+			card.add(row("Sessions", fmt(played[1]), null));
 		}
-		p.add(head);
-		p.add(vgap(5));
+		long xp = 0;
+		for (Map.Entry<String, Long> g : gains)
+		{
+			xp += g.getValue();
+		}
+		if (xp > 0)
+		{
+			card.add(row("Experience", "+" + gp(xp), accent()));
+		}
+		// What the period moved is measured line to line, the two states the
+		// experience above was measured between; the sheet draws where the
+		// account stands now and nothing else. The opening is named beside the
+		// standing figure only where that figure is the close the movement was
+		// measured to, so the three never read as an arithmetic that does not
+		// reach its own end: a live sheet standing past the closing line draws
+		// the standing and the movement, each as itself.
+		HistoryLog.Levels closed = stand.closed;
+		boolean paired = closed.drawn == opened.drawn;
+		long levels = closed.total - opened.total;
+		String total = fmt(stand.standing);
+		if (paired && levels > 0)
+		{
+			total = (stand.standing == closed.total ? fmt(opened.total) + " to " + total : total)
+				+ " · +" + fmt(levels);
+		}
+		card.add(row("Total level", total, null));
+		if (paired && closed.nines > opened.nines)
+		{
+			card.add(row("99s reached", fmt(closed.nines - opened.nines), null));
+		}
+		for (String key : HEADLINE_KEYS)
+		{
+			HistoryProgress.Row r = summaryRow(progress, key);
+			if (r != null)
+			{
+				card.add(row(r.label(), "+" + figure(r), null));
+			}
+		}
+		// the drops and what they were worth, one line: the count is the kills
+		// that dropped something and the value is what those drops came to
+		HistoryProgress.Row drops = summaryRow(progress, "dropsReceived");
+		HistoryProgress.Row value = summaryRow(progress, "lootValue");
+		if (drops != null)
+		{
+			card.add(row(drops.label(), "+" + fmt(drops.value())
+				+ (value != null ? " · " + gp(value.value()) + " gp" : ""), null));
+		}
+		else if (value != null)
+		{
+			card.add(row(value.label(), "+" + figure(value), null));
+		}
+		HistoryProgress.Row deaths = summaryRow(progress, "deaths");
+		if (deaths != null)
+		{
+			card.add(row(deaths.label(), "+" + figure(deaths), null));
+		}
+		return card;
+	}
+
+	// One summary figure by key, or null when the period did not move it.
+	private static HistoryProgress.Row summaryRow(HistoryProgress progress, String key)
+	{
+		for (HistoryProgress.Row r : progress.summary())
+		{
+			if (r.key().equals(key))
+			{
+				return r;
+			}
+		}
+		return null;
+	}
+
+	private static String hoursMinutes(long minutes)
+	{
+		return minutes >= 60 ? (minutes / 60) + "h " + (minutes % 60) + "m" : minutes + "m";
+	}
+
+	// The hiscores grid: every skill's level at the period's close and the
+	// period's gain. A skill that didn't move keeps its place and says nothing.
+	// The headline above it carries the totals.
+	private void addSkillGrid(JPanel p, List<Map.Entry<String, Long>> gains, SkillStand stand)
+	{
+		Map<String, Long> gain = new LinkedHashMap<>();
+		for (Map.Entry<String, Long> g : gains)
+		{
+			gain.put(g.getKey(), g.getValue());
+		}
+		List<net.runelite.api.Skill> order = stand.order;
+		Map<net.runelite.api.Skill, Long> levels = stand.levels;
 
 		JPanel grid = new JPanel(new GridLayout(0, 3, 2, 2));
 		grid.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -3514,9 +3880,18 @@ class ChroniclePanel extends PluginPanel
 			// lifetime as one week's gain. The first line that holds the key is
 			// a recorded value, and the site measured counters the same way.
 			HistoryLog.Baseline earliest = HistoryLog.earliest(hist, at.getKey());
+			// The states standing at each end of the window, not the bare lines:
+			// a line says only what moved that day, and a complete snapshot says
+			// a skill it omits stood at zero. stateAt folds the record up to a
+			// date into the state that stood on it. The opening is taken at the
+			// line the window is measured from, which is the eve of the window
+			// when a line predates it and the earliest line on record when none
+			// does.
+			HistoryLog.Baseline closing = HistoryLog.stateAt(hist, at.getKey());
+			HistoryLog.Baseline opening = HistoryLog.stateAt(hist, from.getKey());
 			List<Map.Entry<String, Long>> gains = new ArrayList<>();
-			for (Map.Entry<String, Long> e : HistoryLog.gained(from.getValue().skills,
-				earliest.skills, at.getValue().skills).entrySet())
+			for (Map.Entry<String, Long> e : HistoryLog.gained(opening.skills,
+				earliest.skills, closing.skills, opening.complete).entrySet())
 			{
 				if (!"overall".equals(e.getKey()))
 				{
@@ -3529,15 +3904,6 @@ class ChroniclePanel extends PluginPanel
 			// reaches today reads the live sheet and ledger: its closing line
 			// is the newest one, and they are that state a few minutes fresher.
 			boolean live = !pEnd.isBefore(java.time.LocalDate.now());
-			if (histBosses)
-			{
-				addKillCounts(p, from.getValue().kcs, earliest.kcs, at.getValue().kcs, live,
-					firstCarryingKcs(hist));
-			}
-			else
-			{
-				addSkillGrid(p, gains, at.getValue().skills, earliest.skills.keySet(), live);
-			}
 
 			// Milestones inside the window, and beside them the summary lines
 			// that read the journal itself rather than the spine: slayer tasks
@@ -3548,23 +3914,43 @@ class ChroniclePanel extends PluginPanel
 			// begins inside it cannot say what it missed, and the spine's delta
 			// stands where the spine carries the key). All of them reach back
 			// past the day the spine first carried them. One walk of the feed
-			// serves the milestones and the counts, each entry counted once by
-			// its type; an entry with no usable stamp is skipped.
+			// serves the milestones, the counts, the played time and the named
+			// lists the groups open to; an entry with no usable stamp is
+			// skipped.
 			long fromMs = pStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			long toMs = end.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			List<JsonObject> milestones = new ArrayList<>();
 			Map<String, Long> fromFeed = new java.util.HashMap<>();
+			Map<String, List<String[]>> named = new LinkedHashMap<>();
+			long[] played = {0, 0};   // minutes, sessions
 			for (JsonObject e : historyFeed)
 			{
 				long ts = safeLong(e.get("ts"));
 				if (ts >= fromMs && ts < toMs)
 				{
-					milestones.add(e);
-					String key = e.has("type")
-						? FEED_SUMMARY_KEYS.get(e.get("type").getAsString()) : null;
+					String type = e.has("type") ? e.get("type").getAsString() : "";
+					// A session is time at the keyboard, and the period's total is
+					// already the first thing the card says. Listing every one of
+					// them here buries the milestones they were spent earning.
+					if (!"SESSION".equals(type))
+					{
+						milestones.add(e);
+					}
+					String key = FEED_SUMMARY_KEYS.get(type);
 					if (key != null)
 					{
 						fromFeed.merge(key, 1L, Long::sum);
+						String line = feedName(e);
+						if (line != null)
+						{
+							named.computeIfAbsent(key, k -> new ArrayList<>())
+								.add(new String[]{line, DAY.format(Instant.ofEpochMilli(ts))});
+						}
+					}
+					if ("SESSION".equals(type))
+					{
+						played[0] += sessionMinutes(e);
+						played[1]++;
 					}
 				}
 			}
@@ -3573,9 +3959,15 @@ class ChroniclePanel extends PluginPanel
 			{
 				retro.put("slayerTasksCompleted", closedTasksBetween(historyJourney, fromMs, toMs));
 				retro.put("slayerKills", closedKillsBetween(historyJourney, fromMs, toMs));
+				List<String[]> tasks = closedTaskNames(historyJourney, fromMs, toMs);
+				if (!tasks.isEmpty())
+				{
+					named.put("slayerTasksCompleted", tasks);
+				}
 			}
 			long oldest = oldestTs(historyFeed);
-			if (oldest > 0 && oldest < fromMs)
+			boolean reachesBack = oldest > 0 && oldest < fromMs;
+			if (reachesBack)
 			{
 				// every counted type, a zero included: a type absent from the
 				// feed draws no line, whatever the spine's delta says
@@ -3584,38 +3976,71 @@ class ChroniclePanel extends PluginPanel
 					retro.put(key, fromFeed.getOrDefault(key, 0L));
 				}
 			}
-
-			// What the period tracked: the headline figures, then every other
-			// counter as a fold named for the section the Stats tab files it in.
-			// The per-source kill counts stay with the Kills toggle above; the
-			// card's Kills line is their sum, written on the spine beside the
-			// counters off the same per-source base. The note under the caption
-			// reads the spine only as far as the period's last line: a period
-			// closed before a key joined names no date after its own end.
-			HistoryProgress progress = HistoryProgress.of(
-				HistoryLog.gained(from.getValue().counters, earliest.counters,
-					at.getValue().counters),
-				null, retro);
-			if (!progress.summary().isEmpty() || !progress.sections().isEmpty())
+			else
 			{
-				p.add(trackedProgress(progress,
-					countersSince(hist.headMap(at.getKey(), true), from.getKey())));
+				// the slice begins inside the window, so it cannot say what it
+				// missed: the lists would name a part of the period as the whole
+				for (String key : FEED_SUMMARY_KEYS.values())
+				{
+					named.remove(key);
+				}
+				played[0] = 0;
+				played[1] = 0;
+			}
+
+			// What the period tracked: the headline figures first, then the
+			// lens detail, then every other figure in its group. The per-source
+			// kill counts stay with the Kills toggle; the headline's Kills line
+			// is their sum, written on the spine beside the counters off the
+			// same per-source base. The note under the headline reads the spine
+			// only as far as the period's last line: a period closed before a
+			// key joined names no date after its own end.
+			HistoryProgress progress = HistoryProgress.of(
+				HistoryLog.gained(opening.counters, earliest.counters,
+					closing.counters),
+				null, retro);
+			SkillStand stand = skillStand(closing, live);
+			HistoryLog.Levels opened = HistoryLog.levels(opening, stand.keys);
+			p.add(headline(progress, gains, stand, opened, played));
+			p.add(vgap(5));
+			String since = countersSince(hist.headMap(at.getKey(), true), from.getKey());
+			if (since != null)
+			{
+				p.add(note(since));
+				p.add(vgap(5));
+			}
+
+			if (histBosses)
+			{
+				addKillCounts(p, opening.kcs, earliest.kcs, closing.kcs, live,
+					firstCarryingKcs(hist));
+			}
+			else
+			{
+				addSkillGrid(p, gains, stand);
+			}
+
+			if (!progress.groups().isEmpty() || !gains.isEmpty())
+			{
+				p.add(trackedProgress(progress, gains, named));
 				p.add(vgap(5));
 			}
 
 			if (!milestones.isEmpty())
 			{
 				JPanel card = card("Milestones · " + fmt(milestones.size()));
+				int shown = shownCap("history:list:milestones");
 				int mounted = 0;
 				for (JsonObject e : milestones)
 				{
-					if (mounted++ >= 6)
+					if (mounted++ >= shown)
 					{
 						break;
 					}
 					long ts = e.has("ts") ? e.get("ts").getAsLong() : 0;
 					card.add(row(feedLine(e), ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "", null));
 				}
+				addMore(card, "history:list:milestones", milestones.size(), shown, false);
 				p.add(card);
 				p.add(vgap(5));
 			}
@@ -4189,7 +4614,7 @@ class ChroniclePanel extends PluginPanel
 				long drops = d.has("drops") ? d.get("drops").getAsLong() : 0;
 				long dropsGp = d.has("dropsGp") ? d.get("dropsGp").getAsLong() : 0;
 				StringBuilder line = new StringBuilder("Session: ");
-				line.append(mins >= 60 ? (mins / 60) + "h " + (mins % 60) + "m" : mins + "m");
+				line.append(hoursMinutes(mins));
 				if (xp > 0)
 				{
 					line.append(" · +").append(gp(xp)).append(" xp");
