@@ -3984,15 +3984,37 @@ class ChroniclePanel extends PluginPanel
 		SkillStand stand, HistoryLog.Levels opened, long[] played)
 	{
 		JPanel card = card("The period");
-		if (played[1] > 0)
-		{
-			card.add(row("Time played", hoursMinutes(played[0]), null));
-			card.add(row("Sessions", fmt(played[1]), null));
-		}
 		long xp = 0;
 		for (Map.Entry<String, Long> g : gains)
 		{
 			xp += g.getValue();
+		}
+		// Skills and PvM each carry a fixed set, the same rows whatever the
+		// period did. A figure reading zero is an answer; a row that vanishes
+		// when it has nothing to say leaves a reader wondering if it was asked.
+		if ("Skills".equals(histFacet) || "PvM".equals(histFacet))
+		{
+			HistoryLog.Levels shut = stand.closed;
+			boolean same = shut.drawn == opened.drawn;
+			if ("PvM".equals(histFacet))
+			{
+				card.add(row("Monsters slain", "+" + fmt(summaryValue(progress, "kills")), null));
+				card.add(row("Deaths", "+" + fmt(summaryValue(progress, "deaths")), null));
+				card.add(row("Slayer tasks completed",
+					"+" + fmt(summaryValue(progress, "slayerTasksCompleted")), null));
+				return card;
+			}
+			card.add(row("Time played", hoursMinutes(played[0]), null));
+			card.add(row("Sessions", fmt(played[1]), null));
+			card.add(row("Experience", "+" + gp(xp), xp > 0 ? accent() : null));
+			card.add(row("99s reached",
+				fmt(same ? Math.max(0, shut.nines - opened.nines) : 0), null));
+			return card;
+		}
+		if (played[1] > 0)
+		{
+			card.add(row("Time played", hoursMinutes(played[0]), null));
+			card.add(row("Sessions", fmt(played[1]), null));
 		}
 		if (xp > 0)
 		{

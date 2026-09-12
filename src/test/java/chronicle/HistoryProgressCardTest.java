@@ -805,11 +805,9 @@ public class HistoryProgressCardTest
 		// session, reached no 99 and never carried the kills.
 		assertEquals(Arrays.asList(
 			"THE PERIOD",
-			"Experience", "+50k",
-			"Kills", "+12",
-			"Slayer tasks completed", "+5",
-			"Drops received", "+12 · 2.5M gp",
-			"Deaths", "+3"), head);
+			"Monsters slain", "+12",
+			"Deaths", "+3",
+			"Slayer tasks completed", "+5"), head);
 	}
 
 	@Test
@@ -1362,7 +1360,7 @@ public class HistoryProgressCardTest
 	public void slayerTasksCountTheClosedSegmentsDatedInsideThePeriod() throws Exception
 	{
 		ChroniclePanel p = panel(stub(true));
-		set(p, "histFacet", "PvM");
+		set(p, "histFacet", "Trackers");
 		// no journey read yet: the spine's delta stands
 		assertEquals("+5", beside(headline(labels(history(p))), "Slayer tasks completed"));
 
@@ -1453,7 +1451,7 @@ public class HistoryProgressCardTest
 		ChroniclePanel p = panel(s);
 		set(p, "histFacet", "PvM");
 		List<String> all = labels(history(p));
-		assertEquals(all.toString(), "+12", beside(headline(all), "Kills"));
+		assertEquals(all.toString(), "+12", beside(headline(all), "Monsters slain"));
 		assertTrue(all.toString(), all.indexOf("THE PERIOD")
 			< all.indexOf("BOSSES AND ACTIVITIES"));
 		// and the old head card counting kills twice is gone
@@ -1477,6 +1475,7 @@ public class HistoryProgressCardTest
 		final ChroniclePanel[] holder = new ChroniclePanel[1];
 		edt(() -> holder[0] = new ChroniclePanel(s));
 		awaitGather(holder[0]);
+		set(holder[0], "histFacet", "Trackers");
 		assertEquals("+2",
 			beside(headline(labels(history(holder[0]))), "Slayer tasks completed"));
 	}
@@ -1552,19 +1551,19 @@ public class HistoryProgressCardTest
 		s.feed.add(entry(now - 20 * DAY_MS, "DEATH", "killerName", "Vorkath"));
 		// the feed reaches back past the week's start: its five deaths inside
 		// the week beat the spine's three, and the one before the week is out
-		assertEquals("+5", beside(headline(labels(pvm(s))), "Deaths"));
+		assertEquals("+5", beside(headline(labels(history(panel(s)))), "Deaths"));
 
 		// a feed that begins inside the week cannot say what it missed: the
 		// spine's delta stands
 		s.feed.remove(6);
-		assertEquals("+3", beside(headline(labels(pvm(s))), "Deaths"));
+		assertEquals("+3", beside(headline(labels(history(panel(s)))), "Deaths"));
 
 		// reaching back with no death inside the week: no line, whatever the
 		// spine's delta says
 		s.feed.clear();
 		s.feed.add(entry(now - DAY_MS, "COLLECTION", "itemName", "Abyssal head"));
 		s.feed.add(entry(now - 20 * DAY_MS, "DEATH", "killerName", "Vorkath"));
-		assertNull(beside(headline(labels(pvm(s))), "Deaths"));
+		assertNull(beside(headline(labels(history(panel(s)))), "Deaths"));
 	}
 
 	@Test
@@ -1903,7 +1902,7 @@ public class HistoryProgressCardTest
 			fmt(99L * skillCount()) + " · +" + fmt(3L * skillCount()),
 			beside(all, "Total level"));
 		// and the sheet's own 99s are nobody's gain: the closing line has none
-		assertNull(all.toString(), beside(headline(all), "99s reached"));
+		assertEquals(all.toString(), "0", beside(headline(all), "99s reached"));
 	}
 
 	@Test
@@ -1940,7 +1939,7 @@ public class HistoryProgressCardTest
 			"{\"date\":\"2026-03-15\",\"counters\":{\"kills\":40}}",
 			"{\"date\":\"2026-04-01\",\"counters\":{\"dropsReceived\":150}}");
 		ChroniclePanel p = panel(s);
-		set(p, "histFacet", "PvM");
+		set(p, "histFacet", "Trackers");
 		set(p, "histFrom", LocalDate.parse("2026-03-02"));
 		set(p, "histTo", LocalDate.parse("2026-04-30"));
 		List<String> head = headline(labels(history(p)));
@@ -1995,7 +1994,7 @@ public class HistoryProgressCardTest
 		String total = beside(all, "Total level");
 		assertFalse(all.toString(), total.contains(" to "));
 		assertFalse(all.toString(), total.contains("+"));
-		assertFalse(all.toString(), all.contains("99s reached"));
+		assertEquals(all.toString(), "0", beside(all, "99s reached"));
 		assertEquals(all.toString(), "73 to 99", grid(all).get(1));
 		assertTrue(all.toString(), all.contains("+12.0M"));
 	}
@@ -2016,7 +2015,7 @@ public class HistoryProgressCardTest
 		List<String> all = labels(history(p));
 		assertEquals(all.toString(), fmt(73L * skillCount()),
 			beside(all, "Total level"));
-		assertFalse(all.toString(), all.contains("99s reached"));
+		assertEquals(all.toString(), "0", beside(all, "99s reached"));
 	}
 
 	@Test
