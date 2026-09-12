@@ -16,10 +16,13 @@ import java.util.List;
 import java.util.Map;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
+import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
 import net.runelite.api.Player;
 import net.runelite.api.Tile;
 import net.runelite.api.TileItem;
+import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemDespawned;
@@ -40,8 +43,9 @@ import static org.junit.Assert.assertTrue;
  * The "kills" figure on a LOOT_UNTAKEN event: how many kills of the source left
  * at least one stack on the floor, whatever the number of stacks. It is the unit
  * "Drops taken" subtracts from the loot events, so a kill that left two stacks is
- * one kill, a stack that was picked up counts nothing, and a stack knows its kill
- * by tick alone, so two kills on one tick read as one.
+ * one kill and a stack that was picked up counts nothing. A ground item carries a
+ * tile and a tick but no kill, so a stack is matched to the NPC death that stood
+ * on (or beside) its tile, and by tick alone only when no such death is known.
  */
 public class LeftBehindKillsTest
 {
@@ -84,6 +88,12 @@ public class LeftBehindKillsTest
 		capture.onGameTick(new GameTick());
 	}
 
+	private static WorldPoint tileAt(int x, int y)
+	{
+		return new WorldPoint(3200 + x, 3200 + y, 0);
+	}
+
+	// the loot script's ServerNpcLoot for a kill of ours
 	private void kill(int t, String source)
 	{
 		tick(t);
@@ -93,15 +103,61 @@ public class LeftBehindKillsTest
 		capture.onServerNpcLoot(new ServerNpcLoot(comp, new ArrayList<ItemStack>()));
 	}
 
+	// an NPC dying in scene, ours or anyone's: ActorDeath with the tile it stood on
+	// (its south-west tile when larger than one)
+	private void death(int t, int index, String name, WorldPoint at, int size)
+	{
+		tick(t);
+		NPC npc = Mockito.mock(NPC.class);
+		Mockito.when(npc.getIndex()).thenReturn(index);
+		Mockito.when(npc.getName()).thenReturn(name);
+		Mockito.when(npc.getWorldLocation()).thenReturn(at);
+		NPCComposition comp = Mockito.mock(NPCComposition.class);
+		Mockito.when(comp.getSize()).thenReturn(size);
+		Mockito.when(npc.getTransformedComposition()).thenReturn(comp);
+		capture.onActorDeath(new ActorDeath(npc));
+	}
+
+	// a kill of ours the way the client shows it: the NPC's death on the tick
+	// before, the loot script's ServerNpcLoot on t
+	private void kill(int t, String source, int index, WorldPoint at)
+	{
+		death(t - 1, index, source, at, 1);
+		kill(t, source);
+	}
+
 	private TileItem spawn(int t, int id)
+	{
+		return spawn(t, id, tile);
+	}
+
+	// a self-owned stack landing on a tile whose world location is readable
+	private TileItem spawnAt(int t, int id, WorldPoint at)
+	{
+		return spawnAt(t, id, at, TileItem.OWNERSHIP_SELF);
+	}
+
+	private TileItem spawnAt(int t, int id, WorldPoint at, int ownership)
+	{
+		Tile where = Mockito.mock(Tile.class);
+		Mockito.when(where.getWorldLocation()).thenReturn(at);
+		return spawn(t, id, where, ownership);
+	}
+
+	private TileItem spawn(int t, int id, Tile where)
+	{
+		return spawn(t, id, where, TileItem.OWNERSHIP_SELF);
+	}
+
+	private TileItem spawn(int t, int id, Tile where, int ownership)
 	{
 		tick(t);
 		TileItem it = Mockito.mock(TileItem.class);
 		Mockito.when(it.getId()).thenReturn(id);
 		Mockito.when(it.getQuantity()).thenReturn(1);
-		Mockito.when(it.getOwnership()).thenReturn(TileItem.OWNERSHIP_SELF);
+		Mockito.when(it.getOwnership()).thenReturn(ownership);
 		Mockito.when(it.getDespawnTime()).thenReturn(DESPAWN);
-		capture.onItemSpawned(new ItemSpawned(tile, it));
+		capture.onItemSpawned(new ItemSpawned(where, it));
 		return it;
 	}
 
@@ -214,8 +270,9 @@ public class LeftBehindKillsTest
 		assertTrue(untakenRows().isEmpty());
 	}
 
-	// an AoE burst: two kills of one source posted on the same tick. A stack knows
-	// its kill by tick alone, so they read as one kill.
+	// an AoE burst: two kills of one source posted on the same tick, with no death
+	// seen and no readable tile (the shared tile mock has no world location). A
+	// stack then knows its kill by tick alone, so they read as one kill.
 	@Test
 	public void twoKillsOnOneTickCollapseToOneKill()
 	{
@@ -261,9 +318,9 @@ public class LeftBehindKillsTest
 	{
 		Class<?> groundLoot = Class.forName("chronicle.ChronicleEventCapture$GroundLoot");
 		Constructor<?> bare = groundLoot.getDeclaredConstructor(int.class, int.class, int.class,
-			int.class, boolean.class, String.class);
+			int.class, boolean.class, String.class, WorldPoint.class);
 		bare.setAccessible(true);
-		Object stack = bare.newInstance(BONES, 1, DESPAWN, 101, false, "Tester");
+		Object stack = bare.newInstance(BONES, 1, DESPAWN, 101, false, "Tester", null);
 		Field tracked = ChronicleEventCapture.class.getDeclaredField("groundLoot");
 		tracked.setAccessible(true);
 		TileItem it = Mockito.mock(TileItem.class);
@@ -292,6 +349,265 @@ public class LeftBehindKillsTest
 		unload.setGameState(GameState.LOADING);
 		capture.onGameStateChanged(unload);
 		gameTick(113);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals(2, items(rows.get(0)));
+		assertEquals(2, kills(rows.get(0)));
+	}
+
+	// ── kills told apart by tile ───────────────────────────────────────────
+
+	// the same AoE burst, with the two deaths seen where they stood: each stack
+	// sits on its own NPC's tile, so the two kills of one tick count two
+	@Test
+	public void twoKillsOnOneTickAtDifferentTilesAreTwoKills()
+	{
+		WorldPoint t1 = tileAt(0, 0);
+		WorldPoint t2 = tileAt(5, 0);
+		kill(100, BEAR, 1, t1);
+		kill(100, BEAR, 2, t2);
+		TileItem a = spawnAt(101, BONES, t1);
+		TileItem b = spawnAt(101, SPIKE, t2);
+		gameTick(101);
+		leave(a, b);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals(BEAR, rows.get(0).get("source").getAsString());
+		assertEquals(2, items(rows.get(0)));
+		assertEquals(2, kills(rows.get(0)));
+	}
+
+	// a barrage pack: the NPCs stand shoulder to shoulder, so each stack is one tile
+	// from the neighbour's death as well as on its own. The death standing on the
+	// tile wins, and the two kills stay two.
+	@Test
+	public void adjacentKillsOnOneTickEachKeepTheirOwnStack()
+	{
+		WorldPoint t1 = tileAt(0, 0);
+		WorldPoint t2 = tileAt(1, 0);
+		kill(100, BEAR, 1, t1);
+		kill(100, BEAR, 2, t2);
+		TileItem a = spawnAt(101, BONES, t1);
+		TileItem b = spawnAt(101, SPIKE, t2);
+		gameTick(101);
+		leave(a, b);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals(2, items(rows.get(0)));
+		assertEquals(2, kills(rows.get(0)));
+	}
+
+	// A stack spawning the tick after its kill while another kill of the same source
+	// lands on that tick: by tick alone it would file under the later kill and the
+	// two kills would read as one. By tile each stack finds its own.
+	@Test
+	public void aLateStackFilesUnderItsOwnKillNotTheLatest()
+	{
+		WorldPoint t1 = tileAt(0, 0);
+		WorldPoint t2 = tileAt(5, 0);
+		kill(100, BEAR, 1, t1);
+		TileItem a = spawnAt(101, BONES, t1);
+		kill(101, BEAR, 2, t2);
+		gameTick(101);
+		TileItem b = spawnAt(102, BONES, t2);
+		gameTick(102);
+		leave(a, b);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals(2, items(rows.get(0)));
+		assertEquals(2, kills(rows.get(0)));
+	}
+
+	// two kills of different sources on one tick: by tick alone the first-armed
+	// kill would take both stacks; by tile each source counts its own kill
+	@Test
+	public void twoSourcesOnOneTickEachCountTheirOwnKill()
+	{
+		WorldPoint t1 = tileAt(0, 0);
+		WorldPoint t2 = tileAt(5, 0);
+		kill(100, BEAR, 1, t1);
+		kill(100, WOLF, 2, t2);
+		TileItem a = spawnAt(101, BONES, t1);
+		TileItem b = spawnAt(101, BONES, t2);
+		gameTick(101);
+		leave(a, b);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(2, rows.size());
+		assertEquals(1, items(rowFor(rows, BEAR)));
+		assertEquals(1, kills(rowFor(rows, BEAR)));
+		assertEquals(1, items(rowFor(rows, WOLF)));
+		assertEquals(1, kills(rowFor(rows, WOLF)));
+	}
+
+	// LootManager knows NPCs whose drop lands a tile off where they stood: a stack
+	// one tile from a footprint still finds that death, on any side
+	@Test
+	public void aStackOneTileOffTheFootprintStillFindsItsKill()
+	{
+		WorldPoint t1 = tileAt(0, 0);
+		WorldPoint t2 = tileAt(5, 0);
+		kill(100, BEAR, 1, t1);
+		kill(100, BEAR, 2, t2);
+		TileItem a = spawnAt(101, BONES, tileAt(-1, -1));
+		TileItem b = spawnAt(101, SPIKE, tileAt(6, 1));
+		gameTick(101);
+		leave(a, b);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals(2, items(rows.get(0)));
+		assertEquals(2, kills(rows.get(0)));
+	}
+
+	// a large NPC's stack can land anywhere on its footprint, not only the
+	// south-west tile its location names
+	@Test
+	public void aStackAnywhereOnALargeFootprintFindsItsKill()
+	{
+		death(99, 1, BEAR, tileAt(0, 0), 3);
+		death(99, 2, BEAR, tileAt(10, 0), 3);
+		kill(100, BEAR);
+		kill(100, BEAR);
+		TileItem a = spawnAt(101, BONES, tileAt(2, 2));
+		TileItem b = spawnAt(101, SPIKE, tileAt(12, 2));
+		gameTick(101);
+		leave(a, b);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals(2, items(rows.get(0)));
+		assertEquals(2, kills(rows.get(0)));
+	}
+
+	// A stack on a tile no death stood on or beside (the NPC died out of scene, or
+	// the client could not read where) keeps the tick rule: it is the armed kill's,
+	// and two such kills on one tick still read as one.
+	@Test
+	public void aStackNoDeathMatchesFallsBackToTheTickRule()
+	{
+		kill(100, BEAR, 1, tileAt(0, 0));
+		kill(100, BEAR, 2, tileAt(5, 0));
+		TileItem a = spawnAt(101, BONES, tileAt(2, 0));
+		TileItem b = spawnAt(101, SPIKE, tileAt(3, 0));
+		gameTick(101);
+		leave(a, b);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals(BEAR, rows.get(0).get("source").getAsString());
+		assertEquals(2, items(rows.get(0)));
+		assertEquals(1, kills(rows.get(0)));
+	}
+
+	// a death of a source that never armed a kill (another player's, or one the loot
+	// script posted nothing for) is nobody's kill of ours, whatever tile the stack
+	// lands on: the stack keeps the armed kill under the tick rule
+	@Test
+	public void aDeathOfASourceThatNeverArmedIsIgnored()
+	{
+		WorldPoint t1 = tileAt(0, 0);
+		death(99, 7, WOLF, t1, 1);
+		kill(100, BEAR);
+		TileItem a = spawnAt(101, BONES, t1);
+		gameTick(101);
+		leave(a);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals(BEAR, rows.get(0).get("source").getAsString());
+		assertEquals(1, items(rows.get(0)));
+		assertEquals(1, kills(rows.get(0)));
+	}
+
+	// a death alone arms nothing: a self-owned stack on its tile with no kill of
+	// ours in the window is a manual drop, as before
+	@Test
+	public void aDeathWithoutAKillArmsNothing()
+	{
+		WorldPoint t1 = tileAt(0, 0);
+		death(99, 7, WOLF, t1, 1);
+		TileItem a = spawnAt(101, BONES, t1);
+		gameTick(101);
+		gameTick(105);
+		leave(a);
+		assertTrue(untakenRows().isEmpty());
+	}
+
+	// A stack still pending when the next pack dies on its tiles (our tick ran before
+	// the loot script spoke, so the kill was seen a tick late): a death after the
+	// spawn cannot be its kill, so both stacks stay with the one kill under the
+	// tick rule.
+	@Test
+	public void aDeathAfterTheSpawnIsNotItsKill()
+	{
+		WorldPoint t1 = tileAt(0, 0);
+		WorldPoint t2 = tileAt(5, 0);
+		TileItem a = spawnAt(101, BONES, t1);
+		TileItem b = spawnAt(101, SPIKE, t2);
+		gameTick(101);
+		kill(101, BEAR);
+		death(102, 5, BEAR, t1, 1);
+		death(102, 6, BEAR, t2, 1);
+		gameTick(102);
+		leave(a, b);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals(2, items(rows.get(0)));
+		assertEquals(1, kills(rows.get(0)));
+	}
+
+	// a group-owned stack is held to a kill on its own tick (a team-mate's drops
+	// arrive group-owned too), and the death it may use is held to that tick as
+	// well: a death of a source armed earlier does not reach it
+	@Test
+	public void aGroupOwnedStackHoldsItsDeathToItsOwnTick()
+	{
+		WorldPoint t1 = tileAt(0, 0);
+		kill(99, WOLF, 7, t1);
+		kill(101, BEAR);
+		TileItem a = spawnAt(101, BONES, t1, TileItem.OWNERSHIP_GROUP);
+		gameTick(101);
+		leave(a);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals(BEAR, rows.get(0).get("source").getAsString());
+		assertEquals(1, kills(rows.get(0)));
+	}
+
+	// a death seen before a login belongs to the scene left behind: after the reset
+	// two kills whose deaths went unseen are two kills, not one under it
+	@Test
+	public void aDeathDoesNotOutliveTheSession()
+	{
+		WorldPoint t1 = tileAt(0, 0);
+		death(99, 7, WOLF, t1, 1);
+		GameStateChanged login = new GameStateChanged();
+		login.setGameState(GameState.LOGGING_IN);
+		capture.onGameStateChanged(login);
+		kill(100, WOLF);
+		TileItem a = spawnAt(101, BONES, t1);
+		gameTick(101);
+		kill(103, WOLF);
+		TileItem b = spawnAt(104, BONES, t1);
+		gameTick(104);
+		leave(a, b);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals(2, items(rows.get(0)));
+		assertEquals(2, kills(rows.get(0)));
+	}
+
+	// a death older than the memory window is forgotten even on the stack's tile:
+	// two later kills whose deaths went unseen are two kills under the tick rule,
+	// not one under the stale death
+	@Test
+	public void aDeathOlderThanTheWindowIsNotUsed()
+	{
+		WorldPoint t1 = tileAt(0, 0);
+		death(80, 7, WOLF, t1, 1);
+		kill(100, WOLF);
+		TileItem a = spawnAt(101, BONES, t1);
+		gameTick(101);
+		kill(110, WOLF);
+		TileItem b = spawnAt(111, BONES, t1);
+		gameTick(111);
+		leave(a, b);
 		List<JsonObject> rows = untakenRows();
 		assertEquals(1, rows.size());
 		assertEquals(2, items(rows.get(0)));

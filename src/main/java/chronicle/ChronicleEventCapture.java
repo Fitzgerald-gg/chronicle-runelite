@@ -25,6 +25,7 @@ import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Actor;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -36,6 +37,7 @@ import net.runelite.api.Player;
 import net.runelite.api.Skill;
 import net.runelite.api.Tile;
 import net.runelite.api.TileItem;
+import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.ChatMessage;
@@ -214,6 +216,14 @@ public class ChronicleEventCapture
 	// The kills of the last few ticks, each carrying the source name stamped onto the
 	// loot it produced so the Uncollected ledger can say where things were left.
 	private final List<RecentKill> recentKills = new ArrayList<>();
+	// The NPC deaths of the last few ticks, ours and other players' alike, each with
+	// the tiles the NPC stood on. A ground item carries a tile and a tick but no
+	// kill, so a stack is matched to its kill by tile first (deathFor) and by tick
+	// alone only when no death of an armed source stood near it. The memory is
+	// longer than KILL_ARM_TICKS because the death precedes the loot script by the
+	// length of the death animation.
+	private static final int DEATH_MEMORY_TICKS = 10;
+	private final List<RecentDeath> recentDeaths = new ArrayList<>();
 	// The player's own "Drop" clicks of the last couple of ticks. The game confirms a
 	// drop with a self-owned spawn at the player's feet, which by tick alone looks
 	// like kill loot; each click is spent by the first spawn it explains. A drop that
@@ -251,6 +261,25 @@ public class ChronicleEventCapture
 		}
 	}
 
+	// an NPC death seen in scene, ours or anyone's, remembered long enough for a
+	// stack to find the kill it fell from by tile. Index and tick together identify
+	// the NPC that died; an index alone is reused once the NPC despawns.
+	private static final class RecentDeath
+	{
+		private final int tick;
+		private final int index;
+		private final String name;
+		private final WorldArea footprint;   // the tiles the NPC occupied at death
+
+		private RecentDeath(int tick, int index, String name, WorldArea footprint)
+		{
+			this.tick = tick;
+			this.index = index;
+			this.name = name;
+			this.footprint = footprint;
+		}
+	}
+
 	private static final class UntakenItem
 	{
 		private final int id;
@@ -259,17 +288,21 @@ public class ChronicleEventCapture
 		// the account that earned it. The batch is gathered before a logout and sent
 		// after the next login, which may belong to somebody else.
 		private final String owner;
-		// the tick of the kill it fell from, the only identity a stack carries, so
-		// the flush can count how many kills left something; -1 when unknown
+		// the kill it fell from, so the flush can count how many kills left
+		// something: the tick of the kill, plus the index of the NPC that died when
+		// the stack was matched to its death by tile; -1 each when unknown
 		private final int killTick;
+		private final int killIndex;
 
-		private UntakenItem(int id, int qty, String source, String owner, int killTick)
+		private UntakenItem(int id, int qty, String source, String owner, int killTick,
+			int killIndex)
 		{
 			this.id = id;
 			this.qty = qty;
 			this.source = source;
 			this.owner = owner;
 			this.killTick = killTick;
+			this.killIndex = killIndex;
 		}
 	}
 
@@ -281,17 +314,20 @@ public class ChronicleEventCapture
 		private final int spawnTick;
 		private final boolean group;   // group-ironman ownership rather than our own
 		private final String owner;    // the account it spawned for
+		private final WorldPoint at;   // the tile it spawned on; null when unreadable
 		private final String source;   // the kill it belongs to; null until promoted
 		private final int killTick;    // that kill's tick; -1 until promoted
+		private final int killIndex;   // the dead NPC's index when matched by tile; -1 otherwise
 
 		private GroundLoot(int id, int qty, int despawnTick, int spawnTick,
-			boolean group, String owner)
+			boolean group, String owner, WorldPoint at)
 		{
-			this(id, qty, despawnTick, spawnTick, group, owner, null, -1);
+			this(id, qty, despawnTick, spawnTick, group, owner, at, null, -1, -1);
 		}
 
 		private GroundLoot(int id, int qty, int despawnTick, int spawnTick,
-			boolean group, String owner, String source, int killTick)
+			boolean group, String owner, WorldPoint at, String source, int killTick,
+			int killIndex)
 		{
 			this.id = id;
 			this.qty = qty;
@@ -299,16 +335,19 @@ public class ChronicleEventCapture
 			this.spawnTick = spawnTick;
 			this.group = group;
 			this.owner = owner;
+			this.at = at;
 			this.source = source;
 			this.killTick = killTick;
+			this.killIndex = killIndex;
 		}
 
 		// the same stack, stamped with the kill it fell from: its source name and
-		// its tick
-		private GroundLoot withKill(RecentKill kill)
+		// its identity, the kill's tick and the dead NPC's index (-1 when only the
+		// tick placed it)
+		private GroundLoot withKill(String source, int killTick, int killIndex)
 		{
-			return new GroundLoot(id, qty, despawnTick, spawnTick, group, owner,
-				kill.source, kill.tick);
+			return new GroundLoot(id, qty, despawnTick, spawnTick, group, owner, at,
+				source, killTick, killIndex);
 		}
 	}
 
@@ -385,6 +424,7 @@ public class ChronicleEventCapture
 		groundLoot.clear();
 		pendingSelf.clear();
 		recentKills.clear();
+		recentDeaths.clear();
 		recentDrops.clear();
 	}
 
@@ -408,8 +448,8 @@ public class ChronicleEventCapture
 			return;   // nobody to attribute it to yet; the batch keeps
 		}
 		Map<String, JsonArray> bySource = new HashMap<>();
-		// the distinct kills each source's stacks fell from, by kill tick
-		Map<String, Set<Integer>> killsBySource = new HashMap<>();
+		// the distinct kills each source's stacks fell from, by kill identity
+		Map<String, Set<String>> killsBySource = new HashMap<>();
 		for (UntakenItem it : untakenBatch)
 		{
 			if (!owner.equals(it.owner))
@@ -423,7 +463,8 @@ public class ChronicleEventCapture
 			bySource.computeIfAbsent(src, k -> new JsonArray()).add(o);
 			if (it.killTick >= 0)
 			{
-				killsBySource.computeIfAbsent(src, k -> new HashSet<>()).add(it.killTick);
+				killsBySource.computeIfAbsent(src, k -> new HashSet<>())
+					.add(it.killIndex + "@" + it.killTick);
 			}
 		}
 		untakenBatch.clear();
@@ -435,13 +476,14 @@ public class ChronicleEventCapture
 				data.addProperty("source", e.getKey());
 			}
 			data.add("items", e.getValue());
-			// The kills that left something: the distinct kill ticks among the
-			// source's stacks, however many stacks each left. A stack knows its kill
-			// by tick alone, so two kills of one source on the same tick (an AoE
-			// burst) collapse to one kill here; a stack whose kill is unknown
-			// counts none.
-			Set<Integer> ticks = killsBySource.get(e.getKey());
-			data.addProperty("kills", ticks == null ? 0 : ticks.size());
+			// The kills that left something: the distinct kill identities among the
+			// source's stacks, however many stacks each left. A stack matched to its
+			// kill by tile carries the dead NPC's index and tick, so two kills of one
+			// source on the same tick (an AoE burst) count two; a stack only its tick
+			// could place carries the kill tick alone, so such stacks from one tick
+			// collapse to one kill; a stack whose kill is unknown counts none.
+			Set<String> kills = killsBySource.get(e.getKey());
+			data.addProperty("kills", kills == null ? 0 : kills.size());
 			emit("LOOT_UNTAKEN", data);
 		}
 	}
@@ -465,7 +507,12 @@ public class ChronicleEventCapture
 			RecentKill kill = killFor(g);
 			if (kill != null)
 			{
-				groundLoot.put(e.getKey(), g.withKill(kill));   // confirmed kill loot
+				// confirmed kill loot: the death that stood on its tile names the
+				// kill exactly, else the tick rule's kill
+				RecentDeath death = deathFor(g);
+				groundLoot.put(e.getKey(), death != null
+					? g.withKill(death.name, death.tick, death.index)
+					: g.withKill(kill.source, kill.tick, -1));
 				done.add(e.getKey());
 			}
 			else if (now - g.spawnTick > KILL_ARM_TICKS)
@@ -500,6 +547,58 @@ public class ChronicleEventCapture
 			}
 		}
 		return best;
+	}
+
+	// The death a buffered spawn fell from, by tile: a recent death of a source that
+	// armKill() saw within the spawn's window, whose footprint holds the spawn tile
+	// or, for the NPCs LootManager knows to drop a tile off where they stood, lies
+	// one tile from it. A death standing on the tile beats one beside it, and the
+	// latest wins among equals. Null when the tile is unreadable or no such death is
+	// near it, and the tick rule decides. Other players' kills die in scene too;
+	// the source gate keeps them out.
+	private RecentDeath deathFor(GroundLoot g)
+	{
+		if (g.at == null || recentDeaths.isEmpty())
+		{
+			return null;
+		}
+		int window = g.group ? 0 : KILL_ARM_TICKS;
+		RecentDeath best = null;
+		int bestDistance = 0;
+		for (RecentDeath d : recentDeaths)
+		{
+			int since = g.spawnTick - d.tick;
+			if (since < 0 || since > DEATH_MEMORY_TICKS || !armedInWindow(d.name, g.spawnTick, window))
+			{
+				continue;
+			}
+			int distance = d.footprint.distanceTo(g.at);
+			if (distance > 1)
+			{
+				continue;
+			}
+			if (best == null || distance < bestDistance
+				|| (distance == bestDistance && d.tick > best.tick))
+			{
+				best = d;
+				bestDistance = distance;
+			}
+		}
+		return best;
+	}
+
+	// whether a kill of this source was armed within window ticks before the spawn
+	private boolean armedInWindow(String source, int spawnTick, int window)
+	{
+		for (RecentKill k : recentKills)
+		{
+			int since = spawnTick - k.tick;
+			if (since >= 0 && since <= window && source.equals(k.source))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// arm untaken tracking: ground items spawning around now are this kill's.
@@ -620,8 +719,10 @@ public class ChronicleEventCapture
 		// reconcileKillLoot() decides at GameTick. The account is read here while we're
 		// certainly logged in as it, since left-behind items go out after the next
 		// login, which may be another's.
+		Tile tile = event.getTile();
 		pendingSelf.put(it, new GroundLoot(it.getId(), it.getQuantity(),
-			it.getDespawnTime(), now, group, localName()));
+			it.getDespawnTime(), now, group, localName(),
+			tile == null ? null : tile.getWorldLocation()));
 	}
 
 	@Subscribe
@@ -640,7 +741,8 @@ public class ChronicleEventCapture
 		boolean left = g.despawnTick > 0 && now >= g.despawnTick - 1;
 		if (left)
 		{
-			untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner, g.killTick));
+			untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner, g.killTick,
+				g.killIndex));
 		}
 	}
 
@@ -1010,8 +1112,14 @@ public class ChronicleEventCapture
 	@Subscribe
 	public void onActorDeath(ActorDeath event)
 	{
+		Actor actor = event.getActor();
+		if (actor instanceof NPC)
+		{
+			rememberDeath((NPC) actor);
+			return;
+		}
 		Player lp = client.getLocalPlayer();
-		if (lp == null || event.getActor() != lp)
+		if (lp == null || actor != lp)
 		{
 			return;   // only our own death
 		}
@@ -1030,6 +1138,39 @@ public class ChronicleEventCapture
 			data.addProperty("killerName", killer);
 		}
 		emit("DEATH", data);
+	}
+
+	// Every NPC death in scene, whoever's kill, with the tiles the NPC stood on, so
+	// a stack can be matched to the kill it fell from by tile (deathFor). A death
+	// whose name or tiles cannot be read is not kept; the tick rule still applies.
+	private void rememberDeath(NPC npc)
+	{
+		int now = client.getTickCount();
+		recentDeaths.removeIf(d -> now - d.tick > DEATH_MEMORY_TICKS);
+		String name;
+		WorldPoint at;
+		int size;
+		try
+		{
+			name = npc.getName();
+			at = npc.getWorldLocation();
+			NPCComposition comp = npc.getTransformedComposition();
+			if (comp == null)
+			{
+				comp = npc.getComposition();
+			}
+			size = comp == null ? 1 : Math.max(1, comp.getSize());
+		}
+		catch (RuntimeException ignored)
+		{
+			return;   // nothing readable about it
+		}
+		if (name == null || name.isEmpty() || at == null)
+		{
+			return;
+		}
+		recentDeaths.add(new RecentDeath(now, npc.getIndex(), name,
+			new WorldArea(at, size, size)));
 	}
 
 	// Best effort: an NPC still locked onto us at the death tick, else the last one
@@ -1360,7 +1501,8 @@ public class ChronicleEventCapture
 			// a pickup.
 			for (GroundLoot g : groundLoot.values())
 			{
-				untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner, g.killTick));
+				untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner, g.killTick,
+					g.killIndex));
 			}
 			groundLoot.clear();
 		}
