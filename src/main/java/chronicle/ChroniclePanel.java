@@ -495,6 +495,17 @@ class ChroniclePanel extends PluginPanel
 			// restore takes, rather than letting the reader see a frame at the top.
 			display.validate();
 			scroll.getVerticalScrollBar().setValue(priorScroll);
+			// And once more after the client's own layout pass: a pane that grew
+			// taller than it was has a bar whose range is still yesterday's, and
+			// the value we just set would have been clamped to it.
+			final int back = priorScroll;
+			javax.swing.SwingUtilities.invokeLater(() ->
+			{
+				if (scroll.getVerticalScrollBar().getValue() < back)
+				{
+					scroll.getVerticalScrollBar().setValue(back);
+				}
+			});
 		}
 	}
 
@@ -794,7 +805,7 @@ class ChroniclePanel extends PluginPanel
 			more.addActionListener(e ->
 			{
 				dropsShown += ROW_CAP;
-				rebuild();
+				rebuildInPlace();
 			});
 			p.add(more);
 		}
@@ -1280,7 +1291,7 @@ class ChroniclePanel extends PluginPanel
 			more.addActionListener(e ->
 			{
 				slayerShown += ROW_CAP;
-				rebuild();
+				rebuildInPlace();
 			});
 			p.add(more);
 			p.add(vgap(4));
@@ -1593,7 +1604,7 @@ class ChroniclePanel extends PluginPanel
 				more.addActionListener(e ->
 				{
 					drillShown.put(key, newCap);
-					rebuild();
+					rebuildInPlace();
 				});
 				p.add(vgap(3));
 				p.add(more);
@@ -2340,7 +2351,26 @@ class ChroniclePanel extends PluginPanel
 		{
 			openFolds.add(key);
 		}
-		rebuild();
+		rebuildInPlace();
+	}
+
+	/**
+	 * Redraw without moving the reader. Opening a fold or asking a list for the
+	 * rest of itself changes what is under the pointer, not where the reader is,
+	 * and rebuild() hangs a fresh scroll pane that starts at the top: on a long
+	 * view, every click would throw them back to the first line.
+	 */
+	private void rebuildInPlace()
+	{
+		keepScroll = true;
+		try
+		{
+			rebuild();
+		}
+		finally
+		{
+			keepScroll = false;
+		}
 	}
 
 	// gp per consumable key, refreshed per rebuild. What the Food and Potions
@@ -3038,7 +3068,7 @@ class ChroniclePanel extends PluginPanel
 		more.addMouseListener(clicker(() ->
 		{
 			histListShown.put(key, size);
-			rebuild();
+			rebuildInPlace();
 		}));
 		card.add(more);
 	}
@@ -3361,7 +3391,7 @@ class ChroniclePanel extends PluginPanel
 				more.addActionListener(e ->
 				{
 					histKcShown += ROW_CAP;
-					rebuild();
+					rebuildInPlace();
 				});
 				p.add(more);
 			}
@@ -4284,7 +4314,7 @@ class ChroniclePanel extends PluginPanel
 			more.addActionListener(ev ->
 			{
 				journalShown += 60;
-				rebuild();
+				rebuildInPlace();
 			});
 			p.add(more);
 		}

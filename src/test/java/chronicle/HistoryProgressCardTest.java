@@ -2239,4 +2239,41 @@ public class HistoryProgressCardTest
 		assertTrue("and what that was worth", body.contains("\"leftGp\""));
 		assertTrue("and the kills that left it", body.contains("\"leftKills\""));
 	}
+
+	@Test
+	public void openingAFoldLeavesTheReaderWhereTheyWere() throws Exception
+	{
+		// every fold click used to hang a fresh scroll pane, which starts at the
+		// top: on a view with eight groups to open, reading it meant scrolling
+		// back down after every click
+		ChroniclePanel p = panel(stub(true));
+		Field d = ChroniclePanel.class.getDeclaredField("display");
+		d.setAccessible(true);
+		javax.swing.JPanel display = (javax.swing.JPanel) d.get(p);
+		p.setSize(240, 200);
+		p.doLayout();
+		display.setSize(240, 200);
+		display.validate();
+		javax.swing.JScrollBar bar =
+			((javax.swing.JScrollPane) display.getComponent(0)).getVerticalScrollBar();
+		int room = bar.getMaximum() - bar.getVisibleAmount();
+		assertTrue("the view must be longer than the panel, room " + room, room > 20);
+		bar.setValue(Math.min(120, room));
+		int target = bar.getValue();   // as far as this pane will go
+		assertTrue("the reader must be able to scroll at all", target > 0);
+
+		// a fold belonging to a view this one is not showing: the content is the
+		// same afterwards, so only the reader's place is under test
+		Method toggle = ChroniclePanel.class.getDeclaredMethod("toggleFold", String.class);
+		toggle.setAccessible(true);
+		toggle.invoke(p, "history:Loot");
+		display.setSize(240, 200);
+		display.validate();
+
+		javax.swing.JScrollBar moved =
+			((javax.swing.JScrollPane) display.getComponent(0)).getVerticalScrollBar();
+		// as far down as the redrawn view allows, and never back to the first line
+		assertTrue("the fold click threw the reader to the top",
+			moved.getValue() > 0);
+	}
 }
