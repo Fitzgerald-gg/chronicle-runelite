@@ -222,6 +222,8 @@ public final class StatRegistry
 		LABELS.put("dropsReceived", "Drops received");
 		LABELS.put("lootValue", "Loot value");
 		LABELS.put("slayerTasksCompleted", "Slayer tasks completed");
+		// read off the slayer journey on the History tab alone, never on the spine
+		LABELS.put("slayerKills", "Slayer kills");
 		LABELS.put("clogSlotsObtained", "Collection log slots");
 		LABELS.put("lootLeftCount", "Left on the floor");
 		LABELS.put("lootLeftValue", "Value left on the floor");

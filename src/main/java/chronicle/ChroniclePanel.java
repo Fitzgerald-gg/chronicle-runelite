@@ -2909,13 +2909,36 @@ class ChroniclePanel extends PluginPanel
 		long n = 0;
 		for (ChronicleApiClient.SlayerTask t : j.tasks)
 		{
-			long ms = (long) (t.ts * 1000);
-			if (!t.inProgress && ms >= fromMs && ms < toMs)
+			if (closedInside(t, fromMs, toMs))
 			{
 				n++;
 			}
 		}
 		return n;
+	}
+
+	// The kills those same segments hold, each task's own count as its completion
+	// set it, the kills the loot never saw included. The window is the one
+	// closedTasksBetween reads, so the two lines agree on which tasks are the
+	// period's.
+	private static long closedKillsBetween(ChronicleApiClient.SlayerJourney j, long fromMs, long toMs)
+	{
+		long n = 0;
+		for (ChronicleApiClient.SlayerTask t : j.tasks)
+		{
+			if (closedInside(t, fromMs, toMs))
+			{
+				n += t.kills;
+			}
+		}
+		return n;
+	}
+
+	// A segment closed inside the window; the one in hand is nobody's yet.
+	private static boolean closedInside(ChronicleApiClient.SlayerTask t, long fromMs, long toMs)
+	{
+		long ms = (long) (t.ts * 1000);
+		return !t.inProgress && ms >= fromMs && ms < toMs;
 	}
 
 	// The oldest stamp in the feed slice, or 0 when it holds none: whether the
@@ -2944,9 +2967,10 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * What died, and what the period added. The collection log's tally is the
-	 * spine, floored by the drop ledger: the list reads as bosses and activities,
-	 * not every creature ever killed.
+	 * What died, and what the period added: every source the record counted, the
+	 * collection log's bosses and activities first, at its tally floored by the
+	 * drop ledger, then everything else the ledger counted, which the log has no
+	 * page for. One base with the summary's Kills line.
 	 *
 	 * <p>Kill counts only entered the daily baseline later, so a period bounded
 	 * by an older line measures each count from the first line that carries it
@@ -2991,19 +3015,30 @@ class ChroniclePanel extends PluginPanel
 			return ga != gb ? Long.compare(gb, ga) : Long.compare(b.getValue(), a.getValue());
 		};
 
-		List<Map.Entry<String, Long>> rows = new ArrayList<>(standing.entrySet());
-		rows.sort(byGainThenTotal);
-		JPanel card = card("Bosses and activities");
-		for (Map.Entry<String, Long> e : rows)
+		// Everything else the drop ledger counted stands apart below. The
+		// collection log knows what counts as a boss; the ledger doesn't.
+		Map<String, Long> unpaged = plugin.ledgerKills();
+		List<Map.Entry<String, Long>> rows = new ArrayList<>();
+		for (Map.Entry<String, Long> e : standing.entrySet())
 		{
-			card.add(kcRow(e.getKey(), e.getValue(), gained.get(e.getKey())));
+			if (!unpaged.containsKey(e.getKey()))
+			{
+				rows.add(e);
+			}
 		}
-		p.add(card);
-		p.add(vgap(6));
+		rows.sort(byGainThenTotal);
+		if (!rows.isEmpty())
+		{
+			JPanel card = card("Bosses and activities");
+			for (Map.Entry<String, Long> e : rows)
+			{
+				card.add(kcRow(e.getKey(), e.getValue(), gained.get(e.getKey())));
+			}
+			p.add(card);
+			p.add(vgap(6));
+		}
 
-		// Everything else the drop ledger counted. The collection log knows what
-		// counts as a boss; the ledger doesn't.
-		List<Map.Entry<String, Long>> rest = new ArrayList<>(plugin.ledgerKills().entrySet());
+		List<Map.Entry<String, Long>> rest = new ArrayList<>(unpaged.entrySet());
 		rest.sort(byGainThenTotal);
 		if (!rest.isEmpty())
 		{
@@ -3221,9 +3256,11 @@ class ChroniclePanel extends PluginPanel
 
 		JPanel lens = new JPanel(new GridLayout(1, 2, 3, 3));
 		lens.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		for (String which : new String[]{"Skills", "Bosses"})
+		// "Kills" lists every monster the record counted, not bosses alone; the
+		// field keeps its old name.
+		for (String which : new String[]{"Skills", "Kills"})
 		{
-			boolean on = "Bosses".equals(which) == histBosses;
+			boolean on = "Kills".equals(which) == histBosses;
 			JLabel t = new JLabel(which, JLabel.CENTER);
 			t.setOpaque(true);
 			t.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
@@ -3232,7 +3269,7 @@ class ChroniclePanel extends PluginPanel
 			t.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
 			t.addMouseListener(clicker(() ->
 			{
-				histBosses = "Bosses".equals(which);
+				histBosses = "Kills".equals(which);
 				rebuild();
 			}));
 			lens.add(t);
@@ -3420,13 +3457,13 @@ class ChroniclePanel extends PluginPanel
 				addSkillGrid(p, gains, at.getValue().skills);
 			}
 
-			// Milestones inside the window, and beside them the two summary lines
+			// Milestones inside the window, and beside them the summary lines
 			// that read the journal itself rather than the spine: slayer tasks
-			// from the closed segments dated inside the period, and collection
-			// log slots from the feed's COLLECTION entries when the feed reaches
-			// back past the window's start (a feed that begins inside it cannot
-			// say what it missed, and the spine's delta stands). Both reach back
-			// past the day the spine first carried them.
+			// and slayer kills from the closed segments dated inside the period,
+			// and collection log slots from the feed's COLLECTION entries when
+			// the feed reaches back past the window's start (a feed that begins
+			// inside it cannot say what it missed, and the spine's delta stands).
+			// All of them reach back past the day the spine first carried them.
 			long fromMs = pStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			long toMs = end.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			List<JsonObject> milestones = new ArrayList<>();
@@ -3447,6 +3484,7 @@ class ChroniclePanel extends PluginPanel
 			if (historyJourney != null)
 			{
 				retro.put("slayerTasksCompleted", closedTasksBetween(historyJourney, fromMs, toMs));
+				retro.put("slayerKills", closedKillsBetween(historyJourney, fromMs, toMs));
 			}
 			long oldest = oldestTs(historyFeed);
 			if (oldest > 0 && oldest < fromMs)
@@ -3456,11 +3494,11 @@ class ChroniclePanel extends PluginPanel
 
 			// What the period tracked: the headline figures, then every other
 			// counter as a fold named for the section the Stats tab files it in.
-			// The per-source kill counts stay with the Bosses toggle above; the
-			// card's Kills line is the drop ledger's own tally, written on the
-			// spine beside the counters. The note under the caption reads the
-			// spine only as far as the period's last line: a period closed
-			// before a key joined names no date after its own end.
+			// The per-source kill counts stay with the Kills toggle above; the
+			// card's Kills line is their sum, written on the spine beside the
+			// counters off the same per-source base. The note under the caption
+			// reads the spine only as far as the period's last line: a period
+			// closed before a key joined names no date after its own end.
 			HistoryProgress progress = HistoryProgress.of(
 				HistoryLog.gained(from.getValue().counters, earliest.counters,
 					at.getValue().counters),

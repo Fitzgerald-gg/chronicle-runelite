@@ -75,8 +75,9 @@ public class SpineExtrasTest
 		assertEquals(Long.valueOf(750), x.get("lootValue"));
 		assertEquals(Long.valueOf(42), x.get("lootLeftCount"));
 		assertEquals(Long.valueOf(150), x.get("lootLeftValue"));
-		// kills are the ledger's own counts, the same base as the loot events,
-		// never the collection log's page counts
+		// kills share the Kills list's per-source base: each source at the most
+		// of its kill-count line and its loot events (9 and 2 here), never a log
+		// page the ledger has no source for
 		assertEquals(Long.valueOf(11), x.get("kills"));
 		assertEquals(Long.valueOf(7), x.get("slayerTasksCompleted"));
 		assertEquals(Long.valueOf(3), x.get("clogSlotsObtained"));
@@ -90,6 +91,35 @@ public class SpineExtrasTest
 			assertFalse(key, trackers.containsKey(key));
 		}
 		assertEquals(StatRegistry.summaryKeys(), x.keySet());
+	}
+
+	@Test
+	public void killsAreTheSumOfTheBaseTheKillsListDraws() throws Exception
+	{
+		journal("{\"schema\":1,\"rsn\":\"Tester\",\"drops\":{"
+			// an ordinary slayer monster: no kill-count line, only its loot events
+			+ "\"Nechryael\":{\"loots\":622,\"value\":100},"
+			// the log counts this one higher, under its own plural
+			+ "\"Tormented Demon\":{\"kc\":1302,\"loots\":1305,\"value\":100},"
+			// and this one lower than the ledger has watched
+			+ "\"Vorkath\":{\"kc\":156,\"loots\":143,\"value\":100}},"
+			+ "\"collection_log\":{\"kcs\":{\"Tormented Demons\":1310,\"Vorkath\":19,"
+			+ "\"Soul Wars\":346}}}");
+		LocalStore store = mounted();
+		Map<String, Long> perSource = store.sourceKills();
+		assertEquals(Long.valueOf(622), perSource.get("Nechryael"));
+		assertEquals(Long.valueOf(1310), perSource.get("Tormented Demons"));
+		assertEquals(Long.valueOf(156), perSource.get("Vorkath"));
+		// a page the ledger never saw loot from is no source
+		assertEquals(perSource.toString(), 3, perSource.size());
+		long sum = 0;
+		for (long v : perSource.values())
+		{
+			sum += v;
+		}
+		assertEquals(622 + 1310 + 156, sum);
+		// the summary's Kills line and the per-source list read one base
+		assertEquals(Long.valueOf(sum), store.spineExtras().get("kills"));
 	}
 
 	@Test

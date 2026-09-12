@@ -648,36 +648,18 @@ public class PanelPreviewTest
 		s.consumVals = store.consumableValues();
 		s.grinds = new GrindBook(new Gson()).grinds(store.clogSnapshot(), store.dropSources());
 		JsonObject clKc = store.clogSnapshot();
-		if (clKc.has("kcs") && clKc.get("kcs").isJsonObject())
+		s.kcs.putAll(LocalStore.clogKillCounts(clKc));
+		// the same fold as ChroniclePlugin.killCounts and ledgerKills: every ledger
+		// source at the most any record saw of it, under the log's spelling where
+		// the two name one thing, and the ones the log has no page for apart
+		for (Map.Entry<String, Long> e
+			: LocalStore.sourceKills(clKc, store.dropSources()).entrySet())
 		{
-			for (Map.Entry<String, com.google.gson.JsonElement> e
-				: clKc.getAsJsonObject("kcs").entrySet())
+			if (!s.kcs.containsKey(e.getKey()))
 			{
-				s.kcs.put(e.getKey(), e.getValue().getAsLong());
+				s.ledgerKcs.put(e.getKey(), e.getValue());
 			}
-		}
-		// same fold as ChroniclePlugin.killCounts: a ledger source the clog already
-		// lists collapses into the log's spelling instead of listing twice
-		Map<String, String> byKind = new LinkedHashMap<>();
-		for (String n : s.kcs.keySet())
-		{
-			byKind.put(n.toLowerCase(Locale.ROOT).replaceAll("s$", ""), n);
-		}
-		for (LocalStore.SourceRow r : store.dropSources())
-		{
-			if (r.kc <= 0)
-			{
-				continue;
-			}
-			String known = byKind.get(r.name.toLowerCase(Locale.ROOT).replaceAll("s$", ""));
-			if (known != null)
-			{
-				s.kcs.merge(known, (long) r.kc, Math::max);
-			}
-			else
-			{
-				s.ledgerKcs.merge(r.name, (long) r.kc, Math::max);
-			}
+			s.kcs.merge(e.getKey(), e.getValue(), Math::max);
 		}
 		return s;
 	}

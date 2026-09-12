@@ -2818,10 +2818,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * reads them: dropsReceived (loot events across every source), lootValue (their
 	 * gp), lootLeftCount and lootLeftValue (items left on the floor and their gp,
 	 * from the untaken ledger, the same tally the Left behind lens shows), kills
-	 * (the ledger's kill counts summed, the same base as dropsReceived, never the
-	 * collection log's page counts, which are mostly minigame rounds),
-	 * slayerTasksCompleted, clogSlotsObtained (the log's own obtained count when
-	 * the journal holds one, else the distinct names the stored pages list).
+	 * (every source's kills summed, the per-source figure {@link #sourceKills}
+	 * gives the History tab's Kills list, so the summary line and the list share
+	 * one base; a collection log page the ledger never saw loot from is not
+	 * counted, most of those are minigame rounds), slayerTasksCompleted,
+	 * clogSlotsObtained (the log's own obtained count when the journal holds one,
+	 * else the distinct names the stored pages list).
 	 * {@link #spineCounters} merges them into a copy of the trackers for each line;
 	 * nothing here reaches the trackers, so the Stats tab never sees them.
 	 */
@@ -2829,12 +2831,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	{
 		long loots = 0;
 		long value = 0;
-		long kills = 0;
-		for (SourceRow r : dropSources())
+		java.util.List<SourceRow> sources = dropSources();
+		for (SourceRow r : sources)
 		{
 			loots += r.loots;
 			value += r.value;
-			kills += r.kc;
+		}
+		long kills = 0;
+		for (long k : sourceKills(clogSnapshot(), sources).values())
+		{
+			kills += k;
 		}
 		long left = 0;
 		long leftValue = 0;
@@ -2866,6 +2872,90 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		java.util.Map<String, Long> out = trackersSnapshot();
 		out.putAll(spineExtras());
 		return out;
+	}
+
+	/**
+	 * Kills per drop source, the figure the History tab's Kills list and its
+	 * summary line share: for each source the most any record has seen of it, its
+	 * kill-count line, the loot events it logged (an ordinary slayer monster has
+	 * no kill-count line, so only its loots grow) and the collection log's count
+	 * for the page of the same name. Keyed by the log's spelling where a source
+	 * matches a page ("Tormented Demons" for the ledger's "Tormented Demon"), else
+	 * the ledger's own; two sources that name one page fold into one entry, and a
+	 * source with nothing counted stays out. A page the ledger never saw loot from
+	 * is not here: {@code ChroniclePlugin.killCounts} lays those beside.
+	 */
+	java.util.Map<String, Long> sourceKills()
+	{
+		return sourceKills(clogSnapshot(), dropSources());
+	}
+
+	static java.util.Map<String, Long> sourceKills(JsonObject clog,
+		java.util.List<SourceRow> sources)
+	{
+		java.util.Map<String, Long> paged = clogKillCounts(clog);
+		java.util.Map<String, String> byKind = new java.util.HashMap<>();
+		for (String name : paged.keySet())
+		{
+			byKind.put(kindOf(name), name);
+		}
+		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		for (SourceRow r : sources)
+		{
+			long kills = Math.max(r.kc, r.loots);
+			String name = r.name;
+			String known = byKind.get(kindOf(r.name));
+			if (known != null)
+			{
+				kills = Math.max(kills, paged.get(known));
+				name = known;
+			}
+			if (kills > 0)
+			{
+				out.merge(name, kills, Math::max);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * The collection log's kill counts as the stored log lists them, by page name:
+	 * the positive numeric entries of its {@code kcs}, a non-numeric one being no
+	 * kill count. Empty with no log.
+	 */
+	static java.util.Map<String, Long> clogKillCounts(JsonObject clog)
+	{
+		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		if (clog == null || !clog.has("kcs") || !clog.get("kcs").isJsonObject())
+		{
+			return out;
+		}
+		for (java.util.Map.Entry<String, JsonElement> e : clog.getAsJsonObject("kcs").entrySet())
+		{
+			try
+			{
+				long v = e.getValue().getAsLong();
+				if (v > 0)
+				{
+					out.put(e.getKey(), v);
+				}
+			}
+			catch (RuntimeException ignored)
+			{
+				// a non-numeric entry is not a kill count
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Loose identity for a source: the collection log says "Tormented Demons"
+	 * where the ledger says "Tormented Demon", and they are one thing.
+	 */
+	static String kindOf(String name)
+	{
+		String n = name == null ? "" : name.trim().toLowerCase(java.util.Locale.ROOT);
+		return n.endsWith("s") ? n.substring(0, n.length() - 1) : n;
 	}
 
 	// Distinct item names the stored log calls obtained: clog_items plus every

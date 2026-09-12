@@ -95,7 +95,8 @@ public class HistoryProgressTest
 			"consumedValue", 16, "coinsFromAlchemy", 15, "coinsEarnedAtShops", 14,
 			"coinsSpentAtShops", 13, "distanceWalked", 12, "distanceRan", 11,
 			"clogSlotsObtained", 9, "deaths", 8, "damageDealtMagic", 1, "damageDealtRanged", 2,
-			"damageDealtMelee", 4, "damageDealt", 7, "slayerTasksCompleted", 6, "kills", 3,
+			"damageDealtMelee", 4, "damageDealt", 7, "slayerKills", 5, "slayerTasksCompleted", 6,
+			"kills", 3,
 			"lootLeftValue", 5, "lootLeftCount", 4, "lootValue", 2000, "dropsReceived", 1);
 	}
 
@@ -105,7 +106,8 @@ public class HistoryProgressTest
 		HistoryProgress p = of(everything());
 		assertEquals(Arrays.asList(
 			"Drops received", "Loot value", "Left on the floor", "Loot kept", "Kills",
-			"Slayer tasks completed", "Damage dealt", "· by melee", "· by ranged", "· by magic",
+			"Slayer tasks completed", "Slayer kills", "Damage dealt", "· by melee", "· by ranged",
+			"· by magic",
 			"Deaths", "Collection log slots", "Distance run", "Distance walked",
 			"Spent at shops", "Earned at shops", "Coins from alchemy", "Consumed value",
 			"Gathered", "Value dropped"),
@@ -128,7 +130,7 @@ public class HistoryProgressTest
 		// one table names a key for both tabs: the summary never words a key
 		// itself
 		HistoryProgress p = of(everything());
-		assertEquals(20, p.summary().size());
+		assertEquals(21, p.summary().size());
 		for (HistoryProgress.Row r : p.summary())
 		{
 			assertEquals(r.key(), StatRegistry.label(r.key()), r.label());
@@ -238,7 +240,7 @@ public class HistoryProgressTest
 	{
 		Map<String, Long> c = everything();
 		HistoryProgress p = of(c);
-		assertEquals(20, p.summary().size());
+		assertEquals(21, p.summary().size());
 		assertTrue(p.sections().toString(), p.sections().isEmpty());
 		for (String k : c.keySet())
 		{

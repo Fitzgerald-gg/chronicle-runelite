@@ -202,12 +202,15 @@ public final class HistoryProgress
 	// floor" reads lootLeftCount and lootLeftValue together, "Loot kept" is
 	// derived from lootValue and lootLeftValue, the damage split rides under
 	// "Damage dealt", and resourcesDroppedValue is the note on the gathered
-	// row, so the list is the keys and not the rows. Teleports are not here:
+	// row, so the list is the keys and not the rows. slayerKills never rides the
+	// spine: the History tab reads it off the slayer journey for the period and
+	// lays it over the deltas as a retroactive figure. Teleports are not here:
 	// the Teleports section carries the period's total with its "Other means",
 	// one place for one figure.
 	private static final Set<String> SUMMARY_KEYS = new HashSet<>(Arrays.asList(
 		"dropsReceived", "lootValue", "lootLeftCount", "lootLeftValue", "kills",
-		"slayerTasksCompleted", "damageDealt", "damageDealtMelee", "damageDealtRanged",
+		"slayerTasksCompleted", "slayerKills", "damageDealt", "damageDealtMelee",
+		"damageDealtRanged",
 		"damageDealtMagic", "deaths", "clogSlotsObtained", "distanceRan", "distanceWalked",
 		"coinsSpentAtShops", "coinsEarnedAtShops", "coinsFromAlchemy", "consumedValue",
 		"resourcesGatheredValue", "resourcesDroppedValue", "itemsDroppedValue"));
@@ -308,6 +311,7 @@ public final class HistoryProgress
 		}
 		add(out, c, gp, "kills");
 		add(out, c, gp, "slayerTasksCompleted");
+		add(out, c, gp, "slayerKills");
 		add(out, c, gp, "damageDealt");
 		// the split rides under its parent, with the registry's "· by" labels
 		add(out, c, gp, "damageDealtMelee");

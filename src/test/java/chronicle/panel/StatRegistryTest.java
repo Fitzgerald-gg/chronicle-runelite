@@ -44,6 +44,9 @@ public class StatRegistryTest
 		assertEquals("Drops received", StatRegistry.label("dropsReceived"));
 		assertEquals("Loot value", StatRegistry.label("lootValue"));
 		assertEquals("Slayer tasks completed", StatRegistry.label("slayerTasksCompleted"));
+		// the journey's own figure for a period, named here like the rest
+		assertEquals("Slayer kills", StatRegistry.label("slayerKills"));
+		assertFalse(StatRegistry.isGp("slayerKills"));
 		assertEquals("Collection log slots", StatRegistry.label("clogSlotsObtained"));
 		assertEquals("Left on the floor", StatRegistry.label("lootLeftCount"));
 		assertEquals("Value left on the floor", StatRegistry.label("lootLeftValue"));

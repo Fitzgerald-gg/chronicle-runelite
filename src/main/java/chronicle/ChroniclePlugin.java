@@ -905,74 +905,39 @@ public class ChroniclePlugin extends Plugin
 		return skillIcons;
 	}
 
-	// Bosses and activities by kill count, as the collection log lists them, floored
-	// by the drop ledger where it has watched more kills than the log has recorded.
+	// Everything counted, keyed as the History spine stores it: the collection
+	// log's bosses and activities by kill count, raised by every drop-ledger
+	// source at the most any record has seen of it (LocalStore.sourceKills: its
+	// kill-count line, its loot events, the log's count for the page of the same
+	// name), under the log's spelling where the two name one thing. A page the
+	// ledger never saw loot from stands at the log's count; a paged source's
+	// figure already holds the page's count, so it stands in for it outright.
 	Map<String, Long> killCounts()
 	{
-		Map<String, Long> out = new java.util.LinkedHashMap<>();
 		JsonObject cl = localStore.clogSnapshot();
-		if (cl.has("kcs") && cl.get("kcs").isJsonObject())
-		{
-			for (Map.Entry<String, com.google.gson.JsonElement> e
-				: cl.getAsJsonObject("kcs").entrySet())
-			{
-				try
-				{
-					long v = e.getValue().getAsLong();
-					if (v > 0)
-					{
-						out.put(e.getKey(), v);
-					}
-				}
-				catch (RuntimeException ignored)
-				{
-					// a non-numeric entry is not a kill count
-				}
-			}
-		}
-		java.util.Map<String, String> byKind = new java.util.HashMap<>();
-		for (String name : out.keySet())
-		{
-			byKind.put(sameThing(name), name);
-		}
-		for (LocalStore.SourceRow r : localStore.dropSources())
-		{
-			String known = byKind.get(sameThing(r.name));
-			if (known != null && r.kc > 0)
-			{
-				out.merge(known, (long) r.kc, Math::max);
-			}
-		}
+		Map<String, Long> out = LocalStore.clogKillCounts(cl);
+		out.putAll(LocalStore.sourceKills(cl, localStore.dropSources()));
 		return out;
 	}
 
-	// Everything else the ledger counted, which the collection log has no page for.
-	// Kept apart: with no record of a source's kind, arrowtips would sit among bosses.
+	// The ledger's sources the collection log has no page for, at the figures
+	// killCounts carries for them. Kept apart for the panel: the log knows what
+	// counts as a boss and the ledger doesn't, and with no record of a source's
+	// kind, arrowtips would sit among bosses.
 	Map<String, Long> ledgerKills()
 	{
-		Map<String, Long> bosses = killCounts();
-		java.util.Set<String> known = new java.util.HashSet<>();
-		for (String name : bosses.keySet())
-		{
-			known.add(sameThing(name));
-		}
+		JsonObject cl = localStore.clogSnapshot();
+		java.util.Set<String> paged = LocalStore.clogKillCounts(cl).keySet();
 		Map<String, Long> out = new java.util.LinkedHashMap<>();
-		for (LocalStore.SourceRow r : localStore.dropSources())
+		for (Map.Entry<String, Long> e
+			: LocalStore.sourceKills(cl, localStore.dropSources()).entrySet())
 		{
-			if (r.kc > 0 && !known.contains(sameThing(r.name)))
+			if (!paged.contains(e.getKey()))
 			{
-				out.merge(r.name, (long) r.kc, Math::max);
+				out.put(e.getKey(), e.getValue());
 			}
 		}
 		return out;
-	}
-
-	// Loose identity for a source: the collection log says "Tormented Demons" where
-	// the ledger says "Tormented Demon", and they are one thing.
-	private static String sameThing(String name)
-	{
-		String n = name == null ? "" : name.trim().toLowerCase(java.util.Locale.ROOT);
-		return n.endsWith("s") ? n.substring(0, n.length() - 1) : n;
 	}
 
 	// Level + xp per skill, as the journal last saw them.

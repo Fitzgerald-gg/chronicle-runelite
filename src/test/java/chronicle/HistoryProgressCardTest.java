@@ -45,11 +45,11 @@ import static org.junit.Assert.assertTrue;
  * than the period's start, then one list of folds in the Stats tab's family
  * and section order with no heading between families. A fold starts shut, its
  * head carries the section's period total where the rows add up to one, and a
- * click on the head opens it to the rows and the leftover "Other". Two summary
- * lines read the journal itself and reach back past the spine: slayer tasks
- * from the closed segments dated inside the period, and collection log slots
- * from the feed's COLLECTION entries when the feed reaches back past the
- * window's start. The note reads the spine only as far as the period's last
+ * click on the head opens it to the rows and the leftover "Other". Three
+ * summary lines read the journal itself and reach back past the spine: slayer
+ * tasks and slayer kills from the closed segments dated inside the period, and
+ * collection log slots from the feed's COLLECTION entries when the feed reaches
+ * back past the window's start. The note reads the spine only as far as the period's last
  * line, and the journey reaches the card through the read the panel primes
  * when it is built. The folds are keyed apart from the Stats tab's.
  */
@@ -185,7 +185,14 @@ public class HistoryProgressCardTest
 
 	private static ChronicleApiClient.SlayerTask task(String name, double ts, boolean inProgress)
 	{
-		return new ChronicleApiClient.SlayerTask(name, 100, inProgress ? 150 : 0, 0, ts, 1_000L,
+		return task(name, ts, inProgress, 100);
+	}
+
+	// the same, with the kills the segment holds
+	private static ChronicleApiClient.SlayerTask task(String name, double ts, boolean inProgress,
+		long kills)
+	{
+		return new ChronicleApiClient.SlayerTask(name, kills, inProgress ? 150 : 0, 0, ts, 1_000L,
 			inProgress);
 	}
 
@@ -656,6 +663,63 @@ public class HistoryProgressCardTest
 			task("Abyssal demons", now, true),
 			task("Dust devils", now - 20 * 86_400, false)));
 		assertNull(beside(card(labels(history(p))), "Slayer tasks completed"));
+	}
+
+	@Test
+	public void slayerKillsSumTheClosedSegmentsDatedInsideThePeriod() throws Exception
+	{
+		ChroniclePanel p = panel(stub(true));
+		// the spine never carries the figure: no journey read yet, no line
+		assertNull(beside(card(labels(history(p))), "Slayer kills"));
+
+		// the journey: a task in hand today, two closed inside the week and one
+		// closed before it. The kills of the closed segments dated inside are
+		// the figure; the one in hand and the one before the week are not.
+		double now = System.currentTimeMillis() / 1000.0;
+		set(p, "historyJourney", journey(
+			task("Abyssal demons", now, true, 90),
+			task("Gargoyles", now - 2 * 86_400, false, 137),
+			task("Nechryael", now - 4 * 86_400, false, 58),
+			task("Dust devils", now - 20 * 86_400, false, 200)));
+		List<String> card = card(labels(history(p)));
+		assertEquals(card.toString(), "+195", beside(card, "Slayer kills"));
+		// right after the tasks line, in the summary's fixed order
+		assertEquals(card.toString(), card.indexOf("Slayer tasks completed") + 2,
+			card.indexOf("Slayer kills"));
+
+		// nothing closed inside the week: no line
+		set(p, "historyJourney", journey(
+			task("Abyssal demons", now, true, 90),
+			task("Dust devils", now - 20 * 86_400, false, 200)));
+		assertNull(beside(card(labels(history(p))), "Slayer kills"));
+	}
+
+	@Test
+	public void theKillsToggleNamesEveryMonster() throws Exception
+	{
+		// the lens reads Skills and Kills: the list under it is every source the
+		// record counted, not bosses alone
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.kcs.put("Zulrah", 108L);
+		s.kcs.put("Nechryael", 622L);
+		s.ledgerKcs.put("Nechryael", 622L);
+		ChroniclePanel p = panel(s);
+		List<String> all = labels(history(p));
+		assertEquals(all.toString(), all.indexOf("Skills") + 1, all.indexOf("Kills"));
+		assertFalse(all.toString(), all.contains("Bosses"));
+
+		// under it, the log's pages first and the ledger's own sources apart,
+		// each at its standing count with the period's gain beside
+		set(p, "histBosses", true);
+		all = labels(history(p));
+		int bosses = all.indexOf("BOSSES AND ACTIVITIES");
+		int rest = all.indexOf("EVERYTHING ELSE COUNTED");
+		assertTrue(all.toString(), bosses > 0 && rest > bosses);
+		assertEquals(all.toString(), "Zulrah", all.get(bosses + 1));
+		assertEquals(all.toString(), "108  +8", all.get(bosses + 2));
+		assertEquals(all.toString(), "Nechryael", all.get(rest + 1));
+		assertEquals(all.toString(), "622", all.get(rest + 2));
+		assertFalse(all.toString(), all.subList(bosses, rest).contains("Nechryael"));
 	}
 
 	@Test
