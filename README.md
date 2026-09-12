@@ -81,7 +81,7 @@ additionally sends a copy of the journal upward on the write interval and at log
 ## The panel
 
 Seven tabs. **Home** shows the current session, with only the cards your play has earned.
-**Drops** is the ledger of sources and items, taken and left behind. **Slayer** holds the current
+**Drops** is the ledger of sources and items, received and left behind. **Slayer** holds the current
 task, the task-by-task journey and the kill log. **Log** is the collection log. **Stats** is every
 counter. **History** compares any two periods. **Journal** is the dated feed.
 

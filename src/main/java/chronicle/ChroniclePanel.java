@@ -652,7 +652,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (plugin.sessionLoots() > 0)
 		{
-			strip.add(row("Drops taken",
+			strip.add(row("Drops received",
 				plugin.sessionLoots() + " · " + gp(plugin.sessionLootValue()) + " gp",
 				ACCENT_SESSION));
 			mounted++;
@@ -731,7 +731,7 @@ class ChroniclePanel extends PluginPanel
 		JPanel p = column();
 		JPanel lens = new JPanel(new GridLayout(1, 2, 3, 3));
 		lens.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		for (String l : new String[]{"Taken", "Left behind"})
+		for (String l : new String[]{"Received", "Left behind"})
 		{
 			boolean on = l.equals("Left behind") == dropsLeftBehind;
 			JLabel pill = new JLabel(l, JLabel.CENTER);
