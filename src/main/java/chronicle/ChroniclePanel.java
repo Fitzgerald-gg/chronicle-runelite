@@ -9,6 +9,7 @@
 package chronicle;
 
 import chronicle.counters.ExperienceStatTracker;
+import chronicle.panel.HistoryProgress;
 import chronicle.panel.StatRegistry;
 import com.google.gson.JsonObject;
 import java.awt.BorderLayout;
@@ -2813,6 +2814,81 @@ class ChroniclePanel extends PluginPanel
 		return feed.isEmpty() ? 0 : safeLong(feed.get(0).get("ts"));
 	}
 
+	// The period's tracked progress: the headline figures, then every other
+	// counter under the family and section the Stats tab files it in. Each
+	// section is a fold that starts shut and opens to its rows and the leftover
+	// "Other"; a family heads its sections only when it has one to show. The
+	// folds are keyed apart from the Stats tab's, so a reader's fold on one tab
+	// leaves the other tab as it was.
+	private JPanel trackedProgress(HistoryProgress progress)
+	{
+		JPanel card = card("Tracked progress");
+		for (HistoryProgress.Row r : progress.summary())
+		{
+			card.add(row(r.label(), "+" + figure(r), null));
+		}
+		String family = null;
+		for (HistoryProgress.Section s : progress.sections())
+		{
+			if (!s.family().equals(family))
+			{
+				family = s.family();
+				card.add(group(family));
+			}
+			if (s.name().equals(s.family()))
+			{
+				// the family's flat top list, drawn as the Stats tab draws it:
+				// plain rows under the family, no fold and no total, since meals
+				// and doses and hitpoints regained do not add up to anything
+				for (HistoryProgress.Row r : s.rows())
+				{
+					card.add(row(r.label(), "+" + figure(r), null));
+				}
+				continue;
+			}
+			String stateKey = "history:" + s.family() + ":" + s.name();
+			boolean open = foldOpen(stateKey);
+			// a section of gp rows totals in gp; every other section counts
+			boolean gpTotal = !s.rows().isEmpty();
+			for (HistoryProgress.Row r : s.rows())
+			{
+				gpTotal &= r.gp();
+			}
+			JPanel head = row(s.name().toUpperCase(Locale.ROOT),
+				"+" + (gpTotal ? gp(s.total()) + " gp" : fmt(s.total())),
+				open ? accent() : null);
+			JLabel headName = (JLabel) ((BorderLayout) head.getLayout())
+				.getLayoutComponent(BorderLayout.CENTER);
+			headName.setFont(FontManager.getRunescapeSmallFont());
+			headName.setForeground(open ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+			head.setBorder(BorderFactory.createEmptyBorder(6, 2, 2, 2));
+			head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			head.addMouseListener(clicker(() -> toggleFold(stateKey)));
+			card.add(head);
+			if (open)
+			{
+				for (HistoryProgress.Row r : s.rows())
+				{
+					card.add(row(r.label(), "+" + figure(r), null));
+				}
+				if (s.ghost() > 0)
+				{
+					card.add(ghostRow(s.ghostLabel(), "+" + fmt(s.ghost())));
+				}
+			}
+		}
+		return card;
+	}
+
+	// A progress figure: gp keys in gp, and a second gp figure beside the value
+	// when the row carries one, worded as the row says ("3 · 300k gp" for loot
+	// left on the floor, "2.5M gp · 300k dropped" for what was gathered).
+	private static String figure(HistoryProgress.Row r)
+	{
+		String base = r.gp() ? gp(r.value()) + " gp" : fmt(r.value());
+		return r.gpNote() > 0 ? base + " · " + gp(r.gpNote()) + " " + r.gpNoteWord() : base;
+	}
+
 	/**
 	 * What died, and what the period added. The collection log's tally is the
 	 * spine, floored by the drop ledger: the list reads as bosses and activities,
@@ -3290,33 +3366,18 @@ class ChroniclePanel extends PluginPanel
 				addSkillGrid(p, gains, at.getValue().skills);
 			}
 
-			List<Map.Entry<String, Long>> movers = new ArrayList<>();
-			for (Map.Entry<String, Long> e : HistoryLog.gained(from.getValue().counters,
-				earliest.counters, at.getValue().counters).entrySet())
+			// What the period tracked: the headline figures, then every other
+			// counter under the family and section the Stats tab files it in.
+			// The per-source kill counts stay with the Bosses toggle above; the
+			// card's Kills line is the drop ledger's own tally, written on the
+			// spine beside the counters.
+			HistoryProgress progress = HistoryProgress.of(
+				HistoryLog.gained(from.getValue().counters, earliest.counters,
+					at.getValue().counters),
+				null);
+			if (!progress.summary().isEmpty() || !progress.sections().isEmpty())
 			{
-				if (!LocalStore.MAX_KEYS.contains(e.getKey())
-					&& !StatRegistry.hidden(e.getKey())
-					&& !StatRegistry.isFloor(e.getKey()))
-				{
-					movers.add(e);
-				}
-			}
-			movers.sort(Map.Entry.<String, Long>comparingByValue().reversed());
-			if (!movers.isEmpty())
-			{
-				JPanel card = card("The period's movers");
-				int mounted = 0;
-				for (Map.Entry<String, Long> m : movers)
-				{
-					if (mounted++ >= 8)
-					{
-						break;
-					}
-					String v = "+" + (StatRegistry.isGp(m.getKey())
-						? gp(m.getValue()) + " gp" : fmt(m.getValue()));
-					card.add(row(StatRegistry.label(m.getKey()), v, null));
-				}
-				p.add(card);
+				p.add(trackedProgress(progress));
 				p.add(vgap(5));
 			}
 

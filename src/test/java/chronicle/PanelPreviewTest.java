@@ -233,6 +233,15 @@ public class PanelPreviewTest
 			set(panel, "histGranularity", g);
 			shoot(panel, out, prefix + "-history-" + g.toLowerCase(), "HISTORY");
 		}
+		// tracked-progress folds open: their rows and the leftover "Other" only
+		// exist in this state, and the folds are keyed apart from the Stats tab's.
+		// Cooking holds two verbs, Teleports reconciles to "Other means".
+		set(panel, "histGranularity", "Week");
+		expandSection(panel, "history:Skilling:Woodcutting");
+		expandSection(panel, "history:Skilling:Cooking");
+		expandSection(panel, "history:Ledger & Roads:Teleports");
+		shoot(panel, out, prefix + "-history-progress-open", "HISTORY");
+		collapseAll(panel);
 
 		shoot(panel, out, prefix + "-journal", "JOURNAL");
 
@@ -502,7 +511,42 @@ public class PanelPreviewTest
 			b.skills.put("slayer", base / 2 + (35 - i) * 44_113L);
 			b.skills.put("runecraft", 1_204_113L + (35 - i) * 8_402L);
 			b.counters.put("damageDealt", 1_500_000L + (35 - i) * 9_113L);
+			b.counters.put("damageDealtMelee", 900_000L + (35 - i) * 6_000L);
+			b.counters.put("damageDealtRanged", 400_000L + (35 - i) * 3_113L);
 			b.counters.put("tilesRan", 900_000L + (35 - i) * 5_204L);
+			b.counters.put("resourcesGatheredValue", 9_000_000L + (35 - i) * 61_000L);
+			b.counters.put("resourcesDroppedValue", 700_000L + (35 - i) * 4_100L);
+			// typed crafts, the table and the roads, each growing under its
+			// floor, so the tracked-progress card has folds and ghosts to draw
+			b.counters.put("fishCaught", 4_000L + (35 - i) * 61L);
+			b.counters.put("sharkCaught", 2_500L + (35 - i) * 40L);
+			b.counters.put("logsChopped", 9_000L + (35 - i) * 120L);
+			b.counters.put("yewLogsChopped", 7_000L + (35 - i) * 95L);
+			b.counters.put("magicLogsChopped", 1_200L + (35 - i) * 15L);
+			b.counters.put("pickPockets", 3_000L + (35 - i) * 70L);
+			b.counters.put("guardPickpockets", 1_800L + (35 - i) * 52L);
+			// two verbs under one craft, so an open fold names each row's verb
+			b.counters.put("foodCooked", 3_000L + (35 - i) * 33L);
+			b.counters.put("sharkCooked", 2_000L + (35 - i) * 25L);
+			b.counters.put("foodBurned", 300L + (35 - i) * 4L);
+			b.counters.put("sharkBurned", 200L + (35 - i) * 3L);
+			b.counters.put("foodEaten", 5_000L + (35 - i) * 30L);
+			b.counters.put("sharkEaten", 4_000L + (35 - i) * 28L);
+			b.counters.put("potionDoses", 6_000L + (35 - i) * 24L);
+			b.counters.put("prayerDoses", 3_500L + (35 - i) * 20L);
+			b.counters.put("teleportsTotal", 1_100L + (35 - i) * 9L);
+			b.counters.put("teleportsViaJewellery", 500L + (35 - i) * 5L);
+			b.counters.put("teleportsCastleWars", 400L + (35 - i) * 4L);
+			// the spine extras the plugin writes beside the counters
+			b.counters.put("dropsReceived", 8_000L + (35 - i) * 41L);
+			b.counters.put("lootValue", 61_000_000L + (35 - i) * 412_000L);
+			b.counters.put("lootLeftCount", 120L + (35 - i) * 2L);
+			b.counters.put("lootLeftValue", 800_000L + (35 - i) * 12_500L);
+			b.counters.put("kills", 60_000L + (35 - i) * 14L);
+			b.counters.put("slayerTasksCompleted", 200L + (35 - i) / 3);
+			b.counters.put("clogSlotsObtained", 400L + (35 - i) / 5);
+			b.kcs.put("Abyssal demons", 4_000L + (35 - i) * 12L);
+			b.kcs.put("Zulrah", 480L + (35 - i) * 2L);
 			s.history.put(d.minusDays(i), b);
 		}
 		return s;

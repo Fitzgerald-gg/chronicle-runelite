@@ -1407,7 +1407,11 @@ public class ChroniclePlugin extends Plugin
 				}
 			}
 		}
-		final Map<String, Long> counters = localStore.trackersSnapshot();
+		// A copy of the trackers with the journal's own totals (loot events, loot
+		// left on the floor, kills, slayer tasks, clog slots) laid beside them: the
+		// History summary reads those as period deltas. The trackers themselves
+		// stay as they are.
+		final Map<String, Long> counters = localStore.spineCounters();
 		final Map<String, Long> kcs = killCounts();
 		executor.submit(() ->
 		{

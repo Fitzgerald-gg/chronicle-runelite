@@ -1,0 +1,388 @@
+/*
+ * Copyright (c) 2026, Chronicle
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the conditions of the BSD 2-Clause
+ * License (see LICENSE) are met.
+ */
+package chronicle.panel;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import org.junit.Test;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * The History tab's period model: the summary keeps its fixed order and shows
+ * only what moved, and everything else files into the Stats tab's families and
+ * sections with a period total on each.
+ */
+public class HistoryProgressTest
+{
+	private static Map<String, Long> map(Object... kv)
+	{
+		Map<String, Long> m = new LinkedHashMap<>();
+		for (int i = 0; i < kv.length; i += 2)
+		{
+			m.put((String) kv[i], ((Number) kv[i + 1]).longValue());
+		}
+		return m;
+	}
+
+	private static HistoryProgress of(Map<String, Long> counters)
+	{
+		return HistoryProgress.of(counters, StatRegistry::isGp);
+	}
+
+	private static List<String> labels(List<HistoryProgress.Row> rows)
+	{
+		List<String> out = new ArrayList<>();
+		for (HistoryProgress.Row r : rows)
+		{
+			out.add(r.label());
+		}
+		return out;
+	}
+
+	private static HistoryProgress.Row row(HistoryProgress p, String label)
+	{
+		for (HistoryProgress.Row r : p.summary())
+		{
+			if (r.label().equals(label))
+			{
+				return r;
+			}
+		}
+		return null;
+	}
+
+	private static HistoryProgress.Section section(HistoryProgress p, String name)
+	{
+		for (HistoryProgress.Section s : p.sections())
+		{
+			if (s.name().equals(name))
+			{
+				return s;
+			}
+		}
+		return null;
+	}
+
+	private static List<String> sectionNames(HistoryProgress p)
+	{
+		List<String> out = new ArrayList<>();
+		for (HistoryProgress.Section s : p.sections())
+		{
+			out.add(s.name());
+		}
+		return out;
+	}
+
+	// every summary key moved, listed backwards to prove the order is the
+	// model's, not the input's
+	private static Map<String, Long> everything()
+	{
+		return map(
+			"itemsDroppedValue", 18, "resourcesDroppedValue", 5, "resourcesGatheredValue", 17,
+			"consumedValue", 16, "coinsFromAlchemy", 15, "coinsEarnedAtShops", 14,
+			"coinsSpentAtShops", 13, "distanceWalked", 12, "distanceRan", 11,
+			"clogSlotsObtained", 9, "deaths", 8, "damageDealtMagic", 1, "damageDealtRanged", 2,
+			"damageDealtMelee", 4, "damageDealt", 7, "slayerTasksCompleted", 6, "kills", 3,
+			"lootLeftValue", 5, "lootLeftCount", 4, "lootValue", 2000, "dropsReceived", 1);
+	}
+
+	@Test
+	public void summaryKeepsItsFixedOrderAndShowsOnlyWhatMoved()
+	{
+		HistoryProgress p = of(everything());
+		assertEquals(Arrays.asList(
+			"Drops received", "Loot value", "Left on the floor", "Loot kept", "Kills",
+			"Slayer tasks completed", "Damage dealt", "· by melee", "· by ranged", "· by magic",
+			"Deaths", "Collection log slots", "Distance run", "Distance walked",
+			"Spent at shops", "Earned at shops", "Coins from alchemy", "Consumed value",
+			"Gathered", "Value dropped"),
+			labels(p.summary()));
+		// gp rows carry the flag, counts do not
+		assertTrue(row(p, "Loot value").gp());
+		assertTrue(row(p, "Consumed value").gp());
+		assertTrue(row(p, "Spent at shops").gp());
+		assertFalse(row(p, "Deaths").gp());
+		assertFalse(row(p, "Distance run").gp());
+
+		// a figure that did not move is no row; a zero is not a row either
+		HistoryProgress few = of(map("deaths", 2, "damageDealt", 0, "kills", 4));
+		assertEquals(Arrays.asList("Kills", "Deaths"), labels(few.summary()));
+	}
+
+	@Test
+	public void everySummaryLabelIsTheRegistrys()
+	{
+		// one table names a key for both tabs: the summary never words a key
+		// itself
+		HistoryProgress p = of(everything());
+		assertEquals(20, p.summary().size());
+		for (HistoryProgress.Row r : p.summary())
+		{
+			assertEquals(r.key(), StatRegistry.label(r.key()), r.label());
+		}
+	}
+
+	@Test
+	public void lootKeptIsValueLessTheFloorAndTheFloorRowCarriesItsGp()
+	{
+		HistoryProgress p = of(map("lootValue", 1000, "lootLeftCount", 3, "lootLeftValue", 250));
+		HistoryProgress.Row floor = row(p, "Left on the floor");
+		assertEquals(3, floor.value());
+		assertFalse(floor.gp());
+		assertEquals(250, floor.gpNote());
+		assertEquals("gp", floor.gpNoteWord());
+		HistoryProgress.Row kept = row(p, "Loot kept");
+		assertEquals(750, kept.value());
+		assertTrue(kept.gp());
+		assertEquals(0, kept.gpNote());
+
+		// nothing left behind: the floor row is absent and all of it was kept
+		HistoryProgress none = of(map("lootValue", 1000));
+		assertNull(row(none, "Left on the floor"));
+		assertEquals(1000, row(none, "Loot kept").value());
+
+		// a count without a value carries no gp note
+		HistoryProgress bare = of(map("lootValue", 40, "lootLeftCount", 2));
+		assertEquals(0, row(bare, "Left on the floor").gpNote());
+
+		// more left than received: nothing was kept
+		HistoryProgress upside = of(map("lootValue", 100, "lootLeftCount", 1, "lootLeftValue", 150));
+		assertNull(row(upside, "Loot kept"));
+	}
+
+	@Test
+	public void theImportedUntakenPairIsNotTheFloor()
+	{
+		// untakenLootCount and untakenLootValue are a lifetime figure carried in
+		// from an older record, not this build's ledger: they never make the
+		// floor line and never come off what was kept. The registry files them
+		// where the Stats tab does.
+		HistoryProgress p = of(map("lootValue", 1000, "untakenLootCount", 3, "untakenLootValue", 250));
+		assertNull(row(p, "Left on the floor"));
+		assertEquals(1000, row(p, "Loot kept").value());
+		assertEquals(Arrays.asList("Loot value", "Loot kept"), labels(p.summary()));
+		assertFalse(HistoryProgress.summaryKey("untakenLootCount"));
+		assertFalse(HistoryProgress.summaryKey("untakenLootValue"));
+	}
+
+	@Test
+	public void killsReadTheLedgersTallyOnTheSpine()
+	{
+		HistoryProgress p = of(map("kills", 15));
+		assertEquals(Collections.singletonList("Kills"), labels(p.summary()));
+		assertEquals(15, row(p, "Kills").value());
+		assertFalse(row(p, "Kills").gp());
+		assertTrue(p.sections().isEmpty());
+
+		assertNull(row(of(map("kills", 0)), "Kills"));
+	}
+
+	@Test
+	public void theDamageSplitRidesUnderItsParent()
+	{
+		HistoryProgress p = of(map("hitsBlocked", 5, "damageDealtRanged", 30,
+			"damageDealtMelee", 60, "damageDealt", 100));
+		// the split sits right after Damage dealt with the registry's "· by"
+		// labels, never as orphaned rows under Combat
+		assertEquals(Arrays.asList("Damage dealt", "· by melee", "· by ranged"), labels(p.summary()));
+		assertEquals(60, row(p, "· by melee").value());
+		assertEquals(Collections.singletonList("Combat"), sectionNames(p));
+		assertEquals(Collections.singletonList("Hits blocked"), labels(section(p, "Combat").rows()));
+	}
+
+	@Test
+	public void whatWasDroppedRidesTheGatheredRow()
+	{
+		HistoryProgress p = of(map("resourcesGatheredValue", 1000, "resourcesDroppedValue", 300));
+		HistoryProgress.Row gathered = row(p, "Gathered");
+		assertEquals(1000, gathered.value());
+		assertTrue(gathered.gp());
+		assertEquals(300, gathered.gpNote());
+		assertEquals("dropped", gathered.gpNoteWord());
+		assertEquals(Collections.singletonList("Gathered"), labels(p.summary()));
+		assertTrue(p.sections().isEmpty());
+
+		// nothing gathered: the dropped figure has no row to ride and shows nowhere
+		HistoryProgress none = of(map("resourcesDroppedValue", 300));
+		assertTrue(none.summary().isEmpty());
+		assertTrue(none.sections().isEmpty());
+		// gathered without a drop: no note
+		assertEquals(0, row(of(map("resourcesGatheredValue", 1000)), "Gathered").gpNote());
+	}
+
+	@Test
+	public void peakAndHiddenKeysNeverFile()
+	{
+		HistoryProgress p = of(map("highestHit", 5, "highestHitTaken", 9, "totalXpGained", 100,
+			"resourcesDroppedValue", 30, "_diag", 3, "hitsMissed", 4));
+		assertEquals(Collections.singletonList("Combat"), sectionNames(p));
+		assertEquals(Collections.singletonList("Hits missed"), labels(section(p, "Combat").rows()));
+		assertTrue(p.summary().isEmpty());
+	}
+
+	@Test
+	public void summaryKeysNeverAppearInSections()
+	{
+		Map<String, Long> c = everything();
+		HistoryProgress p = of(c);
+		assertEquals(20, p.summary().size());
+		assertTrue(p.sections().toString(), p.sections().isEmpty());
+		for (String k : c.keySet())
+		{
+			assertTrue(k, HistoryProgress.summaryKey(k));
+		}
+
+		// the family still lists what the summary leaves it
+		c.put("damageTaken", 300L);
+		HistoryProgress with = of(c);
+		assertEquals(Collections.singletonList("Combat"), sectionNames(with));
+		assertEquals(Collections.singletonList("Damage taken"),
+			labels(section(with, "Combat").rows()));
+	}
+
+	@Test
+	public void teleportsAreASectionNotASummaryLine()
+	{
+		// one place for one figure: the Teleports fold carries the period's
+		// total, its means under it and the rest as "Other means", as on the
+		// Stats tab. A summary line would read a second number for the same word.
+		HistoryProgress p = of(map("teleportsTotal", 10, "teleportsViaJewellery", 6,
+			"teleportsVarrock", 4));
+		assertNull(row(p, "Teleports"));
+		assertFalse(HistoryProgress.summaryKey("teleportsTotal"));
+		HistoryProgress.Section tele = section(p, "Teleports");
+		assertEquals(10, tele.total());
+		assertEquals(Collections.singletonList("· by jewellery"), labels(tele.rows()));
+		assertEquals(4, tele.ghost());
+		assertEquals("Other means", tele.ghostLabel());
+		assertEquals(4, section(p, "Destinations").total());
+	}
+
+	@Test
+	public void aTypedCraftReconcilesToItsFloor()
+	{
+		HistoryProgress p = of(map("logsChopped", 10, "oakLogsChopped", 3, "willowLogsChopped", 6));
+		HistoryProgress.Section wc = section(p, "Woodcutting");
+		assertEquals("Skilling", wc.family());
+		assertEquals(10, wc.total());
+		assertEquals(Arrays.asList("Willow", "Oak"), labels(wc.rows()));
+		assertEquals(6, wc.rows().get(0).value());
+		assertEquals(1, wc.ghost());
+		assertEquals("Other", wc.ghostLabel());
+		// the floor is the head, never a row
+		assertFalse(labels(wc.rows()).contains("Logs chopped"));
+
+		// rows that account for the whole floor leave no ghost
+		HistoryProgress even = of(map("logsChopped", 9, "oakLogsChopped", 3, "willowLogsChopped", 6));
+		assertEquals(0, section(even, "Woodcutting").ghost());
+	}
+
+	@Test
+	public void theHeadIsNeverLessThanTheRowsUnderIt()
+	{
+		// a named row outside the floor (herbiboars are not creatures trapped)
+		// lifts the head past the floor, as the Stats tab heads it: rows plus the
+		// ghost, or the floor, whichever is more
+		HistoryProgress p = of(map("creaturesTrapped", 100, "redChinchompaTrapped", 90,
+			"herbiboarsHarvested", 50));
+		HistoryProgress.Section hunter = section(p, "Hunter");
+		assertEquals(Arrays.asList("Red chinchompa", "Herbiboars harvested"), labels(hunter.rows()));
+		assertEquals(10, hunter.ghost());
+		assertEquals(150, hunter.total());
+
+		// failed pickpockets are typed rows the successes' floor never counted
+		HistoryProgress th = of(map("pickPockets", 10, "guardPickpockets", 8,
+			"guardFailedPickpockets", 5));
+		assertEquals(13, section(th, "Thieving").total());
+		assertEquals(0, section(th, "Thieving").ghost());
+	}
+
+	@Test
+	public void aSectionHoldingMoreThanOneVerbNamesEachRowsVerb()
+	{
+		// cooked and burnt share a name; the Stats tab nests them by verb, and a
+		// breakdown that repeats "Shark" with two numbers is not one
+		HistoryProgress p = of(map("foodCooked", 13, "sharkCooked", 10, "foodBurned", 3,
+			"sharkBurned", 3, "fishCaught", 20, "sharkCaught", 20));
+		HistoryProgress.Section cook = section(p, "Cooking");
+		assertEquals(Arrays.asList("Shark cooked", "Shark burned"), labels(cook.rows()));
+		assertEquals(16, cook.total());
+		assertEquals(3, cook.ghost());
+		// a single-verb section keeps the bare row label
+		assertEquals(Collections.singletonList("Shark"), labels(section(p, "Fishing").rows()));
+
+		HistoryProgress pr = of(map("abyssalAshesSacrificed", 5, "abyssalHeadsReanimated", 2,
+			"dragonBonesBuried", 4, "dragonBonesOffered", 1));
+		assertEquals(Arrays.asList("Abyssal ashes sacrificed", "Dragon bones buried",
+			"Abyssal heads reanimated", "Dragon bones offered"), labels(section(pr, "Prayer").rows()));
+	}
+
+	@Test
+	public void aSectionWithoutAFloorSumsItsRows()
+	{
+		HistoryProgress p = of(map("dartsFletched", 40, "arrowsFletched", 10));
+		HistoryProgress.Section fl = section(p, "Fletching");
+		assertEquals(50, fl.total());
+		assertEquals(Arrays.asList("Darts fletched", "Arrows fletched"), labels(fl.rows()));
+		assertEquals(0, fl.ghost());
+	}
+
+	@Test
+	public void aFloorWithoutTypedRowsOpensToItsFloors()
+	{
+		HistoryProgress p = of(map("bonesBuried", 5, "ashesScattered", 3));
+		HistoryProgress.Section pr = section(p, "Prayer");
+		assertEquals(8, pr.total());
+		assertEquals(Arrays.asList("Bones buried", "Ashes scattered"), labels(pr.rows()));
+		assertEquals(0, pr.ghost());
+	}
+
+	@Test
+	public void sectionsFollowTheStatsTabOrder()
+	{
+		Map<String, Long> c = map(
+			"examines", 2,                 // Ledger: Odds & ends
+			"teleportsVarrock", 4,         // Ledger: Destinations, its own section here
+			"teleportsTotal", 10,          // Ledger: Teleports, the floor
+			"teleportsViaJewellery", 6,    // Ledger: Teleports
+			"dartsFletched", 500,          // Skilling: Fletching, the bigger craft, listed second
+			"logsChopped", 20, "oakLogsChopped", 20,   // Skilling: Woodcutting
+			"damageTaken", 30,             // Combat, sectionless
+			"vialsShattered", 1,           // Living, sectionless
+			"sharkEaten", 7, "foodEaten", 7);   // Living: Food
+		HistoryProgress p = of(c);
+		assertEquals(Arrays.asList("Living", "Food", "Combat", "Fletching", "Woodcutting",
+			"Teleports", "Destinations", "Odds & ends"), sectionNames(p));
+		// a family's sectionless rows carry the family's name and file under it
+		assertEquals("Living", section(p, "Living").family());
+		assertEquals("Ledger & Roads", section(p, "Destinations").family());
+		assertEquals(Collections.singletonList("Varrock"), labels(section(p, "Destinations").rows()));
+		// teleports head with the floor and reconcile the means to it
+		assertEquals(10, section(p, "Teleports").total());
+		assertEquals(4, section(p, "Teleports").ghost());
+	}
+
+	@Test
+	public void emptyInputYieldsNothing()
+	{
+		HistoryProgress p = of(Collections.emptyMap());
+		assertTrue(p.summary().isEmpty());
+		assertTrue(p.sections().isEmpty());
+		HistoryProgress nulls = HistoryProgress.of(null, null);
+		assertTrue(nulls.summary().isEmpty());
+		assertTrue(nulls.sections().isEmpty());
+	}
+}

@@ -32,6 +32,53 @@ public class StatRegistryTest
 	}
 
 	@Test
+	public void summaryKeysLiveOffTheStatsTab()
+	{
+		// spine-only totals: named and priced for the History summary, hidden from
+		// every Stats family so a journal carrying them lists nothing extra
+		for (String key : StatRegistry.summaryKeys())
+		{
+			assertTrue(key, StatRegistry.isSummary(key));
+			assertTrue(key, StatRegistry.hidden(key));
+		}
+		assertEquals("Drops received", StatRegistry.label("dropsReceived"));
+		assertEquals("Loot value", StatRegistry.label("lootValue"));
+		assertEquals("Slayer tasks completed", StatRegistry.label("slayerTasksCompleted"));
+		assertEquals("Collection log slots", StatRegistry.label("clogSlotsObtained"));
+		assertEquals("Left on the floor", StatRegistry.label("lootLeftCount"));
+		assertEquals("Value left on the floor", StatRegistry.label("lootLeftValue"));
+		assertEquals("Kills", StatRegistry.label("kills"));
+		// derived on the History tab, named here all the same
+		assertEquals("Loot kept", StatRegistry.label("lootKept"));
+		assertTrue(StatRegistry.isGp("lootValue"));
+		assertTrue(StatRegistry.isGp("lootLeftValue"));
+		assertFalse(StatRegistry.isGp("dropsReceived"));
+		assertFalse(StatRegistry.isGp("lootLeftCount"));
+		assertFalse(StatRegistry.isGp("kills"));
+		assertFalse(StatRegistry.isSummary("damageDealt"));
+		// the spine pair is not the imported lifetime pair
+		assertFalse(StatRegistry.isSummary("untakenLootCount"));
+		assertFalse(StatRegistry.isSummary("untakenLootValue"));
+	}
+
+	@Test
+	public void aTypedRowCanSpellItsVerb()
+	{
+		// where a list holds more than one verb the bare row labels repeat, so
+		// the verb goes back on, lower-cased after the name
+		assertEquals("Shark cooked", StatRegistry.rowLabelWithVerb("sharkCooked"));
+		assertEquals("Shark burned", StatRegistry.rowLabelWithVerb("sharkBurned"));
+		assertEquals("Abyssal heads reanimated", StatRegistry.rowLabelWithVerb("abyssalHeadsReanimated"));
+		assertEquals("Guard failed pickpockets", StatRegistry.rowLabelWithVerb("guardFailedPickpockets"));
+		assertEquals("Iron ore mined", StatRegistry.rowLabelWithVerb("ironOreMined"));
+		assertEquals("Ranarr planted", StatRegistry.rowLabelWithVerb("ranarrPlanted"));
+		// a key with no verb keeps its row label
+		assertEquals("Herbs cleaned", StatRegistry.rowLabelWithVerb("herbsCleaned"));
+		assertEquals("Lesser ghostly", StatRegistry.rowLabelWithVerb("lesserGhostlyThrallsSummoned"));
+		assertEquals("Shark", StatRegistry.rowLabelWithVerb("sharkEaten"));
+	}
+
+	@Test
 	public void facetsMatchTheSite()
 	{
 		assertEquals("Combat", StatRegistry.family("damageDealt"));

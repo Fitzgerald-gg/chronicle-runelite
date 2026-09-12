@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -56,6 +57,20 @@ public final class StatRegistry
 		// nothing writes it now, but family() would give it a row if it showed up
 		"bowsFletched",
 		"resourcesDroppedValue"));
+	// spine-only totals: the plugin derives them from the journal (loot events,
+	// loot left on the floor, kills, slayer tasks, collection log slots) and
+	// writes them beside the counters on each history line, never into the
+	// trackers. The History summary reads them by name; they are hidden from
+	// every Stats family. The lootLeft pair is not the untakenLoot pair: that one
+	// is a lifetime figure carried in from an older record, and the spine copy
+	// must not step on it.
+	private static final Set<String> SUMMARY = new HashSet<>(Arrays.asList(
+		"dropsReceived", "lootValue", "lootLeftCount", "lootLeftValue", "kills",
+		"slayerTasksCompleted", "clogSlotsObtained"));
+	// high-water counters (highest hit): a period delta of one means nothing.
+	// LocalStore.MAX_KEYS holds the same names for the lifetime arithmetic.
+	private static final Set<String> PEAK = new HashSet<>(Arrays.asList(
+		"highestHit", "highestHitTaken"));
 
 	// one craft's claim on the key space: named keys, floor totals, typed suffixes
 	private static final class SkillSpec
@@ -204,6 +219,16 @@ public final class StatRegistry
 		// the essence spent, not the runes it came back as
 		LABELS.put("essenceCrafted", "Essence crafted");
 		LABELS.put("thrallsSummoned", "Thralls raised");
+		LABELS.put("dropsReceived", "Drops received");
+		LABELS.put("lootValue", "Loot value");
+		LABELS.put("slayerTasksCompleted", "Slayer tasks completed");
+		LABELS.put("clogSlotsObtained", "Collection log slots");
+		LABELS.put("lootLeftCount", "Left on the floor");
+		LABELS.put("lootLeftValue", "Value left on the floor");
+		LABELS.put("kills", "Kills");
+		// derived on the History tab from lootValue and lootLeftValue; named here
+		// so every figure on that tab reads off one table
+		LABELS.put("lootKept", "Loot kept");
 
 		// destinations whose real name the camelCase split can't get back to
 		TELE_NAMES.put("teleportsSeersVillage", "Seers' Village");
@@ -233,10 +258,35 @@ public final class StatRegistry
 	{
 	}
 
-	// a leading underscore marks an internal diagnostic counter
+	// a leading underscore marks an internal diagnostic counter. the spine-only
+	// summary keys hide too: no Stats family lists them.
 	public static boolean hidden(String key)
 	{
-		return key.startsWith("_") || HIDE.contains(key);
+		return key.startsWith("_") || HIDE.contains(key) || SUMMARY.contains(key);
+	}
+
+	// a spine-only total the History summary reads by name
+	public static boolean isSummary(String key)
+	{
+		return SUMMARY.contains(key);
+	}
+
+	// the spine-only summary keys, for the writer that derives them
+	public static Set<String> summaryKeys()
+	{
+		return java.util.Collections.unmodifiableSet(SUMMARY);
+	}
+
+	// a high-water counter whose period delta means nothing
+	public static boolean isPeak(String key)
+	{
+		return PEAK.contains(key);
+	}
+
+	// the peak keys, for the test that holds them to LocalStore.MAX_KEYS
+	public static Set<String> peakKeys()
+	{
+		return java.util.Collections.unmodifiableSet(PEAK);
 	}
 
 	// floors are the generic totals (logsChopped, teleportsTotal) that head a
@@ -455,6 +505,20 @@ public final class StatRegistry
 			return typedName(key, THRALL_SUFFIX);   // "Lesser ghostly" under Thralls
 		}
 		return label(key);
+	}
+
+	// a typed row's label with its verb spelled out: "Shark cooked" beside
+	// "Shark burned" where a list holds more than one verb and the bare row
+	// labels would repeat. Rows with no verb keep their row label.
+	public static String rowLabelWithVerb(String key)
+	{
+		String verb = suffixOf(key);
+		if (verb == null)
+		{
+			return rowLabel(key);
+		}
+		String phrase = prettify(Character.toLowerCase(verb.charAt(0)) + verb.substring(1));
+		return rowLabel(key) + " " + phrase.toLowerCase(Locale.ROOT);
 	}
 
 	private static String teleName(String key)

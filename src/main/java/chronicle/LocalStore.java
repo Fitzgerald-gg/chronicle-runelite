@@ -2813,6 +2813,99 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
+	/**
+	 * Journal-derived totals for the history spine, keyed as the History summary
+	 * reads them: dropsReceived (loot events across every source), lootValue (their
+	 * gp), lootLeftCount and lootLeftValue (items left on the floor and their gp,
+	 * from the untaken ledger, the same tally the Left behind lens shows), kills
+	 * (the ledger's kill counts summed, the same base as dropsReceived, never the
+	 * collection log's page counts, which are mostly minigame rounds),
+	 * slayerTasksCompleted, clogSlotsObtained (the log's own obtained count when
+	 * the journal holds one, else the distinct names the stored pages list).
+	 * {@link #spineCounters} merges them into a copy of the trackers for each line;
+	 * nothing here reaches the trackers, so the Stats tab never sees them.
+	 */
+	java.util.Map<String, Long> spineExtras()
+	{
+		long loots = 0;
+		long value = 0;
+		long kills = 0;
+		for (SourceRow r : dropSources())
+		{
+			loots += r.loots;
+			value += r.value;
+			kills += r.kc;
+		}
+		long left = 0;
+		long leftValue = 0;
+		for (UntakenRow u : untakenSources())
+		{
+			left += u.qty;
+			leftValue += u.value;
+		}
+		chronicle.ChronicleApiClient.SlayerJourney journey = slayerJourney();
+		int finished = clogFraction()[0];
+		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		out.put("dropsReceived", loots);
+		out.put("lootValue", value);
+		out.put("lootLeftCount", left);
+		out.put("lootLeftValue", leftValue);
+		out.put("kills", kills);
+		out.put("slayerTasksCompleted", journey != null ? journey.completedTasks : 0L);
+		out.put("clogSlotsObtained", (long) (finished > 0 ? finished : obtainedSlots(clogSnapshot())));
+		return out;
+	}
+
+	/**
+	 * The counters one history line carries: the trackers as they stand, with the
+	 * {@link #spineExtras spine extras} laid beside them. A fresh copy; the trackers
+	 * themselves are untouched.
+	 */
+	java.util.Map<String, Long> spineCounters()
+	{
+		java.util.Map<String, Long> out = trackersSnapshot();
+		out.putAll(spineExtras());
+		return out;
+	}
+
+	// Distinct item names the stored log calls obtained: clog_items plus every
+	// page's own capture (a page only lists what is lit). Zero with no log. The
+	// stand-in for a journal with no header count: the union lags the game's own
+	// figure while a page sits unvisited.
+	static int obtainedSlots(JsonObject cl)
+	{
+		java.util.Set<String> names = new java.util.HashSet<>();
+		if (cl == null)
+		{
+			return 0;
+		}
+		if (cl.has("clog_items") && cl.get("clog_items").isJsonObject())
+		{
+			for (java.util.Map.Entry<String, JsonElement> e
+				: cl.getAsJsonObject("clog_items").entrySet())
+			{
+				names.add(e.getKey().toLowerCase(java.util.Locale.ROOT));
+			}
+		}
+		if (cl.has("by_cat") && cl.get("by_cat").isJsonObject())
+		{
+			for (java.util.Map.Entry<String, JsonElement> pg
+				: cl.getAsJsonObject("by_cat").entrySet())
+			{
+				if (!pg.getValue().isJsonObject())
+				{
+					continue;
+				}
+				for (java.util.Map.Entry<String, JsonElement> it
+					: pg.getValue().getAsJsonObject().entrySet())
+				{
+					names.add(it.getKey().toLowerCase(java.util.Locale.ROOT));
+				}
+			}
+		}
+		return names.size();
+	}
+
 	/** The journal's stored collection log, deep-copied for the panel. */
 	JsonObject clogSnapshot()
 	{
