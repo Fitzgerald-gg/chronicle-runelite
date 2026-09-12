@@ -255,7 +255,9 @@ class ChroniclePanel extends PluginPanel
 		addTab("tab_drops.png", "Drops", View.DROPS);
 		addTab("tab_slayer.png", "Slayer", View.SLAYER);
 		addTab("tab_log.png", "Collection log", View.LOG);
-		addTab("tab_history.png", "History", View.HISTORY);
+		// "Progression" is what the tab is for; the field and method names keep
+		// their older spelling, since the preview harness reaches them by name.
+		addTab("tab_history.png", "Progression", View.HISTORY);
 		addTab("tab_journal.png", "Journal", View.JOURNAL);
 		north.add(tabGroup);
 		north.add(vgap(7));
@@ -4248,22 +4250,49 @@ class ChroniclePanel extends PluginPanel
 
 	private final Map<Integer, javax.swing.ImageIcon> facetIcons = new LinkedHashMap<>();
 
-	// one sprite as a tab icon, or null where there is no cache to ask
+	/**
+	 * The sprite a facet wears, once it has been fetched. Null until then.
+	 *
+	 * <p>It cannot simply be asked for: SpriteManager.getSprite asserts it is on
+	 * the client thread and a panel is built on the event thread, so asking
+	 * threw an AssertionError, which is an Error and not an exception. A catch
+	 * written for RuntimeException let it past and the whole tab came out
+	 * blank. Nothing here is worth a blank tab, so the fetch is asynchronous,
+	 * the label wears its word until the sprite lands, and every throwable is
+	 * swallowed.
+	 */
 	private javax.swing.ImageIcon facetIcon(int spriteId)
 	{
-		return facetIcons.computeIfAbsent(spriteId, id ->
+		return facetIcons.get(spriteId);
+	}
+
+	// ask for a facet's sprite off the client thread and dress the label when it
+	// arrives, leaving the word in place if it never does
+	private void fetchFacetIcon(int spriteId, JLabel label)
+	{
+		try
 		{
-			try
+			net.runelite.client.game.SpriteManager sm = plugin.sprites();
+			if (sm == null)
 			{
-				net.runelite.client.game.SpriteManager sm = plugin.sprites();
-				java.awt.image.BufferedImage img = sm == null ? null : sm.getSprite(id, 0);
-				return img == null ? null : new javax.swing.ImageIcon(img);
+				return;
 			}
-			catch (RuntimeException e)
+			sm.getSpriteAsync(spriteId, 0, img -> javax.swing.SwingUtilities.invokeLater(() ->
 			{
-				return null;
-			}
-		});
+				if (img == null)
+				{
+					return;
+				}
+				javax.swing.ImageIcon icon = new javax.swing.ImageIcon(img);
+				facetIcons.put(spriteId, icon);
+				label.setIcon(icon);
+				label.setText("");
+			}));
+		}
+		catch (Throwable ignored)   // noqa: a tab icon is never worth a blank tab
+		{
+			// the word stands in
+		}
 	}
 
 	/** The periods the tab offers, widest first, as the list reads them. */	/** The periods the tab offers, widest first, as the list reads them. */
@@ -4321,8 +4350,9 @@ class ChroniclePanel extends PluginPanel
 		for (String[] facet : FACETS)
 		{
 			boolean on = facet[0].equals(histFacet);
+			int sprite = Integer.parseInt(facet[1]);
 			JLabel t = new JLabel("", JLabel.CENTER);
-			javax.swing.ImageIcon icon = facetIcon(Integer.parseInt(facet[1]));
+			javax.swing.ImageIcon icon = facetIcon(sprite);
 			if (icon != null)
 			{
 				t.setIcon(icon);
@@ -4330,6 +4360,7 @@ class ChroniclePanel extends PluginPanel
 			else
 			{
 				t.setText(facet[0]);
+				fetchFacetIcon(sprite, t);
 			}
 			t.setToolTipText(facet[0]);
 			t.setOpaque(true);

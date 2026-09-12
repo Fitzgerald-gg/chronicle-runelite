@@ -1364,10 +1364,19 @@ public class PanelPreviewTest
 
 		final Map<String, Long> kcs = new LinkedHashMap<>();
 
+		// headless: the facet strip falls back to its words. Set to have the
+		// manager throw, the way the real one does when asked off the client
+		// thread.
+		boolean spritesThrow;
+
 		@Override
 		net.runelite.client.game.SpriteManager sprites()
 		{
-			return null;   // headless: the facet strip falls back to its words
+			if (spritesThrow)
+			{
+				throw new AssertionError();
+			}
+			return null;
 		}
 
 		@Override

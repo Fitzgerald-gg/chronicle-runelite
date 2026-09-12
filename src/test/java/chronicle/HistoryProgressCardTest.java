@@ -3049,4 +3049,48 @@ public class HistoryProgressCardTest
 		assertEquals("the lifetime is the total", "+312",
 			beside(headline(labels(history(p))), "Monsters slain"));
 	}
+
+	@Test
+	public void aTabIconIsNeverWorthABlankTab() throws Exception
+	{
+		// SpriteManager.getSprite asserts it is on the client thread and a panel
+		// is built on the event thread, so asking threw an AssertionError. That
+		// is an Error, not an exception, and a catch written for RuntimeException
+		// let it past: the whole History tab came out blank.
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.spritesThrow = true;
+		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "Skills");
+		List<String> all = labels(history(p));
+		assertTrue("the tab is blank: " + all, all.contains("THE PERIOD"));
+		assertTrue(all.toString(), all.contains("ATT"));
+		// and the strip still names itself, in words, since no sprite arrived
+		assertTrue(all.toString(), all.contains("Skills"));
+		assertTrue(all.toString(), all.contains("Trackers"));
+	}
+
+	@Test
+	public void theTabIsCalledProgression() throws Exception
+	{
+		// what the tab is for, rather than what its fields are called
+		ChroniclePanel p = panel(stub(true));
+		java.lang.reflect.Field f = ChroniclePanel.class.getDeclaredField("tabGroup");
+		f.setAccessible(true);
+		Container strip = (Container) f.get(p);
+		List<String> tips = new ArrayList<>();
+		for (Component k : strip.getComponents())
+		{
+			if (k instanceof javax.swing.JComponent)
+			{
+				String tip = ((javax.swing.JComponent) k).getToolTipText();
+				if (tip != null)
+				{
+					tips.add(tip);
+				}
+			}
+		}
+		assertTrue("tabs: " + tips, tips.contains("Progression"));
+		assertFalse("tabs: " + tips, tips.contains("History"));
+		assertFalse("the Stats tab is folded in: " + tips, tips.contains("Stats"));
+	}
 }
