@@ -4024,9 +4024,9 @@ class ChroniclePanel extends PluginPanel
 		JPanel controls = column();
 
 		// granularity pills
-		JPanel pills = new JPanel(new GridLayout(1, 4, 3, 3));
+		JPanel pills = new JPanel(new GridLayout(1, 5, 3, 3));
 		pills.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		for (String g : new String[]{"Day", "Week", "Month", "Year"})
+		for (String g : new String[]{"Day", "Week", "Month", "Year", "Lifetime"})
 		{
 			JLabel pill = new JLabel(g, JLabel.CENTER);
 			pill.setOpaque(true);
@@ -4084,6 +4084,15 @@ class ChroniclePanel extends PluginPanel
 		{
 			switch (histGranularity)
 			{
+				case "Lifetime":
+					// everything the record holds, from its first line to today.
+					// A period with no earlier line to measure against reads as
+					// the account's own beginning, which is what it is.
+					start = historySpine == null || historySpine.isEmpty()
+						? end.minusYears(30) : historySpine.firstKey();
+					end = java.time.LocalDate.now();
+					label = "Lifetime";
+					break;
 				case "Day":
 					start = end;
 					label = end.format(FULL_DAY);
@@ -4149,6 +4158,11 @@ class ChroniclePanel extends PluginPanel
 			}
 			rebuild();
 		}));
+		// Lifetime is one window and the arrows have nowhere to take it. A
+		// control that can do nothing is worse than no control, so they go.
+		boolean stepping = !"Lifetime".equals(histGranularity) || histFrom != null;
+		back.setVisible(stepping);
+		fwd.setVisible(stepping);
 		JLabel lbl = new JLabel(label, JLabel.CENTER);
 		lbl.setFont(FontManager.getRunescapeFont());
 		lbl.setToolTipText("Set exact dates");

@@ -2671,4 +2671,66 @@ public class HistoryProgressCardTest
 		assertEquals("Loot since " + today.minusDays(2).format(FULL),
 			noteHolding(history(p), "Loot since"));
 	}
+
+	@Test
+	public void lifetimeIsAPeriodLikeAnyOtherAndRunsFromTheFirstLine() throws Exception
+	{
+		// the whole record, from the first line it holds to today, as a fifth
+		// choice beside the four windows
+		LocalDate today = LocalDate.now();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		// a line older than any window but Lifetime, so the two can be told apart
+		HistoryLog.Baseline first = new HistoryLog.Baseline();
+		first.skills.put("attack", 900_000L);
+		s.history.put(today.minusDays(90), first);
+		ChroniclePanel p = panel(s);
+		List<String> all = labels(history(p));
+		assertTrue(all.toString(), all.contains("Lifetime"));
+
+		set(p, "histGranularity", "Lifetime");
+		all = labels(history(p));
+		int at = all.indexOf("Lifetime");
+		assertTrue(all.toString(), at >= 0);
+		// the stepper names the window, and at Lifetime that is the word itself
+		assertEquals(all.toString(), 2, java.util.Collections.frequency(all, "Lifetime"));
+		// the period's own figures still draw, and they measure from the record's
+		// first line rather than from the window a shorter period would open on
+		assertTrue(all.toString(), all.contains("THE PERIOD"));
+		assertEquals(all.toString(), "+150k", beside(headline(all), "Experience"));
+
+		set(p, "histGranularity", "Week");
+		assertEquals(labels(history(p)).toString(), "+50k",
+			beside(headline(labels(history(p))), "Experience"));
+	}
+
+	@Test
+	public void theArrowsGoWhereLifetimeCannot() throws Exception
+	{
+		// a control that can do nothing is worse than no control
+		ChroniclePanel p = panel(stub(true));
+		assertTrue("the week's arrows should step", arrowShows(history(p), "<"));
+		assertTrue("the week's arrows should step", arrowShows(history(p), ">"));
+
+		set(p, "histGranularity", "Lifetime");
+		assertFalse("lifetime has nowhere to step back to", arrowShows(history(p), "<"));
+		assertFalse("lifetime has nowhere to step forward to", arrowShows(history(p), ">"));
+	}
+
+	// whether the stepper's arrow is on screen, which is not the same as whether
+	// the label exists: a hidden component is still in the tree
+	private static boolean arrowShows(Container c, String text)
+	{
+		for (Component k : c.getComponents())
+		{
+			if (k instanceof JLabel && text.equals(((JLabel) k).getText()))
+			{
+				return k.isVisible();
+			}
+			if (k instanceof Container && arrowShows((Container) k, text))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 }
