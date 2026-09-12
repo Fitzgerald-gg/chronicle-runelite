@@ -2666,17 +2666,10 @@ class ChroniclePanel extends PluginPanel
 					secGp += cv;
 				}
 			}
-			JPanel head = row(sec.toUpperCase(Locale.ROOT),
-				fmt(total) + (secGp > 0 ? " · " + gp(secGp) + " gp" : ""),
-				open ? accent() : null);
-			JLabel headName = (JLabel) ((BorderLayout) head.getLayout())
-				.getLayoutComponent(BorderLayout.CENTER);
-			headName.setFont(FontManager.getRunescapeSmallFont());
-			headName.setForeground(open ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
-			head.setBorder(BorderFactory.createEmptyBorder(6, 2, 2, 2));
-			head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-			head.addMouseListener(clicker(() -> toggleFold(stateKey)));
-			p.add(head);
+			// the section total is a real figure in one unit, so it stands in
+			// both states; only a count of hidden rows would go
+			p.add(quietHead(sec, fmt(total) + (secGp > 0 ? " · " + gp(secGp) + " gp" : ""),
+				stateKey));
 			if (open)
 			{
 				if (statsFamily.equals("Skilling"))
@@ -2865,11 +2858,11 @@ class ChroniclePanel extends PluginPanel
 	// A second-level fold header: normal case, indented, click to toggle.
 	private JPanel subHead(String label, String totalStr, String stateKey, boolean open)
 	{
-		JPanel head = row(label, totalStr, open ? accent() : null);
+		JPanel head = row(label, totalStr, null);
 		JLabel name = (JLabel) ((BorderLayout) head.getLayout())
 			.getLayoutComponent(BorderLayout.CENTER);
 		name.setFont(FontManager.getRunescapeSmallFont());
-		name.setForeground(open ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+		name.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
 		head.setBorder(BorderFactory.createEmptyBorder(3, 10, 1, 2));
 		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 		head.addMouseListener(clicker(() -> toggleFold(stateKey)));
@@ -3101,7 +3094,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		String listKey = "history:list:" + r.key();
 		boolean open = foldOpen(listKey);
-		JPanel head = row(r.label(), "+" + figure(r), open ? accent() : null);
+		JPanel head = row(r.label(), "+" + figure(r), null);
 		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 		head.addMouseListener(clicker(() -> toggleFold(listKey)));
 		card.add(head);
@@ -3169,17 +3162,16 @@ class ChroniclePanel extends PluginPanel
 
 	// A group's head: its name and the number of lines it opens to, in the
 	// Stats tab's fold-head styling.
+	/**
+	 * A band heading carrying a count of the rows it holds. These bands stand
+	 * shut, so the count is the only account of them a reader has and it stays in
+	 * both states rather than jumping about as folds are clicked. The session
+	 * strip's bands stand open, where a count beside the rows it is counting is
+	 * noise, so that caller passes none. One treatment either way: see quietHead.
+	 */
 	private JPanel groupHead(String name, String count, String stateKey, boolean open)
 	{
-		JPanel head = row(name.toUpperCase(Locale.ROOT), count, open ? accent() : null);
-		JLabel headName = (JLabel) ((BorderLayout) head.getLayout())
-			.getLayoutComponent(BorderLayout.CENTER);
-		headName.setFont(FontManager.getRunescapeSmallFont());
-		headName.setForeground(open ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
-		head.setBorder(BorderFactory.createEmptyBorder(6, 2, 2, 2));
-		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-		head.addMouseListener(clicker(() -> toggleFold(stateKey)));
-		return head;
+		return quietHead(name, count, stateKey);
 	}
 
 	private int shownCap(String key)

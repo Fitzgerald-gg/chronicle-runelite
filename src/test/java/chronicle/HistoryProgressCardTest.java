@@ -30,6 +30,7 @@ import java.util.Set;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.ui.ColorScheme;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -895,7 +896,7 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
-	public void theOpenHeadTakesTheAccentAndOneFoldsStateIsItsOwn() throws Exception
+	public void everyHeadReadsTheSameAndOneFoldsStateIsItsOwn() throws Exception
 	{
 		ChroniclePanel p = panel(stub(true));
 		openFolds(p).add("history:Upkeep");
@@ -911,11 +912,27 @@ public class HistoryProgressCardTest
 		// Potions stays shut: one fold's state is its own
 		assertEquals(card.toString(), 1, java.util.Collections.frequency(card, "Shark"));
 
+		// a heading is structure, not a figure the reader earned, so it reads the
+		// same open or shut and the rows beneath are what say which it is
 		JLabel openName = (JLabel) ((BorderLayout) rowNamed(view, "Food").getLayout())
 			.getLayoutComponent(BorderLayout.CENTER);
 		JLabel shutName = (JLabel) ((BorderLayout) rowNamed(view, "Potions").getLayout())
 			.getLayoutComponent(BorderLayout.CENTER);
-		assertFalse(openName.getForeground().equals(shutName.getForeground()));
+		assertEquals(openName.getForeground(), shutName.getForeground());
+		assertEquals(openName.getFont(), shutName.getFont());
+		// and no heading anywhere on the card wears the accent
+		for (String head : new String[]{"Food", "Potions", "UPKEEP", "COMBAT"})
+		{
+			JPanel h = rowNamed(view, head);
+			if (h == null)
+			{
+				continue;
+			}
+			JLabel name = (JLabel) ((BorderLayout) h.getLayout())
+				.getLayoutComponent(BorderLayout.CENTER);
+			assertFalse(head + " wears the accent",
+				name.getForeground().equals(ColorScheme.BRAND_ORANGE));
+		}
 	}
 
 	@Test
