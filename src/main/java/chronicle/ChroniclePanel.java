@@ -3923,6 +3923,9 @@ class ChroniclePanel extends PluginPanel
 			Map<String, Long> fromFeed = new java.util.HashMap<>();
 			Map<String, List<String[]>> named = new LinkedHashMap<>();
 			long[] played = {0, 0};   // minutes, sessions
+			// the sessions' own take: drops, their gp, the stacks left, their gp,
+			// the kills that left one, and whether any sitting recorded the floor
+			long[] took = {0, 0, 0, 0, 0, 0};
 			for (JsonObject e : historyFeed)
 			{
 				long ts = safeLong(e.get("ts"));
@@ -3951,10 +3954,30 @@ class ChroniclePanel extends PluginPanel
 					{
 						played[0] += sessionMinutes(e);
 						played[1]++;
+						// A session closes with what it took: the loot events it
+						// saw and what they were worth. Dated, one line per
+						// sitting, and the only account of the take that reaches
+						// back before the spine began carrying the journal's own
+						// totals.
+						JsonObject d = e.has("data") && e.get("data").isJsonObject()
+							? e.getAsJsonObject("data") : null;
+						if (d != null)
+						{
+							took[0] += safeLong(d.get("drops"));
+							took[1] += safeLong(d.get("dropsGp"));
+							took[2] += safeLong(d.get("left"));
+							took[3] += safeLong(d.get("leftGp"));
+							took[4] += safeLong(d.get("leftKills"));
+							if (d.has("leftKills"))
+							{
+								took[5] = 1;   // this sitting can speak for the floor
+							}
+						}
 					}
 				}
 			}
 			Map<String, Long> retro = new java.util.HashMap<>();
+			boolean[] sessionsHoldTheFloor = {false};
 			if (historyJourney != null)
 			{
 				retro.put("slayerTasksCompleted", closedTasksBetween(historyJourney, fromMs, toMs));
@@ -3974,6 +3997,22 @@ class ChroniclePanel extends PluginPanel
 				for (String key : FEED_SUMMARY_KEYS.values())
 				{
 					retro.put(key, fromFeed.getOrDefault(key, 0L));
+				}
+				// What the sessions took, over the spine's own delta: the spine
+				// carries the journal's lifetime totals and can only speak for
+				// a period once two of its lines hold them, while a session
+				// says what it took on the day it ran.
+				if (played[1] > 0)
+				{
+					retro.put("dropsReceived", took[0]);
+					retro.put("lootValue", took[1]);
+					if (took[5] > 0)
+					{
+						retro.put("lootLeftCount", took[2]);
+						retro.put("lootLeftValue", took[3]);
+						retro.put("lootLeftKills", took[4]);
+						sessionsHoldTheFloor[0] = true;
+					}
 				}
 			}
 			else
@@ -3995,10 +4034,17 @@ class ChroniclePanel extends PluginPanel
 			// same per-source base. The note under the headline reads the spine
 			// only as far as the period's last line: a period closed before a
 			// key joined names no date after its own end.
+			// Whether the record can say what this period left on the floor: the
+			// tally joined the spine partway through the account's life, and a
+			// period that opens before it cannot be told what it kept.
+			java.time.LocalDate leftFrom = HistoryLog.firstCarrying(
+				hist.headMap(at.getKey(), true), "lootLeftKills");
+			boolean leftDated = sessionsHoldTheFloor[0]
+				|| (leftFrom != null && !leftFrom.isAfter(from.getKey()));
 			HistoryProgress progress = HistoryProgress.of(
 				HistoryLog.gained(opening.counters, earliest.counters,
 					closing.counters),
-				null, retro);
+				null, retro, leftDated);
 			SkillStand stand = skillStand(closing, live);
 			HistoryLog.Levels opened = HistoryLog.levels(opening, stand.keys);
 			p.add(headline(progress, gains, stand, opened, played));

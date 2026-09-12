@@ -1076,11 +1076,19 @@ public class ChroniclePlugin extends Plugin
 		{
 			return;
 		}
+		// What the sitting left behind rides beside what it took, so the three
+		// figures of a take, received, kept and left, come from one dated
+		// record. The journal keeps only lifetime totals for the floor, and a
+		// period cannot be told from those.
+		long[] left = localStore.sessionUntakenTally();
 		JsonObject data = new JsonObject();
 		data.addProperty("minutes", mins);
 		data.addProperty("xp", xp);
 		data.addProperty("drops", drops);
 		data.addProperty("dropsGp", dropsGp);
+		data.addProperty("left", left[0]);
+		data.addProperty("leftGp", left[1]);
+		data.addProperty("leftKills", localStore.sessionUntakenKills());
 		localStore.record("SESSION", data, localName);
 	}
 

@@ -669,6 +669,21 @@ public class HistoryProgressCardTest
 		return e;
 	}
 
+	// one played session carrying its whole take: what it received, what it
+	// left on the floor, and the kills that left it
+	private static JsonObject session(long ts, long minutes, long drops, long dropsGp,
+		long left, long leftGp, long leftKills)
+	{
+		JsonObject e = session(ts, minutes);
+		JsonObject d = e.getAsJsonObject("data");
+		d.addProperty("drops", drops);
+		d.addProperty("dropsGp", dropsGp);
+		d.addProperty("left", left);
+		d.addProperty("leftGp", leftGp);
+		d.addProperty("leftKills", leftKills);
+		return e;
+	}
+
 	// a feed entry carrying a second field: a level, a diary's difficulty, a
 	// combat achievement's tier
 	private static JsonObject entry(long ts, String type, String key, String val,
@@ -2151,5 +2166,77 @@ public class HistoryProgressCardTest
 		assertEquals("Dragon Slayer II", ChroniclePanel.questName("Dragon Slayer II"));
 		assertEquals("Recipe for Disaster",
 			ChroniclePanel.questName("you have completed Recipe for Disaster."));
+	}
+
+	@Test
+	public void theSessionsOwnTakeCarriesTheThreeLootFigures() throws Exception
+	{
+		// the spine holds the journal's lifetime totals and can say nothing about
+		// a period until two of its lines carry them; a sitting says what it took
+		// on the day it ran
+		long now = System.currentTimeMillis();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
+		s.feed.add(session(now - 2 * DAY_MS, 30, 286, 1_000_000, 5, 20_000, 3));
+		ChroniclePanel p = panel(s);
+		openFolds(p).add("history:Loot");
+		List<String> card = card(labels(history(p)));
+		assertEquals(card.toString(), "+686", beside(card, "Drops received"));
+		assertEquals(card.toString(), "+678", beside(card, "Drops taken"));
+		assertEquals(card.toString(), "+14 · 64k gp", beside(card, "Left on the floor"));
+		assertEquals(card.toString(), "+3.0M gp", beside(card, "Loot value"));
+		assertEquals(card.toString(), "+2.9M gp", beside(card, "Loot kept"));
+	}
+
+	@Test
+	public void aFloorTheRecordCannotDateIsNotClaimedAsKept() throws Exception
+	{
+		// sessions that predate the left-behind tally know what they received and
+		// not what they left: saying every drop was taken would be a claim the
+		// record cannot make
+		long now = System.currentTimeMillis();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		JsonObject older = session(now - DAY_MS, 60);
+		older.getAsJsonObject("data").addProperty("drops", 400);
+		older.getAsJsonObject("data").addProperty("dropsGp", 2_000_000);
+		s.feed.add(older);
+		// and the spine has never carried the floor either
+		for (HistoryLog.Baseline b : s.history.values())
+		{
+			b.counters.remove("lootLeftKills");
+			b.counters.remove("lootLeftCount");
+			b.counters.remove("lootLeftValue");
+		}
+		ChroniclePanel p = panel(s);
+		openFolds(p).add("history:Loot");
+		List<String> card = card(labels(history(p)));
+		assertEquals(card.toString(), "+400", beside(card, "Drops received"));
+		assertEquals(card.toString(), "+2.0M gp", beside(card, "Loot value"));
+		assertFalse(card.toString(), card.contains("Drops taken"));
+		assertFalse(card.toString(), card.contains("Loot kept"));
+		assertFalse(card.toString(), card.contains("Left on the floor"));
+	}
+
+	@Test
+	public void theSessionRecordCarriesWhatWasLeftBehind() throws Exception
+	{
+		// the one seam no harness reaches: the session summary is written by the
+		// plugin against the live client. Without the floor on it, a period can
+		// say what it received and never what it kept.
+		File src = new File("src/main/java/chronicle/ChroniclePlugin.java");
+		if (!src.isFile())
+		{
+			return;
+		}
+		String text = new String(Files.readAllBytes(src.toPath()), StandardCharsets.UTF_8);
+		int at = text.indexOf("localStore.record(\"SESSION\"");
+		assertTrue("the session summary must be recorded", at > 0);
+		String body = text.substring(Math.max(0, at - 1200), at);
+		assertTrue("a session says what it received", body.contains("\"drops\""));
+		assertTrue("and what it left on the floor", body.contains("\"left\""));
+		assertTrue("and what that was worth", body.contains("\"leftGp\""));
+		assertTrue("and the kills that left it", body.contains("\"leftKills\""));
 	}
 }

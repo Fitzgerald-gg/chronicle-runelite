@@ -469,6 +469,20 @@ public final class HistoryProgress
 	public static HistoryProgress of(Map<String, Long> counters, Predicate<String> gp,
 		Map<String, Long> retroactive)
 	{
+		return of(counters, gp, retroactive, true);
+	}
+
+	/**
+	 * The same, saying whether what was left on the floor is dated for this
+	 * period. It is not, on a record whose left-behind tally joined the spine
+	 * after the period began, and the two figures derived by subtracting it,
+	 * what was picked up and what was kept, would then claim the whole take:
+	 * the period received two hundred drops and left, so far as the record can
+	 * say, none. They are drawn only where the subtraction has a source.
+	 */
+	public static HistoryProgress of(Map<String, Long> counters, Predicate<String> gp,
+		Map<String, Long> retroactive, boolean leftDated)
+	{
 		Map<String, Long> c = new LinkedHashMap<>();
 		if (counters != null)
 		{
@@ -485,7 +499,7 @@ public final class HistoryProgress
 			}
 		}
 		Predicate<String> g = gp != null ? gp : StatRegistry::isGp;
-		return new HistoryProgress(summary(c, g), sections(c, g));
+		return new HistoryProgress(summary(c, g, leftDated), sections(c, g));
 	}
 
 	private static long at(Map<String, Long> m, String key)
@@ -494,7 +508,7 @@ public final class HistoryProgress
 		return v != null ? v : 0L;
 	}
 
-	private static List<Row> summary(Map<String, Long> c, Predicate<String> gp)
+	private static List<Row> summary(Map<String, Long> c, Predicate<String> gp, boolean leftDated)
 	{
 		List<Row> out = new ArrayList<>();
 		add(out, c, gp, "dropsReceived");
@@ -502,7 +516,7 @@ public final class HistoryProgress
 		// left a stack, floored where more kills left something than the period
 		// counted, and drawn whenever the period received anything
 		long received = at(c, "dropsReceived");
-		if (received > 0)
+		if (received > 0 && leftDated)
 		{
 			out.add(new Row("dropsTaken", StatRegistry.label("dropsTaken"),
 				Math.max(0, received - at(c, "lootLeftKills")), gp.test("dropsTaken")));
@@ -516,7 +530,7 @@ public final class HistoryProgress
 				gp.test("lootLeftCount"), leftGp > 0 ? leftGp : 0, "gp"));
 		}
 		long kept = at(c, "lootValue") - leftGp;
-		if (kept > 0)
+		if (kept > 0 && leftDated)
 		{
 			out.add(new Row("lootKept", StatRegistry.label("lootKept"), kept, true));
 		}
