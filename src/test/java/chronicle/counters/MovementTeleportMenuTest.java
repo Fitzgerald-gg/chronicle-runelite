@@ -767,4 +767,30 @@ public class MovementTeleportMenuTest
 		assertEquals(1, stat(TELEPORTS_TOTAL));
 		assertEquals(1, stat(TELEPORTS_VIA_CAPE));
 	}
+
+	@Test
+	public void aCapeWhoseRightClickNamesThePlaceCountsIt()
+	{
+		// report 3: right-click the construction cape, pick Pollnivneach, and
+		// nothing at all was counted. The cape lists its house locations as
+		// options of their own, so neither half of the click says "tele" and no
+		// rule above it matched.
+		click("Pollnivneach", "Construct. cape(t)");
+		jumpAt(3);
+		assertEquals(1, stat(TELEPORTS_POLLNIVNEACH));
+		assertEquals(1, stat(TELEPORTS_VIA_CAPE));
+		assertEquals(1, stat(TELEPORTS_TOTAL));
+	}
+
+	@Test
+	public void handlingACapeIsNotTeleportingWithIt()
+	{
+		// "Wear" and the bank verbs name no place, and a place the table has
+		// never heard of arms nothing either
+		click("Wear", "Construct. cape(t)");
+		click("Taverley", "Oak plank");
+		jumpAt(3);
+		assertEquals(0, stat(TELEPORTS_TOTAL));
+		assertEquals(places().toString(), 0, places().size());
+	}
 }

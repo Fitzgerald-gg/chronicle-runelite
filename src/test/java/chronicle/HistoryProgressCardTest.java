@@ -2166,6 +2166,8 @@ public class HistoryProgressCardTest
 		long now = System.currentTimeMillis();
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		// the record has been keeping sittings since well before this window
+		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
 		for (int i = 0; i < 8; i++)
 		{
 			s.feed.add(session(now - DAY_MS - i * 60_000L, 30));
@@ -2207,6 +2209,8 @@ public class HistoryProgressCardTest
 		long now = System.currentTimeMillis();
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		// the record has been keeping sittings since well before this window
+		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
 		s.feed.add(entry(now - DAY_MS, "QUEST", "questName",
 			"You have completed Fallen From Grace!"));
 		ChroniclePanel p = panel(s);
@@ -2237,6 +2241,8 @@ public class HistoryProgressCardTest
 		long now = System.currentTimeMillis();
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		// the record has been keeping sittings since well before this window
+		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
 		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
 		s.feed.add(session(now - 2 * DAY_MS, 30, 286, 1_000_000, 5, 20_000, 3));
 		ChroniclePanel p = panel(s);
@@ -2258,6 +2264,8 @@ public class HistoryProgressCardTest
 		long now = System.currentTimeMillis();
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		// the record has been keeping sittings since well before this window
+		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
 		JsonObject older = session(now - DAY_MS, 60);
 		older.getAsJsonObject("data").addProperty("drops", 400);
 		older.getAsJsonObject("data").addProperty("dropsGp", 2_000_000);
@@ -2289,6 +2297,8 @@ public class HistoryProgressCardTest
 		long now = System.currentTimeMillis();
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		// the record has been keeping sittings since well before this window
+		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
 		JsonObject sat = session(now - DAY_MS, 60);
 		sat.getAsJsonObject("data").addProperty("drops", 400);
 		sat.getAsJsonObject("data").addProperty("dropsGp", 2_000_000);
@@ -2314,6 +2324,8 @@ public class HistoryProgressCardTest
 		long now = System.currentTimeMillis();
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		// the record has been keeping sittings since well before this window
+		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
 		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
 		JsonObject older = session(now - 2 * DAY_MS, 30);
 		older.getAsJsonObject("data").addProperty("drops", 286);
@@ -2338,11 +2350,13 @@ public class HistoryProgressCardTest
 		LocalDate today = LocalDate.now();
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		// the record has been keeping sittings since well before this window
+		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
 		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
 		s.feed.add(session(now - 2 * DAY_MS, 30, 286, 1_000_000, 5, 20_000, 3));
 		ChroniclePanel p = panel(s);
 		set(p, "histGranularity", "Year");
-		assertEquals("Loot since " + today.minusDays(2).format(FULL),
+		assertEquals("Loot since " + today.minusDays(40).format(FULL),
 			noteHolding(history(p), "Loot since"));
 	}
 
@@ -2528,5 +2542,55 @@ public class HistoryProgressCardTest
 		int at = card.indexOf("Odds & ends");
 		assertTrue(card.toString(), at >= 0);
 		assertEquals(card.toString(), "2", card.get(at + 1));
+	}
+
+	@Test
+	public void aPeriodTheSittingsCannotReachDrawsNoLootFigure() throws Exception
+	{
+		// Nothing in the record dates a drop. The ledger keeps lifetime totals per
+		// source, the feed never carried a loot entry, and the spine began holding
+		// the loot totals partway through the account's life. A fortnight of
+		// receipts under a heading that says a year is worse than no figure, so
+		// none is drawn and the note says the day loot can be counted from.
+		long now = System.currentTimeMillis();
+		LocalDate today = LocalDate.now();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		for (HistoryLog.Baseline b : s.history.values())
+		{
+			b.counters.remove("dropsReceived");
+			b.counters.remove("lootValue");
+		}
+		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		// the record has been keeping sittings since well before this window
+		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
+		ChroniclePanel p = panel(s);
+		set(p, "histGranularity", "Year");
+		List<String> card = card(labels(history(p)));
+		assertFalse(card.toString(), card.contains("Drops received"));
+		assertFalse(card.toString(), card.contains("Loot value"));
+		assertEquals("Loot since " + today.minusDays(40).format(FULL),
+			noteHolding(history(p), "Loot since"));
+	}
+
+	@Test
+	public void aPeriodTheSittingsDoReachCarriesTheirTake() throws Exception
+	{
+		// the same record, read over a window the sittings cover end to end
+		long now = System.currentTimeMillis();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		for (HistoryLog.Baseline b : s.history.values())
+		{
+			b.counters.remove("dropsReceived");
+			b.counters.remove("lootValue");
+		}
+		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
+		// the record has been keeping sittings since well before this window
+		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
+		ChroniclePanel p = panel(s);
+		List<String> card = card(labels(history(p)));
+		assertEquals(card.toString(), "+400", beside(card, "Drops received"));
+		assertEquals(card.toString(), "+2.0M gp", beside(card, "Loot value"));
 	}
 }

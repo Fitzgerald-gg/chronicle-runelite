@@ -807,16 +807,16 @@ class ChroniclePanel extends PluginPanel
 	 * A child is only hidden where its parent actually moved, so nothing the
 	 * session did can fall out of the strip.
 	 */
-	private static boolean coveredByParent(String key, Map<String, Integer> sess)
+	private static String parentOf(String key, Map<String, Integer> sess)
 	{
 		if (StatRegistry.isFloor(key))
 		{
-			return false;
+			return null;
 		}
 		String sec = StatRegistry.subgroup(key);
 		if (sec.isEmpty())
 		{
-			return false;
+			return null;
 		}
 		// a place reached is one of the teleports the total already counted
 		List<String> floors = StatRegistry.floorKeys(
@@ -825,10 +825,10 @@ class ChroniclePanel extends PluginPanel
 		{
 			if (sess.getOrDefault(f, 0) > 0)
 			{
-				return true;
+				return f;
 			}
 		}
-		return false;
+		return null;
 	}
 
 	/**
@@ -841,16 +841,26 @@ class ChroniclePanel extends PluginPanel
 		java.util.Set<String> shownKeys)
 	{
 		Map<String, List<Map.Entry<String, Long>>> byFamily = new LinkedHashMap<>();
+		// what each parent is standing for, so its row can open on them
+		Map<String, List<Map.Entry<String, Long>>> under = new LinkedHashMap<>();
 		for (Map.Entry<String, Integer> e : sess.entrySet())
 		{
 			String key = e.getKey();
 			if (e.getValue() <= 0 || shownKeys.contains(key) || StatRegistry.hidden(key)
-				|| DAMAGE_SPLIT.contains(key) || coveredByParent(key, sess))
+				|| DAMAGE_SPLIT.contains(key))
 			{
 				continue;
 			}
+			Map.Entry<String, Long> moved =
+				new java.util.AbstractMap.SimpleEntry<>(key, (long) e.getValue());
+			String parent = parentOf(key, sess);
+			if (parent != null)
+			{
+				under.computeIfAbsent(parent, k -> new ArrayList<>()).add(moved);
+				continue;
+			}
 			byFamily.computeIfAbsent(StatRegistry.family(key), f -> new ArrayList<>())
-				.add(new java.util.AbstractMap.SimpleEntry<>(key, (long) e.getValue()));
+				.add(moved);
 		}
 
 		int mounted = 0;
@@ -872,9 +882,62 @@ class ChroniclePanel extends PluginPanel
 			}
 			for (Map.Entry<String, Long> e : rows)
 			{
-				strip.add(sessionRow(e.getKey(), e.getValue()));
-				mounted++;
+				mounted += addMoverRow(strip, e.getKey(), e.getValue(),
+					under.get(e.getKey()));
 			}
+		}
+		return mounted;
+	}
+
+	/**
+	 * One tracker's line. A tracker standing for others, the herb sack for its
+	 * herbs and the teleport total for the places it reached, opens on them: the
+	 * parent is what the session moved, and the breakdown is what it moved it on.
+	 * What the parent counted and its children could not name reconciles as
+	 * "Other" rather than going missing. Returns the lines mounted.
+	 */
+	private int addMoverRow(JPanel strip, String key, long value,
+		List<Map.Entry<String, Long>> kids)
+	{
+		if (kids == null || kids.isEmpty())
+		{
+			strip.add(sessionRow(key, value));
+			return 1;
+		}
+		String listKey = "session:row:" + key;
+		boolean open = foldOpen(listKey);
+		JPanel head = sessionRow(key, value);
+		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		head.addMouseListener(clicker(() -> toggleFold(listKey)));
+		strip.add(head);
+		int mounted = 1;
+		if (!open)
+		{
+			return mounted;
+		}
+		kids.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
+		int cap = shownCap(listKey);
+		int shown = 0;
+		long named = 0;
+		for (Map.Entry<String, Long> k : kids)
+		{
+			named += k.getValue();
+			if (shown++ >= cap)
+			{
+				continue;
+			}
+			strip.add(nested(row(StatRegistry.rowLabel(k.getKey()), fmt(k.getValue()), null)));
+			mounted++;
+		}
+		addMore(strip, listKey, kids.size(), cap);
+		if (value - named >= 1)
+		{
+			strip.add(nested(ghostRow(
+				"Teleports".equals(StatRegistry.subgroup(kids.get(0).getKey()))
+					|| "Destinations".equals(StatRegistry.subgroup(kids.get(0).getKey()))
+					? "Other means" : "Other",
+				fmt(value - named))));
+			mounted++;
 		}
 		return mounted;
 	}
@@ -3272,7 +3335,10 @@ class ChroniclePanel extends PluginPanel
 			note.append("Counters since ").append(counters.format(FULL_DAY));
 			since = counters;
 		}
-		if (loot != null && (since == null || loot.isAfter(since)))
+		// a loot date handed in was already measured against the period's own
+		// start, so it stands whatever the counters say: the counters beginning
+		// later does not make the loot boundary untrue
+		if (loot != null && (lootFromSittings || since == null || loot.isAfter(since)))
 		{
 			String what = lootFromSittings ? "loot" : "loot and kills";
 			note.append(note.length() == 0
@@ -3451,6 +3517,26 @@ class ChroniclePanel extends PluginPanel
 
 	// The oldest stamp in the feed slice, or 0 when it holds none: whether the
 	// slice reaches back past a window's start.
+	// The oldest sitting the record holds. A sitting is the only dated account of
+	// a take, so this is the day from which any loot figure can be drawn at all.
+	private static long oldestSessionTs(List<JsonObject> feed)
+	{
+		long oldest = 0;
+		for (JsonObject e : feed)
+		{
+			if (!e.has("type") || !"SESSION".equals(e.get("type").getAsString()))
+			{
+				continue;
+			}
+			long ts = safeLong(e.get("ts"));
+			if (ts > 0 && (oldest == 0 || ts < oldest))
+			{
+				oldest = ts;
+			}
+		}
+		return oldest;
+	}
+
 	private static long oldestTs(List<JsonObject> feed)
 	{
 		long oldest = 0;
@@ -4220,16 +4306,20 @@ class ChroniclePanel extends PluginPanel
 				// carries the journal's lifetime totals and can only speak for
 				// a period once two of its lines hold them, while a session
 				// says what it took on the day it ran.
-				if (played[1] > 0 && took[0] > 0)
+				// Loot is drawn only where something can account for the whole
+				// period. Nothing in the record dates a drop: the ledger keeps
+				// lifetime totals per source, the feed never carried a loot
+				// entry, and the spine only began holding the loot totals partway
+				// through this account's life. A sitting is the one dated account
+				// of a take, so the sittings can speak for a period only when
+				// they reach back to the start of it. Where they do not, no
+				// figure is drawn and the note says the day loot can be counted
+				// from, because a fortnight of receipts under a heading that
+				// says a year is worse than no figure at all.
+				long sittingsFrom = oldestSessionTs(historyFeed);
+				boolean sittingsCover = sittingsFrom > 0 && sittingsFrom <= fromMs;
+				if (sittingsCover && played[1] > 0 && took[0] > 0)
 				{
-					// One basis for the whole of the loot, or the card sets two
-					// accounts against each other. The spine carries the record's
-					// lifetime totals and can only date them from the day it
-					// began holding them; the sittings say what they took on the
-					// day they ran, and a period's sittings may be a part of it.
-					// Reading the take off the sittings and the floor off the
-					// spine sets a part against the whole, and the subtraction
-					// then reports more picked up than was ever received.
 					sessionsSpeak[0] = true;
 					retro.put("dropsReceived", took[0]);
 					retro.put("lootValue", took[1]);
@@ -4277,14 +4367,16 @@ class ChroniclePanel extends PluginPanel
 			HistoryLog.Levels opened = HistoryLog.levels(opening, stand.keys);
 			p.add(headline(progress, gains, stand, opened, played));
 			p.add(vgap(5));
-			// What the loot rows actually reach back to. When the sittings
-			// supplied them the spine is not their source, so its own start date
-			// says nothing about them; a period whose sittings begin after it
-			// did says so, and one they cover says nothing at all.
+			// What the loot rows actually reach back to. The sittings are the
+			// only dated account of a take, so where they do not reach back to
+			// the period's start no loot figure was drawn at all, and the note
+			// names the day one could be. Where they do, the figures are theirs
+			// and the spine's own start date says nothing about them.
 			java.time.LocalDate lootSince = null;
-			if (sessionsSpeak[0] && firstSitting[0] > 0)
+			long lootFromTs = oldestSessionTs(historyFeed);
+			if (lootFromTs > 0)
 			{
-				java.time.LocalDate sat = Instant.ofEpochMilli(firstSitting[0])
+				java.time.LocalDate sat = Instant.ofEpochMilli(lootFromTs)
 					.atZone(ZoneId.systemDefault()).toLocalDate();
 				if (sat.isAfter(pStart))
 				{
@@ -4292,7 +4384,7 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 			String since = countersSince(hist.headMap(at.getKey(), true), from.getKey(),
-				lootSince, sessionsSpeak[0]);
+				lootSince, lootFromTs > 0);
 			if (since != null)
 			{
 				p.add(note(since));

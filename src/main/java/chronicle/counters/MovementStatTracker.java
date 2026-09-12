@@ -379,6 +379,20 @@ public class MovementStatTracker implements StatTracker
 			return;
 		}
 
+		// A cape whose right-click names the place outright. The construction
+		// cape's menu lists the house locations as options of their own, so
+		// neither half of the click says "tele" and nothing above it matches:
+		// every one of those teleports went uncounted, the cape's own "Tele to
+		// POH" alone excepted. The option has to name a place the table knows,
+		// so "Wear" and "Examine" cannot arm it.
+		if (isTeleportCape(tgtLow) && !isWearHandling(optLow)
+			&& matchDestinationKey(optLow) != null)
+		{
+			armTeleport(optLow, false);
+			pendingMethod = TELEPORTS_VIA_CAPE;
+			return;
+		}
+
 		// any spell/tab/cape/item teleport. The destination can sit on either half: a
 		// spell's "Cast <place>", a tab's "<place> teleport". Arm with both joined and
 		// let the table find it.
@@ -410,6 +424,12 @@ public class MovementStatTracker implements StatTracker
 		{
 			armTeleport(optLow + " " + tgtLow, false);
 		}
+	}
+
+	// the capes and hoods that carry teleports; methodOf reads the same names
+	private static boolean isTeleportCape(String tgtLow)
+	{
+		return tgtLow.contains("cape") || tgtLow.contains("max hood");
 	}
 
 	// items whose activating option names neither "tele" nor a jewellery family

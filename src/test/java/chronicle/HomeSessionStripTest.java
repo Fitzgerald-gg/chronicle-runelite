@@ -352,4 +352,36 @@ public class HomeSessionStripTest
 		assertEquals(open.toString(), "253",
 			beside(open, StatRegistry.label("damageDealtRanged")));
 	}
+
+	@Test
+	public void aParentRowOpensOnThePlacesItStandsFor() throws Exception
+	{
+		// the total is what the session moved; the places are what it moved it on,
+		// and a click is meant to reach them
+		List<String> shut = home(moved(
+			"teleportsTotal", 5, "teleportsVarrock", 3, "teleportsLumbridge", 1));
+		assertEquals(shut.toString(), "5", beside(shut, StatRegistry.label("teleportsTotal")));
+		assertFalse(shut.toString(), shut.contains(StatRegistry.rowLabel("teleportsVarrock")));
+
+		List<String> open = home(moved(
+			"teleportsTotal", 5, "teleportsVarrock", 3, "teleportsLumbridge", 1),
+			"session:row:teleportsTotal");
+		assertEquals(open.toString(), "3",
+			beside(open, StatRegistry.rowLabel("teleportsVarrock")));
+		assertEquals(open.toString(), "1",
+			beside(open, StatRegistry.rowLabel("teleportsLumbridge")));
+		// five journeys, four of them placed: the fifth is drawn, not dropped
+		assertEquals(open.toString(), "1", beside(open, "Other means"));
+	}
+
+	@Test
+	public void aHerbSackRowOpensOnItsHerbs() throws Exception
+	{
+		List<String> open = home(moved(
+			"herbsSacked", 100, "guamLeafSacked", 60, "kwuarmSacked", 40),
+			"session:row:herbsSacked");
+		assertEquals(open.toString(), "100", beside(open, StatRegistry.label("herbsSacked")));
+		assertEquals(open.toString(), "60", beside(open, StatRegistry.rowLabel("guamLeafSacked")));
+		assertEquals(open.toString(), "40", beside(open, StatRegistry.rowLabel("kwuarmSacked")));
+	}
 }
