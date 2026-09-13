@@ -1167,8 +1167,17 @@ class ChroniclePanel extends PluginPanel
 	}
 	private int slayerShown = ROW_CAP;
 
-	// Current task, the journal's task-by-task journey, and the kill log
-	// scraped from the in-game widget.
+	// Which of the tab's two boards is up. Sticky, like every other lens in the
+	// panel: applyTab clears what is paged out and what is drilled into, never
+	// which lens a reader chose.
+	private boolean slayerMonsters;
+
+	// The current task, then ONE of two boards: the journal's task-by-task
+	// journey, or the game's own count per monster. They answer different
+	// questions, so a pill picks between them rather than stacking one under the
+	// other, which is what put the kill log two thousand pixels down. The live
+	// task belongs to the tab and not to either board, so it stays above the
+	// strip and is on screen whichever pill is lit.
 	private JPanel buildSlayer()
 	{
 		JPanel p = column();
@@ -1185,17 +1194,31 @@ class ChroniclePanel extends PluginPanel
 			p.add(vgap(6));
 		}
 
-		// Paint the cached journey at once — no flicker — and re-read the journal
-		// behind it. The read rebuilds only when the journey has actually moved,
-		// so an unchanged journal cannot start a loop.
-		if (journeyCache != null)
+		JPanel lens = new JPanel(new GridLayout(1, 2, 3, 3));
+		lens.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		for (String l : new String[]{"Tasks", "Monsters"})
 		{
-			addJourney(p, journeyCache);
+			boolean on = l.equals("Monsters") == slayerMonsters;
+			JLabel pill = new JLabel(l, JLabel.CENTER);
+			pill.setOpaque(true);
+			pill.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+			pill.setFont(FontManager.getRunescapeSmallFont());
+			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			pill.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+			pill.addMouseListener(clicker(() ->
+			{
+				slayerMonsters = l.equals("Monsters");
+				rebuildInPlace();
+			}));
+			lens.add(pill);
 		}
-		else
-		{
-			p.add(note("Reading the task journey from the journal…"));
-		}
+		p.add(lens);
+		p.add(vgap(6));
+
+		// Asked for under either pill, because it is what the Tasks board opens
+		// on: a read that only fired from that board would leave a reader who
+		// had been sitting on Monsters looking at "Reading the task journey"
+		// the first time they came back.
 		if (!journeyFetching)
 		{
 			journeyFetching = true;
@@ -1210,19 +1233,44 @@ class ChroniclePanel extends PluginPanel
 				}
 				boolean moved = journeyMoved(journeyCache, j);
 				journeyCache = j;
-				if (moved && view == View.SLAYER)
+				// Not while the other board is up: a finished task would repaint
+				// over the kill log and throw a reader back to the top of it.
+				if (moved && view == View.SLAYER && !slayerMonsters)
 				{
 					rebuild();
 				}
 			}));
 		}
-		p.add(vgap(6));
+		if (slayerMonsters)
+		{
+			return addKillLog(p);
+		}
 
-		// The Kill Log, as last scraped from the in-game widget.
+		// Paint the cached journey at once — no flicker — and re-read the journal
+		// behind it. The read rebuilds only when the journey has actually moved,
+		// so an unchanged journal cannot start a loop.
+		if (journeyCache != null)
+		{
+			addJourney(p, journeyCache);
+		}
+		else
+		{
+			p.add(note("Reading the task journey from the journal…"));
+		}
+		return p;
+	}
+
+	/**
+	 * The game's own count per monster, as last scraped from the Kill Log
+	 * interface. Its own board now: it answers "how many of these have I
+	 * killed", which the task journey never does.
+	 */
+	private JPanel addKillLog(JPanel p)
+	{
 		JsonObject cl = plugin.clogSnapshot();
+		List<Map.Entry<String, Long>> kcs = new ArrayList<>();
 		if (cl.has("slayer_kcs") && cl.get("slayer_kcs").isJsonObject())
 		{
-			List<Map.Entry<String, Long>> kcs = new ArrayList<>();
 			for (Map.Entry<String, com.google.gson.JsonElement> e
 				: cl.getAsJsonObject("slayer_kcs").entrySet())
 			{
@@ -1232,30 +1280,36 @@ class ChroniclePanel extends PluginPanel
 					kcs.add(new java.util.AbstractMap.SimpleEntry<>(e.getKey(), v));
 				}
 			}
-			if (!kcs.isEmpty())
-			{
-				kcs.sort(Map.Entry.<String, Long>comparingByValue().reversed());
-				JPanel card = card("Kill log");
-				int mounted = 0;
-				for (Map.Entry<String, Long> e : kcs)
-				{
-					if (mounted++ >= 20)
-					{
-						break;
-					}
-					JPanel r = row(e.getKey(), fmt(e.getValue()), null);
-					r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-					final String mob = e.getKey();
-					r.addMouseListener(clicker(() -> openSourceLoose(mob)));
-					card.add(r);
-				}
-				if (kcs.size() > 20)
-				{
-					card.add(ghostRow("and " + fmt(kcs.size() - 20) + " more. Search finds them", ""));
-				}
-				p.add(card);
-			}
 		}
+		if (kcs.isEmpty())
+		{
+			// Behind a pill this is a screen of its own and has to say something.
+			// Stacked at the foot of the journey it never did: both guards fell
+			// through in silence and the card was simply never built.
+			p.add(note("No kill log yet. It copies itself the next time you open "
+				+ "the Slayer Kill Log in game."));
+			return p;
+		}
+		kcs.sort(Map.Entry.<String, Long>comparingByValue().reversed());
+		JPanel card = card("Kill log");
+		int mounted = 0;
+		for (Map.Entry<String, Long> e : kcs)
+		{
+			if (mounted++ >= 20)
+			{
+				break;
+			}
+			JPanel r = row(e.getKey(), fmt(e.getValue()), null);
+			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			final String mob = e.getKey();
+			r.addMouseListener(clicker(() -> openSourceLoose(mob)));
+			card.add(r);
+		}
+		if (kcs.size() > 20)
+		{
+			card.add(ghostRow("and " + fmt(kcs.size() - 20) + " more. Search finds them", ""));
+		}
+		p.add(card);
 		return p;
 	}
 

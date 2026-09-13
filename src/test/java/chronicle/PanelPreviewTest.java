@@ -196,6 +196,10 @@ public class PanelPreviewTest
 		shoot(panel, out, prefix + "-drops-leftbehind", "DROPS");
 		set(panel, "dropsLeftBehind", false);
 
+		set(panel, "slayerMonsters", true);
+		shoot(panel, out, prefix + "-slayer-monsters", "SLAYER");
+		set(panel, "slayerMonsters", false);
+
 		shoot(panel, out, prefix + "-log", "LOG");
 		set(panel, "clogPageSel", firstClogPage(panel));
 		shoot(panel, out, prefix + "-log-drill", "LOG");
