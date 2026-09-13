@@ -3212,9 +3212,12 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
-	public void theTabIsCalledProgression() throws Exception
+	public void theStripCarriesTheFourTabs() throws Exception
 	{
-		// what the tab is for, rather than what its fields are called
+		// What each tab is FOR, rather than what its fields are called. The eight
+		// tabs this replaced are still the boards underneath, reached by a tab and
+		// a sub-tab; "Progression" is gone as a destination because the period it
+		// used to own now governs every tab from above the strip.
 		ChroniclePanel p = panel(stub(true));
 		java.lang.reflect.Field f = ChroniclePanel.class.getDeclaredField("tabGroup");
 		f.setAccessible(true);
@@ -3231,9 +3234,15 @@ public class HistoryProgressCardTest
 				}
 			}
 		}
-		assertTrue("tabs: " + tips, tips.contains("Progression"));
+		assertEquals("tabs: " + tips, 4, tips.size());
+		for (String want : new String[]{"Record", "PvM", "Skilling", "Collection log"})
+		{
+			assertTrue("tabs: " + tips, tips.contains(want));
+		}
 		assertFalse("tabs: " + tips, tips.contains("History"));
 		assertFalse("the Stats tab is folded in: " + tips, tips.contains("Stats"));
+		assertFalse("Progression is no longer a destination: " + tips,
+			tips.contains("Progression"));
 	}
 
 	@Test

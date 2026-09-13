@@ -91,18 +91,49 @@ class ChroniclePanel extends PluginPanel
 		HOME, DROPS, SLAYER, LOG, STATS, HISTORY, JOURNAL, MANAGE
 	}
 
+	/**
+	 * The four tabs the panel now carries, and the boards under each. The eight
+	 * views above did not go anywhere: a tab and its sub-tab choose one, so every
+	 * board that was already built here is reached a different way rather than
+	 * rebuilt. What changes is the navigation, and that the period governs all of
+	 * it from one place above the strip.
+	 */
+	private enum Tab
+	{
+		RECORD, PVM, SKILLING, LOG
+	}
+
+	private static final Map<Tab, String[]> SUBS = new java.util.EnumMap<>(Tab.class);
+
+	static
+	{
+		// Named for what it holds rather than for its first child: two of the
+		// three are lifetime, and a tab called "This session" whose Journal lists
+		// other sittings is a worse lie than the scrolling it was meant to fix.
+		SUBS.put(Tab.RECORD, new String[]{"Now", "Journal", "Ledger"});
+		// Living is food, potions and vials: upkeep, not fighting, so it files
+		// with the purse and the roads under the Ledger. That leaves the fourth
+		// board here holding Combat alone and able to say so in a word that fits.
+		SUBS.put(Tab.PVM, new String[]{"Kills", "Loot", "Slayer", "Combat"});
+		SUBS.put(Tab.SKILLING, new String[]{"Skills", "Activities"});
+		SUBS.put(Tab.LOG, new String[0]);
+	}
+
 	private final ChroniclePlugin plugin;
 
 	private final JPanel display = new JPanel(new BorderLayout());
 	// The group gets no display panel: it swaps in each tab's own content
 	// component, and ours are empty. rebuild() does the swapping.
 	private final MaterialTabGroup tabGroup = new MaterialTabGroup();
-	private final Map<View, MaterialTab> tabByView = new java.util.EnumMap<>(View.class);
+	private final Map<Tab, MaterialTab> tabByTab = new java.util.EnumMap<>(Tab.class);
+	// the sub-tab each tab was last left on, so coming back lands where you were
+	private final Map<Tab, String> subByTab = new java.util.EnumMap<>(Tab.class);
 	private final IconTextField searchField = new IconTextField();
 	private final Timer searchDebounce;
 	private final Timer homeTicker;
 
 	private View view = View.HOME;
+	private Tab tab = Tab.RECORD;
 	// An item or a source under the glass, overlaying the current tab. Any item
 	// or source row anywhere opens one; the back-stack unwinds the hops.
 	private String detailItem;
@@ -213,7 +244,7 @@ class ChroniclePanel extends PluginPanel
 					return;
 				}
 			}
-			MaterialTab target = searchJump != null ? tabByView.get(searchJump) : null;
+			MaterialTab target = searchJump != null ? tabByTab.get(tabFor(searchJump)) : null;
 			if (target != null)
 			{
 				// select() returns early on the tab already showing, so its
@@ -250,15 +281,14 @@ class ChroniclePanel extends PluginPanel
 			}
 		});
 		// ── tabs, then search ──
-		tabGroup.setLayout(new GridLayout(1, 6, 2, 0));
-		addTab("tab_home.png", "Home", View.HOME);
-		addTab("tab_drops.png", "Drops", View.DROPS);
-		addTab("tab_slayer.png", "Slayer", View.SLAYER);
-		addTab("tab_log.png", "Collection log", View.LOG);
-		// "Progression" is what the tab is for; the field and method names keep
-		// their older spelling, since the preview harness reaches them by name.
-		addTab("tab_history.png", "Progression", View.HISTORY);
-		addTab("tab_journal.png", "Journal", View.JOURNAL);
+		tabGroup.setLayout(new GridLayout(1, 4, 2, 0));
+		// tab_history is the set's clock, which is the only clock anywhere: not
+		// one of the 4,057 named sprites in runelite-api is a clock, an hourglass
+		// or a watch, so an all-sprite strip could not have had one.
+		addTab("tab_history.png", "Record", Tab.RECORD);
+		addTab("tab_pvm.png", "PvM", Tab.PVM);
+		addTab("tab_stats.png", "Skilling", Tab.SKILLING);
+		addTab("tab_log.png", "Collection log", Tab.LOG);
 		north.add(tabGroup);
 		north.add(vgap(7));
 		north.add(searchField);
@@ -341,28 +371,199 @@ class ChroniclePanel extends PluginPanel
 		return new ImageIcon(ImageUtil.loadImageResource(ChroniclePanel.class, name));
 	}
 
-	private void addTab(String icon, String tooltip, View target)
+	private void addTab(String icon, String tooltip, Tab target)
 	{
-		MaterialTab tab = new MaterialTab(tabIcon(icon), tabGroup, new JPanel());
-		tab.setToolTipText(tooltip);
-		tab.setOnSelectEvent(() ->
+		MaterialTab mt = new MaterialTab(tabIcon(icon), tabGroup, new JPanel());
+		mt.setToolTipText(tooltip);
+		mt.setOnSelectEvent(() ->
 		{
 			applyTab(target);
 			return true;
 		});
-		tabGroup.addTab(tab);
-		tabByView.put(target, tab);
-		if (target == View.HOME)
+		tabGroup.addTab(mt);
+		tabByTab.put(target, mt);
+		if (target == Tab.RECORD)
 		{
-			tabGroup.select(tab);
+			tabGroup.select(mt);
+		}
+	}
+
+	/**
+	 * The sub-tabs under the current tab. None where a tab has one board, and
+	 * none while a drill or a query has the screen: those are a different screen
+	 * rather than a lens on this one, and they carry their own way back.
+	 */
+	private JPanel subStrip()
+	{
+		String[] subs = SUBS.get(tab);
+		if (subs == null || subs.length == 0 || !searchQuery().isEmpty()
+			|| detailItem != null || detailSource != null || detailTask >= 0
+			|| leftBehindSource != null || leftBehindItem != null)
+		{
+			return null;
+		}
+		JPanel strip = new JPanel(new GridLayout(1, subs.length, 3, 3));
+		strip.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		String on = sub();
+		for (String name : subs)
+		{
+			JLabel pill = new JLabel(name, JLabel.CENTER);
+			pill.setOpaque(true);
+			pill.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+			pill.setFont(FontManager.getRunescapeSmallFont());
+			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			pill.setForeground(name.equals(on) ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+			pill.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			pill.addMouseListener(clicker(() ->
+			{
+				subByTab.put(tab, name);
+				applyCommon();
+			}));
+			strip.add(pill);
+		}
+		return strip;
+	}
+
+	/** The sub-tab showing under the current tab, defaulting to its first. */
+	private String sub()
+	{
+		String[] subs = SUBS.get(tab);
+		if (subs == null || subs.length == 0)
+		{
+			return "";
+		}
+		String chosen = subByTab.get(tab);
+		for (String s : subs)
+		{
+			if (s.equals(chosen))
+			{
+				return s;
+			}
+		}
+		return subs[0];
+	}
+
+	/** Which board a tab and its sub-tab are asking for. */
+	private View viewOf()
+	{
+		switch (tab)
+		{
+			case PVM:
+				switch (sub())
+				{
+					case "Loot":
+						return View.DROPS;
+					case "Slayer":
+						return View.SLAYER;
+					case "Combat":
+						return View.STATS;
+					case "Kills":
+					default:
+						return View.HISTORY;
+				}
+			case SKILLING:
+				return View.HISTORY;
+			case LOG:
+				return View.LOG;
+			case RECORD:
+			default:
+				switch (sub())
+				{
+					case "Journal":
+						return View.JOURNAL;
+					case "Ledger":
+						return View.STATS;
+					case "Now":
+					default:
+						return View.HOME;
+				}
+		}
+	}
+
+	/** Where search's Enter lands a board that is now a tab plus a sub-tab. */
+	private Tab tabFor(View v)
+	{
+		switch (v)
+		{
+			case DROPS:
+			case SLAYER:
+				return Tab.PVM;
+			case LOG:
+				return Tab.LOG;
+			case HISTORY:
+				return Tab.SKILLING;
+			case JOURNAL:
+			case MANAGE:
+			case STATS:
+			case HOME:
+			default:
+				return Tab.RECORD;
+		}
+	}
+
+	private String subFor(View v)
+	{
+		switch (v)
+		{
+			case DROPS:
+				return "Loot";
+			case SLAYER:
+				return "Slayer";
+			case STATS:
+				return "Ledger";
+			case JOURNAL:
+			case MANAGE:
+				return "Journal";
+			case HISTORY:
+				return "Skills";
+			case HOME:
+			default:
+				return "Now";
 		}
 	}
 
 	/** Show a tab from scratch: no drilled detail, no query, nothing paged out.
 	 *  Every open detail is dropped, or rebuild() would paint it over the tab. */
+	private void applyTab(Tab target)
+	{
+		tab = target;
+		applyCommon();
+	}
+
+	/** Open the tab and sub-tab a board lives under. Search's Enter uses this. */
 	private void applyTab(View target)
 	{
-		view = target;
+		tab = tabFor(target);
+		subByTab.put(tab, subFor(target));
+		applyCommon();
+	}
+
+	private void applyCommon()
+	{
+		// The tab and its sub-tab choose the board; two of them also choose which
+		// lens of a shared board, since Skilling and PvM both read facets of the
+		// one Progression builder, and Combat and the Ledger are families of the
+		// one stats table. This belongs to navigation, not to drawing: rebuild()
+		// deriving `view` every time would ignore anything that set it directly,
+		// which is how the preview harness reaches a board.
+		view = viewOf();
+		if (tab == Tab.SKILLING)
+		{
+			histFacet = "Activities".equals(sub()) ? "Activities" : "Skills";
+		}
+		else if (tab == Tab.PVM && "Kills".equals(sub()))
+		{
+			histFacet = "PvM";
+		}
+		else if (tab == Tab.PVM && "Combat".equals(sub()))
+		{
+			statsFamily = "Combat";
+		}
+		else if (tab == Tab.RECORD && "Ledger".equals(sub())
+			&& !"Ledger & Roads".equals(statsFamily) && !"Living".equals(statsFamily))
+		{
+			statsFamily = "Ledger & Roads";
+		}
 		dropsShown = ROW_CAP;
 		slayerShown = ROW_CAP;
 		drillShown.clear();
@@ -508,12 +709,25 @@ class ChroniclePanel extends PluginPanel
 		scroll.setBorder(null);
 		scroll.getVerticalScrollBar().setUnitIncrement(14);
 		display.add(scroll, BorderLayout.CENTER);
+		// Everything that must not scroll away hangs here: the sub-tabs, which are
+		// navigation, and then the period, because the window a reader is looking
+		// at should not scroll away from the figures it chose.
+		JPanel above = new JPanel();
+		above.setLayout(new BoxLayout(above, BoxLayout.Y_AXIS));
+		above.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		JPanel subs = subStrip();
+		if (subs != null)
+		{
+			above.add(subs);
+			above.add(vgap(6));
+		}
 		if (historyControls != null)
 		{
-			// The window a reader is looking at should not scroll away from the
-			// figures it chose. buildHistory hands its controls up and they hang
-			// above the scroll, fixed, for as long as that view is the one on show.
-			display.add(historyControls, BorderLayout.NORTH);
+			above.add(historyControls);
+		}
+		if (above.getComponentCount() > 0)
+		{
+			display.add(above, BorderLayout.NORTH);
 		}
 		display.revalidate();
 		display.repaint();
