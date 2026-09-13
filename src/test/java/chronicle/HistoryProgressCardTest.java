@@ -1529,6 +1529,31 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void anActivityWithNoDropsIsKnownByItsLogPage() throws Exception
+	{
+		// an activity pays in points and reward crates, so the drop ledger has no
+		// portrait of it. Its collection log page does: the first slot the item
+		// cache can name stands in, and only an exact name is taken, since the
+		// cache's own search is a substring scan.
+		PanelPreviewTest.StubPlugin s = stub(true);
+		ItemManager items = s.items();
+		Mockito.when(items.search("Angler hat")).thenReturn(Arrays.asList(
+			new net.runelite.http.api.item.ItemPrice()
+			{
+				{
+					setId(13_258);
+					setName("Angler hat");
+				}
+			}));
+		ChroniclePanel p = panel(s);
+		Method m = ChroniclePanel.class.getDeclaredMethod("signatureItem", String.class);
+		m.setAccessible(true);
+		assertEquals(13_258, m.invoke(p, "Fishing Trawler"));
+		// a page whose every slot the cache cannot name draws no icon at all
+		assertEquals(0, m.invoke(p, "Soul Wars"));
+	}
+
+	@Test
 	public void aBandFoldsAwayAndSaysWhatItIsHolding() throws Exception
 	{
 		// every band on the tab folds, and shut it carries its own count

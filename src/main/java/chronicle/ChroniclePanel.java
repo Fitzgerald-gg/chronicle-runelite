@@ -3893,8 +3893,66 @@ class ChroniclePanel extends PluginPanel
 				best = b.itemId;
 			}
 		}
+		if (best == 0)
+		{
+			best = pagedItem(source);
+		}
 		signatureItems.put(source, best);
 		return best;
+	}
+
+	/**
+	 * The same portrait for a name the ledger never saw a drop from: an activity
+	 * pays in points and reward crates, not in loot events, so its icon comes
+	 * from the first item its collection log page lists that the item cache can
+	 * name. Zero where the page is unknown or none of its items resolve, which
+	 * is the case for a page whose every slot is untradeable.
+	 */
+	private int pagedItem(String page)
+	{
+		Map<String, Map<String, List<String>>> tax = taxonomy(plugin.gson());
+		if (tax == null)
+		{
+			return 0;
+		}
+		for (Map<String, List<String>> pages : tax.values())
+		{
+			List<String> slots = pages.get(page);
+			if (slots == null)
+			{
+				continue;
+			}
+			for (String slot : slots)
+			{
+				int id = itemNamed(slot);
+				if (id > 0)
+				{
+					return id;
+				}
+			}
+			return 0;
+		}
+		return 0;
+	}
+
+	// An item id for an exact name. ItemManager.search is a substring scan over
+	// the price list, so it answers "Ore pack" for anything holding those two
+	// words; only a name that matches outright is taken.
+	private int itemNamed(String name)
+	{
+		List<net.runelite.http.api.item.ItemPrice> hits = plugin.items().search(name);
+		if (hits == null)
+		{
+			return 0;
+		}
+		for (net.runelite.http.api.item.ItemPrice hit : hits)
+		{
+			if (name.equalsIgnoreCase(hit.getName()))
+			{
+				return hit.getId();
+			}
+		}
+		return 0;
 	}
 
 	/**
