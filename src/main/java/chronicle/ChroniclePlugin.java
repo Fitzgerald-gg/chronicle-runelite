@@ -943,9 +943,9 @@ public class ChroniclePlugin extends Plugin
 	}
 
 	// The ledger's sources the collection log has no page for, at the figures
-	// killCounts carries for them. Kept apart for the panel: the log knows what
-	// counts as a boss and the ledger doesn't, and with no record of a source's
-	// kind, arrowtips would sit among bosses.
+	// killCounts carries for them. The panel sorts its own boards by kind now and
+	// no longer asks; this stays as the one place that answers "which of these
+	// did the log never hear of", which is a question about the record itself.
 	Map<String, Long> ledgerKills()
 	{
 		JsonObject cl = localStore.clogSnapshot();

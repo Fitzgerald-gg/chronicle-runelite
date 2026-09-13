@@ -3312,11 +3312,6 @@ class ChroniclePanel extends PluginPanel
 		card.add(more);
 	}
 
-	// What the card measures from, when that is later than the period's start
-	// line: the counters joined the spine after the imported baselines, and the
-	// journal-derived loot and kill totals joined it later still. Null when both
-	// go back to the start line. The spine handed in ends where the period
-	// does, so a key that joined after the period closed is not on it.
 	/**
 	 * The dates the period's figures reach back to, where that is later than the
 	 * period's own opening line and the figures are therefore a part of it.
@@ -3352,21 +3347,6 @@ class ChroniclePanel extends PluginPanel
 				.append(loot.format(FULL_DAY));
 		}
 		return note.length() == 0 ? null : note.toString();
-	}
-
-	// The first line on the spine that carries kill counts, or null when none
-	// does yet: the date the Kills toggle names for a period closed before them.
-	private static java.time.LocalDate firstCarryingKcs(
-		java.util.SortedMap<java.time.LocalDate, HistoryLog.Baseline> spine)
-	{
-		for (Map.Entry<java.time.LocalDate, HistoryLog.Baseline> e : spine.entrySet())
-		{
-			if (e.getValue() != null && !e.getValue().kcs.isEmpty())
-			{
-				return e.getKey();
-			}
-		}
-		return null;
 	}
 
 	// Closed slayer segments dated inside [fromMs, toMs): a segment's ts is its
@@ -3622,107 +3602,6 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * What died, and what the period added: every source the record counted, the
-	 * collection log's bosses and activities first, at its tally floored by the
-	 * drop ledger, then everything else the ledger counted, which the log has no
-	 * page for. One base with the summary's Kills line.
-	 *
-	 * <p>Kill counts only entered the daily baseline later, so a period bounded
-	 * by an older line measures each count from the first line that carries it
-	 * ({@code earliestKc}), and a period wholly before that reports the standing
-	 * count and no gain. The two counts handed in are the states standing at
-	 * each end of the window rather than the bare lines: kill counts are
-	 * cumulative, so a count a later line stops carrying still stands at what it
-	 * reached.
-	 *
-	 * <p>The standing column is the period's close ({@code nowKc}), the way the
-	 * site drew every period as a snapshot. Only a period that reaches today
-	 * reads the live ledger instead ({@code live}): its closing line is the
-	 * newest one, and the ledger is that same state a few minutes fresher. A
-	 * closing line from before the plugin wrote kill counts says so in a note,
-	 * naming {@code kcsSince}, the first line that carries them, rather than
-	 * standing today's counts in for a past period.
-	 */
-	private void addKillCounts(JPanel p, Map<String, Long> beforeKc,
-		Map<String, Long> earliestKc, Map<String, Long> nowKc, boolean live,
-		java.time.LocalDate kcsSince)
-	{
-		Map<String, Long> standing = live ? plugin.killCounts() : nowKc;
-		if (standing.isEmpty())
-		{
-			if (live)
-			{
-				p.add(note("No kill counts recorded yet: they come from the "
-					+ "collection log and from what the drop ledger witnesses."));
-			}
-			else
-			{
-				p.add(note("Kill counts were not on the record when this period closed."
-					+ (kcsSince != null ? " They begin on " + kcsSince.format(FULL_DAY) + "." : "")));
-			}
-			return;
-		}
-		Map<String, Long> gained = HistoryLog.gained(beforeKc, earliestKc, nowKc);
-		if (gained.isEmpty() && (beforeKc == null || beforeKc.isEmpty()))
-		{
-			p.add(note("Kill counts begin their record now. This period has no "
-				+ "earlier count to measure against."));
-			p.add(vgap(4));
-		}
-
-		// What moved this period first, then what stands highest.
-		Comparator<Map.Entry<String, Long>> byGainThenTotal = (a, b) ->
-		{
-			long ga = gained.getOrDefault(a.getKey(), 0L);
-			long gb = gained.getOrDefault(b.getKey(), 0L);
-			return ga != gb ? Long.compare(gb, ga) : Long.compare(b.getValue(), a.getValue());
-		};
-
-		// Everything else the drop ledger counted stands apart below. The
-		// collection log knows what counts as a boss; the ledger doesn't. The
-		// ledger only sorts the names here; the figures stay the standing ones.
-		java.util.Set<String> unpaged = plugin.ledgerKills().keySet();
-		List<Map.Entry<String, Long>> rows = new ArrayList<>();
-		List<Map.Entry<String, Long>> rest = new ArrayList<>();
-		for (Map.Entry<String, Long> e : standing.entrySet())
-		{
-			(unpaged.contains(e.getKey()) ? rest : rows).add(e);
-		}
-		// Both boards page the way every other list on the tab does: what moved
-		// this period stands at the top, a cap holds the rest back, and one click
-		// brings all of it. Uncapped, a one day window drew the whole standing
-		// board, hundreds of rows of lifetime counts under a heading that says
-		// the period moved four of them.
-		rows.sort(byGainThenTotal);
-		addKcBoard(p, "Bosses and activities", "history:list:kills", rows, gained);
-		rest.sort(byGainThenTotal);
-		addKcBoard(p, "Everything else counted", "history:list:killsRest", rest, gained);
-	}
-
-	private void addKcBoard(JPanel p, String title, String key,
-		List<Map.Entry<String, Long>> rows, Map<String, Long> gained)
-	{
-		if (rows.isEmpty())
-		{
-			return;
-		}
-		JPanel card = card(title);
-		int cap = shownCap(key);
-		int mounted = 0;
-		for (Map.Entry<String, Long> e : rows)
-		{
-			if (mounted++ >= cap)
-			{
-				break;
-			}
-			card.add(kcRow(e.getKey(), e.getValue(), gained.get(e.getKey())));
-		}
-		addMore(card, key, rows.size(), cap, false);
-		p.add(card);
-		p.add(vgap(6));
-	}
-
-	/**
 	 * What the period's loot was worth, five figures in one unit. Counts are the
 	 * boards' business; this is the money.
 	 */
@@ -3746,91 +3625,400 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * Every monster the period killed, what it dropped and what that came to,
-	 * the most profitable first. Over a window this reads the dated roll, which
-	 * knows what was taken on the days it covers. Over a lifetime it reads the
-	 * drop ledger, which is the whole account and needs no dating.
+	 * Two bands of the one count. Everything the record counts is sorted into
+	 * bosses, monsters, activities and skilling, and a facet draws the two that
+	 * are its business: a boss board is not the place to find a pickpocket, and
+	 * a thieving total is not a kill.
+	 *
+	 * <p>The first band carries the icon each of its names is known by, since a
+	 * reader knows a boss on sight. The second is plain: it runs to hundreds, and
+	 * a list is what hundreds of anything wants to be.
 	 */
-	private void addMonsterProfit(JPanel p, java.time.LocalDate from, java.time.LocalDate to,
-		Map<String, Long> killed)
+	private void addKinds(JPanel p, Map<String, Long> beforeKc, Map<String, Long> earliestKc,
+		Map<String, Long> nowKc, boolean live, java.time.LocalDate from,
+		java.time.LocalDate to, String first, String second)
 	{
-		List<String[]> rows = new ArrayList<>();
-		if ("Lifetime".equals(histGranularity) && histFrom == null)
+		boolean whole = wholeRecord();
+		pickpocketed = null;   // read once a build: a new target mints its counter mid-session
+		Map<String, Long> standing = live ? plugin.killCounts() : nowKc;
+		Map<String, Long> gained = HistoryLog.gained(beforeKc, earliestKc, nowKc);
+		Map<String, Long> worth = periodWorth(from, to);
+		Map<String, Long> loose = loosely(worth);
+		// Lifetime shows what a thing stands at; a period shows only what that
+		// period put on it, and a thing the period never touched is not in it.
+		Map<String, List<Map.Entry<String, Long>>> byKind = new LinkedHashMap<>();
+		for (String name : whole ? standing.keySet() : union(gained.keySet(), worth.keySet()))
+		{
+			long figure = whole ? standing.getOrDefault(name, 0L) : gained.getOrDefault(name, 0L);
+			if (figure <= 0 && paidFor(worth, loose, name) <= 0)
+			{
+				continue;
+			}
+			byKind.computeIfAbsent(sourceKind(name), k -> new ArrayList<>())
+				.add(new java.util.AbstractMap.SimpleEntry<>(name, figure));
+		}
+		Comparator<Map.Entry<String, Long>> byPaid = (a, b) ->
+		{
+			long wa = paidFor(worth, loose, a.getKey());
+			long wb = paidFor(worth, loose, b.getKey());
+			if (wa != wb)
+			{
+				return Long.compare(wb, wa);
+			}
+			return b.getValue().equals(a.getValue())
+				? a.getKey().compareToIgnoreCase(b.getKey())
+				: Long.compare(b.getValue(), a.getValue());
+		};
+		boolean drew = false;
+		for (String kind : new String[]{first, second})
+		{
+			List<Map.Entry<String, Long>> rows = byKind.get(kind);
+			if (rows == null || rows.isEmpty())
+			{
+				continue;
+			}
+			rows.sort(byPaid);
+			addKindBand(p, kind, rows, worth, loose, kind.equals(first));
+			drew = true;
+		}
+		if (!drew)
+		{
+			p.add(ghostRow(whole ? "Nothing counted yet." : "Nothing counted this period.", ""));
+			p.add(vgap(6));
+		}
+	}
+
+	private static java.util.Set<String> union(java.util.Set<String> a, java.util.Set<String> b)
+	{
+		java.util.Set<String> out = new java.util.LinkedHashSet<>(a);
+		out.addAll(b);
+		return out;
+	}
+
+	/**
+	 * What each source paid over the window: the dated roll where it reaches, the
+	 * whole ledger where the period is the whole record.
+	 *
+	 * <p>Keyed the way {@code LocalStore.sourceKills} keys the counts, which is
+	 * the collection log's spelling wherever the log has a page of the same name.
+	 * The ledger says "Tormented Demon" and the log says "Tormented Demons"; read
+	 * straight, the two never met and the biggest earner on the record sorted to
+	 * the bottom of the board as though it had paid nothing.
+	 */
+	private Map<String, Long> periodWorth(java.time.LocalDate from, java.time.LocalDate to)
+	{
+		Map<String, Long> out = new LinkedHashMap<>();
+		if (wholeRecord())
 		{
 			for (LocalStore.SourceRow r : plugin.dropSources())
 			{
-				rows.add(new String[]{r.name, String.valueOf(r.kc > 0 ? r.kc : r.loots),
-					String.valueOf(r.value)});
+				out.merge(r.name, r.value, Long::sum);
 			}
 		}
 		else
 		{
 			for (String[] r : plugin.lootBetween(from, to).sources)
 			{
-				long kc = killed.getOrDefault(r[0], 0L);
-				rows.add(new String[]{r[0], String.valueOf(kc > 0 ? kc : safeParse(r[1])), r[2]});
+				out.merge(r[0], safeParse(r[2]), Long::sum);
 			}
 		}
+		return out;
+	}
+
+	// The paid figure for a counted name, found under either spelling.
+	private static long paidFor(Map<String, Long> worth, Map<String, Long> loose, String name)
+	{
+		Long exact = worth.get(name);
+		return exact != null ? exact : loose.getOrDefault(LocalStore.kindOf(name), 0L);
+	}
+
+	// The same figures under the one spelling both sides can agree on.
+	private static Map<String, Long> loosely(Map<String, Long> worth)
+	{
+		Map<String, Long> out = new LinkedHashMap<>();
+		for (Map.Entry<String, Long> e : worth.entrySet())
+		{
+			out.merge(LocalStore.kindOf(e.getKey()), e.getValue(), Long::sum);
+		}
+		return out;
+	}
+
+	/**
+	 * What a counted name is. The collection log's own tabs decide most of it: its
+	 * Bosses and Raids are bosses, its Clues and Minigames are activities, and its
+	 * Other tab is skilling ground but for the pages of it that are something
+	 * killed. A name the log has no page for is a monster unless it is plainly
+	 * something opened or something caught. The pickpocket targets the log has no
+	 * page for at all, so they are named here the way the teleport destinations
+	 * are: a closed set the game itself fixes, widened by what the record's own
+	 * thieving counters say.
+	 */
+	private static final java.util.Set<String> PICKPOCKETED = new java.util.HashSet<>(
+		java.util.Arrays.asList("man", "woman", "farmer", "master farmer", "hero",
+			"paladin", "knight", "knight of ardougne", "ardougne knight", "watchman",
+			"yanille watchman", "guard", "market guard", "rogue", "bandit",
+			"desert bandit", "pollnivnian bandit", "bearded pollnivnian bandit",
+			"menaphite thug", "cave goblin", "h.a.m. member", "male h.a.m. member",
+			"female h.a.m. member", "elf", "vyre", "tzhaar-hur", "fremennik citizen",
+			"villager", "gnome", "gnome woman", "gnome child", "warrior woman",
+			"al kharid warrior", "al-kharid warrior", "wealthy citizen", "martin",
+			"martin the master gardener"));
+
+	/**
+	 * The same question asked of the record rather than of the table: a thieving
+	 * counter is minted per target ({@code guardPickpockets}), so a target the
+	 * table has never heard of still names itself, and a game update that adds
+	 * one needs no edit here. Letters only, since the counter is camel case and
+	 * the ledger's name is not.
+	 */
+	private java.util.Set<String> pickpocketedKeys()
+	{
+		if (pickpocketed == null)
+		{
+			pickpocketed = new java.util.HashSet<>();
+			for (String key : counters().keySet())
+			{
+				if (key.endsWith("Pickpockets") && !key.endsWith("FailedPickpockets"))
+				{
+					pickpocketed.add(letters(
+						key.substring(0, key.length() - "Pickpockets".length())));
+				}
+			}
+		}
+		return pickpocketed;
+	}
+
+	private java.util.Set<String> pickpocketed;
+
+	private static String letters(String s)
+	{
+		StringBuilder out = new StringBuilder();
+		for (char c : s.toCharArray())
+		{
+			if (Character.isLetterOrDigit(c))
+			{
+				out.append(Character.toLowerCase(c));
+			}
+		}
+		return out.toString();
+	}
+
+	static final String KIND_BOSS = "Bosses";
+	static final String KIND_ACTIVITY = "Activities";
+	static final String KIND_SKILLING = "Skilling";
+	static final String KIND_MONSTER = "Monsters";
+
+	private String sourceKind(String name)
+	{
+		if (PICKPOCKETED.contains(name.toLowerCase(Locale.ROOT))
+			|| pickpocketedKeys().contains(letters(name)))
+		{
+			return KIND_SKILLING;
+		}
+		Map<String, Map<String, List<String>>> tax = taxonomy(plugin.gson());
+		if (tax != null)
+		{
+			for (Map.Entry<String, Map<String, List<String>>> tab : tax.entrySet())
+			{
+				if (!tab.getValue().containsKey(name))
+				{
+					continue;
+				}
+				String t = tab.getKey().toLowerCase(Locale.ROOT);
+				if (t.contains("boss") || t.contains("raid"))
+				{
+					return KIND_BOSS;
+				}
+				if (t.contains("clue") || t.contains("minigame"))
+				{
+					return KIND_ACTIVITY;
+				}
+				return MONSTER_PAGES.contains(name) ? KIND_MONSTER : KIND_SKILLING;
+			}
+		}
+		String low = name.toLowerCase(Locale.ROOT);
+		return has(low, OPENED) ? KIND_ACTIVITY
+			: has(low, GATHERED) ? KIND_SKILLING : KIND_MONSTER;
+	}
+
+	/**
+	 * The log's Other tab is the one it mixes: a rooftop course sits beside a
+	 * demon. These are the pages of it that are something killed; the rest of the
+	 * tab is ground a skill was trained on.
+	 */
+	private static final java.util.Set<String> MONSTER_PAGES = new java.util.HashSet<>(
+		java.util.Arrays.asList("Champion's Challenge", "Chompy Bird Hunting",
+			"Creature Creation", "Cyclopes", "Elder Chaos Druids", "Glough's Experiments",
+			"Revenants", "Slayer", "Tormented Demons", "TzHaar"));
+
+	// The ledger counts sources the log has no page for. Most are monsters, but
+	// some are things opened and some are things caught, and neither belongs on
+	// a kill board. These words are what say so.
+	private static final String[] OPENED = {"chest", "casket", "clue scroll", "high gamble"};
+	private static final String[] GATHERED = {"impling", "salvage", "loot sack",
+		"reward pool", "reward cart", "ent trunk", "offerings", "herbiboar", "bird nest"};
+
+	private static boolean has(String low, String[] words)
+	{
+		for (String w : words)
+		{
+			if (low.contains(w))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private final Map<String, Integer> signatureItems = new LinkedHashMap<>();
+
+	// The item a thing is known by: the dearest it has ever dropped, which is as
+	// close to a portrait of it as this record keeps. Zero where the ledger never
+	// saw it drop anything.
+	private int signatureItem(String source)
+	{
+		Integer known = signatureItems.get(source);
+		if (known != null)
+		{
+			return known;
+		}
+		int best = 0;
+		long worth = 0;
+		// under the ledger's own spelling: the count came in under the log's
+		for (LocalStore.BagItem b : plugin.sourceItems(resolveSource(source)))
+		{
+			if (b.value > worth)
+			{
+				worth = b.value;
+				best = b.itemId;
+			}
+		}
+		signatureItems.put(source, best);
+		return best;
+	}
+
+	/**
+	 * One band of counted things: a heading that folds, and under it a line for
+	 * each, with its count and what it paid. The first band of a facet carries
+	 * the icon each thing is known by, since a reader knows a boss on sight; the
+	 * second is plain, since it runs to hundreds and a list is what hundreds of
+	 * anything wants to be.
+	 */
+	private void addKindBand(JPanel p, String kind, List<Map.Entry<String, Long>> rows,
+		Map<String, Long> worth, Map<String, Long> loose, boolean withIcons)
+	{
 		if (rows.isEmpty())
 		{
-			p.add(note("No loot is dated inside this period. The roll counts from the day"
-				+ " it began keeping days."));
-			p.add(vgap(6));
 			return;
 		}
-		rows.sort((a, b) -> Long.compare(safeParse(b[2]), safeParse(a[2])));
-		JPanel card = card("Every kill, by what it paid");
-		String key = "history:list:profit";
-		int cap = shownCap(key);
+		String stateKey = "history:kind:" + kind;
+		boolean open = !foldOpen(stateKey);   // these stand open; the fold shuts them
+		p.add(quietHead(kind, open ? "" : fmt(rows.size()), stateKey));
+		if (!open)
+		{
+			p.add(vgap(4));
+			return;
+		}
+		// These bands are the tab's own content rather than a detail under
+		// something else, so they stand deeper than the lists a fold opens onto.
+		Integer asked = histListShown.get(stateKey);
+		int cap = asked == null ? BAND_CAP : asked;
+		JPanel card = cardPlain();
 		int mounted = 0;
-		for (String[] r : rows)
+		for (Map.Entry<String, Long> e : rows)
 		{
 			if (mounted++ >= cap)
 			{
 				break;
 			}
-			card.add(row(r[0], fmt(safeParse(r[1])) + " kc · " + gp(safeParse(r[2])) + " gp", null));
+			card.add(kindRow(e.getKey(), e.getValue(),
+				paidFor(worth, loose, e.getKey()), withIcons));
 		}
-		addMore(card, key, rows.size(), cap, false);
+		addMore(card, stateKey, rows.size(), cap, false);
 		p.add(card);
 		p.add(vgap(6));
 	}
 
+	// How many rows a band stands before it holds the rest back, and the column an
+	// icon band keeps for its icons.
+	private static final int BAND_CAP = 12;
+	private static final int ICON_W = 22;
+	private static final int ICON_H = 18;
+
 	/**
-	 * The period's activities: the collection log's own minigame, skilling and	/**
-	 * The period's activities: the collection log's own minigame, skilling and
-	 * treasure trail pages, each at the count it stands on with what the period
-	 * added. The site reads these off Jagex's hiscores, which this plugin has
-	 * never asked for and should not start asking for; the log is the record's
-	 * own account of the same ground.
+	 * One counted thing on one line: its name, its count, and what it paid over
+	 * the period beside it. The count is the figure and the payment is the
+	 * accent, so the two read as two things and not as one long number.
+	 *
+	 * <p>In an icon band the line carries the dearest thing the ledger ever saw
+	 * it drop, which is as close to a portrait of it as this record keeps, drawn
+	 * small. Every row in such a band keeps the column whether it fills it or
+	 * not: a name starting further left than the one above it is exactly the
+	 * ragged edge this tab is trying not to have.
 	 */
-	private void addActivities(JPanel p, Map<String, Long> beforeKc,
-		Map<String, Long> earliestKc, Map<String, Long> nowKc, boolean live,
-		java.time.LocalDate kcsSince)
+	private JPanel kindRow(String name, long figure, long worth, boolean withIcon)
 	{
-		Map<String, Long> standing = live ? plugin.killCounts() : nowKc;
-		Map<String, Long> gained = HistoryLog.gained(beforeKc, earliestKc, nowKc);
-		List<Map.Entry<String, Long>> rows = new ArrayList<>();
-		for (Map.Entry<String, Long> e : standing.entrySet())
+		JPanel r = new JPanel(new BorderLayout(ROW_GAP, 0));
+		r.setOpaque(false);
+		r.setAlignmentX(Component.LEFT_ALIGNMENT);
+		r.setBorder(BorderFactory.createEmptyBorder(1, ROW_INSET, 1, ROW_INSET));
+		r.setToolTipText(name + ", " + fmt(figure)
+			+ (worth > 0 ? " · " + fmt(worth) + " gp" : ""));
+
+		JLabel named = new JLabel(name);
+		named.setFont(FontManager.getRunescapeFont());
+		r.add(named, BorderLayout.CENTER);
+
+		if (withIcon)
 		{
-			if (isActivityPage(e.getKey()))
-			{
-				rows.add(e);
-			}
+			JLabel icon = new JLabel();
+			icon.setPreferredSize(new Dimension(ICON_W, ICON_H));
+			mountIcon(icon, signatureItem(name));
+			r.add(icon, BorderLayout.WEST);
 		}
-		if (rows.isEmpty())
+
+		JPanel figures = new JPanel();
+		figures.setLayout(new BoxLayout(figures, BoxLayout.X_AXIS));
+		figures.setOpaque(false);
+		JLabel count = new JLabel(fmt(figure));
+		count.setFont(FontManager.getRunescapeFont());
+		count.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+		figures.add(count);
+		if (worth > 0)
 		{
-			p.add(note("No activity has a count on the record yet."
-				+ (kcsSince != null ? " Counts begin on " + kcsSince.format(FULL_DAY) + "." : "")));
+			figures.add(javax.swing.Box.createHorizontalStrut(6));
+			JLabel paid = new JLabel(gp(worth));
+			paid.setFont(FontManager.getRunescapeFont());
+			paid.setForeground(accent());
+			figures.add(paid);
+		}
+		r.add(figures, BorderLayout.EAST);
+
+		// the line still drills, the way the kill boards always did
+		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		r.addMouseListener(clicker(() -> openSourceLoose(name)));
+		return r;
+	}
+
+	// An item's image at the size a row wants, once the cache has it. The image
+	// arrives on the client thread, so the label is set back on the EDT.
+	private void mountIcon(JLabel label, int itemId)
+	{
+		if (itemId <= 0)
+		{
 			return;
 		}
-		rows.sort((a, b) ->
+		AsyncBufferedImage img = plugin.items().getImage(itemId, 1, false);
+		if (img == null)
 		{
-			long ga = gained.getOrDefault(a.getKey(), 0L);
-			long gb = gained.getOrDefault(b.getKey(), 0L);
-			return ga != gb ? Long.compare(gb, ga) : Long.compare(b.getValue(), a.getValue());
-		});
-		addKcBoard(p, "Activities", "history:list:activities", rows, gained);
+			return;
+		}
+		img.onLoaded(() -> javax.swing.SwingUtilities.invokeLater(() ->
+		{
+			label.setIcon(new javax.swing.ImageIcon(
+				img.getScaledInstance(ICON_W, ICON_H, java.awt.Image.SCALE_SMOOTH)));
+			label.repaint();
+		}));
 	}
 
 	/**
@@ -3856,16 +4044,6 @@ class ChroniclePanel extends PluginPanel
 			return false;
 		}
 		return page.toLowerCase(Locale.ROOT).contains("treasure trails");
-	}
-
-	// One counted thing: what it stands at, and what the period added.	// One counted thing: what it stands at, and what the period added.
-	private JPanel kcRow(String name, long standing, Long gained)
-	{
-		JPanel r = row(name, fmt(standing) + (gained != null ? "  +" + fmt(gained) : ""),
-			gained != null ? accent() : null);
-		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-		r.addMouseListener(clicker(() -> openSourceLoose(name)));
-		return r;
 	}
 
 	// Hiscores order. An ORDER only. The grid is built from the client's own
@@ -4051,8 +4229,10 @@ class ChroniclePanel extends PluginPanel
 		HistoryProgress.Row value = summaryRow(progress, "lootValue");
 		if (drops != null)
 		{
+			// no unit on the pair: "+64,298 · 488.2M gp" wants 212px of a 209px
+			// row and took it out of the name, which then read "Drops recei..."
 			card.add(row(drops.label(), "+" + fmt(drops.value())
-				+ (value != null ? " · " + gp(value.value()) + " gp" : ""), null));
+				+ (value != null ? " · " + gp(value.value()) : ""), null));
 		}
 		else if (value != null)
 		{
@@ -4135,12 +4315,15 @@ class ChroniclePanel extends PluginPanel
 		// to, so the three never read as an arithmetic that does not reach its
 		// own end, and ends that drew different skills are not compared at all.
 		HistoryLog.Levels shut = stand.closed;
-		boolean paired = opened != null && shut.drawn == opened.drawn;
-		long levels = opened == null ? 0 : shut.total - opened.total;
+		// A lifetime encompasses everything that came before, so it says where the
+		// sheet stands and nothing more. Counting the levels up from one and
+		// calling it a gain is arithmetic nobody asked for.
+		boolean paired = !wholeRecord() && opened != null && shut.drawn == opened.drawn;
+		long levels = paired ? shut.total - opened.total : 0;
 		String figure = fmt(stand.standing);
-		if (paired && levels > 0)
+		if (levels > 0)
 		{
-			figure = (stand.standing == shut.total && !wholeRecord()
+			figure = (stand.standing == shut.total
 				? fmt(opened.total) + " to " + figure : figure) + " · +" + fmt(levels);
 		}
 		JPanel cell = new JPanel(new BorderLayout(3, 0));
@@ -4156,7 +4339,7 @@ class ChroniclePanel extends PluginPanel
 
 		JLabel fig = new JLabel(figure, JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
-		fig.setForeground(paired && levels > 0 ? accent() : Color.WHITE);
+		fig.setForeground(levels > 0 ? accent() : Color.WHITE);
 		cell.add(fig, BorderLayout.EAST);
 		return cell;
 	}
@@ -4306,6 +4489,10 @@ class ChroniclePanel extends PluginPanel
 	static final String[] PERIODS = {"Lifetime", "Year", "Month", "Week", "Day"};
 
 	// the choices, built fresh so the tick sits on whichever is current
+	// the visible period's own two ends, kept for the menu
+	private java.time.LocalDate periodFrom;
+	private java.time.LocalDate periodTo;
+
 	private javax.swing.JPopupMenu periodMenu()
 	{
 		javax.swing.JPopupMenu menu = new javax.swing.JPopupMenu();
@@ -4327,6 +4514,19 @@ class ChroniclePanel extends PluginPanel
 			});
 			menu.add(item);
 		}
+		// Any two days, from the same list: at Lifetime there is no dateline to
+		// click, so this is the only way back to a window of one's own choosing.
+		menu.addSeparator();
+		javax.swing.JMenuItem exact = new javax.swing.JMenuItem("Exact dates");
+		exact.setFont(FontManager.getRunescapeSmallFont());
+		if (histFrom != null)
+		{
+			exact.setForeground(accent());
+		}
+		exact.addActionListener(e -> onSetExactDates(
+			periodFrom != null ? periodFrom : java.time.LocalDate.now().minusDays(6),
+			periodTo != null ? periodTo : java.time.LocalDate.now()));
+		menu.add(exact);
 		return menu;
 	}
 
@@ -4433,6 +4633,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		final java.time.LocalDate pStart = start;
 		final java.time.LocalDate pEnd = end;
+		// what the period menu's exact-dates entry opens on, since at Lifetime
+		// there is no dateline to read them off
+		periodFrom = pStart;
+		periodTo = pEnd;
 
 		JPanel stepper = new JPanel(new BorderLayout());
 		stepper.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -4475,10 +4679,10 @@ class ChroniclePanel extends PluginPanel
 			}
 			rebuild();
 		}));
-		// Lifetime is one window and the arrows have nowhere to take it. A
-		// control that can do nothing is worse than no control, so they go.
-		// Lifetime is one window: no arrows, and no row to hang them on. The
-		// period is chosen from the list above, which is the only control it has.
+		// Lifetime is one window and the arrows have nowhere to take it. A control
+		// that can do nothing is worse than no control, so neither they nor the
+		// row they hang on are drawn; the list above is the only control it has,
+		// and exact dates are reachable from there.
 		boolean stepping = !"Lifetime".equals(histGranularity) || histFrom != null;
 		JLabel lbl = new JLabel(label, JLabel.CENTER);
 		lbl.setFont(FontManager.getRunescapeFont());
@@ -4591,21 +4795,20 @@ class ChroniclePanel extends PluginPanel
 			// is the newest one, and they are that state a few minutes fresher.
 			boolean live = !pEnd.isBefore(java.time.LocalDate.now());
 
-			// Milestones inside the window, and beside them the summary lines
-			// that read the journal itself rather than the spine: slayer tasks
-			// and slayer kills from the closed segments dated inside the period,
-			// and the feed's dated entries counted by type (collection log
-			// slots, deaths, pets, quests, diaries, combat achievements, levels)
-			// when the feed reaches back past the window's start (a feed that
-			// begins inside it cannot say what it missed, and the spine's delta
-			// stands where the spine carries the key). All of them reach back
-			// past the day the spine first carried them. One walk of the feed
-			// serves the milestones, the counts, the played time and the named
-			// lists the groups open to; an entry with no usable stamp is
-			// skipped.
+			// The summary lines that read the journal itself rather than the
+			// spine: slayer tasks and slayer kills from the closed segments dated
+			// inside the period, and the feed's dated entries counted by type
+			// (collection log slots, deaths, pets, quests, diaries, combat
+			// achievements, levels) when the feed reaches back past the window's
+			// start (a feed that begins inside it cannot say what it missed, and
+			// the spine's delta stands where the spine carries the key). All of
+			// them reach back past the day the spine first carried them. One walk
+			// of the feed serves the counts, the played time and the named lists
+			// the groups open to; an entry with no usable stamp is skipped. The
+			// milestones themselves are the Journal tab's business: it is the
+			// same feed, read day by day, and drawing it twice was clutter.
 			long fromMs = pStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			long toMs = end.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-			List<JsonObject> milestones = new ArrayList<>();
 			Map<String, Long> fromFeed = new java.util.HashMap<>();
 			Map<String, List<String[]>> named = new LinkedHashMap<>();
 			long[] played = {0, 0};   // minutes, sessions
@@ -4623,13 +4826,6 @@ class ChroniclePanel extends PluginPanel
 				if (ts >= fromMs && ts < toMs)
 				{
 					String type = e.has("type") ? e.get("type").getAsString() : "";
-					// A session is time at the keyboard, and the period's total is
-					// already the first thing the card says. Listing every one of
-					// them here buries the milestones they were spent earning.
-					if (!"SESSION".equals(type))
-					{
-						milestones.add(e);
-					}
 					String key = FEED_SUMMARY_KEYS.get(type);
 					if (key != null)
 					{
@@ -4813,8 +5009,13 @@ class ChroniclePanel extends PluginPanel
 					lootSince = sat;
 				}
 			}
-			String since = countersSince(hist.headMap(at.getKey(), true), from.getKey(),
-				lootSince, lootFromTs > 0);
+			// Only a window needs it. A lifetime reads the totals themselves, which
+			// are whole whatever day the spine began carrying them, so a line
+			// saying the record starts in August would be untrue of every figure
+			// above it.
+			String since = wholeRecord() ? null
+				: countersSince(hist.headMap(at.getKey(), true), from.getKey(),
+					lootSince, lootFromTs > 0);
 			if (since != null)
 			{
 				p.add(note(since));
@@ -4826,16 +5027,14 @@ class ChroniclePanel extends PluginPanel
 			// find it.
 			if ("PvM".equals(histFacet))
 			{
-				addKillCounts(p, opening.kcs, earliest.kcs, closing.kcs, live,
-					firstCarryingKcs(hist));
 				addLootValues(p, progress);
-				addMonsterProfit(p, pStart, pEnd,
-					HistoryLog.gained(opening.kcs, earliest.kcs, closing.kcs));
+				addKinds(p, opening.kcs, earliest.kcs, closing.kcs, live, pStart, pEnd,
+					KIND_BOSS, KIND_MONSTER);
 			}
 			else if ("Activities".equals(histFacet))
 			{
-				addActivities(p, opening.kcs, earliest.kcs, closing.kcs, live,
-					firstCarryingKcs(hist));
+				addKinds(p, opening.kcs, earliest.kcs, closing.kcs, live, pStart, pEnd,
+					KIND_ACTIVITY, KIND_SKILLING);
 			}
 			else if ("Trackers".equals(histFacet))
 			{
@@ -4856,25 +5055,6 @@ class ChroniclePanel extends PluginPanel
 			else
 			{
 				addSkillGrid(p, gains, stand, opened);
-			}
-
-			if (!milestones.isEmpty())
-			{
-				List<String[]> lines = milestoneLines(milestones);
-				JPanel card = card("Milestones · " + fmt(milestones.size()));
-				int shown = shownCap("history:list:milestones");
-				int mounted = 0;
-				for (String[] line : lines)
-				{
-					if (mounted++ >= shown)
-					{
-						break;
-					}
-					card.add(row(line[0], line[1], null));
-				}
-				addMore(card, "history:list:milestones", lines.size(), shown, false);
-				p.add(card);
-				p.add(vgap(5));
 			}
 		}
 
@@ -5413,55 +5593,6 @@ class ChroniclePanel extends PluginPanel
 	// Feed rendering
 	// ------------------------------------------------------------------
 
-	/**
-	 * The period's milestones as lines, newest first. One that names itself is a
-	 * line of its own. A run of milestones of a kind that names nothing, the
-	 * imported log slots and the deaths with no killer on record, would otherwise
-	 * be the same sentence over and over: those fold into one line saying how
-	 * many and across what span, standing where the most recent of them stood.
-	 */
-	private static List<String[]> milestoneLines(List<JsonObject> milestones)
-	{
-		Map<String, Integer> nameless = new LinkedHashMap<>();
-		for (JsonObject e : milestones)
-		{
-			if (feedName(e) == null)
-			{
-				nameless.merge(typeOf(e), 1, Integer::sum);
-			}
-		}
-		List<String[]> out = new ArrayList<>();
-		java.util.Set<String> folded = new java.util.HashSet<>();
-		for (JsonObject e : milestones)
-		{
-			String type = typeOf(e);
-			String when = stamp(e);
-			if (feedName(e) != null || nameless.getOrDefault(type, 0) < 2)
-			{
-				out.add(new String[]{feedLine(e), when});
-				continue;
-			}
-			if (!folded.add(type))
-			{
-				continue;
-			}
-			// the list runs newest first, so the last of this run is its oldest
-			String oldest = when;
-			for (int i = milestones.size() - 1; i >= 0; i--)
-			{
-				JsonObject o = milestones.get(i);
-				if (type.equals(typeOf(o)) && feedName(o) == null)
-				{
-					oldest = stamp(o);
-					break;
-				}
-			}
-			out.add(new String[]{namelessLine(type, nameless.get(type)),
-				oldest.isEmpty() || oldest.equals(when) ? when : oldest + " to " + when});
-		}
-		return out;
-	}
-
 	private static String typeOf(JsonObject e)
 	{
 		return e.has("type") ? e.get("type").getAsString() : "";
@@ -5471,33 +5602,6 @@ class ChroniclePanel extends PluginPanel
 	{
 		long ts = e.has("ts") ? e.get("ts").getAsLong() : 0;
 		return ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "";
-	}
-
-	// what a folded run of one kind reads as. The record knows how many and when,
-	// and nothing else about them, so the line says exactly that.
-	private static String namelessLine(String type, int n)
-	{
-		switch (type)
-		{
-			case "COLLECTION":
-				return fmt(n) + " new log slots";
-			case "DEATH":
-				return fmt(n) + " deaths";
-			case "PET":
-				return fmt(n) + " pets";
-			case "CLUE":
-				return fmt(n) + " caskets opened";
-			case "QUEST":
-				return fmt(n) + " quests completed";
-			case "DIARY":
-				return fmt(n) + " diaries completed";
-			case "COMBAT_ACHIEVEMENT":
-				return fmt(n) + " combat achievements";
-			case "LEVEL":
-				return fmt(n) + " levels";
-			default:
-				return fmt(n) + " " + StatRegistry.prettify(type.toLowerCase(Locale.ROOT));
-		}
 	}
 
 	private static String feedLine(JsonObject e)

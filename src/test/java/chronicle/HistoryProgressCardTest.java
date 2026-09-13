@@ -428,6 +428,20 @@ public class HistoryProgressCardTest
 		return history(p);
 	}
 
+	// the Journal tab as the client draws it, for the milestones the Progression
+	// tab hands over to it
+	private static JPanel journal(ChroniclePanel panel) throws Exception
+	{
+		final JPanel[] out = new JPanel[1];
+		edt(() ->
+		{
+			Method m = ChroniclePanel.class.getDeclaredMethod("buildJournal");
+			m.setAccessible(true);
+			out[0] = (JPanel) m.invoke(panel);
+		});
+		return out[0];
+	}
+
 	private static JPanel history(ChroniclePanel panel) throws Exception
 	{
 		final JPanel[] out = new JPanel[1];
@@ -462,7 +476,9 @@ public class HistoryProgressCardTest
 	{
 		for (Component child : c.getComponents())
 		{
-			if (child instanceof JLabel)
+			// an icon's label says nothing; it is the column a row keeps for it
+			if (child instanceof JLabel && ((JLabel) child).getText() != null
+				&& !((JLabel) child).getText().isEmpty())
 			{
 				out.add(((JLabel) child).getText());
 			}
@@ -473,24 +489,11 @@ public class HistoryProgressCardTest
 		}
 	}
 
-	// the card's labels, from its caption to the milestones card or the end
+	// the card's labels, from its caption to the end of the view
 	private static List<String> card(List<String> all)
 	{
 		int at = all.indexOf("TRACKED PROGRESS");
-		if (at < 0)
-		{
-			return new ArrayList<>();
-		}
-		int end = all.size();
-		for (int i = at + 1; i < all.size(); i++)
-		{
-			if (all.get(i).startsWith("MILESTONES"))
-			{
-				end = i;
-				break;
-			}
-		}
-		return all.subList(at, end);
+		return at < 0 ? new ArrayList<>() : all.subList(at, all.size());
 	}
 
 	// the figure beside a named line, or null when the line is absent
@@ -592,11 +595,11 @@ public class HistoryProgressCardTest
 		{
 			String label = all.get(i);
 			if (label.equals("ATT") || label.equals("TRACKED PROGRESS")
-				|| label.equals("BOSSES AND ACTIVITIES") || label.equals("ACTIVITIES")
-				|| label.equals("EVERYTHING ELSE COUNTED") || label.startsWith("MILESTONES")
-				// the boards' own empty states, which are body and not headline
-				|| label.startsWith("No kill counts") || label.startsWith("Kill counts")
-				|| label.startsWith("No activity"))
+				|| label.equals("WHAT IT WAS WORTH") || label.equals("BOSSES")
+				|| label.equals("MONSTERS") || label.equals("ACTIVITIES")
+				|| label.equals("SKILLING")
+				// the bands' own empty state, which is body and not headline
+				|| label.startsWith("Nothing counted"))
 			{
 				end = i;
 				break;
@@ -1412,10 +1415,10 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
-	public void theKillsToggleNamesEveryMonster() throws Exception
+	public void thePvmFacetSplitsBossesFromMonsters() throws Exception
 	{
-		// the lens reads Skills and Kills: the list under it is every source the
-		// record counted, not bosses alone
+		// the facets name themselves across the top, and the boss board is not a
+		// facet of its own any more
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.kcs.put("Zulrah", 108L);
 		s.kcs.put("Nechryael", 622L);
@@ -1426,18 +1429,123 @@ public class HistoryProgressCardTest
 			all.subList(all.indexOf("Skills"), all.indexOf("Skills") + 4));
 		assertFalse(all.toString(), all.contains("Bosses"));
 
-		// under it, the log's pages first and the ledger's own sources apart,
-		// each at its standing count with the period's gain beside
+		// under the facet, two bands: the collection log's own boss pages, then
+		// everything else the record counted killing
 		set(p, "histFacet", "PvM");
+		set(p, "histGranularity", "Lifetime");
 		all = labels(history(p));
-		int bosses = all.indexOf("BOSSES AND ACTIVITIES");
-		int rest = all.indexOf("EVERYTHING ELSE COUNTED");
+		int bosses = all.indexOf("BOSSES");
+		int rest = all.indexOf("MONSTERS");
 		assertTrue(all.toString(), bosses > 0 && rest > bosses);
 		assertEquals(all.toString(), "Zulrah", all.get(bosses + 1));
-		assertEquals(all.toString(), "108  +8", all.get(bosses + 2));
 		assertEquals(all.toString(), "Nechryael", all.get(rest + 1));
-		assertEquals(all.toString(), "622", all.get(rest + 2));
 		assertFalse(all.toString(), all.subList(bosses, rest).contains("Nechryael"));
+	}
+
+	@Test
+	public void aLifetimeTotalLevelStandsWithoutCountingUpFromOne() throws Exception
+	{
+		// a lifetime encompasses everything that came before, so the tile says
+		// where the sheet stands. It used to add "· +2,197", the levels counted
+		// up from one, which is arithmetic nobody asked for.
+		ChroniclePanel p = panel(stub(true));
+		set(p, "histFacet", "Skills");
+		set(p, "histGranularity", "Lifetime");
+		String lifetime = standingLevel(labels(history(p)));
+		assertNotNull(lifetime);
+		assertFalse(lifetime, lifetime.contains("·"));
+		assertFalse(lifetime, lifetime.contains(" to "));
+	}
+
+	@Test
+	public void aThievedNameIsNotAKill() throws Exception
+	{
+		// a pickpocket target counts loots the way a monster counts kills, and
+		// nothing in the shape of the row tells them apart: the game fixes who
+		// can be robbed, so the panel names them. They belong under Skilling,
+		// and never on a kill board.
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.kcs.put("Knight", 13_533L);
+		s.kcs.put("Nechryael", 622L);
+		s.ledgerKcs.put("Knight", 13_533L);
+		s.ledgerKcs.put("Nechryael", 622L);
+		ChroniclePanel p = panel(s);
+		set(p, "histGranularity", "Lifetime");
+		set(p, "histFacet", "PvM");
+		List<String> pvm = labels(history(p));
+		assertTrue(pvm.toString(), pvm.contains("Nechryael"));
+		assertFalse(pvm.toString(), pvm.contains("Knight"));
+
+		set(p, "histFacet", "Activities");
+		List<String> act = labels(history(p));
+		int skilling = act.indexOf("SKILLING");
+		assertTrue(act.toString(), skilling > 0);
+		assertEquals(act.toString(), "Knight", act.get(skilling + 1));
+		assertFalse(act.toString(), act.contains("Nechryael"));
+	}
+
+	@Test
+	public void aThievedNameTheTableNeverHeardOfNamesItself() throws Exception
+	{
+		// the record mints a counter per thieving target, so a name the table has
+		// never heard of still says what it is and needs no edit here when the
+		// game adds one
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.kcs.put("Wealthy Trader", 300L);
+		s.ledgerKcs.put("Wealthy Trader", 300L);
+		s.lifetime.put("wealthyTraderPickpockets", 300L);
+		s.lifetime.put("wealthyTraderFailedPickpockets", 40L);
+		ChroniclePanel p = panel(s);
+		set(p, "histGranularity", "Lifetime");
+		set(p, "histFacet", "PvM");
+		assertFalse(labels(history(p)).toString(),
+			labels(history(p)).contains("Wealthy Trader"));
+
+		set(p, "histFacet", "Activities");
+		List<String> act = labels(history(p));
+		int skilling = act.indexOf("SKILLING");
+		assertTrue(act.toString(), skilling > 0);
+		assertTrue(act.toString(), act.subList(skilling, act.size()).contains("Wealthy Trader"));
+	}
+
+	@Test
+	public void aMinigamePageIsAnActivityAndAMinedPageIsSkilling() throws Exception
+	{
+		// the collection log's own tabs decide it: its Minigames and Clues are
+		// activities, and the rest of its Other tab is ground a skill was
+		// trained on
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.kcs.put("Guardians of the Rift", 5_218L);
+		s.kcs.put("Motherlode Mine", 40L);
+		ChroniclePanel p = panel(s);
+		set(p, "histGranularity", "Lifetime");
+		set(p, "histFacet", "Activities");
+		List<String> all = labels(history(p));
+		int act = all.indexOf("ACTIVITIES");
+		int skilling = all.indexOf("SKILLING");
+		assertTrue(all.toString(), act > 0 && skilling > act);
+		assertTrue(all.toString(), all.subList(act, skilling).contains("Guardians of the Rift"));
+		assertTrue(all.toString(), all.subList(skilling, all.size()).contains("Motherlode Mine"));
+	}
+
+	@Test
+	public void aBandFoldsAwayAndSaysWhatItIsHolding() throws Exception
+	{
+		// every band on the tab folds, and shut it carries its own count
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.kcs.put("Zulrah", 108L);
+		s.kcs.put("Vorkath", 54L);
+		ChroniclePanel p = panel(s);
+		set(p, "histGranularity", "Lifetime");
+		set(p, "histFacet", "PvM");
+		List<String> open = labels(history(p));
+		assertTrue(open.toString(), open.contains("Zulrah"));
+		assertTrue(open.toString(), open.contains("Vorkath"));
+
+		click(rowNamed(history(p), "BOSSES"));
+		List<String> shut = labels(history(p));
+		assertFalse(shut.toString(), shut.contains("Zulrah"));
+		assertEquals(shut.toString(), "2", beside(shut, "BOSSES"));
 	}
 
 	@Test
@@ -1452,8 +1560,7 @@ public class HistoryProgressCardTest
 		set(p, "histFacet", "PvM");
 		List<String> all = labels(history(p));
 		assertEquals(all.toString(), "+12", beside(headline(all), "Monsters slain"));
-		assertTrue(all.toString(), all.indexOf("THE PERIOD")
-			< all.indexOf("BOSSES AND ACTIVITIES"));
+		assertTrue(all.toString(), all.indexOf("THE PERIOD") < all.indexOf("BOSSES"));
 		// and the old head card counting kills twice is gone
 		assertEquals(all.toString(), 1, java.util.Collections.frequency(all, "THE PERIOD"));
 	}
@@ -1649,7 +1756,6 @@ public class HistoryProgressCardTest
 		List<String> all = labels(history(opened(s)));
 		assertEquals(all.toString(), "+1", beside(headline(all), "Deaths"));
 		assertNull(all.toString(), beside(card(all), "Pets"));
-		assertTrue(all.toString(), all.contains("MILESTONES · 1"));
 	}
 
 	@Test
@@ -2020,10 +2126,12 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
-	public void theKillsToggleCarriesACountTheClosingLineOmits() throws Exception
+	public void aCountTheClosingLineOmitsIsNeverALoss() throws Exception
 	{
 		// kill counts are cumulative: a line that stops carrying one does not
-		// undo it, so the count stands where it reached
+		// undo it. The window reports the gain, and where the closing line
+		// dropped the key the state still stands at what it reached, so there
+		// is no gain to draw and no negative figure anywhere.
 		LocalDate today = LocalDate.now();
 		PanelPreviewTest.StubPlugin s = spanned(true, true);
 		s.history.get(today.minusDays(10)).kcs.remove("Zulrah");
@@ -2032,7 +2140,11 @@ public class HistoryProgressCardTest
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
-		assertEquals(all.toString(), "100", beside(all, "Zulrah"));
+		assertNull(all.toString(), beside(all, "Zulrah"));
+		for (String label : all)
+		{
+			assertFalse(label, label.startsWith("-"));
+		}
 	}
 
 	@Test
@@ -2057,49 +2169,49 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
-	public void theKillsToggleStandsAtTheClosingLinesCounts() throws Exception
+	public void aWindowDrawsWhatItAddedAndALifetimeWhatItStandsAt() throws Exception
 	{
-		// the standing column is the closing line's count, with the period's
-		// gain beside it; neither today's line's 130 nor the live ledger's 135
-		// is anywhere on a past window
+		// a window is an account of itself: it draws the eight the period added
+		// and nothing else, so neither today's line's 130 nor the live ledger's
+		// 135 is anywhere on a past window
 		LocalDate today = LocalDate.now();
 		ChroniclePanel p = panel(spanned(true, true));
 		set(p, "histFacet", "PvM");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
-		assertEquals(all.toString(), "108  +8", beside(all, "Zulrah"));
+		assertEquals(all.toString(), "8", beside(all, "Zulrah"));
 		for (String label : all)
 		{
 			assertFalse(label, label.startsWith("130") || label.startsWith("135"));
 		}
 
-		// the week reaching today reads the ledger, fresher than today's line:
-		// its 135 stands, not the line's 130, beside the gain measured between
-		// the lines
+		// a lifetime encompasses everything before it, so it stands the count
+		// itself, read off the ledger, which is fresher than today's line
 		set(p, "histFrom", null);
 		set(p, "histTo", null);
+		set(p, "histGranularity", "Lifetime");
 		all = labels(history(p));
-		assertEquals(all.toString(), "135  +22", beside(all, "Zulrah"));
+		assertEquals(all.toString(), "135", beside(all, "Zulrah"));
 	}
 
 	@Test
-	public void theKillsToggleStandsTheLedgersOwnSourcesAtTheClosingLine() throws Exception
+	public void aLedgerSourceWithNoLogPageSitsUnderMonsters() throws Exception
 	{
-		// a source the collection log has no page for sits under Everything
-		// else counted, and on a past window it stands at the closing line's
-		// count like any other row, not the ledger's: the ledger only sorts the
-		// name there. The week reaching today reads the ledger.
+		// a source the collection log has no page for is still something killed:
+		// it sits in the second band, under the log's own boss pages, and on a
+		// past window it draws the twenty that window added, not the ledger's
+		// standing six hundred and thirty
 		LocalDate today = LocalDate.now();
 		ChroniclePanel p = panel(spanned(true, true));
 		set(p, "histFacet", "PvM");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
-		int rest = all.indexOf("EVERYTHING ELSE COUNTED");
-		assertTrue(all.toString(), rest > all.indexOf("BOSSES AND ACTIVITIES"));
+		int rest = all.indexOf("MONSTERS");
+		assertTrue(all.toString(), rest > all.indexOf("BOSSES"));
 		assertEquals(all.toString(), "Nechryael", all.get(rest + 1));
-		assertEquals(all.toString(), "600  +20", all.get(rest + 2));
+		assertEquals(all.toString(), "20", all.get(rest + 2));
 		for (String label : all)
 		{
 			assertFalse(label, label.startsWith("630"));
@@ -2107,29 +2219,28 @@ public class HistoryProgressCardTest
 
 		set(p, "histFrom", null);
 		set(p, "histTo", null);
+		set(p, "histGranularity", "Lifetime");
 		all = labels(history(p));
-		rest = all.indexOf("EVERYTHING ELSE COUNTED");
+		rest = all.indexOf("MONSTERS");
 		assertEquals(all.toString(), "Nechryael", all.get(rest + 1));
-		assertEquals(all.toString(), "630  +30", all.get(rest + 2));
+		assertEquals(all.toString(), "630", all.get(rest + 2));
 	}
 
 	@Test
-	public void aClosingLineBeforeKillCountsSaysSoInsteadOfTodaysCounts() throws Exception
+	public void aWindowClosedBeforeKillCountsDrawsNoneOfTodaysCounts() throws Exception
 	{
-		// the window closed before the spine carried kill counts: a note names
-		// the first line that does, and today's ledger stays off the past
+		// the window closed before the spine carried kill counts: it says so
+		// plainly, draws no band, and today's ledger stays off the past
 		LocalDate today = LocalDate.now();
 		ChroniclePanel p = panel(spanned(true, false));
 		set(p, "histFacet", "PvM");
 		set(p, "histFrom", today.minusDays(15));
 		set(p, "histTo", today.minusDays(5));
 		List<String> all = labels(history(p));
-		String joined = String.join(" ", all);
-		assertTrue(joined, joined.contains("Kill counts were not on the record when this "
-			+ "period closed. They begin on " + today.format(FULL) + "."));
+		assertTrue(all.toString(), all.contains("Nothing counted this period."));
 		assertFalse(all.toString(), all.contains("Zulrah"));
-		assertFalse(all.toString(), all.contains("BOSSES AND ACTIVITIES"));
-		assertFalse(joined, joined.contains("No kill counts recorded yet"));
+		assertFalse(all.toString(), all.contains("BOSSES"));
+		assertFalse(all.toString(), all.contains("MONSTERS"));
 	}
 
 	@Test
@@ -2227,11 +2338,11 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
-	public void sessionsAreTimePlayedAndNotMilestones() throws Exception
+	public void sessionsAreTimePlayedAndTheMilestonesAreTheJournals() throws Exception
 	{
-		// eighteen sessions in a week used to fill the milestone list and push
-		// the pets and log slots out of it; the period's own head already says
-		// how long was played
+		// the period's own head says how long was played, and the entries
+		// themselves are the Journal tab's business: the same feed, read day by
+		// day, and drawing it on both tabs was clutter
 		long now = System.currentTimeMillis();
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
@@ -2242,18 +2353,25 @@ public class HistoryProgressCardTest
 			s.feed.add(session(now - DAY_MS - i * 60_000L, 30));
 		}
 		s.feed.add(entry(now - DAY_MS, "PET", "petName", "Abyssal orphan"));
-		JPanel view = history(panel(s));
-		List<String> all = labels(view);
+		ChroniclePanel p = panel(s);
+		List<String> all = labels(history(p));
 		assertTrue(all.toString(), all.contains("Time played"));
 		assertTrue(all.toString(), all.contains("Sessions"));
 		assertFalse(all.toString(), all.stream().anyMatch(l -> l.startsWith("Session:")));
-		assertTrue(all.toString(), all.stream().anyMatch(l -> l.contains("Abyssal orphan")));
+		// no milestone list on this tab at all
+		assertFalse(all.toString(), all.stream().anyMatch(l -> l.startsWith("MILESTONES")));
+		assertFalse(all.toString(), all.stream().anyMatch(l -> l.contains("Abyssal orphan")));
+
+		List<String> journal = labels(journal(p));
+		assertTrue(journal.toString(),
+			journal.stream().anyMatch(l -> l.contains("Abyssal orphan")));
 	}
 
 	@Test
-	public void theMilestoneListPagesLikeEveryOtherList() throws Exception
+	public void theJournalCarriesTheMilestonesTheTabNoLongerDraws() throws Exception
 	{
-		// a year's worth of milestones used to stop dead at six with no way on
+		// the Progression tab used to end in a milestone list of its own. It is
+		// the Journal's account, and the Journal draws every one of them.
 		long now = System.currentTimeMillis();
 		PanelPreviewTest.StubPlugin s = stub(true);
 		for (int i = 0; i < 9; i++)
@@ -2261,13 +2379,12 @@ public class HistoryProgressCardTest
 			s.feed.add(entry(now - DAY_MS - i * 60_000L, "COLLECTION", "itemName", "Slot " + i));
 		}
 		ChroniclePanel p = panel(s);
-		JPanel view = history(p);
-		List<String> all = labels(view);
-		assertTrue(all.toString(), all.contains("Show 3 more"));
+		List<String> all = labels(history(p));
+		assertFalse(all.toString(), all.stream().anyMatch(l -> l.startsWith("MILESTONES")));
+		assertEquals(all.toString(), 0, countStarting(all, "Log slot: Slot "));
 
-		click(rowNamed(view, "Show 3 more"));
-		List<String> more = labels(history(p));
-		assertEquals(more.toString(), 9, countStarting(more, "Log slot: Slot "));
+		List<String> journal = labels(journal(p));
+		assertEquals(journal.toString(), 9, countStarting(journal, "Log slot: Slot "));
 	}
 
 	@Test
@@ -2490,74 +2607,30 @@ public class HistoryProgressCardTest
 	// ---- the tab a reader opens ------------------------------------------
 
 	@Test
-	public void aRunOfMilestonesThatNameNothingIsOneLine() throws Exception
+	public void aBandIsCappedAndOneClickBringsTheRest() throws Exception
 	{
-		// an imported log slot carries no item name, so six of them were six
-		// copies of the same sentence. They fold into one line saying how many
-		// and across what span; anything that names itself keeps its own line.
-		long now = System.currentTimeMillis();
+		// uncapped, a board of two hundred names drew all of them
 		PanelPreviewTest.StubPlugin s = stub(true);
-		for (int i = 0; i < 6; i++)
+		for (int i = 0; i < 26; i++)
 		{
-			JsonObject e = new JsonObject();
-			e.addProperty("ts", now - (i + 1) * 3600_000L);
-			e.addProperty("type", "COLLECTION");
-			e.add("data", new JsonObject());
-			s.feed.add(e);
-		}
-		s.feed.add(entry(now - 2 * 3600_000L, "PET", "petName", "Abyssal orphan"));
-		ChroniclePanel p = panel(s);
-		List<String> all = labels(history(p));
-		assertTrue(all.toString(), all.contains("6 new log slots"));
-		assertTrue(all.toString(), all.contains("Pet: Abyssal orphan"));
-		// the card still counts the milestones, not the lines
-		assertTrue(all.toString(), all.contains("MILESTONES · 7"));
-		// and the folded run is not also listed one by one
-		assertEquals(all.toString(), 0,
-			java.util.Collections.frequency(all, "Log slot: new item"));
-	}
-
-	@Test
-	public void oneOfAKindThatNamesNothingKeepsItsOwnLine() throws Exception
-	{
-		// nothing to fold: a single unnamed milestone reads as itself
-		long now = System.currentTimeMillis();
-		PanelPreviewTest.StubPlugin s = stub(true);
-		JsonObject e = new JsonObject();
-		e.addProperty("ts", now - 3600_000L);
-		e.addProperty("type", "COLLECTION");
-		e.add("data", new JsonObject());
-		s.feed.add(e);
-		List<String> all = labels(history(panel(s)));
-		assertTrue(all.toString(), all.contains("Log slot: new item"));
-		assertFalse(all.toString(), all.contains("1 new log slots"));
-	}
-
-	@Test
-	public void theKillBoardIsCappedAndOneClickBringsTheRest() throws Exception
-	{
-		// uncapped, a one day window drew the whole standing board
-		PanelPreviewTest.StubPlugin s = stub(true);
-		for (int i = 0; i < 20; i++)
-		{
-			s.kcs.put("Boss " + (char) ('A' + i), 100L + i);
+			s.kcs.put("Mob " + (char) ('A' + i), 100L + i);
 		}
 		ChroniclePanel p = panel(s);
+		set(p, "histGranularity", "Lifetime");
 		set(p, "histFacet", "PvM");
 		List<String> all = labels(history(p));
-		int board = all.indexOf("BOSSES AND ACTIVITIES");
-		assertTrue(all.toString(), board >= 0);
+		assertTrue(all.toString(), all.indexOf("MONSTERS") >= 0);
 		assertTrue(all.toString(), all.contains("Show 14 more"));
-		// six stand, ranked, and the other fourteen are held back
-		assertTrue(all.toString(), all.contains("Boss T"));
-		assertFalse(all.toString(), all.contains("Boss A"));
-		assertFalse(all.toString(), all.contains("Boss N"));
+		// twelve stand, ranked, and the other fourteen are held back
+		assertTrue(all.toString(), all.contains("Mob Z"));
+		assertFalse(all.toString(), all.contains("Mob A"));
+		assertFalse(all.toString(), all.contains("Mob N"));
 
 		click(rowNamed(history(p), "Show 14 more"));
 		all = labels(history(p));
 		assertFalse(all.toString(), all.contains("Show 14 more"));
-		assertTrue(all.toString(), all.contains("Boss T"));
-		assertTrue(all.toString(), all.contains("Boss A"));
+		assertTrue(all.toString(), all.contains("Mob Z"));
+		assertTrue(all.toString(), all.contains("Mob A"));
 	}
 
 	@Test
@@ -2797,7 +2870,9 @@ public class HistoryProgressCardTest
 	public void theListOffersEveryPeriodWidestFirst() throws Exception
 	{
 		// five pills across a 225px panel clipped the longest word; a list does
-		// not, however many periods there come to be
+		// not, however many periods there come to be. Any two days are the last
+		// entry: at Lifetime there is no dateline to click, so the list is the
+		// only way to a window of one's own choosing.
 		ChroniclePanel p = panel(stub(true));
 		history(p);
 		java.lang.reflect.Method m = ChroniclePanel.class.getDeclaredMethod("periodMenu");
@@ -2811,7 +2886,8 @@ public class HistoryProgressCardTest
 				offered.add(((javax.swing.JMenuItem) k).getText());
 			}
 		}
-		assertEquals(Arrays.asList("Lifetime", "Year", "Month", "Week", "Day"), offered);
+		assertEquals(Arrays.asList("Lifetime", "Year", "Month", "Week", "Day", "Exact dates"),
+			offered);
 	}
 
 	@Test
@@ -2985,10 +3061,16 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
-	public void everyKillIsRankedByWhatItPaid() throws Exception
+	public void everyCountedNameCarriesWhatItPaid() throws Exception
 	{
-		// a lifetime reads the drop ledger, which is the whole account
+		// a lifetime reads the drop ledger, which is the whole account, and every
+		// band ranks by what its names paid rather than by how often they died
 		PanelPreviewTest.StubPlugin s = stub(true);
+		s.kcs.put("Zulrah", 108L);
+		s.kcs.put("Nechryael", 622L);
+		s.kcs.put("Man", 4L);
+		s.ledgerKcs.put("Nechryael", 622L);
+		s.ledgerKcs.put("Man", 4L);
 		s.sources = Arrays.asList(
 			new LocalStore.SourceRow("Zulrah", 108, 108, 5_000_000L, null, 0, 0),
 			new LocalStore.SourceRow("Nechryael", 622, 622, 3_400_000L, null, 0, 0),
@@ -2997,12 +3079,17 @@ public class HistoryProgressCardTest
 		set(p, "histFacet", "PvM");
 		set(p, "histGranularity", "Lifetime");
 		List<String> all = labels(history(p));
-		int at = all.indexOf("EVERY KILL, BY WHAT IT PAID");
-		assertTrue("no profit list: " + all, at >= 0);
-		assertEquals(all.toString(), "Zulrah", all.get(at + 1));
-		assertEquals(all.toString(), "108 kc · 5.0M gp", all.get(at + 2));
-		assertEquals(all.toString(), "Nechryael", all.get(at + 3));
-		assertTrue(all.toString(), all.indexOf("Man") > all.indexOf("Nechryael"));
+		int bosses = all.indexOf("BOSSES");
+		assertTrue("no boss band: " + all, bosses >= 0);
+		// the count is the figure and the payment is the accent beside it, two
+		// labels so they read as two things
+		assertEquals(all.toString(), Arrays.asList("Zulrah", "108", "5.0M"),
+			all.subList(bosses + 1, bosses + 4));
+		int mobs = all.indexOf("MONSTERS");
+		assertEquals(all.toString(), Arrays.asList("Nechryael", "622", "3.4M"),
+			all.subList(mobs + 1, mobs + 4));
+		// the man was robbed, not killed: he is on the other facet entirely
+		assertFalse(all.toString(), all.contains("Man"));
 	}
 
 	@Test

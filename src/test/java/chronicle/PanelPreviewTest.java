@@ -239,6 +239,8 @@ public class PanelPreviewTest
 		}
 		set(panel, "histFacet", "PvM");
 		shoot(panel, out, prefix + "-history-bosses", "HISTORY");
+		set(panel, "histFacet", "Activities");
+		shoot(panel, out, prefix + "-history-activities", "HISTORY");
 		set(panel, "histFacet", "Skills");
 		for (String g : new String[]{"Day", "Week", "Month", "Year"})
 		{
