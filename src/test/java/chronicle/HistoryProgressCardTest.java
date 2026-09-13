@@ -2905,11 +2905,11 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
-	public void aSkillTileNamesItselfAndSaysWhereItCameFrom() throws Exception
+	public void aSkillTileSaysWhereItCameFromAndWhatItGained() throws Exception
 	{
-		// the site's tile carries the icon, the levels it moved between, the
-		// skill's own name and the xp. Three across leaves 62px and
-		// "Construction" alone wants 64, so the grid is two across.
+		// the tile carries the icon, the levels it moved between and the xp.
+		// The name is not on it: three across leaves 62px and "Construction"
+		// alone wants 64, and the icon is what a reader looks for anyway.
 		LocalDate today = LocalDate.now();
 		ChroniclePanel p = panel(spanned(false, false));
 		set(p, "histFacet", "Skills");
@@ -2918,9 +2918,9 @@ public class HistoryProgressCardTest
 		List<String> all = labels(history(p));
 		int at = all.indexOf("ATT");
 		assertTrue(all.toString(), at >= 0);
-		// icon, the pair, the name, the xp
-		assertEquals(all.toString(), Arrays.asList("ATT", "73 to 75", "Attack", "+250k xp"),
-			all.subList(at, at + 4));
+		// icon, the pair, the xp
+		assertEquals(all.toString(), Arrays.asList("ATT", "73 to 75", "+250k xp"),
+			all.subList(at, at + 3));
 	}
 
 	@Test
@@ -3092,5 +3092,74 @@ public class HistoryProgressCardTest
 		assertTrue("tabs: " + tips, tips.contains("Progression"));
 		assertFalse("tabs: " + tips, tips.contains("History"));
 		assertFalse("the Stats tab is folded in: " + tips, tips.contains("Stats"));
+	}
+
+	@Test
+	public void aLifetimeSaysWhereASkillStandsAndNotWhereItBegan() throws Exception
+	{
+		// everything came before a lifetime, so naming the start tells a reader
+		// what they already assumed
+		LocalDate today = LocalDate.now();
+		ChroniclePanel p = panel(spanned(false, false));
+		set(p, "histFacet", "Skills");
+
+		// a window names both ends
+		set(p, "histFrom", today.minusDays(15));
+		set(p, "histTo", today.minusDays(5));
+		assertEquals(grid(labels(history(p))).toString(), "73 to 75",
+			grid(labels(history(p))).get(1));
+
+		set(p, "histFrom", null);
+		set(p, "histTo", null);
+		set(p, "histGranularity", "Lifetime");
+		List<String> lifetime = grid(labels(history(p)));
+		assertFalse("a lifetime named a start: " + lifetime, lifetime.get(1).contains(" to "));
+		assertFalse("the total named a start: " + labels(history(p)),
+			String.valueOf(beside(labels(history(p)), "Total level")).contains(" to "));
+	}
+
+	@Test
+	public void aLifetimeCountsEverySittingTheRecordHolds() throws Exception
+	{
+		// the feed's oldest entry can begin after the record's first line, and a
+		// lifetime is every day it holds, so its sittings are all of them
+		long now = System.currentTimeMillis();
+		LocalDate today = LocalDate.now();
+		PanelPreviewTest.StubPlugin s = stub(true);
+		HistoryLog.Baseline first = new HistoryLog.Baseline();
+		first.skills.put("attack", 500L);
+		s.history.put(today.minusDays(400), first);
+		s.feed.add(session(now - 2 * DAY_MS, 95));
+		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "Skills");
+		set(p, "histGranularity", "Lifetime");
+		List<String> all = labels(history(p));
+		assertEquals(all.toString(), "1h 35m", beside(all, "Time played"));
+		assertEquals(all.toString(), "1", beside(all, "Sessions"));
+	}
+
+	@Test
+	public void aSpriteIsAskedForOnceAndNotOncePerBuild() throws Exception
+	{
+		// every build used to queue four more tasks on the client thread, and a
+		// reader clicking about queued them faster than the client drained them
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.spriteManager = Mockito.mock(net.runelite.client.game.SpriteManager.class);
+		Mockito.doAnswer(inv ->
+		{
+			s.spriteAsks.add(inv.getArgument(0));
+			return null;
+		}).when(s.spriteManager).getSpriteAsync(Mockito.anyInt(), Mockito.anyInt(),
+			Mockito.any(java.util.function.Consumer.class));
+
+		ChroniclePanel p = panel(s);
+		for (int i = 0; i < 6; i++)
+		{
+			history(p);
+		}
+		assertEquals("asked " + s.spriteAsks, ChroniclePanel.FACETS.length,
+			s.spriteAsks.size());
+		assertEquals("the same sprite twice: " + s.spriteAsks,
+			s.spriteAsks.size(), new java.util.HashSet<>(s.spriteAsks).size());
 	}
 }

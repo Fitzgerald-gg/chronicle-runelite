@@ -992,7 +992,7 @@ class ChroniclePanel extends PluginPanel
 			pill.addMouseListener(clicker(() ->
 			{
 				dropsLeftBehind = l.equals("Left behind");
-				rebuild();
+				rebuildInPlace();
 			}));
 			lens.add(pill);
 		}
@@ -2645,7 +2645,7 @@ class ChroniclePanel extends PluginPanel
 			pill.addMouseListener(clicker(() ->
 			{
 				statsFamily = fam;
-				rebuild();
+				rebuildInPlace();
 			}));
 			pills.add(pill);
 		}
@@ -4105,11 +4105,10 @@ class ChroniclePanel extends PluginPanel
 		List<net.runelite.api.Skill> order = stand.order;
 		Map<net.runelite.api.Skill, Long> levels = stand.levels;
 
-		// Two across, not three. At three a tile is 62px wide and the shortest
-		// thing that has to fit on it is the skill's own name: "Construction"
-		// alone wants 64. At two it is 95 and the icon, the levels, the name and
-		// the xp all sit down together.
-		JPanel grid = new JPanel(new GridLayout(0, 2, 2, 2));
+		// Three across, which is the shape the sheet is read in. The skill's own
+		// name will not fit beside its icon at 62px, and the icon is what a
+		// reader looks for anyway.
+		JPanel grid = new JPanel(new GridLayout(0, 3, 2, 2));
 		grid.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
 		for (net.runelite.api.Skill sk : order)
@@ -4141,7 +4140,7 @@ class ChroniclePanel extends PluginPanel
 		String figure = fmt(stand.standing);
 		if (paired && levels > 0)
 		{
-			figure = (stand.standing == shut.total
+			figure = (stand.standing == shut.total && !wholeRecord()
 				? fmt(opened.total) + " to " + figure : figure) + " · +" + fmt(levels);
 		}
 		JPanel cell = new JPanel(new BorderLayout(3, 0));
@@ -4188,20 +4187,17 @@ class ChroniclePanel extends PluginPanel
 		}
 		cell.add(icon, BorderLayout.WEST);
 
-		JPanel text = new JPanel(new GridLayout(gained != null ? 3 : 2, 1));
+		JPanel text = new JPanel(new GridLayout(gained != null ? 2 : 1, 1));
 		text.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		// where it began and where it ended, when it moved between them
-		boolean climbed = from != null && level > from;
+		// Where it began and where it ended, when it moved between them. A
+		// lifetime says only where it stands: everything came before it, so
+		// naming the start tells a reader what they already assumed.
+		boolean climbed = from != null && level > from && !wholeRecord();
 		JLabel lvl = new JLabel(level <= 0 ? "-"
 			: climbed ? fmt(from) + " to " + fmt(level) : String.valueOf(level));
 		lvl.setFont(FontManager.getRunescapeSmallFont());
 		lvl.setForeground(gained != null ? Color.WHITE : ColorScheme.LIGHT_GRAY_COLOR.darker());
 		text.add(lvl);
-
-		JLabel name = new JLabel(StatRegistry.prettify(sk.name().toLowerCase(Locale.ROOT)));
-		name.setFont(FontManager.getRunescapeSmallFont());
-		name.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
-		text.add(name);
 
 		if (gained != null)
 		{
@@ -4249,6 +4245,7 @@ class ChroniclePanel extends PluginPanel
 	private String histFacet = "Skills";
 
 	private final Map<Integer, javax.swing.ImageIcon> facetIcons = new LinkedHashMap<>();
+	private final java.util.Set<Integer> facetAsked = new java.util.HashSet<>();
 
 	/**
 	 * The sprite a facet wears, once it has been fetched. Null until then.
@@ -4273,7 +4270,10 @@ class ChroniclePanel extends PluginPanel
 		try
 		{
 			net.runelite.client.game.SpriteManager sm = plugin.sprites();
-			if (sm == null)
+			// once, ever: every build used to queue four more tasks on the client
+			// thread, and a reader clicking about queued them faster than the
+			// client drained them
+			if (sm == null || !facetAsked.add(spriteId))
 			{
 				return;
 			}
@@ -4295,7 +4295,14 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	/** The periods the tab offers, widest first, as the list reads them. */	/** The periods the tab offers, widest first, as the list reads them. */
+	// whether the period on show is the whole record, which needs no opening
+	// figure named beside its close
+	private boolean wholeRecord()
+	{
+		return "Lifetime".equals(histGranularity) && histFrom == null;
+	}
+
+	/** The periods the tab offers, widest first, as the list reads them. */
 	static final String[] PERIODS = {"Lifetime", "Year", "Month", "Week", "Day"};
 
 	// the choices, built fresh so the tick sits on whichever is current
@@ -4470,9 +4477,9 @@ class ChroniclePanel extends PluginPanel
 		}));
 		// Lifetime is one window and the arrows have nowhere to take it. A
 		// control that can do nothing is worse than no control, so they go.
+		// Lifetime is one window: no arrows, and no row to hang them on. The
+		// period is chosen from the list above, which is the only control it has.
 		boolean stepping = !"Lifetime".equals(histGranularity) || histFrom != null;
-		back.setVisible(stepping);
-		fwd.setVisible(stepping);
 		JLabel lbl = new JLabel(label, JLabel.CENTER);
 		lbl.setFont(FontManager.getRunescapeFont());
 		lbl.setToolTipText("Set exact dates");
@@ -4481,8 +4488,11 @@ class ChroniclePanel extends PluginPanel
 		stepper.add(back, BorderLayout.WEST);
 		stepper.add(lbl, BorderLayout.CENTER);
 		stepper.add(fwd, BorderLayout.EAST);
-		controls.add(stepper);
-		controls.add(vgap(6));
+		if (stepping)
+		{
+			controls.add(stepper);
+			controls.add(vgap(6));
+		}
 		historyControls = controls;
 
 		// Ask for a fresh pass when the day has turned or the feed has grown.
@@ -4743,13 +4753,18 @@ class ChroniclePanel extends PluginPanel
 			else
 			{
 				// the slice begins inside the window, so it cannot say what it
-				// missed: the lists would name a part of the period as the whole
-				for (String key : FEED_SUMMARY_KEYS.values())
+				// missed: the lists would name a part of the period as the whole.
+				// A lifetime is the exception, being every day the record holds:
+				// its sittings are all the sittings there are.
+				if (!"Lifetime".equals(histGranularity) || histFrom != null)
 				{
-					named.remove(key);
+					for (String key : FEED_SUMMARY_KEYS.values())
+					{
+						named.remove(key);
+					}
+					played[0] = 0;
+					played[1] = 0;
 				}
-				played[0] = 0;
-				played[1] = 0;
 			}
 
 			// What the period tracked: the headline figures first, then the

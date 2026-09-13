@@ -1368,6 +1368,10 @@ public class PanelPreviewTest
 		// manager throw, the way the real one does when asked off the client
 		// thread.
 		boolean spritesThrow;
+		// a manager that counts what it is asked for, so a test can prove the
+		// panel asks once and not once a build
+		net.runelite.client.game.SpriteManager spriteManager;
+		final java.util.List<Integer> spriteAsks = new java.util.ArrayList<>();
 
 		@Override
 		net.runelite.client.game.SpriteManager sprites()
@@ -1376,7 +1380,7 @@ public class PanelPreviewTest
 			{
 				throw new AssertionError();
 			}
-			return null;
+			return spriteManager;
 		}
 
 		@Override
