@@ -29,6 +29,7 @@ import java.util.Locale;
 import java.util.Set;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import org.junit.BeforeClass;
@@ -470,6 +471,14 @@ public class HistoryProgressCardTest
 		List<String> out = new ArrayList<>();
 		collect(c, out);
 		return out;
+	}
+
+	private static net.runelite.http.api.item.ItemPrice priced(int id, String name)
+	{
+		net.runelite.http.api.item.ItemPrice p = new net.runelite.http.api.item.ItemPrice();
+		p.setId(id);
+		p.setName(name);
+		return p;
 	}
 
 	private static void collect(Container c, List<String> out)
@@ -1509,6 +1518,31 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void aNameTheRecordCountsAsCaughtIsNotAKill() throws Exception
+	{
+		// the same rule as the thieved names, widened to the verbs the record
+		// counts a skill by. The counter is camel case and plural and the ledger's
+		// name is neither, so both sides are reduced to singular letters.
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.kcs.put("Moonlight moth", 1_400L);
+		s.kcs.put("Nechryael", 622L);
+		s.ledgerKcs.put("Moonlight moth", 1_400L);
+		s.lifetime.put("moonlightMothsTrapped", 1_400L);
+		ChroniclePanel p = panel(s);
+		set(p, "histGranularity", "Lifetime");
+		set(p, "histFacet", "PvM");
+		assertFalse(labels(history(p)).toString(),
+			labels(history(p)).contains("Moonlight moth"));
+
+		set(p, "histFacet", "Activities");
+		List<String> act = labels(history(p));
+		int skilling = act.indexOf("SKILLING");
+		assertTrue(act.toString(), skilling > 0);
+		assertTrue(act.toString(),
+			act.subList(skilling, act.size()).contains("Moonlight moth"));
+	}
+
+	@Test
 	public void aMinigamePageIsAnActivityAndAMinedPageIsSkilling() throws Exception
 	{
 		// the collection log's own tabs decide it: its Minigames and Clues are
@@ -1536,15 +1570,11 @@ public class HistoryProgressCardTest
 		// cache can name stands in, and only an exact name is taken, since the
 		// cache's own search is a substring scan.
 		PanelPreviewTest.StubPlugin s = stub(true);
-		ItemManager items = s.items();
-		Mockito.when(items.search("Angler hat")).thenReturn(Arrays.asList(
-			new net.runelite.http.api.item.ItemPrice()
-			{
-				{
-					setId(13_258);
-					setName("Angler hat");
-				}
-			}));
+		// the cache answers the empty string with its whole price list, which is
+		// how the panel builds its name index; untradeables are not in it
+		Mockito.when(s.items().search("")).thenReturn(Arrays.asList(
+			priced(13_258, "Angler hat"), priced(13_259, "Angler top"),
+			priced(12_019, "Coal bag")));
 		ChroniclePanel p = panel(s);
 		Method m = ChroniclePanel.class.getDeclaredMethod("signatureItem", String.class);
 		m.setAccessible(true);
@@ -3271,7 +3301,194 @@ public class HistoryProgressCardTest
 		}
 		assertEquals("asked " + s.spriteAsks, ChroniclePanel.FACETS.length,
 			s.spriteAsks.size());
+
+		// The bands want sprites too, for a line with nothing of its own to wear,
+		// and they want the very sprites the strip above already asked for. A
+		// board of two hundred rebuilt on every click is exactly where an
+		// unbounded queue would show, and none of it costs a single new ask.
+		s.kcs.put("Zulrah", 108L);
+		s.kcs.put("Nechryael", 622L);
+		set(p, "histFacet", "PvM");
+		set(p, "histGranularity", "Lifetime");
+		for (int i = 0; i < 6; i++)
+		{
+			history(p);
+		}
+		assertEquals("the bands asked again: " + s.spriteAsks,
+			ChroniclePanel.FACETS.length, s.spriteAsks.size());
 		assertEquals("the same sprite twice: " + s.spriteAsks,
 			s.spriteAsks.size(), new java.util.HashSet<>(s.spriteAsks).size());
+	}
+
+	@Test
+	public void theDearestDropIsFoundEvenWhenTheLedgerKeptOnlyItsName() throws Exception
+	{
+		// The ledger's bag mostly came from the old cloud journal, which kept item
+		// NAMES and no ids at all. Read straight, the dearest row's id is zero for
+		// four sources in five and the whole first step of the chain is dead, so a
+		// named row is looked up in the item cache by name.
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.itemManager = livingItems();
+		Mockito.when(s.items().search("")).thenReturn(Arrays.asList(
+			priced(23_962, "Crystal shard"), priced(23_957, "Crystal tool seed")));
+		s.kcs.put("Zalcano", 2_024L);
+		s.sources = Arrays.asList(
+			new LocalStore.SourceRow("Zalcano", 2_024, 2_024, 81_900_000L, null, 0, 0));
+		s.bags.put("Zalcano", Arrays.asList(
+			// the dearest carries no id, the way the imported rows do
+			new LocalStore.BagItem(0, "Crystal tool seed", 2, 46_173_662L),
+			new LocalStore.BagItem(23_962, "Crystal shard", 4_340, 0L)));
+
+		ChroniclePanel p = panel(s);
+		set(p, "histGranularity", "Lifetime");
+		set(p, "histFacet", "PvM");
+		Method sig = ChroniclePanel.class.getDeclaredMethod("signatureItem", String.class);
+		sig.setAccessible(true);
+		assertEquals("the dearest row won, not the only one carrying an id",
+			23_957, sig.invoke(p, "Zalcano"));
+
+		// and the image behind it is shrunk once, however often the board is
+		// redrawn: an image the cache already holds answers onLoaded through the
+		// client thread, so waiting on it again every build is the queue that made
+		// the whole plugin heavy
+		for (int i = 0; i < 6; i++)
+		{
+			history(p);
+		}
+		Mockito.verify(s.items(), Mockito.times(1)).getImage(23_957, 1, false);
+	}
+
+	// an item cache that hands back a loaded image, and a client thread that runs
+	// what it is given: without both, nothing downstream of onLoaded ever happens
+	private static ItemManager livingItems()
+	{
+		ClientThread ct = Mockito.mock(ClientThread.class);
+		Mockito.doAnswer(inv ->
+		{
+			((Runnable) inv.getArgument(0)).run();
+			return null;
+		}).when(ct).invokeLater(Mockito.any(Runnable.class));
+		ItemManager im = Mockito.mock(ItemManager.class);
+		java.util.Map<Integer, net.runelite.client.util.AsyncBufferedImage> made =
+			new java.util.HashMap<>();
+		Mockito.when(im.getImage(Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
+			.thenAnswer(inv -> made.computeIfAbsent(inv.getArgument(0), id ->
+			{
+				net.runelite.client.util.AsyncBufferedImage img =
+					new net.runelite.client.util.AsyncBufferedImage(ct, 36, 32,
+						java.awt.image.BufferedImage.TYPE_INT_ARGB);
+				img.loaded();
+				return img;
+			}));
+		return im;
+	}
+
+	@Test
+	public void aNameTheLedgerOnlyPartlySharesIsNotBorrowedForAnIcon() throws Exception
+	{
+		// the click-through resolver will take any source whose name contains this
+		// one or is contained by it, which is right for a click and wrong for an
+		// icon: the restaurant would wear whatever the pickpocketed gnome dropped
+		PanelPreviewTest.StubPlugin s = stub(true);
+		Mockito.when(s.items().search("")).thenReturn(Arrays.asList(
+			priced(1_061, "Chef's hat"), priced(12_020, "Gnome scarf")));
+		s.kcs.put("Gnome Restaurant", 40L);
+		s.sources = Arrays.asList(
+			new LocalStore.SourceRow("Gnome", 2, 2, 177L, null, 0, 0));
+		s.bags.put("Gnome", Arrays.asList(
+			new LocalStore.BagItem(0, "Chef's hat", 1, 355L)));
+		ChroniclePanel p = panel(s);
+		Method sig = ChroniclePanel.class.getDeclaredMethod("signatureItem", String.class);
+		sig.setAccessible(true);
+		assertFalse("the restaurant borrowed the gnome's bag",
+			Integer.valueOf(1_061).equals(sig.invoke(p, "Gnome Restaurant")));
+	}
+
+	@Test
+	public void anAnswerFoundBeforeTheItemCacheLoadedIsNotKept() throws Exception
+	{
+		// the item cache loads its prices over the network and starts out empty. A
+		// nothing found in that window is a not-yet, and keeping it would pin the
+		// row to its fallback icon for the rest of the session.
+		PanelPreviewTest.StubPlugin s = stub(true);
+		Mockito.when(s.items().search("")).thenReturn(new ArrayList<>());
+		s.kcs.put("Zalcano", 2_024L);
+		s.sources = Arrays.asList(
+			new LocalStore.SourceRow("Zalcano", 2_024, 2_024, 81_900_000L, null, 0, 0));
+		s.bags.put("Zalcano", Arrays.asList(
+			new LocalStore.BagItem(0, "Crystal tool seed", 2, 46_173_662L)));
+		ChroniclePanel p = panel(s);
+		Method sig = ChroniclePanel.class.getDeclaredMethod("signatureItem", String.class);
+		sig.setAccessible(true);
+		assertEquals(0, sig.invoke(p, "Zalcano"));
+
+		// the prices land a moment later, and the answer is there to be found
+		Mockito.when(s.items().search("")).thenReturn(Arrays.asList(
+			priced(23_957, "Crystal tool seed")));
+		assertEquals("the empty answer was kept", 23_957, sig.invoke(p, "Zalcano"));
+	}
+
+	@Test
+	public void aLineWithNothingOfItsOwnWearsItsSkillThenItsFacet() throws Exception
+	{
+		// the icon chain, in the order the record can answer it. Nothing here has
+		// a drop on the ledger and the item cache names nothing, so a thieving
+		// target falls to its skill and a monster falls to its facet's sprite.
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.skillIconManager = Mockito.mock(net.runelite.client.game.SkillIconManager.class);
+		Mockito.when(s.skillIconManager.getSkillImage(net.runelite.api.Skill.HERBLORE, true))
+			.thenReturn(new java.awt.image.BufferedImage(
+				25, 25, java.awt.image.BufferedImage.TYPE_INT_ARGB));
+		s.spriteManager = Mockito.mock(net.runelite.client.game.SpriteManager.class);
+		Mockito.doAnswer(inv ->
+		{
+			s.spriteAsks.add((Integer) inv.getArgument(0));
+			((java.util.function.Consumer<java.awt.image.BufferedImage>) inv.getArgument(2))
+				.accept(new java.awt.image.BufferedImage(
+					32, 32, java.awt.image.BufferedImage.TYPE_INT_ARGB));
+			return null;
+		}).when(s.spriteManager).getSpriteAsync(Mockito.anyInt(), Mockito.anyInt(),
+			Mockito.any(java.util.function.Consumer.class));
+
+		// two minigame pages, neither with a drop on the ledger: one the record
+		// can name a skill for, one it cannot
+		s.kcs.put("Mastering Mixology", 240L);
+		s.kcs.put("Soul Wars", 346L);
+		ChroniclePanel p = panel(s);
+		set(p, "histGranularity", "Lifetime");
+		set(p, "histFacet", "Activities");
+		JPanel view = history(p);
+
+		javax.swing.JLabel mixology = iconBeside(view, "Mastering Mixology");
+		assertNotNull("no icon column on the mixology line", mixology);
+		assertNotNull("mixology wore nothing", mixology.getIcon());
+		assertTrue("not downsized: " + mixology.getIcon().getIconHeight(),
+			mixology.getIcon().getIconHeight() <= 18);
+
+		// Soul Wars is a fight, not a skill, so it falls to the facet's own
+		// sprite, which lands asynchronously
+		javax.swing.JLabel souls = iconBeside(view, "Soul Wars");
+		assertNotNull("no icon column on the soul wars line", souls);
+		edt(() ->
+		{
+		});
+		assertNotNull("soul wars wore nothing", souls.getIcon());
+		assertTrue("not downsized: " + souls.getIcon().getIconHeight(),
+			souls.getIcon().getIconHeight() <= 18);
+		assertTrue("the minigames sprite was never asked for: " + s.spriteAsks,
+			s.spriteAsks.contains(1053));
+	}
+
+	// the icon label of the row whose name is given, or null where it has none
+	private static javax.swing.JLabel iconBeside(Container c, String name)
+	{
+		JPanel row = rowNamed(c, name);
+		if (row == null)
+		{
+			return null;
+		}
+		Component west = ((BorderLayout) row.getLayout())
+			.getLayoutComponent(BorderLayout.WEST);
+		return west instanceof javax.swing.JLabel ? (javax.swing.JLabel) west : null;
 	}
 }

@@ -313,6 +313,7 @@ public class PanelPreviewTest
 	private StubPlugin fixturePlugin() throws Exception
 	{
 		StubPlugin s = new StubPlugin(mockItems());
+		s.spriteManager = mockSprites();
 		s.rsn = "Fixture";
 		s.slayer = new ChronicleEventCapture.SlayerView("Abyssal demons", 63, 184);
 
@@ -933,6 +934,7 @@ public class PanelPreviewTest
 		store.load(dir, rsn);
 
 		StubPlugin s = new StubPlugin(im);
+		s.spriteManager = mockSprites();
 		s.rsn = rsn;
 		s.sources = store.dropSources();
 		s.untaken = store.untakenSources();
@@ -1009,9 +1011,38 @@ public class PanelPreviewTest
 		return stem;
 	}
 
+	// A sprite cache that answers, so the shots show what a line wears when the
+	// record has no item for it: a plain lozenge stands in for the game's own
+	// sidebar sprite, which only a running client can hand over.
+	private static net.runelite.client.game.SpriteManager mockSprites()
+	{
+		net.runelite.client.game.SpriteManager sm =
+			Mockito.mock(net.runelite.client.game.SpriteManager.class);
+		Mockito.doAnswer(inv ->
+		{
+			BufferedImage img = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
+			Graphics2D g = img.createGraphics();
+			g.setColor(new java.awt.Color(140, 120, 70));
+			g.fillOval(3, 3, 26, 26);
+			g.dispose();
+			((java.util.function.Consumer<BufferedImage>) inv.getArgument(2)).accept(img);
+			return null;
+		}).when(sm).getSpriteAsync(Mockito.anyInt(), Mockito.anyInt(),
+			Mockito.any(java.util.function.Consumer.class));
+		return sm;
+	}
+
 	private ItemManager mockItems()
 	{
+		// a client thread that actually runs what it is handed: an image the cache
+		// already holds answers onLoaded through it, so a mock that swallows the
+		// task renders every cached icon blank
 		ClientThread ct = Mockito.mock(ClientThread.class);
+		Mockito.doAnswer(inv ->
+		{
+			((Runnable) inv.getArgument(0)).run();
+			return null;
+		}).when(ct).invokeLater(Mockito.any(Runnable.class));
 		ItemManager im = Mockito.mock(ItemManager.class);
 		Mockito.when(im.getImage(Mockito.anyInt(), Mockito.anyInt(), Mockito.anyBoolean()))
 			.thenAnswer(inv ->
@@ -1067,7 +1098,8 @@ public class PanelPreviewTest
 		Map<String, Long> consumVals = new LinkedHashMap<>();
 		List<ChronicleApiClient.GrindRow> grinds = new ArrayList<>();
 		List<LocalStore.PetRow> petRows = new ArrayList<>();
-		private final ItemManager itemManager;
+		// a test that needs real item images supplies its own manager
+		ItemManager itemManager;
 
 		StubPlugin(ItemManager im)
 		{
@@ -1385,10 +1417,14 @@ public class PanelPreviewTest
 			return spriteManager;
 		}
 
+		// headless by default: skillIcon() catches the NPE and the grid shows a
+		// bare level. A test that wants the skill icons supplies its own.
+		net.runelite.client.game.SkillIconManager skillIconManager;
+
 		@Override
 		net.runelite.client.game.SkillIconManager skillIcons()
 		{
-			return null;   // headless: skillIcon() catches the NPE, grid shows a bare level
+			return skillIconManager;
 		}
 
 		@Override
@@ -1486,7 +1522,15 @@ public class PanelPreviewTest
 			Method rebuild = ChroniclePanel.class.getDeclaredMethod("rebuild");
 			rebuild.setAccessible(true);
 			rebuild.invoke(panel);
-
+		});
+		// An icon that arrives while the build is running dresses its label on a
+		// later pass of the event queue. Captured in the same pass, every one of
+		// them would be missing from the shot and the shot would be a lie.
+		edt(() ->
+		{
+		});
+		edt(() ->
+		{
 			panel.setSize(PANEL_W, 1200);
 			layoutTree(panel);
 			int h = Math.min(MAX_H, panel.getPreferredSize().height + 44);

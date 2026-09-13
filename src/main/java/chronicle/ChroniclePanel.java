@@ -1148,6 +1148,13 @@ class ChroniclePanel extends PluginPanel
 		drillShown.clear();
 		histListShown.clear();
 		openFolds.clear();
+		// the icons and the kinds are read off this account's ledger and counters
+		signatureItems.clear();
+		scaledIcons.clear();
+		itemWaiting.clear();
+		sourceKinds.clear();
+		skilled = null;
+		ledgerNames = null;
 		gatherHistory();
 		rebuild();
 	}
@@ -1562,25 +1569,12 @@ class ChroniclePanel extends PluginPanel
 
 	private String resolveSource(String name)
 	{
+		String named = resolveSourceNamed(name);
+		if (named != null)
+		{
+			return named;
+		}
 		List<LocalStore.SourceRow> all = plugin.dropSources();
-		for (LocalStore.SourceRow r : all)
-		{
-			if (r.name.equalsIgnoreCase(name))
-			{
-				return r.name;
-			}
-		}
-		if (name.endsWith("s"))
-		{
-			String sing = name.substring(0, name.length() - 1);
-			for (LocalStore.SourceRow r : all)
-			{
-				if (r.name.equalsIgnoreCase(sing))
-				{
-					return r.name;
-				}
-			}
-		}
 		String low = name.toLowerCase(Locale.ROOT);
 		LocalStore.SourceRow best = null;
 		for (LocalStore.SourceRow r : all)
@@ -1594,6 +1588,43 @@ class ChroniclePanel extends PluginPanel
 		}
 		return best != null ? best.name : name;
 	}
+
+	/**
+	 * The ledger's spelling of a name, where the ledger has that name: outright,
+	 * or as the singular of it. Null otherwise.
+	 *
+	 * <p>Kept apart from {@link #resolveSource}, whose last resort is any source
+	 * whose name merely contains this one or is contained by it. That is right
+	 * for a click, which should land somewhere rather than nowhere, and wrong for
+	 * an icon: "Gnome Restaurant" would be drawn wearing whatever the pickpocketed
+	 * "Gnome" last dropped, and the page's own collection log would never be asked.
+	 */
+	private String resolveSourceNamed(String name)
+	{
+		if (ledgerNames == null)
+		{
+			// Once a build, not once a name. Every call asks the journal for its
+			// whole source list, and a board of two hundred names asking two
+			// hundred times copies it two hundred times before a single row is
+			// drawn.
+			Map<String, String> index = new java.util.HashMap<>();
+			for (LocalStore.SourceRow r : plugin.dropSources())
+			{
+				index.putIfAbsent(r.name.toLowerCase(Locale.ROOT), r.name);
+			}
+			ledgerNames = index;
+		}
+		String low = name.toLowerCase(Locale.ROOT);
+		String hit = ledgerNames.get(low);
+		if (hit == null && low.endsWith("s"))
+		{
+			hit = ledgerNames.get(low.substring(0, low.length() - 1));
+		}
+		return hit;
+	}
+
+	// the ledger's own spelling of every source it holds, by lower case name
+	private Map<String, String> ledgerNames;
 
 	private void pushDetail()
 	{
@@ -3639,7 +3670,11 @@ class ChroniclePanel extends PluginPanel
 		java.time.LocalDate to, String first, String second)
 	{
 		boolean whole = wholeRecord();
-		pickpocketed = null;   // read once a build: a new target mints its counter mid-session
+		// read once a build: the journal is asked for these whole, and a new
+		// target mints its counter mid-session
+		skilled = null;
+		ledgerNames = null;
+		sourceKinds.clear();
 		Map<String, Long> standing = live ? plugin.killCounts() : nowKc;
 		Map<String, Long> gained = HistoryLog.gained(beforeKc, earliestKc, nowKc);
 		Map<String, Long> worth = periodWorth(from, to);
@@ -3764,32 +3799,53 @@ class ChroniclePanel extends PluginPanel
 			"al kharid warrior", "al-kharid warrior", "wealthy citizen", "martin",
 			"martin the master gardener"));
 
+	// The verbs the record counts a skill by, and the skill each of them means.
+	// A counter is minted per target ({@code guardPickpockets},
+	// {@code redSalamandersTrapped}), so what the game did to a thing is written
+	// down beside the thing.
+	private static final String[][] SKILLED = {
+		{"Pickpockets", "THIEVING"}, {"Trapped", "HUNTER"},
+		{"Caught", "HUNTER"}, {"Harvested", "HUNTER"},
+	};
+
 	/**
-	 * The same question asked of the record rather than of the table: a thieving
-	 * counter is minted per target ({@code guardPickpockets}), so a target the
-	 * table has never heard of still names itself, and a game update that adds
-	 * one needs no edit here. Letters only, since the counter is camel case and
-	 * the ledger's name is not.
+	 * The same question asked of the record rather than of a table: a name the
+	 * journal counts under one of those verbs was worked for, not killed, so a
+	 * target the table has never heard of still names itself and a game update
+	 * that adds one needs no edit here. Letters only, since the counter is camel
+	 * case and the ledger's name is not.
 	 */
-	private java.util.Set<String> pickpocketedKeys()
+	private Map<String, String> skilledKeys()
 	{
-		if (pickpocketed == null)
+		if (skilled == null)
 		{
-			pickpocketed = new java.util.HashSet<>();
+			Map<String, String> found = new LinkedHashMap<>();
 			for (String key : counters().keySet())
 			{
-				if (key.endsWith("Pickpockets") && !key.endsWith("FailedPickpockets"))
+				for (String[] verb : SKILLED)
 				{
-					pickpocketed.add(letters(
-						key.substring(0, key.length() - "Pickpockets".length())));
+					// a failure is spelled like the thing it failed at
+					if (key.endsWith(verb[0]) && !key.endsWith("Failed" + verb[0]))
+					{
+						found.putIfAbsent(
+							letters(key.substring(0, key.length() - verb[0].length())), verb[1]);
+						break;
+					}
 				}
 			}
+			skilled = found;
 		}
-		return pickpocketed;
+		return skilled;
 	}
 
-	private java.util.Set<String> pickpocketed;
+	private Map<String, String> skilled;
 
+	/**
+	 * A name reduced to what two spellings of it can agree on: its letters, in
+	 * lower case, singular. The counter is camel case and plural
+	 * ({@code moonlightMothsTrapped}) and the ledger's name is neither
+	 * ("Moonlight moth"), so neither side is comparable as it stands.
+	 */
 	private static String letters(String s)
 	{
 		StringBuilder out = new StringBuilder();
@@ -3800,7 +3856,8 @@ class ChroniclePanel extends PluginPanel
 				out.append(Character.toLowerCase(c));
 			}
 		}
-		return out.toString();
+		int end = out.length();
+		return end > 1 && out.charAt(end - 1) == 's' ? out.substring(0, end - 1) : out.toString();
 	}
 
 	static final String KIND_BOSS = "Bosses";
@@ -3808,10 +3865,26 @@ class ChroniclePanel extends PluginPanel
 	static final String KIND_SKILLING = "Skilling";
 	static final String KIND_MONSTER = "Monsters";
 
+	// what each name was decided to be, so a board of a hundred and thirty rows
+	// decides each of them once and not once a click
+	private final Map<String, String> sourceKinds = new LinkedHashMap<>();
+
 	private String sourceKind(String name)
 	{
+		String known = sourceKinds.get(name);
+		if (known != null)
+		{
+			return known;
+		}
+		String kind = decideKind(name);
+		sourceKinds.put(name, kind);
+		return kind;
+	}
+
+	private String decideKind(String name)
+	{
 		if (PICKPOCKETED.contains(name.toLowerCase(Locale.ROOT))
-			|| pickpocketedKeys().contains(letters(name)))
+			|| skilledKeys().containsKey(letters(name)))
 		{
 			return KIND_SKILLING;
 		}
@@ -3854,7 +3927,8 @@ class ChroniclePanel extends PluginPanel
 	// The ledger counts sources the log has no page for. Most are monsters, but
 	// some are things opened and some are things caught, and neither belongs on
 	// a kill board. These words are what say so.
-	private static final String[] OPENED = {"chest", "casket", "clue scroll", "high gamble"};
+	private static final String[] OPENED = {"chest", "casket", "clue scroll", "high gamble",
+		"treasure trail"};
 	private static final String[] GATHERED = {"impling", "salvage", "loot sack",
 		"reward pool", "reward cart", "ent trunk", "offerings", "herbiboar", "bird nest"};
 
@@ -3882,22 +3956,36 @@ class ChroniclePanel extends PluginPanel
 		{
 			return known;
 		}
+		// Dearest first, and the first of them the panel can actually draw wins.
+		// Most of the ledger's bag came from the old cloud journal, which kept
+		// item NAMES and no ids at all, so reading the dearest row's id straight
+		// off returned zero for four sources in five: Zalcano's crystal tool seed,
+		// Bloodveld's blood runes, the lot. A named row is looked up by name.
+		String own = resolveSourceNamed(source);
+		List<LocalStore.BagItem> bag = own == null ? new ArrayList<>()
+			: new ArrayList<>(plugin.sourceItems(own));
+		bag.sort((a, b) -> Long.compare(b.value, a.value));
 		int best = 0;
-		long worth = 0;
-		// under the ledger's own spelling: the count came in under the log's
-		for (LocalStore.BagItem b : plugin.sourceItems(resolveSource(source)))
+		for (LocalStore.BagItem b : bag)
 		{
-			if (b.value > worth)
+			best = b.itemId > 0 ? b.itemId : itemNamed(b.name);
+			if (best > 0)
 			{
-				worth = b.value;
-				best = b.itemId;
+				break;
 			}
 		}
 		if (best == 0)
 		{
 			best = pagedItem(source);
 		}
-		signatureItems.put(source, best);
+		// A nothing found before the item cache could name anything is a not-yet,
+		// not an answer. Kept, it would pin the row to its fallback for the rest
+		// of the session, which is the very retry the index above refuses to
+		// spend.
+		if (best > 0 || nameIndex() != null)
+		{
+			signatureItems.put(source, best);
+		}
 		return best;
 	}
 
@@ -3935,24 +4023,56 @@ class ChroniclePanel extends PluginPanel
 		return 0;
 	}
 
-	// An item id for an exact name. ItemManager.search is a substring scan over
-	// the price list, so it answers "Ore pack" for anything holding those two
-	// words; only a name that matches outright is taken.
+	// Every item the cache can price, by name. ItemManager.search is a substring
+	// scan of the whole price list, so it answers the empty string with all of
+	// it in one pass; asking it name by name walks four thousand items every
+	// time, and a single source's bag can hold fifty names.
+	private Map<String, Integer> itemsByName;
+
+	/**
+	 * An item id for an exact name, or zero for a name the cache cannot price,
+	 * which is every untradeable. Only an outright match is taken: the search
+	 * this is built from is a substring scan and would answer "Ore pack" for
+	 * anything holding those two words.
+	 */
 	private int itemNamed(String name)
 	{
-		List<net.runelite.http.api.item.ItemPrice> hits = plugin.items().search(name);
-		if (hits == null)
+		Map<String, Integer> index = nameIndex();
+		if (index == null || name == null || name.isEmpty())
 		{
 			return 0;
 		}
-		for (net.runelite.http.api.item.ItemPrice hit : hits)
+		Integer id = index.get(name.toLowerCase(Locale.ROOT));
+		return id == null ? 0 : id;
+	}
+
+	/**
+	 * The name index, or null while the client cannot build one. The item cache
+	 * loads its prices over the network on a half-hourly schedule and starts out
+	 * empty, so an empty answer is "not yet" and not "no such item": it is not
+	 * kept, and the next build asks again.
+	 */
+	private Map<String, Integer> nameIndex()
+	{
+		if (itemsByName != null)
 		{
-			if (name.equalsIgnoreCase(hit.getName()))
+			return itemsByName;
+		}
+		List<net.runelite.http.api.item.ItemPrice> all = plugin.items().search("");
+		if (all == null || all.isEmpty())
+		{
+			return null;
+		}
+		Map<String, Integer> byName = new java.util.HashMap<>();
+		for (net.runelite.http.api.item.ItemPrice price : all)
+		{
+			if (price.getName() != null)
 			{
-				return hit.getId();
+				byName.putIfAbsent(price.getName().toLowerCase(Locale.ROOT), price.getId());
 			}
 		}
-		return 0;
+		itemsByName = byName;
+		return itemsByName;
 	}
 
 	/**
@@ -4031,7 +4151,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			JLabel icon = new JLabel();
 			icon.setPreferredSize(new Dimension(ICON_W, ICON_H));
-			mountIcon(icon, signatureItem(name));
+			mountKindIcon(icon, name);
 			r.add(icon, BorderLayout.WEST);
 		}
 
@@ -4058,12 +4178,62 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	// An item's image at the size a row wants, once the cache has it. The image
-	// arrives on the client thread, so the label is set back on the EDT.
-	private void mountIcon(JLabel label, int itemId)
+	/**
+	 * What a line wears, in the order the record can answer it.
+	 *
+	 * <p>First the thing itself: the dearest item the drop ledger ever saw it
+	 * give up. Then, for a page the ledger never saw a drop from, the first item
+	 * its collection log page lists. Then the skill it belongs to, which is what
+	 * a thieving target and a rooftop course are really about. Last, the sprite
+	 * of the facet it sits under, so a line is never a blank column.
+	 */
+	private void mountKindIcon(JLabel label, String name)
 	{
-		if (itemId <= 0)
+		int item = signatureItem(name);
+		if (item > 0)
 		{
+			mountItem(label, item);
+			return;
+		}
+		net.runelite.api.Skill skill = skillOf(name);
+		if (skill != null)
+		{
+			java.awt.image.BufferedImage img = skillIcon(skill);
+			if (img != null)
+			{
+				dress(label, "skill:" + skill.name(), img, ICON_W, ICON_H);
+				return;
+			}
+		}
+		wearSprite(label, kindSprite(sourceKind(name)), ICON_W, ICON_H);
+	}
+
+	private final Map<Integer, List<JLabel>> itemWaiting = new LinkedHashMap<>();
+	// The images already waited on, held by identity and weakly: the ItemManager
+	// caches at most 128 of them and drops the rest, and an id remembered as
+	// "already asked" after its image was dropped would never be asked again and
+	// its row would stay blank for the session. An evicted image simply falls out
+	// of here and the next build asks the new one, once.
+	private final java.util.Set<AsyncBufferedImage> itemAsked =
+		java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+
+	/**
+	 * An item's image at the size a row wants, shrunk once and kept.
+	 *
+	 * <p>Asked for once per item, ever, the way the sprites are. An image the
+	 * cache already holds does not answer {@code onLoaded} straight away: it
+	 * hands the callback to the client thread, so a board of a dozen rows put a
+	 * dozen tasks on that thread on every single rebuild, for icons it had
+	 * already drawn. That is the queue that made the whole plugin heavy the
+	 * first time. Here the scaled icon is kept and every later build just wears
+	 * it.
+	 */
+	private void mountItem(JLabel label, int itemId)
+	{
+		javax.swing.ImageIcon have = scaledIcons.get("item:" + itemId);
+		if (have != null)
+		{
+			label.setIcon(have);
 			return;
 		}
 		AsyncBufferedImage img = plugin.items().getImage(itemId, 1, false);
@@ -4071,12 +4241,106 @@ class ChroniclePanel extends PluginPanel
 		{
 			return;
 		}
+		itemWaiting.computeIfAbsent(itemId, k -> new ArrayList<>()).add(label);
+		if (!itemAsked.add(img))
+		{
+			return;
+		}
+		// the image lands on the client thread; the labels are dressed on the EDT
 		img.onLoaded(() -> javax.swing.SwingUtilities.invokeLater(() ->
 		{
-			label.setIcon(new javax.swing.ImageIcon(
-				img.getScaledInstance(ICON_W, ICON_H, java.awt.Image.SCALE_SMOOTH)));
-			label.repaint();
+			javax.swing.ImageIcon icon = fit(img, ICON_W, ICON_H);
+			scaledIcons.put("item:" + itemId, icon);
+			List<JLabel> waiting = itemWaiting.remove(itemId);
+			if (waiting != null)
+			{
+				for (JLabel one : waiting)
+				{
+					one.setIcon(icon);
+					one.repaint();
+				}
+			}
 		}));
+	}
+
+	// The facet's own sprite, which is the last thing a line can wear: it says
+	// at least what kind of thing the line is, and it is the same icon the strip
+	// above wears for that facet.
+	private static int kindSprite(String kind)
+	{
+		if (KIND_ACTIVITY.equals(kind))
+		{
+			return 1053;   // SideiconsInterface.MINIGAMES
+		}
+		return KIND_SKILLING.equals(kind) ? 775 : 774;   // STATS, else COMBAT
+	}
+
+	/**
+	 * The skill a counted name belongs to, or null where none does: the
+	 * collection log's pages that are one skill's ground, which the log itself
+	 * does not say, so they are named here.
+	 *
+	 * <p>The thieved and trapped names the record can answer for itself are not
+	 * asked here. They are all filed under Skilling, which is the second band of
+	 * its facet, and only the first band draws icons; asking would be a branch
+	 * that can never be reached. {@link #skilledKeys} still decides what they are.
+	 */
+	private net.runelite.api.Skill skillOf(String name)
+	{
+		String skill = PAGE_SKILL.get(name);
+		if (skill == null)
+		{
+			return null;
+		}
+		try
+		{
+			return net.runelite.api.Skill.valueOf(skill);
+		}
+		catch (IllegalArgumentException e)
+		{
+			return null;   // a skill this client's api does not carry yet
+		}
+	}
+
+	/**
+	 * The collection log page that is one skill's ground, and the skill. Only
+	 * where a single skill honestly stands for the whole page: a minigame that
+	 * is really a fight (Pest Control, Castle Wars, Soul Wars) is left out, since
+	 * a wrong skill icon is worse than the generic one it would replace, and so
+	 * are the treasure trails, which are a reward stream and not a skill.
+	 */
+	private static final Map<String, String> PAGE_SKILL = pageSkills();
+
+	private static Map<String, String> pageSkills()
+	{
+		Map<String, String> m = new LinkedHashMap<>();
+		m.put("Aerial Fishing", "FISHING");
+		m.put("Barracuda Trials", "SAILING");
+		m.put("Brimhaven Agility Arena", "AGILITY");
+		m.put("Camdozaal", "MINING");
+		m.put("Colossal Wyrm Agility", "AGILITY");
+		m.put("Fishing Trawler", "FISHING");
+		m.put("Forestry", "WOODCUTTING");
+		m.put("Giants' Foundry", "SMITHING");
+		m.put("Gnome Restaurant", "COOKING");
+		m.put("Guardians of the Rift", "RUNECRAFT");
+		m.put("Hallowed Sepulchre", "AGILITY");
+		m.put("Hunter Guild", "HUNTER");
+		m.put("Magic Training Arena", "MAGIC");
+		m.put("Mahogany Homes", "CONSTRUCTION");
+		m.put("Mastering Mixology", "HERBLORE");
+		m.put("Motherlode Mine", "MINING");
+		m.put("Ocean Encounters", "SAILING");
+		m.put("Rogues' Den", "THIEVING");
+		m.put("Rooftop Agility", "AGILITY");
+		m.put("Sailing Miscellaneous", "SAILING");
+		m.put("Sea Treasures", "SAILING");
+		m.put("Shades of Mort'ton", "FIREMAKING");
+		m.put("Shooting Stars", "MINING");
+		m.put("Tithe Farm", "FARMING");
+		m.put("Vale Totems", "FLETCHING");
+		m.put("Volcanic Mine", "MINING");
+		return m;
 	}
 
 	/**
@@ -4464,7 +4728,7 @@ class ChroniclePanel extends PluginPanel
 				java.awt.image.BufferedImage img = plugin.skillIcons().getSkillImage(s, true);
 				return img;
 			}
-			catch (RuntimeException e)
+			catch (Throwable e)   // noqa: no icon is worth the tab it sits on
 			{
 				return null;   // a dev client without the sprite cache
 			}
@@ -4485,8 +4749,11 @@ class ChroniclePanel extends PluginPanel
 
 	private String histFacet = "Skills";
 
-	private final Map<Integer, javax.swing.ImageIcon> facetIcons = new LinkedHashMap<>();
+	private final Map<Integer, java.awt.image.BufferedImage> facetIcons = new LinkedHashMap<>();
 	private final java.util.Set<Integer> facetAsked = new java.util.HashSet<>();
+	// the labels still waiting on a sprite that has been asked for but has not
+	// landed, each with the size it wants it at
+	private final Map<Integer, List<Object[]>> facetWaiting = new LinkedHashMap<>();
 
 	/**
 	 * The sprite a facet wears, once it has been fetched. Null until then.
@@ -4499,15 +4766,31 @@ class ChroniclePanel extends PluginPanel
 	 * the label wears its word until the sprite lands, and every throwable is
 	 * swallowed.
 	 */
-	private javax.swing.ImageIcon facetIcon(int spriteId)
+	private java.awt.image.BufferedImage facetIcon(int spriteId)
 	{
 		return facetIcons.get(spriteId);
 	}
 
-	// ask for a facet's sprite off the client thread and dress the label when it
-	// arrives, leaving the word in place if it never does
-	private void fetchFacetIcon(int spriteId, JLabel label)
+	/**
+	 * Dress a label in a game sprite at the size it asks for, fetching it off the
+	 * client thread the first time anyone wants it and no more than that ever.
+	 * A width of zero means the sprite's own size, which is what the facet strip
+	 * wants; a row wants it shrunk into the icon column.
+	 *
+	 * <p>Several labels can want one sprite: the facet strip and every row in a
+	 * band that has nothing of its own to show. They queue, and the one fetch
+	 * dresses all of them.
+	 */
+	private void wearSprite(JLabel label, int spriteId, int w, int h)
 	{
+		java.awt.image.BufferedImage have = facetIcons.get(spriteId);
+		if (have != null)
+		{
+			dress(label, "sprite:" + spriteId + "@" + w, have, w, h);
+			return;
+		}
+		facetWaiting.computeIfAbsent(spriteId, k -> new ArrayList<>())
+			.add(new Object[]{label, w, h});
 		try
 		{
 			net.runelite.client.game.SpriteManager sm = plugin.sprites();
@@ -4524,16 +4807,55 @@ class ChroniclePanel extends PluginPanel
 				{
 					return;
 				}
-				javax.swing.ImageIcon icon = new javax.swing.ImageIcon(img);
-				facetIcons.put(spriteId, icon);
-				label.setIcon(icon);
-				label.setText("");
+				facetIcons.put(spriteId, img);
+				List<Object[]> waiting = facetWaiting.remove(spriteId);
+				if (waiting != null)
+				{
+					for (Object[] want : waiting)
+					{
+						dress((JLabel) want[0], "sprite:" + spriteId + "@" + want[1],
+							img, (Integer) want[1], (Integer) want[2]);
+					}
+				}
 			}));
 		}
 		catch (Throwable ignored)   // noqa: a tab icon is never worth a blank tab
 		{
 			// the word stands in
 		}
+	}
+
+	// Every icon the tab has already shrunk, by what it is and how big. Scaling
+	// is not free and it happens on the event thread: a band redrawn on every
+	// fold click would smooth-scale the same dozen images again each time, which
+	// is per-click work of exactly the kind that made this tab heavy before.
+	private final Map<String, javax.swing.ImageIcon> scaledIcons = new LinkedHashMap<>();
+
+	/**
+	 * An image on a label at the size asked for, its shape kept: a 36x32 item
+	 * squeezed into a square column is a squashed item. A width of zero means the
+	 * image's own size. The result is kept under the key the caller names it by,
+	 * so it is scaled once and worn thereafter.
+	 */
+	private void dress(JLabel label, String key, java.awt.image.BufferedImage img, int w, int h)
+	{
+		javax.swing.ImageIcon icon = scaledIcons.get(key);
+		if (icon == null)
+		{
+			icon = w <= 0 || h <= 0 ? new javax.swing.ImageIcon(img) : fit(img, w, h);
+			scaledIcons.put(key, icon);
+		}
+		label.setIcon(icon);
+		label.setText("");
+	}
+
+	private static javax.swing.ImageIcon fit(java.awt.image.BufferedImage img, int w, int h)
+	{
+		double scale = Math.min(w / (double) img.getWidth(), h / (double) img.getHeight());
+		return new javax.swing.ImageIcon(img.getScaledInstance(
+			Math.max(1, (int) Math.round(img.getWidth() * scale)),
+			Math.max(1, (int) Math.round(img.getHeight() * scale)),
+			java.awt.Image.SCALE_SMOOTH));
 	}
 
 	// whether the period on show is the whole record, which needs no opening
@@ -4591,6 +4913,11 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildHistory()
 	{
 		JPanel p = column();
+		// The labels of the build just discarded are nobody's business now. Left
+		// to pile up, an icon that never lands would hold every label the tab
+		// ever drew, which is the same unbounded queue that made it lag.
+		facetWaiting.clear();
+		itemWaiting.clear();
 		// the window controls, which rebuild() hangs above the scroll so they stay
 		// on screen while the period's figures move under them
 		JPanel controls = column();
@@ -4616,17 +4943,8 @@ class ChroniclePanel extends PluginPanel
 		{
 			boolean on = facet[0].equals(histFacet);
 			int sprite = Integer.parseInt(facet[1]);
-			JLabel t = new JLabel("", JLabel.CENTER);
-			javax.swing.ImageIcon icon = facetIcon(sprite);
-			if (icon != null)
-			{
-				t.setIcon(icon);
-			}
-			else
-			{
-				t.setText(facet[0]);
-				fetchFacetIcon(sprite, t);
-			}
+			JLabel t = new JLabel(facet[0], JLabel.CENTER);
+			wearSprite(t, sprite, 0, 0);   // the word stands until the sprite lands
 			t.setToolTipText(facet[0]);
 			t.setOpaque(true);
 			t.setBorder(BorderFactory.createEmptyBorder(3, 4, 3, 4));
