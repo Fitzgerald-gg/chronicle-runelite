@@ -339,6 +339,15 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 			src.addProperty("loots", asLong(src.get("loots")) + 1);
 			src.addProperty("value", asLong(src.get("value")) + batchValue);
+			// The chat box speaks BEFORE the drop lands. "Your Sarachnis kill count
+			// is: 52" anchors at 52, and the loot event for that very kill arrives
+			// after it, so counting it as an observation SINCE would read 53. The
+			// row carries the game's own number for the kill it came from: where
+			// that is the number the anchor was taken at, this is that same kill
+			// arriving late, and the baseline moves with it rather than the count.
+			// A slayer monster's row carries its task counter instead, which is a
+			// different quantity and will not match, so its kills still count.
+			absorbLaggingKill(source, kc);
 			// first_seen/last_seen run as min/max of every kill, epoch ms: an earlier
 			// date the Loot Tracker import set stands, a later one only ever extends.
 			long nowMs = System.currentTimeMillis();
@@ -630,6 +639,22 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 			if (collectionLog != null)
 			{
+				// Anchor from what has just been READ, not from the merged result:
+				// a page not opened this session keeps its old number through the
+				// merge, and re-anchoring on it would throw away the observations
+				// that number has been riding on.
+				Object read = collectionLog.get("slayer_kcs");
+				if (read instanceof java.util.Map)
+				{
+					for (java.util.Map.Entry<?, ?> e : ((java.util.Map<?, ?>) read).entrySet())
+					{
+						if (e.getKey() != null && e.getValue() instanceof Number)
+						{
+							anchorKill(String.valueOf(e.getKey()),
+								((Number) e.getValue()).longValue(), "log", rsn);
+						}
+					}
+				}
 				// The session's capture is partial, covering only the pages browsed.
 				// Clog data only grows; union it into the stored log.
 				root.add("collection_log", mergeClog(
@@ -782,6 +807,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 		ensureObject(o, "skills");
 		ensureObject(o, "chat_kcs");
+		ensureObject(o, "kc_anchors");
 		ensureObject(o, "collection_log");
 		ensureObject(o, "achievements");
 		ensureObject(o, "drops");
@@ -1170,6 +1196,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					src.addProperty("value", total);
 				}
 			}
+			// Hundreds of rows have just been seeded from the Loot Tracker. None of
+			// them is a kill that happened since an anchor was taken, so the
+			// baselines move with them rather than the counts.
+			rebaseAnchors();
 		}
 	}
 
@@ -2321,6 +2351,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 						cur.add("items", bag);
 					}
 				}
+				// Another machine's ledger has just been merged in. Those rows are
+				// not kills that happened since an anchor was taken here, and the
+				// merge can only raise the counts, so the baselines move with them.
+				rebaseAnchors();
 			}
 			// the dated feed, deduplicated on feedKey
 			if (in.has("feed") && in.get("feed").isJsonArray())
@@ -3361,6 +3395,182 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
+	// ── anchored kill counts ───────────────────────────────────────────────
+
+	/**
+	 * A kill count the game stated, and what this journal had observed of that
+	 * same fight at the moment it was stated.
+	 *
+	 * <p>Both halves matter. The count alone is a snapshot: the Kill Log is read
+	 * by opening an interface, so a number resting on it is frozen until the
+	 * player goes and looks again, and Abyssal demons sat on 1,798 while the game
+	 * itself had reached 2,523. The observation alone is live but partial: the
+	 * ledger only ever saw the kills that dropped something, and only since
+	 * tracking began. Held together they are neither: the stated count carries
+	 * everything that happened before it, and the observations since carry
+	 * everything after, so the number moves on its own without ever re-counting a
+	 * kill the statement already counted.
+	 *
+	 * <p>Rank decides which statement stands. The chat box speaks on the kill
+	 * itself, the Kill Log when it is opened; a statement of equal or higher rank
+	 * REPLACES an older one outright, even when its number is lower, because this
+	 * is a dated reading superseding a dated reading rather than a guess at a
+	 * maximum. A lower rank never displaces a higher one.
+	 */
+	private static int anchorRank(String src)
+	{
+		return "chat".equals(src) ? 3 : "log".equals(src) ? 2 : 1;
+	}
+
+	void anchorKill(String name, long stated, String src, String rsn)
+	{
+		if (name == null || name.isEmpty() || stated <= 0 || !isReadyFor(rsn))
+		{
+			return;
+		}
+		synchronized (lock)
+		{
+			if (root == null)
+			{
+				return;
+			}
+			ensureObject(root, "kc_anchors");
+			JsonObject all = root.getAsJsonObject("kc_anchors");
+			JsonObject was = all.has(name) && all.get(name).isJsonObject()
+				? all.getAsJsonObject(name) : null;
+			if (was != null)
+			{
+				int had = anchorRank(was.has("src") ? was.get("src").getAsString() : "page");
+				if (anchorRank(src) < had)
+				{
+					return;
+				}
+				// the same statement again, unchanged, must not re-baseline: the
+				// observations since it are what the number is riding on
+				if (anchorRank(src) == had && asLong(was.get("n")) == stated)
+				{
+					return;
+				}
+			}
+			JsonObject a = new JsonObject();
+			a.addProperty("n", stated);
+			a.addProperty("ts", System.currentTimeMillis());
+			a.addProperty("src", src);
+			a.addProperty("obs", observedFor(name));
+			all.add(name, a);
+			root.addProperty("updated_at", nowSec());
+		}
+	}
+
+	/**
+	 * What the ledger has observed of a fight, under any spelling of its name.
+	 * The MAXIMUM of the matching sources and never their sum: the Kill Log says
+	 * "Abyssal demons" where the ledger says "Abyssal demon", and one kill must
+	 * not be billed twice for being written down twice.
+	 */
+	private long observedFor(String name)
+	{
+		if (root == null || !root.has("drops") || !root.get("drops").isJsonObject())
+		{
+			return 0;
+		}
+		String kind = kindOf(name);
+		long best = 0;
+		for (java.util.Map.Entry<String, JsonElement> e
+			: root.getAsJsonObject("drops").entrySet())
+		{
+			if (!e.getValue().isJsonObject() || !kindOf(e.getKey()).equals(kind))
+			{
+				continue;
+			}
+			best = Math.max(best, asLong(e.getValue().getAsJsonObject().get("loots")));
+		}
+		return best;
+	}
+
+	/**
+	 * The kill an anchor was taken at, arriving afterwards as a drop. Re-takes
+	 * that anchor's baseline so the row is not read as a kill since.
+	 */
+	private void absorbLaggingKill(String source, Integer stated)
+	{
+		if (stated == null || root == null || !root.has("kc_anchors")
+			|| !root.get("kc_anchors").isJsonObject())
+		{
+			return;
+		}
+		String kind = kindOf(source);
+		for (java.util.Map.Entry<String, JsonElement> e
+			: root.getAsJsonObject("kc_anchors").entrySet())
+		{
+			if (!e.getValue().isJsonObject() || !kindOf(e.getKey()).equals(kind))
+			{
+				continue;
+			}
+			JsonObject a = e.getValue().getAsJsonObject();
+			if (asLong(a.get("n")) == stated.longValue())
+			{
+				a.addProperty("obs", observedFor(e.getKey()));
+			}
+		}
+	}
+
+	/** Every anchored fight at its stated count plus what has been seen since. */
+	java.util.Map<String, Long> anchoredKills()
+	{
+		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		synchronized (lock)
+		{
+			if (root == null || !root.has("kc_anchors")
+				|| !root.get("kc_anchors").isJsonObject())
+			{
+				return out;
+			}
+			for (java.util.Map.Entry<String, JsonElement> e
+				: root.getAsJsonObject("kc_anchors").entrySet())
+			{
+				if (!e.getValue().isJsonObject())
+				{
+					continue;
+				}
+				JsonObject a = e.getValue().getAsJsonObject();
+				long n = asLong(a.get("n"));
+				if (n <= 0)
+				{
+					continue;
+				}
+				// Never negative. A journal restored from a backup, or carried to a
+				// machine that watched less of it, has fewer observations than the
+				// anchor was taken beside; that is not minus four kills.
+				long since = Math.max(0, observedFor(e.getKey()) - asLong(a.get("obs")));
+				out.put(e.getKey(), n + since);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Re-take every anchor's observation baseline without touching what was
+	 * stated. For the moments the ledger's counts move without a kill happening:
+	 * the Loot Tracker import seeding hundreds of rows at once, and a journal
+	 * merged in from another machine. Left alone, those would read as kills.
+	 */
+	private void rebaseAnchors()
+	{
+		if (root == null || !root.has("kc_anchors") || !root.get("kc_anchors").isJsonObject())
+		{
+			return;
+		}
+		for (java.util.Map.Entry<String, JsonElement> e
+			: root.getAsJsonObject("kc_anchors").entrySet())
+		{
+			if (e.getValue().isJsonObject())
+			{
+				e.getValue().getAsJsonObject().addProperty("obs", observedFor(e.getKey()));
+			}
+		}
+	}
+
 	/**
 	 * A kill count the game announced in the chat box, under the name it used.
 	 * Stored raw: "subdued Wintertodt" is what was said, and mapping that onto a
@@ -3391,6 +3601,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			m.addProperty(subject, tally);
 			root.addProperty("updated_at", nowSec());
 		}
+		// and as an anchor, so the count keeps moving between announcements
+		anchorKill(subject, tally, "chat", rsn);
 	}
 
 	/** Every count the chat box has announced, by the name the game used. */
@@ -3593,6 +3805,50 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				known = byKind.get(chatKind(said + " chests"));
 			}
 			out.merge(known != null ? known : said, e.getValue(), Math::max);
+		}
+	}
+
+	/**
+	 * Place stated counts onto names already in hand, one row per fight.
+	 *
+	 * <p>The Kill Log writes "Abyssal demons" where the ledger writes "Abyssal
+	 * demon", and putting them in side by side left the same monster listed
+	 * twice with two different numbers -- 32 such pairs on a real journal. Each
+	 * statement lands on the name already there.
+	 *
+	 * <p>{@code floor} is the difference between a statement that knows what has
+	 * happened since it and one that does not. An anchored count carries its own
+	 * observations forward, so it IS the count and replaces what is there. A bare
+	 * Kill Log reading is only what was true when somebody last opened that
+	 * interface: it may not pull a live count down, because the kills the ledger
+	 * has watched since are real. Abyssal demons read 1,798 from a stale log
+	 * beside 2,346 the ledger had actually seen.
+	 */
+	static void placeByKind(java.util.Map<String, Long> out,
+		java.util.Map<String, Long> stated, boolean floor)
+	{
+		if (out == null || stated == null || stated.isEmpty())
+		{
+			return;
+		}
+		java.util.Map<String, String> byKind = new java.util.HashMap<>();
+		for (String name : out.keySet())
+		{
+			byKind.putIfAbsent(chatKind(name), name);
+		}
+		for (java.util.Map.Entry<String, Long> e : stated.entrySet())
+		{
+			String known = byKind.get(chatKind(e.getKey()));
+			String name = known != null ? known : e.getKey();
+			if (floor)
+			{
+				out.merge(name, e.getValue(), Math::max);
+			}
+			else
+			{
+				out.put(name, e.getValue());
+			}
+			byKind.putIfAbsent(chatKind(name), name);
 		}
 	}
 

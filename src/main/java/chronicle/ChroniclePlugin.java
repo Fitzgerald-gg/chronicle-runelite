@@ -969,7 +969,6 @@ public class ChroniclePlugin extends Plugin
 	{
 		JsonObject cl = localStore.clogSnapshot();
 		Map<String, Long> out = LocalStore.clogKillCounts(cl);
-		out.putAll(LocalStore.sourceKills(cl, localStore.dropSources()));
 		// The Kill Log OVERRIDES both, rather than joining them at a max. A
 		// collection log page's header counter is not always a kill count --
 		// Wintertodt's counts rewards claimed, and read as kills it said 1,078
@@ -983,9 +982,24 @@ public class ChroniclePlugin extends Plugin
 		// the chat line arrives on every kill, with nothing opened and nothing
 		// fetched. Both are the game counting and both only count up, so between
 		// the two the larger is the later reading.
-		Map<String, Long> game = LocalStore.killLogCounts(cl);
-		LocalStore.foldChatCounts(game, localStore.chatKillCounts(), out.keySet());
-		out.putAll(game);
+		Map<String, Long> stated = LocalStore.killLogCounts(cl);
+		LocalStore.foldChatCounts(stated, localStore.chatKillCounts(), out.keySet());
+		// A bare reading is a FLOOR. It was true when somebody last opened that
+		// interface and knows nothing of what has happened since, so it may not
+		// pull a live count down: Abyssal demons read 1,798 from a stale Kill Log
+		// beside the 2,346 the ledger had actually watched.
+		// A statement always beats the page counter, which need not be counting
+		// kills at all: Wintertodt's page counts rewards claimed and says 1,078
+		// where 448 were killed, and the larger of those two is the lie.
+		LocalStore.placeByKind(out, stated, false);
+		// The ledger is then a floor over that. A bare statement was true when
+		// somebody last opened an interface and knows nothing of what has happened
+		// since, so it may not pull down a count the ledger has actually watched:
+		// Abyssal demons read 1,798 from a stale Kill Log beside 2,346 seen.
+		LocalStore.placeByKind(out, LocalStore.sourceKills(cl, localStore.dropSources()), true);
+		// And an anchored count is a statement carrying its own observations
+		// forward. It knows what has happened since, so it IS the count.
+		LocalStore.placeByKind(out, localStore.anchoredKills(), false);
 		return out;
 	}
 
