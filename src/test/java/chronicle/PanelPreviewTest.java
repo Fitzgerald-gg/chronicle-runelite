@@ -275,9 +275,11 @@ public class PanelPreviewTest
 		shoot(panel, out, prefix + "-drops-leftbehind", "DROPS");
 		set(panel, "dropsLeftBehind", false);
 
-		set(panel, "slayerMonsters", true);
+		set(panel, "slayerLens", "Monsters");
 		shoot(panel, out, prefix + "-slayer-monsters", "SLAYER");
-		set(panel, "slayerMonsters", false);
+		set(panel, "slayerLens", "Drops");
+		shoot(panel, out, prefix + "-slayer-drops", "SLAYER");
+		set(panel, "slayerLens", "Tasks");
 
 		shoot(panel, out, prefix + "-log", "LOG");
 		set(panel, "clogPageSel", firstClogPage(panel));
@@ -1221,6 +1223,13 @@ public class PanelPreviewTest
 			// a real journal behind the stub answers for itself, so a preview of
 			// the loot board shows the roll the account actually has
 			return store != null ? store.lootRollFrom() : 0;
+		}
+
+		@Override
+		java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs)
+		{
+			return store != null ? store.onTaskLoot(fromMs, toMs)
+				: new java.util.ArrayList<>();
 		}
 
 		@Override

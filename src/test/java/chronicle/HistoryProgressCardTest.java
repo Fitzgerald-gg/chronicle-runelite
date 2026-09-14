@@ -3575,43 +3575,57 @@ public class HistoryProgressCardTest
 			periodLabelsAsShown(p).contains("This session"));
 	}
 
+
+
 	@Test
-	public void aLootPageCanBeTakenAwayAsText() throws Exception
+	public void aLootPageCanBeTakenAwayAsAPicture() throws Exception
 	{
-		// A page worth reading is a page worth sharing, and what leaves has to be
-		// the whole record rather than the view of it: the page mounts twenty five
-		// loot lines behind a "show more", and the copy carries every one.
+		// A page worth reading is a page worth sharing, and what shares is a
+		// picture: the places this goes take images, and text lost the columns
+		// that made it readable.
 		ChroniclePanel p = panel(stub(true));
-		Method m = ChroniclePanel.class.getDeclaredMethod("sourceAsText", String.class,
-			LocalStore.SourceRow.class, List.class);
-		m.setAccessible(true);
+		Method bd = ChroniclePanel.class.getDeclaredMethod("buildSourceDetail", String.class);
+		bd.setAccessible(true);
+		Method strip = ChroniclePanel.class.getDeclaredMethod("stripChrome", JPanel.class);
+		strip.setAccessible(true);
+		Method pi = ChroniclePanel.class.getDeclaredMethod("pageImage", JPanel.class);
+		pi.setAccessible(true);
 
-		List<LocalStore.BagItem> bag = new ArrayList<>();
-		for (int i = 0; i < 40; i++)
+		final Object[] out = new Object[2];
+		edt(() ->
 		{
-			bag.add(new LocalStore.BagItem(0, "Item " + i, 2, 100));
-		}
-		String text = (String) m.invoke(p, "Zalcano", null, bag);
-		// fenced, or Discord sets it proportional and lines up none of the figures
-		assertTrue("not fenced: " + text, text.startsWith("```"));
-		assertTrue("not fenced: " + text, text.endsWith("```"));
-		assertTrue("the page does not name itself: " + text,
-			text.startsWith("```\nZalcano\n"));
-		assertTrue(text, text.contains("40 items"));
-		assertTrue("the copy stopped where the page does", text.contains("Item 39"));
-		assertTrue("quantities are lost", text.contains("Item 0 x2"));
-		assertTrue("values are lost", text.contains("100 gp"));
+			JPanel page = (JPanel) bd.invoke(p, "Zalcano");
+			List<String> before = labels(page);
+			out[1] = before.contains("< Back");
+			out[0] = pi.invoke(null, strip.invoke(null, page));
+		});
+		assertTrue("the page had no way back to take off", (Boolean) out[1]);
+		assertNotNull("no picture was drawn", out[0]);
 
-		// and the figures line up under each other: every loot line the same width
-		java.util.Set<Integer> widths = new java.util.HashSet<>();
-		for (String line : text.split("\n"))
+		java.awt.Image img = (java.awt.Image) out[0];
+		assertTrue("drawn at the sidebar's width, so long names truncate",
+			img.getWidth(null) > 225);
+		assertTrue("nothing was drawn", img.getHeight(null) > 0);
+	}
+
+	@Test
+	public void thePictureDropsTheNavigationItWasBuiltWith() throws Exception
+	{
+		// The way back and the copy are navigation and have no business in a
+		// picture somebody is sharing; the card is what follows them.
+		ChroniclePanel p = panel(stub(true));
+		Method bd = ChroniclePanel.class.getDeclaredMethod("buildSourceDetail", String.class);
+		bd.setAccessible(true);
+		Method strip = ChroniclePanel.class.getDeclaredMethod("stripChrome", JPanel.class);
+		strip.setAccessible(true);
+		final List<String> after = new ArrayList<>();
+		edt(() ->
 		{
-			if (line.contains(" gp") && line.startsWith("Item "))
-			{
-				widths.add(line.length());
-			}
-		}
-		assertEquals("the columns do not line up: " + widths, 1, widths.size());
+			JPanel page = (JPanel) strip.invoke(null, bd.invoke(p, "Zalcano"));
+			after.addAll(labels(page));
+		});
+		assertFalse("the way back rode along: " + after, after.contains("< Back"));
+		assertFalse("the copy rode along: " + after, after.contains("copy"));
 	}
 
 	@Test

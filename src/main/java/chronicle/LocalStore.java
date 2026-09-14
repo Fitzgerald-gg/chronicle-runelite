@@ -1713,6 +1713,74 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** The journey as the journal knows it, shaped for the panel (newest first). */
+	/**
+	 * Every item the slayer journey logged inside a window, summed across tasks and
+	 * ranked by what it came to. A task carries the stamp of its own close, so this
+	 * is a filter over the journey rather than a delta: pass the whole of time to
+	 * get the lot.
+	 *
+	 * <p>On-task only by construction. The ledger's per-source totals cannot tell a
+	 * task kill from a stray one; the journey only ever holds the former.
+	 */
+	java.util.List<BagItem> onTaskLoot(long fromMs, long toMs)
+	{
+		java.util.Map<String, long[]> summed = new java.util.LinkedHashMap<>();
+		java.util.Map<String, Integer> ids = new java.util.LinkedHashMap<>();
+		synchronized (lock)
+		{
+			if (root == null || !root.has("slayer") || !root.get("slayer").isJsonObject())
+			{
+				return new java.util.ArrayList<>();
+			}
+			JsonObject sl = root.getAsJsonObject("slayer");
+			if (!sl.has("tasks") || !sl.get("tasks").isJsonArray())
+			{
+				return new java.util.ArrayList<>();
+			}
+			for (JsonElement e : sl.getAsJsonArray("tasks"))
+			{
+				if (!e.isJsonObject())
+				{
+					continue;
+				}
+				JsonObject t = e.getAsJsonObject();
+				long ms = (long) (asDouble(t.get("ts")) * 1000);
+				if (ms > 0 && (ms < fromMs || ms > toMs))
+				{
+					continue;
+				}
+				if (!t.has("items") || !t.get("items").isJsonObject())
+				{
+					continue;
+				}
+				for (java.util.Map.Entry<String, JsonElement> it
+					: t.getAsJsonObject("items").entrySet())
+				{
+					if (!it.getValue().isJsonObject())
+					{
+						continue;
+					}
+					JsonObject v = it.getValue().getAsJsonObject();
+					long[] tot = summed.computeIfAbsent(it.getKey(), k -> new long[2]);
+					tot[0] += asLong(v.get("qty"));
+					tot[1] += asLong(v.get("value"));
+					if (!ids.containsKey(it.getKey()) && v.has("id"))
+					{
+						ids.put(it.getKey(), (int) asLong(v.get("id")));
+					}
+				}
+			}
+		}
+		java.util.List<BagItem> out = new java.util.ArrayList<>();
+		for (java.util.Map.Entry<String, long[]> e : summed.entrySet())
+		{
+			out.add(new BagItem(ids.getOrDefault(e.getKey(), 0), e.getKey(),
+				e.getValue()[0], e.getValue()[1]));
+		}
+		out.sort(java.util.Comparator.comparingLong((BagItem b) -> b.value).reversed());
+		return out;
+	}
+
 	chronicle.ChronicleApiClient.SlayerJourney slayerJourney()
 	{
 		synchronized (lock)

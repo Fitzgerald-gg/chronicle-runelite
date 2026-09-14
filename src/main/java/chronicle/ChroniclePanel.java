@@ -1991,7 +1991,9 @@ class ChroniclePanel extends PluginPanel
 	// Which of the tab's two boards is up. Sticky, like every other lens in the
 	// panel: applyTab clears what is paged out and what is drilled into, never
 	// which lens a reader chose.
-	private boolean slayerMonsters;
+	// Which of the three boards the Slayer tab is showing. A boolean held two and
+	// could not hold a third.
+	private String slayerLens = "Tasks";
 
 	// The current task, then ONE of two boards: the journal's task-by-task
 	// journey, or the game's own count per monster. They answer different
@@ -2015,11 +2017,11 @@ class ChroniclePanel extends PluginPanel
 			p.add(vgap(6));
 		}
 
-		JPanel lens = new JPanel(new GridLayout(1, 2, 3, 3));
+		JPanel lens = new JPanel(new GridLayout(1, 3, 3, 3));
 		lens.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		for (String l : new String[]{"Tasks", "Monsters"})
+		for (String l : new String[]{"Tasks", "Monsters", "Drops"})
 		{
-			boolean on = l.equals("Monsters") == slayerMonsters;
+			boolean on = l.equals(slayerLens);
 			JLabel pill = new JLabel(l, JLabel.CENTER);
 			pill.setOpaque(true);
 			pill.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
@@ -2028,7 +2030,7 @@ class ChroniclePanel extends PluginPanel
 			pill.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
 			pill.addMouseListener(clicker(() ->
 			{
-				slayerMonsters = l.equals("Monsters");
+				slayerLens = l;
 				rebuildInPlace();
 			}));
 			lens.add(pill);
@@ -2056,15 +2058,19 @@ class ChroniclePanel extends PluginPanel
 				journeyCache = j;
 				// Not while the other board is up: a finished task would repaint
 				// over the kill log and throw a reader back to the top of it.
-				if (moved && view == View.SLAYER && !slayerMonsters)
+				if (moved && view == View.SLAYER && "Tasks".equals(slayerLens))
 				{
 					rebuild();
 				}
 			}));
 		}
-		if (slayerMonsters)
+		if ("Monsters".equals(slayerLens))
 		{
 			return addKillLog(p);
+		}
+		if ("Drops".equals(slayerLens))
+		{
+			return addOnTaskLoot(p);
 		}
 
 		// Paint the cached journey at once — no flicker — and re-read the journal
@@ -2086,6 +2092,104 @@ class ChroniclePanel extends PluginPanel
 	 * interface. Its own board now: it answers "how many of these have I
 	 * killed", which the task journey never does.
 	 */
+	/**
+	 * Everything the tasks gave, summed across the journey and ranked by what it
+	 * came to. On-task by construction: the ledger's per-source totals cannot tell
+	 * a task kill from a stray one, and the journey only ever held the former.
+	 *
+	 * <p>It reads the period like every other board, because a task carries the
+	 * stamp of its own close.
+	 */
+	private JPanel addOnTaskLoot(JPanel p)
+	{
+		return addOnTaskLoot(p, Integer.MAX_VALUE);
+	}
+
+	private JPanel addOnTaskLoot(JPanel p, int cap)
+	{
+		Window w = window();
+		final long from = wholeRecord() ? Long.MIN_VALUE / 2
+			: w.start.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+		final long to = wholeRecord() ? Long.MAX_VALUE / 2
+			: w.end.plusDays(1).atStartOfDay(ZoneId.systemDefault())
+				.toInstant().toEpochMilli() - 1;
+		final List<LocalStore.BagItem> bag = plugin.onTaskLoot(from, to);
+		if (bag.isEmpty())
+		{
+			p.add(note(wholeRecord()
+				? "No task loot in the journal yet. It collects as tasks close."
+				: "No task loot inside " + w.label + "."));
+			return p;
+		}
+		long count = 0;
+		long worth = 0;
+		for (LocalStore.BagItem b : bag)
+		{
+			count += b.qty;
+			worth += b.value;
+		}
+		final long qty = count;
+		final long value = worth;
+		JPanel head = card("On-task loot");
+		head.add(row("Items", fmt(qty), accent()));
+		head.add(row("Worth", gp(value) + " gp", null));
+		head.add(row("Kinds", fmt(bag.size()), null));
+		p.add(head);
+		p.add(vgap(6));
+		p.add(copyHeader("Drops", () -> toClipboard(pageImage(onTaskLootPage()))));
+		int mounted = 0;
+		for (LocalStore.BagItem b : bag)
+		{
+			if (mounted++ >= cap)
+			{
+				p.add(ghostRow("+ " + fmt(bag.size() - cap) + " more", ""));
+				break;
+			}
+			JPanel r = row(b.name + (b.qty > 1 ? " \u00d7" + fmt(b.qty) : ""),
+				b.value > 0 ? gp(b.value) + " gp" : "", null);
+			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			final String item = b.name;
+			r.addMouseListener(clicker(() -> openItem(item)));
+			p.add(r);
+		}
+		return p;
+	}
+
+	/** The board on its own, for the picture: no lens strip, no journey above it. */
+	private JPanel onTaskLootPage()
+	{
+		return addOnTaskLoot(column(), COPY_ROWS);
+	}
+
+
+	/**
+	 * A section head with a copy on its right. A board that is not a drill has no
+	 * back row to hang one on, and it should still be shareable.
+	 */
+	private JPanel copyHeader(String title, java.util.function.BooleanSupplier copy)
+	{
+		JPanel r = row(title, "copy", null);
+		BorderLayout layout = (BorderLayout) r.getLayout();
+		JLabel t = (JLabel) layout.getLayoutComponent(BorderLayout.CENTER);
+		t.setFont(FontManager.getRunescapeSmallFont());
+		t.setForeground(accent());
+		JLabel take = (JLabel) layout.getLayoutComponent(BorderLayout.EAST);
+		if (take != null)
+		{
+			take.setFont(FontManager.getRunescapeSmallFont());
+			take.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+			take.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			take.setToolTipText("Copy this board as text and a picture");
+			take.addMouseListener(clicker(() ->
+			{
+				boolean ok = copy.getAsBoolean();
+				take.setText(ok ? "copied" : "cannot copy");
+				take.setForeground(ok ? accent() : ColorScheme.PROGRESS_ERROR_COLOR);
+			}));
+		}
+		return r;
+	}
+
 	private JPanel addKillLog(JPanel p)
 	{
 		JsonObject cl = plugin.clogSnapshot();
@@ -2652,46 +2756,27 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	/**
-	 * A page on the clipboard as BOTH a picture and its text, so the place it is
-	 * pasted takes whichever it understands: a chat window takes the image and
-	 * arrives looking like the panel, a spreadsheet or a wiki takes the text and
-	 * can still be searched and edited. Offering one would have been choosing for
-	 * everyone who pastes it.
-	 */
+	/** A picture on the clipboard, which is the one thing every chat window takes. */
 	private static final class PageCopy implements java.awt.datatransfer.Transferable
 	{
 		private final java.awt.Image image;
-		private final String text;
 
-		private PageCopy(java.awt.Image image, String text)
+		private PageCopy(java.awt.Image image)
 		{
 			this.image = image;
-			this.text = text;
 		}
 
 		@Override
 		public java.awt.datatransfer.DataFlavor[] getTransferDataFlavors()
 		{
-			return image == null
-				? new java.awt.datatransfer.DataFlavor[]{
-					java.awt.datatransfer.DataFlavor.stringFlavor}
-				: new java.awt.datatransfer.DataFlavor[]{
-					java.awt.datatransfer.DataFlavor.imageFlavor,
-					java.awt.datatransfer.DataFlavor.stringFlavor};
+			return new java.awt.datatransfer.DataFlavor[]{
+				java.awt.datatransfer.DataFlavor.imageFlavor};
 		}
 
 		@Override
 		public boolean isDataFlavorSupported(java.awt.datatransfer.DataFlavor flavor)
 		{
-			for (java.awt.datatransfer.DataFlavor f : getTransferDataFlavors())
-			{
-				if (f.equals(flavor))
-				{
-					return true;
-				}
-			}
-			return false;
+			return java.awt.datatransfer.DataFlavor.imageFlavor.equals(flavor);
 		}
 
 		@Override
@@ -2702,25 +2787,21 @@ class ChroniclePanel extends PluginPanel
 			{
 				return image;
 			}
-			if (java.awt.datatransfer.DataFlavor.stringFlavor.equals(flavor))
-			{
-				return text;
-			}
 			throw new java.awt.datatransfer.UnsupportedFlavorException(flavor);
 		}
 	}
 
 	/** False where there is no desktop clipboard to reach, rather than throwing. */
-	private static boolean toClipboard(java.awt.Image image, String text)
+	private static boolean toClipboard(java.awt.Image image)
 	{
-		if ((text == null || text.isEmpty()) && image == null)
+		if (image == null)
 		{
 			return false;
 		}
 		try
 		{
 			java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
-				.setContents(new PageCopy(image, text), null);
+				.setContents(new PageCopy(image), null);
 			return true;
 		}
 		catch (Throwable ignored)   // noqa: headless, or a desktop that refuses
@@ -2784,73 +2865,28 @@ class ChroniclePanel extends PluginPanel
 	 * other, the way the page itself sets them. Alignment is the whole reason the
 	 * copy is fenced: a proportional font throws it away.
 	 */
-	private static String aligned(List<String[]> rows)
-	{
-		int left = 0;
-		int right = 0;
-		for (String[] r : rows)
-		{
-			left = Math.max(left, r[0].length());
-			right = Math.max(right, r[1] == null ? 0 : r[1].length());
-		}
-		StringBuilder b = new StringBuilder();
-		for (String[] r : rows)
-		{
-			b.append(r[0]);
-			if (r[1] != null && !r[1].isEmpty())
-			{
-				for (int i = r[0].length(); i < left + 2 + (right - r[1].length()); i++)
-				{
-					b.append(' ');
-				}
-				b.append(r[1]);
-			}
-			b.append('\n');
-		}
-		return b.toString();
-	}
+	/**
+	 * What a copy carries before it stops being pasteable. Discord takes two
+	 * thousand characters and the on-task board runs to 287 kinds, which is ten
+	 * thousand; a picture of all of them is five thousand pixels tall and nobody
+	 * reads it either. The tail says what was left rather than trailing off.
+	 */
+	private static final int COPY_ROWS = 60;
+
+
 
 	// how many sources an item's page mounts; lifted while a copy is drawn
 	private int itemSourceCap = 40;
 
-	/**
-	 * An item's whole page as text: what it came to, and every source that gave
-	 * it, fenced and aligned for the same reason a source page is.
-	 */
-	private String itemAsText(String name, long qty, long value, List<Object[]> srcs)
-	{
-		StringBuilder b = new StringBuilder("```\n").append(name).append("\n");
-		List<String[]> head = new ArrayList<>();
-		head.add(new String[]{"Obtained", "x" + fmt(qty)});
-		if (value > 0)
-		{
-			head.add(new String[]{"Worth", gp(value) + " gp"});
-		}
-		b.append(aligned(head));
-		if (!srcs.isEmpty())
-		{
-			b.append("\n").append(srcs.size() == 1 ? "1 source"
-				: fmt(srcs.size()) + " sources").append("\n");
-			List<String[]> from = new ArrayList<>();
-			for (Object[] s : srcs)
-			{
-				from.add(new String[]{(String) s[0] + " x" + fmt((long) s[1]),
-					(long) s[2] > 0 ? gp((long) s[2]) + " gp" : ""});
-			}
-			b.append(aligned(from));
-		}
-		return b.append("```").toString();
-	}
 
 	/** The item's page on the clipboard, as a picture of itself and as its text. */
-	private boolean copyItemPage(String name, long qty, long value, List<Object[]> srcs)
+	private boolean copyItemPage(String name)
 	{
-		String text = itemAsText(name, qty, value, srcs);
 		java.awt.Image shot = null;
 		int was = itemSourceCap;
 		try
 		{
-			itemSourceCap = Integer.MAX_VALUE;
+			itemSourceCap = COPY_ROWS;
 			shot = pageImage(stripChrome(buildItemDetail(name)));
 		}
 		catch (Throwable ignored)   // noqa: the text still goes, which is the point
@@ -2861,7 +2897,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			itemSourceCap = was;
 		}
-		return toClipboard(shot, text);
+		return toClipboard(shot);
 	}
 
 	/**
@@ -2885,15 +2921,13 @@ class ChroniclePanel extends PluginPanel
 	 * what the reader is looking at stops at twenty five items behind a "show
 	 * more" and what they are sharing should not.
 	 */
-	private boolean copySourcePage(String name, LocalStore.SourceRow sr,
-		List<LocalStore.BagItem> bag)
+	private boolean copySourcePage(String name)
 	{
-		String text = sourceAsText(name, sr, bag);
 		java.awt.Image shot = null;
 		Integer was = drillShown.get(name);
 		try
 		{
-			drillShown.put(name, Integer.MAX_VALUE);
+			drillShown.put(name, COPY_ROWS);
 			shot = pageImage(stripChrome(buildSourceDetail(name)));
 		}
 		catch (Throwable ignored)   // noqa: the text still goes, which is the point
@@ -2911,56 +2945,9 @@ class ChroniclePanel extends PluginPanel
 				drillShown.put(name, was);
 			}
 		}
-		return toClipboard(shot, text);
+		return toClipboard(shot);
 	}
 
-	/**
-	 * A source's whole page as text: what the card says, then EVERY line of its
-	 * loot rather than the twenty five the page mounts. Somebody copying this
-	 * wants the record, not the view of it.
-	 *
-	 * <p>Fenced, because the place this is going is a chat window. Discord sets a
-	 * bare paste in a proportional font, which lines up none of the figures and
-	 * makes a long drop table unreadable; inside a fence it arrives as the page
-	 * drew it. The fence costs six characters where it is not wanted.
-	 */
-	private String sourceAsText(String name, LocalStore.SourceRow sr,
-		List<LocalStore.BagItem> bag)
-	{
-		StringBuilder b = new StringBuilder("```\n").append(name).append("\n");
-		if (sr != null)
-		{
-			List<String[]> head = new ArrayList<>();
-			head.add(new String[]{"Kills tracked",
-				sr.kc > 0 ? fmt(sr.kc) : fmt(sr.loots) + " drops"});
-			head.add(new String[]{"The take", gp(sr.value) + " gp"
-				+ (sr.kc > 0 ? " (" + gp(sr.value / Math.max(1, sr.kc)) + " gp/kc)" : "")});
-			if (sr.pb != null)
-			{
-				head.add(new String[]{"Personal best", pb(sr.pb)});
-			}
-			if (sr.firstMs > 0)
-			{
-				head.add(new String[]{"Tracked since",
-					TASK_DAY.format(Instant.ofEpochMilli(sr.firstMs))});
-			}
-			b.append(aligned(head));
-		}
-		if (!bag.isEmpty())
-		{
-			b.append("\n").append(bag.size() == 1 ? "1 item" : fmt(bag.size()) + " items")
-				.append("\n");
-			List<String[]> loot = new ArrayList<>();
-			for (LocalStore.BagItem it : bag)
-			{
-				loot.add(new String[]{
-					it.name + (it.qty > 1 ? " x" + fmt(it.qty) : ""),
-					it.value > 0 ? gp(it.value) + " gp" : ""});
-			}
-			b.append(aligned(loot));
-		}
-		return b.append("```").toString();
-	}
 
 	// The item under the glass: total obtained, worth, and every source of it.
 	private JPanel buildItemDetail(String name)
@@ -2992,7 +2979,7 @@ class ChroniclePanel extends PluginPanel
 		final int itemId = found;
 		// read before the row is built: the copy hands back every source, not the
 		// forty the page mounts
-		p.add(backRow(() -> copyItemPage(name, qty, value, srcs)));
+		p.add(backRow(() -> copyItemPage(name)));
 		p.add(vgap(4));
 		JPanel head = card(name);
 		if (itemId > 0)
@@ -3054,7 +3041,7 @@ class ChroniclePanel extends PluginPanel
 		// page: every loot line, not the twenty five the page mounts.
 		final List<LocalStore.BagItem> bag = plugin.sourceItems(sr != null ? sr.name : name);
 		bag.sort(Comparator.comparingLong((LocalStore.BagItem b) -> b.value).reversed());
-		p.add(backRow(() -> copySourcePage(name, sr, bag)));
+		p.add(backRow(() -> copySourcePage(name)));
 		p.add(vgap(4));
 		JPanel head = card(name);
 		if (sr != null)

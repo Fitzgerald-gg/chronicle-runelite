@@ -1010,6 +1010,12 @@ public class ChroniclePlugin extends Plugin
 		return Math.max(clogCapture.availableCount(), localStore.clogFraction()[1]);
 	}
 
+	/** Every item the slayer journey logged inside a window, ranked by value. */
+	java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs)
+	{
+		return localStore.onTaskLoot(fromMs, toMs);
+	}
+
 	java.util.List<LocalStore.BagItem> untakenItemsOf(String source)
 	{
 		return localStore.untakenItemsOf(source);
