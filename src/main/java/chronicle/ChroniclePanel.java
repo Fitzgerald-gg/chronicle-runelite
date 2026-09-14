@@ -663,6 +663,8 @@ class ChroniclePanel extends PluginPanel
 		LOG_PAGE_FOR.put("TzTok-Jad", "The Fight Caves");
 		LOG_PAGE_FOR.put("TzKal-Zuk", "The Inferno");
 		LOG_PAGE_FOR.put("Sol Heredit", "Fortis Colosseum");
+		// One page counts both, and each of them is its own row on the board.
+		LOG_PAGE_FOR.put("The Corrupted Gauntlet", "The Gauntlet");
 	}
 
 	/**
@@ -692,6 +694,18 @@ class ChroniclePanel extends PluginPanel
 		if (best > 0)
 		{
 			return best;
+		}
+		// The page's own LABELLED line before its headline number. kcs keeps
+		// whichever count came first on the page, which may be counting rewards,
+		// and on a journal written before best times were turned away it may be
+		// half of one: the Gauntlet's page reads 55 where 31 were completed.
+		for (Map.Entry<String, Long> ln : pageLines(name))
+		{
+			String said = ln.getKey().toLowerCase(Locale.ROOT);
+			if (said.contains("kill") || said.contains("completion"))
+			{
+				return ln.getValue();
+			}
 		}
 		String page = LOG_PAGE_FOR.containsKey(name) ? LOG_PAGE_FOR.get(name) : name;
 		return Math.max(0, lookup(cl, "kcs", page));
@@ -865,6 +879,23 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private List<Map.Entry<String, Long>> logLines(String boss)
 	{
+		List<Map.Entry<String, Long>> out = pageLines(boss);
+		// A line that only restates the count the card already carries is noise.
+		// What is worth reading beside it is a line counting something ELSE:
+		// Wintertodt's rewards claimed against its kills.
+		long kills = bossKills(boss);
+		out.removeIf(ln ->
+		{
+			String said = ln.getKey().toLowerCase(Locale.ROOT);
+			return ln.getValue() == kills
+				&& (said.contains("kill") || said.contains("completion"));
+		});
+		return out;
+	}
+
+	/** The page's lines that are this fight's, as the page wrote them. */
+	private List<Map.Entry<String, Long>> pageLines(String boss)
+	{
 		List<Map.Entry<String, Long>> out = new ArrayList<>();
 		JsonObject cl = plugin.clogSnapshot();
 		if (cl == null || !cl.has("kc_lines") || !cl.get("kc_lines").isJsonObject())
@@ -893,16 +924,62 @@ class ChroniclePanel extends PluginPanel
 			: found.getAsJsonObject().entrySet())
 		{
 			long n = safeLong(ln.getValue());
-			if (n > 0)
+			if (n <= 0 || !lineBelongsTo(boss, ln.getKey()))
 			{
-				out.add(new java.util.AbstractMap.SimpleEntry<>(ln.getKey(), n));
+				continue;
 			}
-		}
-		if (out.size() == 1 && out.get(0).getValue() == bossKills(boss))
-		{
-			out.clear();
+			out.add(new java.util.AbstractMap.SimpleEntry<>(ln.getKey(), n));
 		}
 		return out;
+	}
+
+	/**
+	 * Whether a page's line is this boss's business.
+	 *
+	 * <p>Two lines it is not. A PERSONAL BEST IS A TIME: the count is read off the
+	 * last ": number" on the line, so "Personal Best: 8:55" came back as 55 under
+	 * the label "Personal Best: 8". Capture drops those now, but a journal that
+	 * already holds one keeps it, since these lines are floor-merged and never
+	 * removed, so they are turned away here too. A label left ending in a digit is
+	 * the tell.
+	 *
+	 * <p>And a page can count more than one fight. The Gauntlet's page carries the
+	 * corrupted completions as well, and the corrupted Gauntlet is its own row on
+	 * the board: a line goes to whichever roster name it names most exactly, so
+	 * "Corrupted Gauntlet completion count" goes to that row rather than being
+	 * read twice, once on each.
+	 */
+	private boolean lineBelongsTo(String boss, String label)
+	{
+		if (label == null || label.isEmpty())
+		{
+			return false;
+		}
+		if (Character.isDigit(label.charAt(label.length() - 1)))
+		{
+			return false;
+		}
+		String said = label.toLowerCase(Locale.ROOT);
+		String mine = bare(boss);
+		String best = null;
+		for (Boss b : bossRoster(plugin.gson()))
+		{
+			String name = bare(b.name);
+			if (!name.isEmpty() && said.contains(name)
+				&& (best == null || name.length() > best.length()))
+			{
+				best = name;
+			}
+		}
+		// a line naming no fight at all stays on the page that carried it
+		return best == null || best.equals(mine);
+	}
+
+	/** A roster name as a line would write it: no leading "the". */
+	private static String bare(String name)
+	{
+		String n = name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
+		return n.startsWith("the ") ? n.substring(4) : n;
 	}
 
 	/**
@@ -1056,7 +1133,11 @@ class ChroniclePanel extends PluginPanel
 		List<Map.Entry<String, Long>> lines = logLines(b.name);
 		if (src == null)
 		{
-			card.add(row("Kills tracked", "-", null));
+			// No loot has reached the journal, but the log still counted the
+			// fight, and a dash where a number is known reads as not tracked.
+			long known = bossKills(b.name);
+			card.add(row("Kills tracked", known > 0 ? fmt(known) : "-",
+				known > 0 ? accent() : null));
 			for (Map.Entry<String, Long> ln : lines)
 			{
 				card.add(row(ln.getKey(), fmt(ln.getValue()), null));

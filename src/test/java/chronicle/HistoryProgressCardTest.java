@@ -3564,6 +3564,9 @@ public class HistoryProgressCardTest
 		todt.addProperty("Rewards claimed", 1_078);
 		lines.add("Wintertodt", todt);
 		com.google.gson.JsonObject gauntlet = new com.google.gson.JsonObject();
+		// the page carries a best time and both fights' completions
+		gauntlet.addProperty("Personal Best: 8", 55);
+		gauntlet.addProperty("Personal Best Corrupted: 13", 11);
 		gauntlet.addProperty("Gauntlet completion count", 31);
 		gauntlet.addProperty("Corrupted Gauntlet completion count", 1);
 		lines.add("The Gauntlet", gauntlet);
@@ -3577,11 +3580,35 @@ public class HistoryProgressCardTest
 			todtCard.contains("Rewards claimed"));
 		assertTrue(todtCard.toString(), todtCard.contains("1,078"));
 
-		// a pair stays whole: the Gauntlet's two only make sense read together
+		// A PERSONAL BEST IS A TIME. "Personal Best: 8:55" is read off its last
+		// ": number" and comes back as 55 under the label "Personal Best: 8".
+		// Capture turns those away now, but a journal already holding one keeps
+		// it, because these lines are floor-merged and never removed.
 		set(p, "bossOpen", "The Gauntlet");
-		List<String> both = labels(kills(p));
-		assertTrue(both.toString(), both.contains("Gauntlet completion count"));
-		assertTrue(both.toString(), both.contains("Corrupted Gauntlet completion count"));
+		List<String> card = labels(kills(p));
+		assertFalse("a best time is being read as a count: " + card,
+			card.contains("Personal Best: 8"));
+		assertFalse(card.toString(), card.contains("Personal Best Corrupted: 13"));
+		// no loot from the Gauntlet ever reaches the journal, but the log counted
+		// it: a dash where a number is known reads as untracked
+		assertTrue("the count the log holds is not shown: " + card,
+			card.contains("Kills tracked") && card.contains("31"));
+		// and the line restating it is not printed under it
+		assertFalse("the headline is repeated as a line: " + card,
+			card.contains("Gauntlet completion count"));
+		// the corrupted fight is its own row on the board, so its count is read
+		// there rather than twice, once on each
+		assertFalse("the corrupted count is on the plain Gauntlet's card: " + card,
+			card.contains("Corrupted Gauntlet completion count"));
+
+		set(p, "bossOpen", "The Corrupted Gauntlet");
+		List<String> corrupted = labels(kills(p));
+		assertTrue("the corrupted fight lost its own count: " + corrupted,
+			corrupted.contains("Kills tracked") && corrupted.contains("1"));
+		// and it must not inherit the plain Gauntlet's page counter, which on an
+		// older journal is half of a best time: 55 where 1 was completed
+		assertFalse("it took the whole page's counter: " + corrupted,
+			corrupted.contains("55"));
 	}
 
 	@Test
