@@ -174,7 +174,6 @@ class ChroniclePanel extends PluginPanel
 			PANEL_INSET, PANEL_INSET, PANEL_INSET, PANEL_INSET));
 		setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-		JPanel north = new JPanel();
 		north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
 		north.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
@@ -281,6 +280,19 @@ class ChroniclePanel extends PluginPanel
 			}
 		});
 		// ── tabs, then search ──
+		periodHolder.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		// The strip's other rows centre themselves; a LEFT aligned holder among
+		// them is pushed right by BoxLayout and loses the width its label needs,
+		// which is how "September 2026" came to draw as "September 20...".
+		periodHolder.setAlignmentX(Component.CENTER_ALIGNMENT);
+		// BoxLayout hands a component its maximum, and a JPanel's default maximum
+		// is its preferred, which for an empty holder is nothing at all. Left to
+		// that, the row would never take a pixel of the strip.
+		periodHolder.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
+		periodHolder.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 16, 22));
+		north.add(periodHolder);
+		north.add(vgap(3));
+
 		tabGroup.setLayout(new GridLayout(1, 4, 2, 0));
 		// tab_history is the set's clock, which is the only clock anywhere: not
 		// one of the 4,057 named sprites in runelite-api is a clock, an hourglass
@@ -873,7 +885,12 @@ class ChroniclePanel extends PluginPanel
 	// The History tab's period controls, hung above the scroll rather than inside
 	// it. Built by buildHistory, which is the only place that knows the window
 	// they name, and cleared on every rebuild so no other view inherits them.
-	private JPanel historyControls;
+	// The period sits above the tab strip, because it governs every tab. Refilled
+	// on each rebuild so the label follows the window.
+	private final JPanel periodHolder = new JPanel(new BorderLayout());
+	// the strip the period, the tabs and the search hang on, kept so the period
+	// changing size can invalidate the layout that has to make room for it
+	private final JPanel north = new JPanel();
 
 	private static JScrollPane paneIn(java.awt.Container c)
 	{
@@ -912,7 +929,24 @@ class ChroniclePanel extends PluginPanel
 			manage.setVisible(view == View.JOURNAL || view == View.MANAGE);
 		}
 		display.removeAll();
-		historyControls = null;
+		// The period governs every board except the sitting, which is now and can
+		// be nothing else. Drawn above the tabs, so it is plainly over all of them
+		// rather than looking like one tab's control.
+		periodHolder.removeAll();
+		if (view != View.HOME)
+		{
+			periodHolder.add(periodRow(), BorderLayout.CENTER);
+		}
+		periodHolder.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 16,
+			view == View.HOME ? 0 : 22));
+		// BoxLayout caches what its children asked for and only drops that cache
+		// when the container itself is invalidated. revalidate() alone leaves the
+		// strip laying the period out at the height it had last time, which for a
+		// holder that starts empty is none at all.
+		periodHolder.invalidate();
+		north.invalidate();
+		north.revalidate();
+		north.repaint();
 		JPanel body;
 		if (!searchQuery().isEmpty())
 		{
@@ -986,10 +1020,6 @@ class ChroniclePanel extends PluginPanel
 		{
 			above.add(subs);
 			above.add(vgap(6));
-		}
-		if (historyControls != null)
-		{
-			above.add(historyControls);
 		}
 		if (above.getComponentCount() > 0)
 		{
@@ -5444,60 +5474,29 @@ class ChroniclePanel extends PluginPanel
 		return menu;
 	}
 
-	private JPanel buildHistory()
+	/** The window the period control is on: its two ends, and what to call it. */
+	private static final class Window
 	{
-		JPanel p = column();
-		// The labels of the build just discarded are nobody's business now. Left
-		// to pile up, an icon that never lands would hold every label the tab
-		// ever drew, which is the same unbounded queue that made it lag.
-		facetWaiting.clear();
-		itemWaiting.clear();
-		// the window controls, which rebuild() hangs above the scroll so they stay
-		// on screen while the period's figures move under them
-		JPanel controls = column();
+		final java.time.LocalDate start;
+		final java.time.LocalDate end;
+		final String label;
 
-		// The period, one line that opens on the choices. Five of them across a
-		// 225px panel left the longest word 31px to say itself in and it needs
-		// 39, and a list has no such trouble however many there come to be.
-		JPanel picker = row("Period",
-			histFrom != null ? "Exact dates" : histGranularity, accent());
-		picker.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-		picker.addMouseListener(clicker(() -> periodMenu().show(picker, 0, picker.getHeight())));
-		controls.add(picker);
-		controls.add(vgap(3));
-
-		// The four readings of a period, as the game's own sidebar icons. The
-		// words do not fit: "Activities" wants 48px of a 42px cell and
-		// "Trackers" 43, so a strip of words clips two of the four. Where the
-		// sprite cache is not there to ask, the words stand in anyway, since a
-		// blank strip is worse than a clipped one.
-		JPanel lens = new JPanel(new GridLayout(1, FACETS.length, 3, 3));
-		lens.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		for (String[] facet : FACETS)
+		Window(java.time.LocalDate start, java.time.LocalDate end, String label)
 		{
-			boolean on = facet[0].equals(histFacet);
-			int sprite = Integer.parseInt(facet[1]);
-			JLabel t = new JLabel(facet[0], JLabel.CENTER);
-			wearSprite(t, sprite, 0, 0);   // the word stands until the sprite lands
-			t.setToolTipText(facet[0]);
-			t.setOpaque(true);
-			t.setBorder(BorderFactory.createEmptyBorder(3, 4, 3, 4));
-			t.setFont(FontManager.getRunescapeSmallFont());
-			t.setBackground(on ? ColorScheme.DARK_GRAY_HOVER_COLOR
-				: ColorScheme.DARKER_GRAY_COLOR);
-			t.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
-			t.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-			t.addMouseListener(clicker(() ->
-			{
-				histFacet = facet[0];
-				rebuildInPlace();
-			}));
-			lens.add(t);
+			this.start = start;
+			this.end = end;
+			this.label = label;
 		}
-		controls.add(lens);
-		controls.add(vgap(5));
+	}
 
-		// the period under the cursor — or the exact dates the player typed
+	/**
+	 * The period every board is read through. It used to be computed inside the
+	 * Progression tab, which is why only that tab could honour it; it is a value
+	 * now, so the row above the tabs and the boards below them are reading the
+	 * same two dates.
+	 */
+	private Window window()
+	{
 		java.time.LocalDate end = histCursor;
 		java.time.LocalDate start;
 		String label;
@@ -5512,9 +5511,9 @@ class ChroniclePanel extends PluginPanel
 			switch (histGranularity)
 			{
 				case "Lifetime":
-					// everything the record holds, from its first line to today.
-					// A period with no earlier line to measure against reads as
-					// the account's own beginning, which is what it is.
+					// everything the record holds, from its first line to today. A
+					// period with no earlier line to measure against reads as the
+					// account's own beginning, which is what it is.
 					start = historySpine == null || historySpine.isEmpty()
 						? end.minusYears(30) : historySpine.firstKey();
 					end = java.time.LocalDate.now();
@@ -5541,73 +5540,91 @@ class ChroniclePanel extends PluginPanel
 					break;
 			}
 		}
-		final java.time.LocalDate pStart = start;
-		final java.time.LocalDate pEnd = end;
 		// what the period menu's exact-dates entry opens on, since at Lifetime
 		// there is no dateline to read them off
-		periodFrom = pStart;
-		periodTo = pEnd;
+		periodFrom = start;
+		periodTo = end;
+		return new Window(start, end, label);
+	}
 
-		JPanel stepper = new JPanel(new BorderLayout());
-		stepper.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		stepper.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
-		JLabel back = new JLabel("<");
-		JLabel fwd = new JLabel(">");
-		for (JLabel arrow : new JLabel[]{back, fwd})
+	/**
+	 * The period, on one row above the tabs, because it governs all of them. The
+	 * arrows step the window and the label between them opens the list; at
+	 * Lifetime the arrows have nowhere to go, so they are not drawn and the label
+	 * stands alone. This sitting is the one board it does not govern, and there
+	 * the row is not drawn at all.
+	 */
+	private JPanel periodRow()
+	{
+		final Window w = window();
+		JPanel r = new JPanel(new BorderLayout());
+		r.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		r.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
+		r.setAlignmentX(Component.LEFT_ALIGNMENT);
+		r.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+		if (!"Lifetime".equals(histGranularity) || histFrom != null)
 		{
-			arrow.setForeground(accent());
-			arrow.setFont(FontManager.getRunescapeBoldFont());
-			arrow.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-			arrow.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 6));
+			JLabel back = new JLabel("<");
+			JLabel fwd = new JLabel(">");
+			for (JLabel arrow : new JLabel[]{back, fwd})
+			{
+				arrow.setForeground(accent());
+				arrow.setFont(FontManager.getRunescapeBoldFont());
+				arrow.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				arrow.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 6));
+			}
+			back.addMouseListener(clicker(() -> stepPeriod(-1)));
+			fwd.addMouseListener(clicker(() -> stepPeriod(1)));
+			r.add(back, BorderLayout.WEST);
+			r.add(fwd, BorderLayout.EAST);
 		}
-		back.addMouseListener(clicker(() ->
-		{
-			if (histFrom != null && histTo != null)
-			{
-				long span = java.time.temporal.ChronoUnit.DAYS.between(histFrom, histTo) + 1;
-				histFrom = histFrom.minusDays(span);
-				histTo = histTo.minusDays(span);
-			}
-			else
-			{
-				histCursor = stepBack(histCursor);
-			}
-			rebuild();
-		}));
-		fwd.addMouseListener(clicker(() ->
-		{
-			if (histFrom != null && histTo != null)
-			{
-				long span = java.time.temporal.ChronoUnit.DAYS.between(histFrom, histTo) + 1;
-				histFrom = histFrom.plusDays(span);
-				histTo = histTo.plusDays(span);
-			}
-			else
-			{
-				java.time.LocalDate next = stepForward(histCursor);
-				histCursor = next.isAfter(java.time.LocalDate.now()) ? java.time.LocalDate.now() : next;
-			}
-			rebuild();
-		}));
-		// Lifetime is one window and the arrows have nowhere to take it. A control
-		// that can do nothing is worse than no control, so neither they nor the
-		// row they hang on are drawn; the list above is the only control it has,
-		// and exact dates are reachable from there.
-		boolean stepping = !"Lifetime".equals(histGranularity) || histFrom != null;
-		JLabel lbl = new JLabel(label, JLabel.CENTER);
+		JLabel lbl = new JLabel(w.label, JLabel.CENTER);
 		lbl.setFont(FontManager.getRunescapeFont());
-		lbl.setToolTipText("Set exact dates");
+		lbl.setForeground(accent());
+		lbl.setToolTipText("Choose the period");
 		lbl.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-		lbl.addMouseListener(clicker(() -> onSetExactDates(pStart, pEnd)));
-		stepper.add(back, BorderLayout.WEST);
-		stepper.add(lbl, BorderLayout.CENTER);
-		stepper.add(fwd, BorderLayout.EAST);
-		if (stepping)
+		lbl.addMouseListener(clicker(() -> periodMenu().show(r, 0, r.getHeight())));
+		r.add(lbl, BorderLayout.CENTER);
+		return r;
+	}
+
+	/** Move the window one granule, or one span where exact dates are set. */
+	private void stepPeriod(int by)
+	{
+		if (histFrom != null && histTo != null)
 		{
-			controls.add(stepper);
-			controls.add(vgap(6));
+			long span = java.time.temporal.ChronoUnit.DAYS.between(histFrom, histTo) + 1;
+			histFrom = by < 0 ? histFrom.minusDays(span) : histFrom.plusDays(span);
+			histTo = by < 0 ? histTo.minusDays(span) : histTo.plusDays(span);
 		}
-		historyControls = controls;
+		else if (by < 0)
+		{
+			histCursor = stepBack(histCursor);
+		}
+		else
+		{
+			java.time.LocalDate next = stepForward(histCursor);
+			histCursor = next.isAfter(java.time.LocalDate.now())
+				? java.time.LocalDate.now() : next;
+		}
+		rebuild();
+	}
+
+	private JPanel buildHistory()
+	{
+		JPanel p = column();
+		// The labels of the build just discarded are nobody's business now. Left
+		// to pile up, an icon that never lands would hold every label the tab
+		// ever drew, which is the same unbounded queue that made it lag.
+		facetWaiting.clear();
+		itemWaiting.clear();
+		// The period is above the tabs now and the tabs replaced the facet strip,
+		// so this builds no controls of its own; it reads the window like anything
+		// else and draws the board the sub-tab asked for.
+		Window periodWin = window();
+		final java.time.LocalDate pStart = periodWin.start;
+		final java.time.LocalDate pEnd = periodWin.end;
+		final java.time.LocalDate end = periodWin.end;
 
 		// Ask for a fresh pass when the day has turned or the feed has grown.
 		// Probing the newest entry costs one copy; the gather costs thousands,

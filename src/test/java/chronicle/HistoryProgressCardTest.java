@@ -443,6 +443,19 @@ public class HistoryProgressCardTest
 		return out[0];
 	}
 
+	/** The period row on its own: it is above the tabs now, not inside a tab. */
+	private static List<String> periodLabels(ChroniclePanel panel) throws Exception
+	{
+		final JPanel[] out = new JPanel[1];
+		edt(() ->
+		{
+			Method m = ChroniclePanel.class.getDeclaredMethod("periodRow");
+			m.setAccessible(true);
+			out[0] = (JPanel) m.invoke(panel);
+		});
+		return labels(out[0]);
+	}
+
 	private static JPanel history(ChroniclePanel panel) throws Exception
 	{
 		final JPanel[] out = new JPanel[1];
@@ -451,9 +464,13 @@ public class HistoryProgressCardTest
 			Method m = ChroniclePanel.class.getDeclaredMethod("buildHistory");
 			m.setAccessible(true);
 			JPanel body = (JPanel) m.invoke(panel);
-			Field f = ChroniclePanel.class.getDeclaredField("historyControls");
-			f.setAccessible(true);
-			JPanel controls = (JPanel) f.get(panel);
+			// The period used to be built inside this tab and handed up as
+			// `historyControls`. It governs every tab now, so it is built once
+			// above the strip; the tab still has to be read WITH it, because what
+			// the boards say is only true of the window the row names.
+			Method pr = ChroniclePanel.class.getDeclaredMethod("periodRow");
+			pr.setAccessible(true);
+			JPanel controls = (JPanel) pr.invoke(panel);
 			JPanel whole = new JPanel();
 			whole.setLayout(new javax.swing.BoxLayout(whole, javax.swing.BoxLayout.Y_AXIS));
 			if (controls != null)
@@ -1434,8 +1451,6 @@ public class HistoryProgressCardTest
 		s.ledgerKcs.put("Nechryael", 622L);
 		ChroniclePanel p = panel(s);
 		List<String> all = labels(history(p));
-		assertEquals(all.toString(), Arrays.asList("Skills", "PvM", "Activities", "Trackers"),
-			all.subList(all.indexOf("Skills"), all.indexOf("Skills") + 4));
 		assertFalse(all.toString(), all.contains("Bosses"));
 
 		// under the facet, two bands: the collection log's own boss pages, then
@@ -2704,15 +2719,12 @@ public class HistoryProgressCardTest
 		List<String> inBody = labels(body[0]);
 		assertFalse("the period row is still inside the scrolling body: " + inBody,
 			inBody.contains("Period"));
-		Field f = ChroniclePanel.class.getDeclaredField("historyControls");
-		f.setAccessible(true);
-		JPanel controls = (JPanel) f.get(p);
-		assertNotNull("buildHistory handed up no controls", controls);
-		List<String> up = labels(controls);
-		for (String control : new String[]{"Period", "Skills", "PvM", "Activities", "Trackers"})
-		{
-			assertTrue(control + " is not among the controls: " + up, up.contains(control));
-		}
+		// It hangs above the TABS now, not above one tab's body: it governs every
+		// board except the sitting, so it cannot belong to any one of them.
+		set(p, "histGranularity", "Lifetime");
+		List<String> up = periodLabels(p);
+		assertFalse("the period row is empty: " + up, up.isEmpty());
+		assertTrue("the period row does not name its window: " + up, up.contains("Lifetime"));
 	}
 
 	@Test
@@ -2877,15 +2889,15 @@ public class HistoryProgressCardTest
 		s.history.put(today.minusDays(90), first);
 		ChroniclePanel p = panel(s);
 		set(p, "histGranularity", "Lifetime");
+		assertTrue(periodLabels(p).toString(), periodLabels(p).contains("Lifetime"));
 		List<String> all = labels(history(p));
-		assertEquals(all.toString(), "Lifetime", beside(all, "Period"));
 		// the period's own figures still draw, and they measure from the record's
 		// first line rather than from the window a shorter period would open on
 		assertTrue(all.toString(), all.contains("THE PERIOD"));
 		assertEquals(all.toString(), "+150k", beside(headline(all), "Experience"));
 
 		set(p, "histGranularity", "Week");
-		assertEquals(labels(history(p)).toString(), "Week", beside(labels(history(p)), "Period"));
+		assertFalse(periodLabels(p).toString(), periodLabels(p).isEmpty());
 		assertEquals(labels(history(p)).toString(), "+50k",
 			beside(headline(labels(history(p))), "Experience"));
 	}
@@ -2946,29 +2958,31 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
-	public void theRowNamesThePeriodItIsShowing() throws Exception
+	public void theRowNamesTheWindowItIsShowing() throws Exception
 	{
-		// five choices across one row left each 31px of text and "Lifetime"
-		// needs 39. Laid out at the real panel width, none may overflow.
+		// The row names the WINDOW, not the granularity that chose it: "September
+		// 2026" tells a reader which month they are looking at and "Month" does
+		// not. Lifetime is the one period whose window has no better name.
 		ChroniclePanel p = panel(stub(true));
 		for (String period : ChroniclePanel.PERIODS)
 		{
 			set(p, "histGranularity", period);
-			List<String> all = labels(history(p));
-			assertEquals(all.toString(), period, beside(all, "Period"));
+			List<String> named = periodLabels(p);
+			assertFalse("nothing names the period " + period, named.isEmpty());
+			for (String t : named)
+			{
+				assertFalse(period + " drew an empty label", t.trim().isEmpty());
+			}
 		}
-		// and exact dates are a period of their own, named as such
+		set(p, "histGranularity", "Lifetime");
+		assertTrue(periodLabels(p).toString(), periodLabels(p).contains("Lifetime"));
+		// and exact dates name both their ends, since no granularity named them
 		LocalDate today = LocalDate.now();
 		set(p, "histFrom", today.minusDays(3));
 		set(p, "histTo", today);
-		assertEquals("Exact dates", beside(labels(history(p)), "Period"));
-	}
-
-	private static JPanel historyControlsOf(ChroniclePanel p) throws Exception
-	{
-		Field f = ChroniclePanel.class.getDeclaredField("historyControls");
-		f.setAccessible(true);
-		return (JPanel) f.get(p);
+		List<String> exact = periodLabels(p);
+		assertTrue("exact dates are unnamed: " + exact,
+			exact.toString().contains("-"));
 	}
 
 	private static JLabel labelNamed(Container c, String text)
@@ -3206,9 +3220,6 @@ public class HistoryProgressCardTest
 		List<String> all = labels(history(p));
 		assertTrue("the tab is blank: " + all, all.contains("THE PERIOD"));
 		assertTrue(all.toString(), all.contains("ATT"));
-		// and the strip still names itself, in words, since no sprite arrived
-		assertTrue(all.toString(), all.contains("Skills"));
-		assertTrue(all.toString(), all.contains("Trackers"));
 	}
 
 	@Test
@@ -3308,8 +3319,15 @@ public class HistoryProgressCardTest
 		{
 			history(p);
 		}
-		assertEquals("asked " + s.spriteAsks, ChroniclePanel.FACETS.length,
-			s.spriteAsks.size());
+		// The facet strip that used to do the asking is gone -- the tabs replaced
+		// it -- so what matters is not how many sprites a build wants but that
+		// building again wants no more of them.
+		int asked = s.spriteAsks.size();
+		for (int i = 0; i < 6; i++)
+		{
+			history(p);
+		}
+		assertEquals("asked again: " + s.spriteAsks, asked, s.spriteAsks.size());
 
 		// The bands want sprites too, for a line with nothing of its own to wear,
 		// and they want the very sprites the strip above already asked for. A
@@ -3319,12 +3337,15 @@ public class HistoryProgressCardTest
 		s.kcs.put("Nechryael", 622L);
 		set(p, "histFacet", "PvM");
 		set(p, "histGranularity", "Lifetime");
+		// A board opened for the first time may legitimately want a sprite nobody
+		// has asked for yet. What it may never do is want one again per build.
+		history(p);
+		int bands = s.spriteAsks.size();
 		for (int i = 0; i < 6; i++)
 		{
 			history(p);
 		}
-		assertEquals("the bands asked again: " + s.spriteAsks,
-			ChroniclePanel.FACETS.length, s.spriteAsks.size());
+		assertEquals("the bands asked again: " + s.spriteAsks, bands, s.spriteAsks.size());
 		assertEquals("the same sprite twice: " + s.spriteAsks,
 			s.spriteAsks.size(), new java.util.HashSet<>(s.spriteAsks).size());
 	}
