@@ -39,7 +39,9 @@ import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -2676,6 +2678,71 @@ public class HistoryProgressCardTest
 		assertTrue("and what it left on the floor", body.contains("\"left\""));
 		assertTrue("and what that was worth", body.contains("\"leftGp\""));
 		assertTrue("and the kills that left it", body.contains("\"leftKills\""));
+	}
+
+	@Test
+	public void theHomeTickLeavesADrillOpenedFromItAlone() throws Exception
+	{
+		// Home refreshes itself every three seconds. A page opened FROM Home keeps
+		// Home's view, so an incomplete guard rebuilds that page instead: the whole
+		// scroll pane is replaced and the bar re-set under a reader who is in the
+		// middle of scrolling it. On the trackers page, which is two hundred rows
+		// and four thousand pixels tall, that reads as the scroll lagging.
+		ChroniclePanel p = panel(stub(true));
+		setView(p, "HOME");
+		Method open = ChroniclePanel.class.getDeclaredMethod("openAllTrackers");
+		open.setAccessible(true);
+		Field d = ChroniclePanel.class.getDeclaredField("display");
+		d.setAccessible(true);
+
+		final Object[] seen = new Object[3];
+		edt(() ->
+		{
+			open.invoke(p);
+			javax.swing.JPanel display = (javax.swing.JPanel) d.get(p);
+			seen[0] = display.getComponent(0);
+			seen[2] = labels(display);
+			tick(p);
+			seen[1] = ((javax.swing.JPanel) d.get(p)).getComponent(0);
+		});
+		@SuppressWarnings("unchecked")
+		List<String> said = (List<String>) seen[2];
+		assertTrue("this is not the trackers page: " + said, said.contains("TRACKERS"));
+		assertSame("the home tick rebuilt the page the reader was scrolling",
+			seen[0], seen[1]);
+	}
+
+	@Test
+	public void theHomeTickStillRefreshesHomeItself() throws Exception
+	{
+		// and the guard must not go so wide that the sitting stops refreshing,
+		// which is the whole reason the tick exists
+		ChroniclePanel p = panel(stub(true));
+		setView(p, "HOME");
+		Field d = ChroniclePanel.class.getDeclaredField("display");
+		d.setAccessible(true);
+		final Object[] seen = new Object[2];
+		edt(() ->
+		{
+			javax.swing.JPanel display = (javax.swing.JPanel) d.get(p);
+			seen[0] = display.getComponent(0);
+			tick(p);
+			seen[1] = ((javax.swing.JPanel) d.get(p)).getComponent(0);
+		});
+		assertNotSame("the sitting stopped refreshing on its own tick",
+			seen[0], seen[1]);
+	}
+
+	/** Fire the home ticker by hand, the way three seconds would. */
+	private static void tick(ChroniclePanel panel) throws Exception
+	{
+		Field t = ChroniclePanel.class.getDeclaredField("homeTicker");
+		t.setAccessible(true);
+		javax.swing.Timer timer = (javax.swing.Timer) t.get(panel);
+		for (java.awt.event.ActionListener al : timer.getActionListeners())
+		{
+			al.actionPerformed(new java.awt.event.ActionEvent(timer, 0, ""));
+		}
 	}
 
 	@Test
