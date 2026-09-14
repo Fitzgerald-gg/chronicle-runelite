@@ -445,7 +445,25 @@ public class HistoryProgressCardTest
 	}
 
 	/** The period row on its own: it is above the tabs now, not inside a tab. */
+	@SuppressWarnings({"unchecked", "rawtypes"})
+	private static void setView(ChroniclePanel panel, String name) throws Exception
+	{
+		Class<?> type = Class.forName("chronicle.ChroniclePanel$View");
+		Field f = ChroniclePanel.class.getDeclaredField("view");
+		f.setAccessible(true);
+		f.set(panel, Enum.valueOf((Class<Enum>) type.asSubclass(Enum.class), name));
+	}
+
 	private static List<String> periodLabels(ChroniclePanel panel) throws Exception
+	{
+		// On the sitting the row states its scope instead of offering to change
+		// it, so a test about the CONTROL has to stand on a board it governs.
+		setView(panel, "HISTORY");
+		return periodLabelsAsShown(panel);
+	}
+
+	/** The row exactly as the board currently on show would draw it. */
+	private static List<String> periodLabelsAsShown(ChroniclePanel panel) throws Exception
 	{
 		final JPanel[] out = new JPanel[1];
 		edt(() ->
@@ -477,6 +495,13 @@ public class HistoryProgressCardTest
 			Method m = ChroniclePanel.class.getDeclaredMethod("buildHistory");
 			m.setAccessible(true);
 			JPanel body = (JPanel) m.invoke(panel);
+			// This helper reads the history board WITH its period row, so the
+			// panel has to be standing on that board while the row is built: on
+			// the sitting the row states its scope instead of offering to change
+			// it. Put back afterwards, or a helper quietly changes which board
+			// the test that called it is standing on.
+			Object stood = get(panel, "view");
+			setView(panel, "HISTORY");
 			// The period used to be built inside this tab and handed up as
 			// `historyControls`. It governs every tab now, so it is built once
 			// above the strip; the tab still has to be read WITH it, because what
@@ -484,6 +509,9 @@ public class HistoryProgressCardTest
 			Method pr = ChroniclePanel.class.getDeclaredMethod("periodRow");
 			pr.setAccessible(true);
 			JPanel controls = (JPanel) pr.invoke(panel);
+			Field vf = ChroniclePanel.class.getDeclaredField("view");
+			vf.setAccessible(true);
+			vf.set(panel, stood);
 			JPanel whole = new JPanel();
 			whole.setLayout(new javax.swing.BoxLayout(whole, javax.swing.BoxLayout.Y_AXIS));
 			if (controls != null)
@@ -3479,6 +3507,32 @@ public class HistoryProgressCardTest
 		List<String> week = labels(kills(p));
 		assertFalse("the lifetime count survived into a week: " + week,
 			week.contains("2,023"));
+	}
+
+	@Test
+	public void theSittingStatesItsScopeRatherThanLeavingTheRowEmpty() throws Exception
+	{
+		// The sitting is now and can be nothing else, so the period cannot govern
+		// it. Hiding the row there moved every tab under it, and a strip that
+		// jumps as you move between tabs reads as the panel misbehaving -- so the
+		// row draws at the same height in the same place and says what it is.
+		ChroniclePanel p = panel(stub(true));
+		setView(p, "HOME");
+		List<String> sitting = periodLabelsAsShown(p);
+		assertTrue("the sitting does not name its scope: " + sitting,
+			sitting.contains("This session"));
+		// and it is a statement, not a control: nothing to step it with
+		assertFalse(sitting.toString(), sitting.contains("<"));
+		assertFalse(sitting.toString(), sitting.contains(">"));
+
+		// every other board still gets the control itself
+		setView(p, "KILLS");
+		set(p, "histGranularity", "Week");
+		List<String> elsewhere = periodLabelsAsShown(p);
+		assertFalse("the sitting's label leaked onto another board: " + elsewhere,
+			elsewhere.contains("This session"));
+		assertTrue("no stepper where the period governs: " + elsewhere,
+			elsewhere.contains("<"));
 	}
 
 	@Test

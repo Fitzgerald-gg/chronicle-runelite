@@ -1176,13 +1176,13 @@ class ChroniclePanel extends PluginPanel
 		// The period governs every board except the sitting, which is now and can
 		// be nothing else. Drawn above the tabs, so it is plainly over all of them
 		// rather than looking like one tab's control.
+		// Always drawn, on every board, above the tabs: it governs all of them, and
+		// on the one it cannot govern it says so rather than leaving. A control
+		// that vanishes on one tab moves every tab under it, and the strip jumping
+		// as you move between them reads as the panel misbehaving.
 		periodHolder.removeAll();
-		if (view != View.HOME)
-		{
-			periodHolder.add(periodRow(), BorderLayout.CENTER);
-		}
-		periodHolder.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 16,
-			view == View.HOME ? 0 : 22));
+		periodHolder.add(periodRow(), BorderLayout.CENTER);
+		periodHolder.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 16, 22));
 		// BoxLayout caches what its children asked for and only drops that cache
 		// when the container itself is invalidated. revalidate() alone leaves the
 		// strip laying the period out at the height it had last time, which for a
@@ -6188,6 +6188,18 @@ class ChroniclePanel extends PluginPanel
 		r.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
 		r.setAlignmentX(Component.LEFT_ALIGNMENT);
 		r.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+		// The sitting is now and can be nothing else, so the row states its scope
+		// rather than offering to change it. It still draws, at the same height in
+		// the same place, because a control that vanishes on one tab moves every
+		// tab under it.
+		if (view == View.HOME)
+		{
+			JLabel fixed = new JLabel("This session", JLabel.CENTER);
+			fixed.setFont(FontManager.getRunescapeFont());
+			fixed.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+			r.add(fixed, BorderLayout.CENTER);
+			return r;
+		}
 		if (!"Lifetime".equals(histGranularity) || histFrom != null)
 		{
 			JLabel back = new JLabel("<");
