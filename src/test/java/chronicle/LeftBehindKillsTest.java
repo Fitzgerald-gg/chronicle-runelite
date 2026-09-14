@@ -338,6 +338,10 @@ public class LeftBehindKillsTest
 	@Test
 	public void theStacksSweptUpAtAnUnloadKeepTheirKills()
 	{
+		// A HOP, not a region change: the world goes away and no despawn is ever
+		// coming, so the sweep is the only chance to count these. A region change
+		// reloads the scene in place and is handled the other way round -- see
+		// aSceneReloadIsNotLeavingTheLoot.
 		kill(100, BEAR);
 		spawn(101, BONES);
 		gameTick(101);
@@ -346,13 +350,85 @@ public class LeftBehindKillsTest
 		gameTick(111);
 		tick(112);
 		GameStateChanged unload = new GameStateChanged();
-		unload.setGameState(GameState.LOADING);
+		unload.setGameState(GameState.HOPPING);
 		capture.onGameStateChanged(unload);
 		gameTick(113);
 		List<JsonObject> rows = untakenRows();
 		assertEquals(1, rows.size());
 		assertEquals(2, items(rows.get(0)));
 		assertEquals(2, kills(rows.get(0)));
+	}
+
+	// A region change reloads the scene in place. The client re-announces every
+	// ground item that survived it -- the same TileItem objects, a new scene base,
+	// no despawn in between -- so an item is still there and still ours. Treating
+	// the reload as a departure recorded 23,591 coins as abandoned while they sat
+	// in the inventory, because banking them dropped the tracking and the pickup a
+	// second later had nothing left to correct.
+	@Test
+	public void aSceneReloadIsNotLeavingTheLoot()
+	{
+		kill(100, BEAR);
+		TileItem bones = spawn(101, BONES);
+		gameTick(101);
+
+		GameStateChanged reload = new GameStateChanged();
+		reload.setGameState(GameState.LOADING);
+		capture.onGameStateChanged(reload);
+		gameTick(102);
+
+		// the client replaying what survived, on the same object
+		capture.onItemSpawned(new ItemSpawned(tile, bones));
+		gameTick(103);
+
+		// and then taken, well before its despawn tick
+		pickUp(104, bones);
+		gameTick(105);
+		assertEquals("a reload is not a departure", 0, untakenRows().size());
+	}
+
+	// and the replay must not be read as a second drop, or one stack is counted
+	// twice over: once as the kill's loot and once as a stack of its own
+	@Test
+	public void theReplayedStackIsNotASecondDrop()
+	{
+		kill(100, BEAR);
+		TileItem bones = spawn(101, BONES);
+		gameTick(101);
+		GameStateChanged reload = new GameStateChanged();
+		reload.setGameState(GameState.LOADING);
+		capture.onGameStateChanged(reload);
+		capture.onItemSpawned(new ItemSpawned(tile, bones));
+		gameTick(102);
+
+		leave(bones);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals("the replay was counted as a second stack", 1, items(rows.get(0)));
+	}
+
+	// Walking far from a stack unloads it with the scene and no despawn is posted.
+	// Without a sweep it would be neither counted nor released, so the record would
+	// quietly stop seeing the commonest way loot is left: walked away from.
+	@Test
+	public void aStackWalkedAwayFromIsStillCountedWhenItsTimeIsUp()
+	{
+		kill(100, BEAR);
+		spawn(101, BONES);
+		gameTick(101);
+		// a region change, then nothing: no replay, no despawn, we simply left
+		GameStateChanged reload = new GameStateChanged();
+		reload.setGameState(GameState.LOADING);
+		capture.onGameStateChanged(reload);
+		gameTick(102);
+		assertEquals("counted before its time was up", 0, untakenRows().size());
+
+		// its own despawn tick passes with nobody telling us
+		gameTick(DESPAWN + 10);
+		List<JsonObject> rows = untakenRows();
+		assertEquals(1, rows.size());
+		assertEquals(1, items(rows.get(0)));
+		assertEquals("the kill it came from was lost", 1, kills(rows.get(0)));
 	}
 
 	// ── kills told apart by tile ───────────────────────────────────────────

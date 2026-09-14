@@ -493,6 +493,43 @@ public class ChronicleEventCapture
 	// window, so the later-firing ServerNpcLoot (posted by LootManager, usually from
 	// its GameTick) has landed by the time it is judged. A spawn that never sits near a
 	// kill is a manual drop and is discarded.
+	/**
+	 * Bank anything that passed its own despawn tick without us ever seeing it
+	 * despawn. Walking far enough from a stack unloads it with the scene and no
+	 * despawn is posted, so without this the item would neither be counted nor
+	 * ever released -- the record would quietly stop seeing loot walked away from,
+	 * and the map would grow for as long as the client ran.
+	 *
+	 * <p>The grace is there because the despawn usually does arrive, and arriving
+	 * a tick late should be read as the despawn it is rather than raced by this.
+	 */
+	private void sweepTimedOutLoot()
+	{
+		if (groundLoot.isEmpty())
+		{
+			return;
+		}
+		int now = client.getTickCount();
+		List<TileItem> gone = new ArrayList<>();
+		for (Map.Entry<TileItem, GroundLoot> e : groundLoot.entrySet())
+		{
+			GroundLoot g = e.getValue();
+			if (g.despawnTick > 0 && now > g.despawnTick + TIMEOUT_GRACE)
+			{
+				untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner, g.killTick,
+					g.killIndex));
+				gone.add(e.getKey());
+			}
+		}
+		for (TileItem it : gone)
+		{
+			groundLoot.remove(it);
+		}
+	}
+
+	// ticks past a stack's own despawn before we conclude nobody is going to tell us
+	private static final int TIMEOUT_GRACE = 5;
+
 	private void reconcileKillLoot()
 	{
 		if (pendingSelf.isEmpty())
@@ -710,6 +747,13 @@ public class ChronicleEventCapture
 			return;
 		}
 		int now = client.getTickCount();
+		// Already ours and already tracked: this is the scene reload re-announcing
+		// what survived it, not a second drop. Re-buffering it would enter it as
+		// fresh kill loot and count it twice.
+		if (groundLoot.containsKey(it))
+		{
+			return;
+		}
 		if (isOwnDrop(it, event.getTile(), now))
 		{
 			return;   // the game confirming a Drop click, not kill loot
@@ -1459,6 +1503,7 @@ public class ChronicleEventCapture
 	public void onGameTick(GameTick tick)
 	{
 		reconcileKillLoot();
+		sweepTimedOutLoot();
 		flushUntakenLoot();
 
 		// expire a pet prime that never got a name.
@@ -1493,12 +1538,27 @@ public class ChronicleEventCapture
 	public void onGameStateChanged(GameStateChanged event)
 	{
 		GameState state = event.getGameState();
-		if (state == GameState.LOADING || state == GameState.HOPPING || state == GameState.LOGIN_SCREEN)
+		// NOT on LOADING. A region change reloads the scene in place and the client
+		// then re-announces every ground item that survived it -- same TileItem
+		// objects, new scene base, no despawn in between. Banking here called that
+		// "left behind" and dropped the tracking, so the pickup a second later had
+		// nothing left to correct it: 23,591 coins were recorded as abandoned while
+		// they sat in the inventory. Cameron's own client log, 2026-09-14:
+		//
+		//   01:59:04  Item spawn   995 (23591)   y=1984
+		//   01:59:06  LOADING -> LOGGED_IN
+		//   01:59:06  Item spawn   995 (23591)   y=7104   (the same item, replayed)
+		//   01:59:07  Item despawn 995 (23591)            (the pickup)
+		//
+		// Keeping the entry costs nothing: the item is still tracked, and whether it
+		// was taken or timed out is decided by the despawn, which is the one signal
+		// that actually knows. A drop genuinely abandoned across a region change
+		// still despawns on its own timer and is still counted then.
+		//
+		// A hop or a logout is different: the world goes away and no despawn is ever
+		// coming, so those are still banked here.
+		if (state == GameState.HOPPING || state == GameState.LOGIN_SCREEN)
 		{
-			// Leaving the scene with our kill loot still on the ground means it was
-			// left behind, so bank it before the refs go stale. These items despawn
-			// early on unload, which the tick check in onItemDespawned would read as
-			// a pickup.
 			for (GroundLoot g : groundLoot.values())
 			{
 				untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner, g.killTick,
