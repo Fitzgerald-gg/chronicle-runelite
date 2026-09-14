@@ -74,6 +74,44 @@ public class KillCountsTest
 		+ "\"collection_log\":{\"kcs\":{\"Tormented Demons\":1302,\"Vorkath\":19,"
 		+ "\"Kraken\":237,\"Soul Wars\":346,\"Zulrah\":0,\"Rift\":\"many\"}}}";
 
+	// Wintertodt's collection log page counts REWARDS CLAIMED: read as kills it
+	// says 1,078 where 448 were killed. A player who opened that page but never
+	// the Kill Log has only the lying number on record, and the chat line the game
+	// prints on every kill is the game itself saying otherwise. The larger must
+	// NOT win here, because the lie is the larger.
+	@Test
+	public void theGamesOwnCountBeatsAPageCounterCountingSomethingElse() throws Exception
+	{
+		Map<String, Long> kc = plugin("{\"schema\":1,\"rsn\":\"Tester\","
+			+ "\"chat_kcs\":{\"subdued Wintertodt\":448},"
+			+ "\"collection_log\":{\"kcs\":{\"Wintertodt\":1078}}}").killCounts();
+		assertEquals(Long.valueOf(448), kc.get("Wintertodt"));
+	}
+
+	// and where the Kill Log has spoken too, the later of the two wins: the log
+	// was read at 447, the game has since said 448 on the kill itself.
+	@Test
+	public void theChatLineMovesACountTheKillLogFroze() throws Exception
+	{
+		Map<String, Long> kc = plugin("{\"schema\":1,\"rsn\":\"Tester\","
+			+ "\"chat_kcs\":{\"subdued Wintertodt\":448,\"Gauntlet\":32},"
+			+ "\"collection_log\":{\"kcs\":{\"Wintertodt\":1078},"
+			+ "\"slayer_kcs\":{\"Wintertodt\":447,\"The Gauntlet\":31}}}").killCounts();
+		assertEquals(Long.valueOf(448), kc.get("Wintertodt"));
+		assertEquals("the chat box names it Gauntlet, the log The Gauntlet",
+			Long.valueOf(32), kc.get("The Gauntlet"));
+	}
+
+	// a source with no page, no Kill Log entry and no loot row at all: the chat
+	// line is the only thing that has ever counted it, and it still counts.
+	@Test
+	public void aSourceOnlyTheChatBoxHasSeenStillCounts() throws Exception
+	{
+		Map<String, Long> kc = plugin("{\"schema\":1,\"rsn\":\"Tester\","
+			+ "\"chat_kcs\":{\"Amoxliatl\":7}}").killCounts();
+		assertEquals(Long.valueOf(7), kc.get("Amoxliatl"));
+	}
+
 	@Test
 	public void everyLedgerSourceCountsAtTheMostAnyRecordSaw() throws Exception
 	{
