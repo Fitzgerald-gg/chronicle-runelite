@@ -578,7 +578,7 @@ class ChroniclePanel extends PluginPanel
 		leftBehindSource = null;
 		leftBehindItem = null;
 		detailStack.clear();
-		searchField.setText("");
+		clearSearch();
 		rebuild();
 	}
 
@@ -1089,6 +1089,19 @@ class ChroniclePanel extends PluginPanel
 	private Color accent()
 	{
 		return ACCENT_LIFETIME;
+	}
+
+	/**
+	 * Empty the box as NAVIGATION rather than as typing. Clearing a box that had
+	 * something in it is a document change like any other, and the debounce
+	 * cannot tell the two apart: left armed, it fires a hundred and fifty
+	 * milliseconds later and builds the page again, throwing away the one the
+	 * reader is already looking at and landing them back at its top.
+	 */
+	private void clearSearch()
+	{
+		searchField.setText("");
+		searchDebounce.stop();
 	}
 
 	private String searchQuery()
@@ -2612,7 +2625,7 @@ class ChroniclePanel extends PluginPanel
 		pushDetail();
 		detailItem = name;
 		detailSource = null;
-		searchField.setText("");
+		clearSearch();
 		rebuild();
 	}
 
@@ -2624,7 +2637,7 @@ class ChroniclePanel extends PluginPanel
 		detailSource = null;
 		detailSkill = null;
 		detailTask = -1;
-		searchField.setText("");
+		clearSearch();
 		rebuild();
 	}
 
@@ -2635,7 +2648,7 @@ class ChroniclePanel extends PluginPanel
 		detailItem = null;
 		detailSource = null;
 		detailTask = -1;
-		searchField.setText("");
+		clearSearch();
 		rebuild();
 	}
 
@@ -2644,7 +2657,7 @@ class ChroniclePanel extends PluginPanel
 		pushDetail();
 		detailSource = name;
 		detailItem = null;
-		searchField.setText("");
+		clearSearch();
 		rebuild();
 	}
 
