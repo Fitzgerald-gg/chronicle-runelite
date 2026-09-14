@@ -131,6 +131,11 @@ public class PanelPreviewTest
 		shoot(panel, out, prefix + "-slayer", "SLAYER");
 		shoot(panel, out, prefix + "-slayer", "SLAYER");
 
+		// a skill under the glass, which the grid cell now opens on
+		set(panel, "detailSkill", "Woodcutting");
+		shoot(panel, out, prefix + "-skill-detail", "HISTORY");
+		set(panel, "detailSkill", null);
+
 		// drilled: a source, then an item inside one
 		List<LocalStore.SourceRow> src = stub.dropSources();
 		if (!src.isEmpty())

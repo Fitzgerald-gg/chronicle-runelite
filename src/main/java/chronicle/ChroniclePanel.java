@@ -138,6 +138,9 @@ class ChroniclePanel extends PluginPanel
 	// or source row anywhere opens one; the back-stack unwinds the hops.
 	private String detailItem;
 	private String detailSource;
+	// A skill under the glass, opened from its cell in the grid. Not on the back
+	// stack: the grid is the only place it opens from, so Back is the grid.
+	private String detailSkill;
 	private final java.util.ArrayDeque<String[]> detailStack = new java.util.ArrayDeque<>();
 	private String statsFamily = StatRegistry.FAMILIES[0];
 	private int dropsShown = ROW_CAP;
@@ -409,8 +412,8 @@ class ChroniclePanel extends PluginPanel
 	{
 		String[] subs = SUBS.get(tab);
 		if (subs == null || subs.length == 0 || !searchQuery().isEmpty()
-			|| detailItem != null || detailSource != null || detailTask >= 0
-			|| leftBehindSource != null || leftBehindItem != null)
+			|| detailItem != null || detailSource != null || detailSkill != null
+			|| detailTask >= 0 || leftBehindSource != null || leftBehindItem != null)
 		{
 			return null;
 		}
@@ -585,6 +588,7 @@ class ChroniclePanel extends PluginPanel
 		histListShown.clear();
 		detailItem = null;
 		detailSource = null;
+		detailSkill = null;
 		detailTask = -1;
 		leftBehindSource = null;
 		leftBehindItem = null;
@@ -1022,6 +1026,10 @@ class ChroniclePanel extends PluginPanel
 		else if (detailSource != null)
 		{
 			body = buildSourceDetail(detailSource);
+		}
+		else if (detailSkill != null)
+		{
+			body = buildSkillDetail(detailSkill);
 		}
 		else if (detailTask >= 0)
 		{
@@ -2226,6 +2234,17 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
+	/** One skill under the glass, from its own cell in the grid. */
+	void openSkill(String craft)
+	{
+		detailSkill = craft;
+		detailItem = null;
+		detailSource = null;
+		detailTask = -1;
+		searchField.setText("");
+		rebuild();
+	}
+
 	void openSource(String name)
 	{
 		pushDetail();
@@ -2319,6 +2338,12 @@ class ChroniclePanel extends PluginPanel
 
 	private void backDetail()
 	{
+		if (detailSkill != null)
+		{
+			detailSkill = null;
+			rebuild();
+			return;
+		}
 		String[] prev = detailStack.poll();
 		if (prev == null)
 		{
@@ -5370,8 +5395,13 @@ class ChroniclePanel extends PluginPanel
 		JPanel cell = new JPanel(new BorderLayout(3, 0));
 		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		cell.setBorder(BorderFactory.createEmptyBorder(3, 4, 3, 4));
-		cell.setToolTipText(StatRegistry.prettify(sk.name().toLowerCase(Locale.ROOT))
+		final String craft = StatRegistry.prettify(sk.name().toLowerCase(Locale.ROOT));
+		cell.setToolTipText(craft
 			+ (gained != null ? ", +" + gp(gained) + " this period" : ""));
+		// The cell has always carried a tooltip, which is a mouse listener; this
+		// is what makes the hand cursor honest. Its counters had no other way in.
+		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		cell.addMouseListener(clicker(() -> openSkill(craft)));
 
 		JLabel icon = new JLabel();
 		java.awt.image.BufferedImage img = skillIcon(sk);
@@ -5764,6 +5794,73 @@ class ChroniclePanel extends PluginPanel
 	private JPanel nothingInWindow(String what)
 	{
 		return note("No " + what + " inside " + window().label + ".");
+	}
+
+	/**
+	 * One skill under the glass: where it stands, what the window moved it, and
+	 * then the counters filed under it. The cell this opens from renders a level
+	 * over an xp gain, so xp is the question it asked and xp is answered first.
+	 */
+	private JPanel buildSkillDetail(String craft)
+	{
+		JPanel p = column();
+		p.add(backRow());
+		p.add(vgap(4));
+		consumVals = plugin.consumableValues();
+		String key = craft.toLowerCase(Locale.ROOT);
+
+		JPanel head = card(craft);
+		Span s = span();
+		Long now = s == null ? null : s.closing.skills.get(key);
+		Long was = s == null ? null : s.opening.skills.get(key);
+		if (now != null && now > 0)
+		{
+			head.add(row("Level", String.valueOf(PaceBook.levelAt(now)), accent()));
+			head.add(row("Experience", gp(now), null));
+			if (!wholeRecord() && was != null && now > was)
+			{
+				head.add(row("Gained", "+" + gp(now - was), accent()));
+			}
+		}
+		else
+		{
+			head.add(row("Level", "-", null));
+		}
+		p.add(head);
+		p.add(vgap(6));
+
+		Map<String, Long> counters = countersForPeriod();
+		if (counters == null)
+		{
+			p.add(noPeriod());
+			return p;
+		}
+		List<Map.Entry<String, Long>> rows = new ArrayList<>();
+		for (Map.Entry<String, Long> e : counters.entrySet())
+		{
+			if (e.getValue() == null || e.getValue() <= 0
+				|| !"Skilling".equals(StatRegistry.family(e.getKey()))
+				|| !craft.equalsIgnoreCase(StatRegistry.subgroup(e.getKey())))
+			{
+				continue;
+			}
+			rows.add(e);
+		}
+		if (rows.isEmpty())
+		{
+			// Seven of the twenty three file no counters at all, and a skill that
+			// tracks nothing should say so rather than open on a blank.
+			p.add(note("Nothing is tracked under " + craft
+				+ (wholeRecord() ? "." : " in " + window().label + ".")));
+			return p;
+		}
+		rows.sort(StatRegistry::compareRows);
+		addPaceLine(p, craft);
+		for (Map.Entry<String, Long> e : rows)
+		{
+			p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e), null));
+		}
+		return p;
 	}
 
 	/** What a board says when the window holds too little to be a period. */

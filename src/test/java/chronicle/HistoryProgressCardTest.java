@@ -3235,6 +3235,61 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void aSkillCellOpensOnItsOwnTrackers() throws Exception
+	{
+		// The grid has always carried a tooltip, which is a mouse listener, and a
+		// hand cursor that did nothing. Its counters had no other way in once the
+		// family pills stopped offering Skilling, so the cell has to open.
+		PanelPreviewTest.StubPlugin st = stub(true);
+		st.lifetime.put("logsChopped", 95L);
+		ChroniclePanel p = panel(st);
+		set(p, "histFacet", "Skills");
+		set(p, "histGranularity", "Lifetime");
+		int clickable = 0;
+		for (Container cell : panels(history(p)))
+		{
+			if (cell.getMouseListeners().length > 0 && labels(cell).size() >= 2)
+			{
+				clickable++;
+			}
+		}
+		assertTrue("no cell in the grid opens: " + clickable, clickable >= 20);
+
+		// and what it opens on is that skill's own trackers, under its own head
+		Method open = ChroniclePanel.class.getDeclaredMethod("openSkill", String.class);
+		open.setAccessible(true);
+		edt(() -> open.invoke(p, "Woodcutting"));
+		final JPanel[] drill = new JPanel[1];
+		edt(() ->
+		{
+			Method m = ChroniclePanel.class.getDeclaredMethod("buildSkillDetail", String.class);
+			m.setAccessible(true);
+			drill[0] = (JPanel) m.invoke(p, "Woodcutting");
+		});
+		List<String> said = labels(drill[0]);
+		assertTrue("no way back out: " + said, said.contains("< Back"));
+		assertTrue(said.toString(), said.contains("WOODCUTTING"));
+		assertTrue("the cell asked an xp question: " + said, said.contains("Level"));
+		assertTrue("nothing of woodcutting's own: " + said,
+			said.contains("Logs chopped"));
+	}
+
+	/** Every container under one, for walking a grid of cells. */
+	private static List<Container> panels(Container c)
+	{
+		List<Container> out = new ArrayList<>();
+		for (Component k : c.getComponents())
+		{
+			if (k instanceof Container)
+			{
+				out.add((Container) k);
+				out.addAll(panels((Container) k));
+			}
+		}
+		return out;
+	}
+
+	@Test
 	public void theBossBoardCountsTheWindowAndNotTheLifetime() throws Exception
 	{
 		// The period governs this board too. A boss sheet drawn under "last week"
