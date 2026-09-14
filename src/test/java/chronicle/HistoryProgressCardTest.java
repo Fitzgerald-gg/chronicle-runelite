@@ -2681,6 +2681,37 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void navigatingAwayFromASearchDoesNotRebuildTheNewPageAgain() throws Exception
+	{
+		// Every open* clears the search box and rebuilds. Clearing a box that had
+		// something in it is a document change, and the 150ms debounce cannot tell
+		// navigation from typing: it fires a second full build of the page that
+		// was just built, and lands it back at the top. The trackers page is
+		// reached by typing "Trackers", so it paid this every single time.
+		ChroniclePanel p = panel(stub(true));
+		Field sf = ChroniclePanel.class.getDeclaredField("searchField");
+		sf.setAccessible(true);
+		Field sd = ChroniclePanel.class.getDeclaredField("searchDebounce");
+		sd.setAccessible(true);
+		Method open = ChroniclePanel.class.getDeclaredMethod("openAllTrackers");
+		open.setAccessible(true);
+
+		final boolean[] armed = new boolean[2];
+		edt(() ->
+		{
+			Object box = sf.get(p);
+			box.getClass().getMethod("setText", String.class).invoke(box, "trackers");
+			// typing must still arm it, or the search stops working
+			armed[0] = ((javax.swing.Timer) sd.get(p)).isRunning();
+			open.invoke(p);
+			armed[1] = ((javax.swing.Timer) sd.get(p)).isRunning();
+		});
+		assertTrue("typing no longer arms the search", armed[0]);
+		assertFalse("navigation armed the search debounce, which will rebuild "
+			+ "the page it just opened 150ms later", armed[1]);
+	}
+
+	@Test
 	public void theHomeTickLeavesADrillOpenedFromItAlone() throws Exception
 	{
 		// Home refreshes itself every three seconds. A page opened FROM Home keeps
