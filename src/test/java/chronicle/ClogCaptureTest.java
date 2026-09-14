@@ -349,10 +349,14 @@ public class ClogCaptureTest
 
 	// ── account boundary ───────────────────────────────────────────────────
 
-	// The login screen ends the account: nothing captured for one player may still
-	// be sitting there to go out under the next one's name.
+	// The login screen must NOT clear this. The plugin folds the capture into the
+	// journal from its own logout handler, and both are @Subscribe on
+	// GameStateChanged at the same priority: clearing here meant whichever the
+	// EventBus registered first decided whether a session's collection log
+	// survived, and a player who opened their log and logged out lost the lot --
+	// the Kill Log included, which is the one thing a new install is told to do.
 	@Test
-	public void loginScreenClearsEverything()
+	public void theLoginScreenLeavesTheCaptureForThePluginToBank()
 	{
 		adventureLogOpen(false);
 		stubVorkathPage();
@@ -364,6 +368,28 @@ public class ClogCaptureTest
 		assertTrue(capture.isDirty());
 
 		gameState(GameState.LOGIN_SCREEN);
+
+		assertFalse("the capture was thrown away before it could be banked",
+			clogItems().isEmpty());
+		assertFalse(byCat().isEmpty());
+	}
+
+	// and the boundary itself, which the plugin now draws deliberately once it has
+	// taken what it needs: nothing captured for one player may still be sitting
+	// there to go out under the next one's name.
+	@Test
+	public void resetClearsEverything()
+	{
+		adventureLogOpen(false);
+		stubVorkathPage();
+		logOpened();
+		tickTo(101);
+		transmit(DRACONIC_VISAGE, 1);
+		pageDrawn();
+		tickTo(105);
+		assertTrue(capture.isDirty());
+
+		capture.reset();
 
 		assertTrue(clogItems().isEmpty());
 		assertTrue(byCat().isEmpty());

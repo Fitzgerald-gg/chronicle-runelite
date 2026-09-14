@@ -154,7 +154,12 @@ public class ClogCapture
 		}
 		else if (state == GameState.LOGIN_SCREEN)
 		{
-			reset();
+			// NOT reset here. The plugin folds this capture into the journal on its
+			// own logout handler, and both of us are @Subscribe on GameStateChanged
+			// at the same priority: whichever the EventBus happened to register
+			// first decided whether a session's log survived. It calls reset() once
+			// it has taken what it needs, so the order is stated rather than lucky.
+			dropSceneState();
 		}
 		else if (state == GameState.HOPPING)
 		{
@@ -511,6 +516,14 @@ public class ClogCapture
 	void clearDirty()
 	{
 		dirty = false;
+	}
+
+	/** What cannot outlive a scene, without touching what was captured. */
+	private void dropSceneState()
+	{
+		killLogTicks = -1;
+		clogFlushTick = -1;
+		clogRetrieving = false;
 	}
 
 	void reset()

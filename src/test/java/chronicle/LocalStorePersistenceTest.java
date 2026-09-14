@@ -57,6 +57,36 @@ public class LocalStorePersistenceTest
 		return store;
 	}
 
+	// The logout fold hands over the collection log ALONE: the player has already
+	// left, so there are no skills to harvest and no combat level to read. If
+	// setCharacter refused a call shaped like that, the fold would silently do
+	// nothing and the session's log would still be lost -- which is the bug it
+	// was written to close.
+	@Test
+	public void theCollectionLogCanBeFoldedWithoutTheRestOfTheCharacter()
+	{
+		LocalStore store = mounted();
+		JsonObject skills = new JsonObject();
+		JsonObject slayer = new JsonObject();
+		slayer.addProperty("level", 99);
+		slayer.addProperty("xp", 13_034_431);
+		skills.add("Slayer", slayer);
+		store.setCharacter(RSN, skills, 126, null, null);
+
+		java.util.Map<String, Object> clog = new HashMap<>();
+		java.util.Map<String, Integer> killLog = new HashMap<>();
+		killLog.put("Wintertodt", 447);
+		clog.put("slayer_kcs", killLog);
+		store.setCharacter(RSN, null, 0, clog, null);
+
+		JsonObject got = store.clogSnapshot();
+		assertEquals("the kill log did not land",
+			447, got.getAsJsonObject("slayer_kcs").get("Wintertodt").getAsInt());
+		// and the character it was folded beside is untouched, not blanked by the
+		// nulls the logout fold passes
+		assertEquals(99, store.skillSheet().get("Slayer")[0]);
+	}
+
 	private void kill(LocalStore store, String source, int kc, int itemId, int qty)
 	{
 		JsonObject data = new JsonObject();
