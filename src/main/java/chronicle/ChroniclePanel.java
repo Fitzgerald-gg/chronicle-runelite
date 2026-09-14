@@ -2810,6 +2810,75 @@ class ChroniclePanel extends PluginPanel
 		return b.toString();
 	}
 
+	// how many sources an item's page mounts; lifted while a copy is drawn
+	private int itemSourceCap = 40;
+
+	/**
+	 * An item's whole page as text: what it came to, and every source that gave
+	 * it, fenced and aligned for the same reason a source page is.
+	 */
+	private String itemAsText(String name, long qty, long value, List<Object[]> srcs)
+	{
+		StringBuilder b = new StringBuilder("```\n").append(name).append("\n");
+		List<String[]> head = new ArrayList<>();
+		head.add(new String[]{"Obtained", "x" + fmt(qty)});
+		if (value > 0)
+		{
+			head.add(new String[]{"Worth", gp(value) + " gp"});
+		}
+		b.append(aligned(head));
+		if (!srcs.isEmpty())
+		{
+			b.append("\n").append(srcs.size() == 1 ? "1 source"
+				: fmt(srcs.size()) + " sources").append("\n");
+			List<String[]> from = new ArrayList<>();
+			for (Object[] s : srcs)
+			{
+				from.add(new String[]{(String) s[0] + " x" + fmt((long) s[1]),
+					(long) s[2] > 0 ? gp((long) s[2]) + " gp" : ""});
+			}
+			b.append(aligned(from));
+		}
+		return b.append("```").toString();
+	}
+
+	/** The item's page on the clipboard, as a picture of itself and as its text. */
+	private boolean copyItemPage(String name, long qty, long value, List<Object[]> srcs)
+	{
+		String text = itemAsText(name, qty, value, srcs);
+		java.awt.Image shot = null;
+		int was = itemSourceCap;
+		try
+		{
+			itemSourceCap = Integer.MAX_VALUE;
+			shot = pageImage(stripChrome(buildItemDetail(name)));
+		}
+		catch (Throwable ignored)   // noqa: the text still goes, which is the point
+		{
+			shot = null;
+		}
+		finally
+		{
+			itemSourceCap = was;
+		}
+		return toClipboard(shot, text);
+	}
+
+	/**
+	 * The way back and the copy itself off a built page. They are navigation, and
+	 * navigation has no business in a picture somebody is sharing; they are the
+	 * first two things every drill adds, and its card follows.
+	 */
+	private static JPanel stripChrome(JPanel page)
+	{
+		if (page.getComponentCount() > 2)
+		{
+			page.remove(1);
+			page.remove(0);
+		}
+		return page;
+	}
+
 	/**
 	 * Put a source's page on the clipboard as a picture of itself and as its text.
 	 * The picture is built from a FRESH page with the loot cap lifted, because
@@ -2825,16 +2894,7 @@ class ChroniclePanel extends PluginPanel
 		try
 		{
 			drillShown.put(name, Integer.MAX_VALUE);
-			JPanel page = buildSourceDetail(name);
-			// The way back and the copy itself are navigation, and navigation has no
-			// business in a picture somebody is sharing. They are the first two
-			// things the page adds, and the card follows.
-			if (page.getComponentCount() > 2)
-			{
-				page.remove(1);
-				page.remove(0);
-			}
-			shot = pageImage(page);
+			shot = pageImage(stripChrome(buildSourceDetail(name)));
 		}
 		catch (Throwable ignored)   // noqa: the text still goes, which is the point
 		{
@@ -2906,28 +2966,34 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildItemDetail(String name)
 	{
 		JPanel p = column();
-		p.add(backRow());
-		p.add(vgap(4));
-		long qty = 0;
-		long value = 0;
-		int itemId = 0;
-		List<Object[]> srcs = new ArrayList<>();
+		long got = 0;
+		long worth = 0;
+		int found = 0;
+		final List<Object[]> srcs = new ArrayList<>();
 		for (LocalStore.SourceRow r : plugin.dropSources())
 		{
 			for (LocalStore.BagItem b : plugin.sourceItems(r.name))
 			{
 				if (b.name.equalsIgnoreCase(name))
 				{
-					qty += b.qty;
-					value += b.value;
-					if (itemId == 0 && b.itemId > 0)
+					got += b.qty;
+					worth += b.value;
+					if (found == 0 && b.itemId > 0)
 					{
-						itemId = b.itemId;
+						found = b.itemId;
 					}
 					srcs.add(new Object[]{r.name, b.qty, b.value});
 				}
 			}
 		}
+		srcs.sort((a, b) -> Long.compare((long) b[1], (long) a[1]));
+		final long qty = got;
+		final long value = worth;
+		final int itemId = found;
+		// read before the row is built: the copy hands back every source, not the
+		// forty the page mounts
+		p.add(backRow(() -> copyItemPage(name, qty, value, srcs)));
+		p.add(vgap(4));
 		JPanel head = card(name);
 		if (itemId > 0)
 		{
@@ -2952,13 +3018,12 @@ class ChroniclePanel extends PluginPanel
 			return p;
 		}
 		p.add(group("From"));
-		srcs.sort((a, b) -> Long.compare((long) b[1], (long) a[1]));
 		int mounted = 0;
 		for (Object[] s : srcs)
 		{
-			if (mounted++ >= 40)
+			if (mounted++ >= itemSourceCap)
 			{
-				p.add(ghostRow("+ " + (srcs.size() - 40) + " more sources", ""));
+				p.add(ghostRow("+ " + (srcs.size() - itemSourceCap) + " more sources", ""));
 				break;
 			}
 			JPanel r = row((String) s[0], "×" + fmt((long) s[1])

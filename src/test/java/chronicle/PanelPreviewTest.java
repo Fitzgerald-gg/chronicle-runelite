@@ -188,6 +188,28 @@ public class PanelPreviewTest
 						new File(out, prefix + "-copy-image.png"));
 				}
 				shown.remove(top);
+
+				// and the item page's own picture
+				List<LocalStore.BagItem> topBag = stub.sourceItems(top);
+				if (!topBag.isEmpty())
+				{
+					Method bi = ChroniclePanel.class.getDeclaredMethod("buildItemDetail",
+						String.class);
+					bi.setAccessible(true);
+					javax.swing.JPanel ip = (javax.swing.JPanel) bi.invoke(panel,
+						topBag.get(0).name);
+					if (ip.getComponentCount() > 2)
+					{
+						ip.remove(1);
+						ip.remove(0);
+					}
+					Object iimg = pi.invoke(null, ip);
+					if (iimg != null)
+					{
+						ImageIO.write((BufferedImage) iimg, "png",
+							new File(out, prefix + "-copy-item-image.png"));
+					}
+				}
 			});
 		}
 
