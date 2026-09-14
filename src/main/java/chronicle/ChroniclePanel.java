@@ -616,6 +616,8 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	private static List<Boss> bossRoster;
+	// the window's kill movement, computed once per build rather than per cell
+	private Map<String, Long> movedKcs;
 	// which cell has its card open, if any
 	private String bossOpen;
 
@@ -772,9 +774,32 @@ class ChroniclePanel extends PluginPanel
 		{
 			return -1;
 		}
-		long was = kcOf(s.opening.kcs, name);
-		long now = kcOf(s.closing.kcs, name);
-		return Math.max(0, now - was);
+		if (movedKcs == null)
+		{
+			// HistoryLog.gained, NOT a hand-rolled closing minus opening. A kill
+			// count absent from the opening line was never recorded rather than
+			// zero, so subtracting reads its whole standing figure as this
+			// period's kills: the week a species first reached the journal, every
+			// one of them arrived at once. gained() keeps the earliest recorded
+			// base and DROPS a key that has no base at all, which is the honest
+			// answer -- the record cannot say what it does not hold.
+			movedKcs = HistoryLog.gained(s.opening.kcs, s.earliest.kcs, s.closing.kcs);
+		}
+		Long moved = movedKcs.get(name);
+		if (moved == null)
+		{
+			for (Map.Entry<String, Long> e : movedKcs.entrySet())
+			{
+				if (e.getKey().equalsIgnoreCase(name))
+				{
+					moved = e.getValue();
+					break;
+				}
+			}
+		}
+		// minus one, not zero: a dash says the record cannot answer, and drawing
+		// a nought would claim it counted none
+		return moved == null ? -1 : Math.max(0, moved);
 	}
 
 	/**
@@ -1058,6 +1083,7 @@ class ChroniclePanel extends PluginPanel
 		// The period governs every board except the sitting, which is now and can
 		// be nothing else. Drawn above the tabs, so it is plainly over all of them
 		// rather than looking like one tab's control.
+		movedKcs = null;
 		periodHolder.removeAll();
 		if (view != View.HOME)
 		{
