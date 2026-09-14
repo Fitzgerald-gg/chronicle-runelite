@@ -3605,7 +3605,7 @@ public class HistoryProgressCardTest
 		set(p, "bossOpen", "Wintertodt");
 		List<String> todt = labels(kills(p));
 		assertFalse("the cart's loot is in the journal: " + todt,
-			todt.contains("No loot from here has reached the journal yet."));
+			String.join(" ", todt).contains("No loot from here has reached"));
 		assertTrue("the container is not named as what it is: " + todt,
 			todt.contains("Reward cart"));
 		assertTrue(todt.toString(), todt.contains("Kills tracked"));
@@ -3616,6 +3616,33 @@ public class HistoryProgressCardTest
 		List<String> temp = labels(kills(p));
 		assertTrue(temp.toString(), temp.contains("Reward pool"));
 		assertTrue(temp.toString(), temp.contains("Casket"));
+	}
+
+	@Test
+	public void aFightWhoseTakingsAreFiledUnderAnotherNameShowsThem() throws Exception
+	{
+		// The Gauntlet's payout is filed against the fight that hands it over,
+		// not against the Gauntlet. The creatures inside it are NOT the fight's
+		// loot: a crystalline bear's shards are the bear's.
+		PanelPreviewTest.StubPlugin st = stub(true);
+		st.sources = Arrays.asList(
+			new LocalStore.SourceRow("Corrupted Hunllef", 3, 3, 95_036L, null, 0, 0),
+			new LocalStore.SourceRow("Corrupted Rat", 18, 18, 0L, null, 0, 0));
+
+		ChroniclePanel p = panel(st);
+		set(p, "bossOpen", "The Corrupted Gauntlet");
+		List<String> card = labels(kills(p));
+		assertFalse("95k of it is in the ledger: " + card,
+			String.join(" ", card).contains("No loot from here has reached"));
+		assertTrue("the payout is not shown: " + card, card.contains("Corrupted Hunllef"));
+		assertFalse("a filler creature was counted as the fight's loot: " + card,
+			card.contains("Corrupted Rat"));
+
+		// and a fight whose payout has genuinely never been looted still says so
+		set(p, "bossOpen", "The Gauntlet");
+		// the note wraps, so it arrives as more than one label
+		assertTrue(labels(kills(p)).toString(),
+			String.join(" ", labels(kills(p))).contains("No loot from here has reached"));
 	}
 
 	@Test
