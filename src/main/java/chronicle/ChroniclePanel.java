@@ -1117,7 +1117,23 @@ class ChroniclePanel extends PluginPanel
 	/** Rebuild the panel from plugin state. Safe to call from any thread. */
 	void update()
 	{
-		SwingUtilities.invokeLater(this::rebuild);
+		SwingUtilities.invokeLater(() ->
+		{
+			// The record changing under a reader who did not ask to go anywhere: a
+			// push landing, the status line moving, the history read arriving. Only
+			// navigation starts at the top; returning a reader to the first line of
+			// a page they were in the middle of, every push interval, is the record
+			// interrupting them.
+			keepScroll = true;
+			try
+			{
+				rebuild();
+			}
+			finally
+			{
+				keepScroll = false;
+			}
+		});
 	}
 
 	// Set only for the home ticker's own rebuild. Every other rebuild is a move to

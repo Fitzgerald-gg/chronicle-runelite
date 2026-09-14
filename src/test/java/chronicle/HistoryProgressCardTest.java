@@ -2777,6 +2777,41 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void aRefreshFromThePluginLeavesTheReaderWhereTheyWere() throws Exception
+	{
+		// update() is the record changing under a reader who did not ask to go
+		// anywhere: a push landing, the status line moving, the history read
+		// arriving. It threw the whole scroll pane away and hung a fresh one,
+		// which starts at the top, so on a long page the reader was returned to
+		// the first line every push interval.
+		ChroniclePanel p = panel(stub(true));
+		Field d = ChroniclePanel.class.getDeclaredField("display");
+		d.setAccessible(true);
+		javax.swing.JPanel display = (javax.swing.JPanel) d.get(p);
+		p.setSize(240, 200);
+		p.doLayout();
+		display.setSize(240, 200);
+		display.validate();
+		javax.swing.JScrollBar bar =
+			((javax.swing.JScrollPane) display.getComponent(0)).getVerticalScrollBar();
+		int room = bar.getMaximum() - bar.getVisibleAmount();
+		assertTrue("the view must be longer than the panel, room " + room, room > 20);
+		bar.setValue(Math.min(120, room));
+		assertTrue("the reader must be able to scroll at all", bar.getValue() > 0);
+
+		p.update();
+		edt(() ->
+		{
+		});   // let the queued rebuild run
+		display.setSize(240, 200);
+		display.validate();
+		javax.swing.JScrollBar moved =
+			((javax.swing.JScrollPane) display.getComponent(0)).getVerticalScrollBar();
+		assertTrue("a refresh from the plugin threw the reader back to the top",
+			moved.getValue() > 0);
+	}
+
+	@Test
 	public void openingAFoldLeavesTheReaderWhereTheyWere() throws Exception
 	{
 		// every fold click used to hang a fresh scroll pane, which starts at the
