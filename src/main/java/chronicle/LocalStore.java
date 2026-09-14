@@ -2148,6 +2148,41 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			out.add("kc_lines", kcLines);
 		}
+		// Best times, merged the other way about. Every other figure here only
+		// grows, so they are floored; a personal best IMPROVES DOWNWARD, and
+		// flooring it would pin the worst time ever recorded and never let go.
+		JsonObject pbLines = new JsonObject();
+		for (JsonObject src : new JsonObject[]{base, inc})
+		{
+			if (!src.has("pb_lines") || !src.get("pb_lines").isJsonObject())
+			{
+				continue;
+			}
+			for (java.util.Map.Entry<String, JsonElement> pg
+				: src.getAsJsonObject("pb_lines").entrySet())
+			{
+				if (!pg.getValue().isJsonObject())
+				{
+					continue;
+				}
+				JsonObject tgt = pbLines.has(pg.getKey())
+					? pbLines.getAsJsonObject(pg.getKey()) : new JsonObject();
+				for (java.util.Map.Entry<String, JsonElement> ln
+					: pg.getValue().getAsJsonObject().entrySet())
+				{
+					long n = asLong(ln.getValue());
+					if (n > 0 && (!tgt.has(ln.getKey()) || n < asLong(tgt.get(ln.getKey()))))
+					{
+						tgt.addProperty(ln.getKey(), n);
+					}
+				}
+				pbLines.add(pg.getKey(), tgt);
+			}
+		}
+		if (pbLines.size() > 0)
+		{
+			out.add("pb_lines", pbLines);
+		}
 		for (String mapKey : new String[]{"kcs", "clog_items", "cat_counts", "slayer_kcs"})
 		{
 			JsonObject merged = new JsonObject();

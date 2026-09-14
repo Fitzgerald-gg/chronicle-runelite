@@ -933,6 +933,83 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
+	/** One source's takings, openable. */
+	private JPanel dropsRow(String label, LocalStore.SourceRow r)
+	{
+		long qty = 0;
+		for (LocalStore.BagItem it : plugin.sourceItems(r.name))
+		{
+			qty += it.qty;
+		}
+		JPanel row = row(label, fmt(qty) + " \u00b7 " + gp(r.value) + " gp", null);
+		row.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		final String open = r.name;
+		row.addMouseListener(clicker(() -> openSource(open)));
+		return row;
+	}
+
+	/** "Reward cart (Wintertodt)" is Wintertodt's, and is not a boss of its own. */
+	private static boolean namesInBrackets(String source, String boss)
+	{
+		int open = source.lastIndexOf('(');
+		int close = source.lastIndexOf(')');
+		return open > 0 && close > open
+			&& LocalStore.kindOf(source.substring(open + 1, close))
+				.equals(LocalStore.kindOf(boss));
+	}
+
+	private static String beforeBracket(String source)
+	{
+		int open = source.lastIndexOf('(');
+		return open > 0 ? source.substring(0, open).trim() : source;
+	}
+
+	/** m:ss, or h:mm:ss past the hour. */
+	private static String clock(long seconds)
+	{
+		long h = seconds / 3600;
+		long m = (seconds % 3600) / 60;
+		long s = seconds % 60;
+		return h > 0 ? String.format(Locale.UK, "%d:%02d:%02d", h, m, s)
+			: String.format(Locale.UK, "%d:%02d", m, s);
+	}
+
+	/** The page's best times that are this fight's, in seconds. */
+	private List<Map.Entry<String, Long>> bestTimes(String boss)
+	{
+		List<Map.Entry<String, Long>> out = new ArrayList<>();
+		JsonObject cl = plugin.clogSnapshot();
+		if (cl == null || !cl.has("pb_lines") || !cl.get("pb_lines").isJsonObject())
+		{
+			return out;
+		}
+		String page = LOG_PAGE_FOR.containsKey(boss) ? LOG_PAGE_FOR.get(boss) : boss;
+		com.google.gson.JsonElement found = null;
+		for (Map.Entry<String, com.google.gson.JsonElement> e
+			: cl.getAsJsonObject("pb_lines").entrySet())
+		{
+			if (e.getKey().equalsIgnoreCase(page))
+			{
+				found = e.getValue();
+				break;
+			}
+		}
+		if (found == null || !found.isJsonObject())
+		{
+			return out;
+		}
+		for (Map.Entry<String, com.google.gson.JsonElement> ln
+			: found.getAsJsonObject().entrySet())
+		{
+			long secs = safeLong(ln.getValue());
+			if (secs > 0 && lineBelongsTo(boss, ln.getKey()))
+			{
+				out.add(new java.util.AbstractMap.SimpleEntry<>(ln.getKey(), secs));
+			}
+		}
+		return out;
+	}
+
 	/**
 	 * Whether a page's line is this boss's business.
 	 *
@@ -971,8 +1048,59 @@ class ChroniclePanel extends PluginPanel
 				best = name;
 			}
 		}
-		// a line naming no fight at all stays on the page that carried it
-		return best == null || best.equals(mine);
+		if (best != null)
+		{
+			return best.equals(mine);
+		}
+		// A line naming no fight at all belongs to whoever the page is: "Personal
+		// Best" on the Gauntlet's page is the Gauntlet's. A fight read off
+		// somebody else's page has to be named to claim one, and a qualifier that
+		// names it is enough -- "Personal Best Corrupted" never says Gauntlet.
+		String page = LOG_PAGE_FOR.containsKey(boss) ? LOG_PAGE_FOR.get(boss) : boss;
+		if (!page.equalsIgnoreCase(boss))
+		{
+			return namesOneOf(said, words(mine, bare(page)));
+		}
+		for (Boss other : bossRoster(plugin.gson()))
+		{
+			String onPage = LOG_PAGE_FOR.containsKey(other.name)
+				? LOG_PAGE_FOR.get(other.name) : other.name;
+			if (other.name.equalsIgnoreCase(boss) || !onPage.equalsIgnoreCase(page))
+			{
+				continue;
+			}
+			if (namesOneOf(said, words(bare(other.name), mine)))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** The words of a name that the other name does not also carry. */
+	private static List<String> words(String name, String against)
+	{
+		List<String> out = new ArrayList<>();
+		for (String w : name.split("\\s+"))
+		{
+			if (w.length() > 3 && !against.contains(w))
+			{
+				out.add(w);
+			}
+		}
+		return out;
+	}
+
+	private static boolean namesOneOf(String said, List<String> words)
+	{
+		for (String w : words)
+		{
+			if (said.contains(w))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** A roster name as a line would write it: no leading "the". */
@@ -1122,45 +1250,55 @@ class ChroniclePanel extends PluginPanel
 
 		String kind = LocalStore.kindOf(b.name);
 		LocalStore.SourceRow src = null;
+		// What the fight is paid out through as well as the fight itself. A
+		// skilling boss hands its loot over in a container -- "Reward cart
+		// (Wintertodt)", "Reward pool (Tempoross)", the casket beside it -- and
+		// looking only for a source of the boss's own name found none of it, so
+		// four and a half million gp sat in the journal under a card saying no
+		// loot had reached it.
+		List<LocalStore.SourceRow> paidOut = new ArrayList<>();
 		for (LocalStore.SourceRow r : plugin.dropSources())
 		{
 			if (LocalStore.kindOf(r.name).equals(kind))
 			{
-				src = r;
-				break;
+				if (src == null)
+				{
+					src = r;
+				}
+				continue;
 			}
-		}
-		List<Map.Entry<String, Long>> lines = logLines(b.name);
-		if (src == null)
-		{
-			// No loot has reached the journal, but the log still counted the
-			// fight, and a dash where a number is known reads as not tracked.
-			long known = bossKills(b.name);
-			card.add(row("Kills tracked", known > 0 ? fmt(known) : "-",
-				known > 0 ? accent() : null));
-			for (Map.Entry<String, Long> ln : lines)
+			if (namesInBrackets(r.name, b.name))
 			{
-				card.add(row(ln.getKey(), fmt(ln.getValue()), null));
+				paidOut.add(r);
 			}
-			card.add(note("No loot from here has reached the journal yet."));
-			return card;
 		}
-		card.add(row("Kills tracked", fmt(src.loots), accent()));
+		long known = bossKills(b.name);
+		card.add(row("Kills tracked",
+			known > 0 ? fmt(known) : src != null ? fmt(src.loots) : "-",
+			known > 0 || src != null ? accent() : null));
+		// the best time, which is a time
+		for (Map.Entry<String, Long> pb : bestTimes(b.name))
+		{
+			card.add(row(pb.getKey(), clock(pb.getValue()), null));
+		}
 		// what the page itself counts, which need not be kills at all
-		for (Map.Entry<String, Long> ln : lines)
+		for (Map.Entry<String, Long> ln : logLines(b.name))
 		{
 			card.add(row(ln.getKey(), fmt(ln.getValue()), null));
 		}
-		long qty = 0;
-		for (LocalStore.BagItem it : plugin.sourceItems(src.name))
+		if (src != null)
 		{
-			qty += it.qty;
+			card.add(dropsRow("Drops", src));
 		}
-		JPanel drops = row("Drops", fmt(qty) + " · " + gp(src.value) + " gp", null);
-		drops.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-		final String open = src.name;
-		drops.addMouseListener(clicker(() -> openSource(open)));
-		card.add(drops);
+		for (LocalStore.SourceRow r : paidOut)
+		{
+			// named as the game pays it out, not as a second boss
+			card.add(dropsRow(beforeBracket(r.name), r));
+		}
+		if (src == null && paidOut.isEmpty())
+		{
+			card.add(note("No loot from here has reached the journal yet."));
+		}
 		return card;
 	}
 

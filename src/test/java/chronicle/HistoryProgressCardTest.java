@@ -3550,6 +3550,80 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void aFightPaidOutInAContainerStillShowsItsLoot() throws Exception
+	{
+		// Wintertodt hands its loot over in a cart and Tempoross in a pool, under
+		// a source of that name rather than the boss's. Looking only for a source
+		// spelled like the boss found none of it, so four and a half million gp
+		// sat in the journal under a card saying no loot had reached it.
+		PanelPreviewTest.StubPlugin st = stub(true);
+		st.sources = Arrays.asList(
+			new LocalStore.SourceRow("Reward cart (Wintertodt)", 97, 97, 4_550_382L, null, 0, 0),
+			new LocalStore.SourceRow("Reward pool (Tempoross)", 114, 114, 2_269_132L, null, 0, 0),
+			new LocalStore.SourceRow("Casket (Tempoross)", 25, 25, 230_772L, null, 0, 0));
+		com.google.gson.JsonObject cl = st.clog != null ? st.clog
+			: new com.google.gson.JsonObject();
+		com.google.gson.JsonObject log = new com.google.gson.JsonObject();
+		log.addProperty("Wintertodt", 447);
+		log.addProperty("Tempoross", 455);
+		cl.add("slayer_kcs", log);
+		st.clog = cl;
+
+		ChroniclePanel p = panel(st);
+		set(p, "bossOpen", "Wintertodt");
+		List<String> todt = labels(kills(p));
+		assertFalse("the cart's loot is in the journal: " + todt,
+			todt.contains("No loot from here has reached the journal yet."));
+		assertTrue("the container is not named as what it is: " + todt,
+			todt.contains("Reward cart"));
+		assertTrue(todt.toString(), todt.contains("Kills tracked"));
+		assertTrue("the kills are not the boss's own: " + todt, todt.contains("447"));
+
+		// and a fight paid out through two of them shows both
+		set(p, "bossOpen", "Tempoross");
+		List<String> temp = labels(kills(p));
+		assertTrue(temp.toString(), temp.contains("Reward pool"));
+		assertTrue(temp.toString(), temp.contains("Casket"));
+	}
+
+	@Test
+	public void aBestTimeIsShownAsATime() throws Exception
+	{
+		// "Personal Best: 3:46" was read by a count expression as 46 kills. It is
+		// a time, and it is worth showing as one.
+		PanelPreviewTest.StubPlugin st = stub(true);
+		com.google.gson.JsonObject cl = st.clog != null ? st.clog
+			: new com.google.gson.JsonObject();
+		com.google.gson.JsonObject pages = new com.google.gson.JsonObject();
+		com.google.gson.JsonObject temp = new com.google.gson.JsonObject();
+		temp.addProperty("Personal Best", 226);          // 3:46
+		pages.add("Tempoross", temp);
+		com.google.gson.JsonObject gaunt = new com.google.gson.JsonObject();
+		gaunt.addProperty("Personal Best", 535);         // 8:55
+		gaunt.addProperty("Personal Best Corrupted", 791);   // 13:11
+		pages.add("The Gauntlet", gaunt);
+		cl.add("pb_lines", pages);
+		st.clog = cl;
+
+		ChroniclePanel p = panel(st);
+		set(p, "bossOpen", "Tempoross");
+		assertTrue(labels(kills(p)).toString(), labels(kills(p)).contains("3:46"));
+
+		// a page counting two fights gives each its own, and neither the other's
+		set(p, "bossOpen", "The Gauntlet");
+		List<String> plain = labels(kills(p));
+		assertTrue(plain.toString(), plain.contains("8:55"));
+		assertFalse("the corrupted best is on the plain Gauntlet: " + plain,
+			plain.contains("13:11"));
+
+		set(p, "bossOpen", "The Corrupted Gauntlet");
+		List<String> corrupt = labels(kills(p));
+		assertTrue(corrupt.toString(), corrupt.contains("13:11"));
+		assertFalse("it took the plain Gauntlet's best: " + corrupt,
+			corrupt.contains("8:55"));
+	}
+
+	@Test
 	public void theBossCardNamesTheCountersTheLogPageCarries() throws Exception
 	{
 		// The page's own counters are not all kill counts, and a number without
