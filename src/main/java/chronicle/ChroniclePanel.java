@@ -88,7 +88,7 @@ class ChroniclePanel extends PluginPanel
 
 	private enum View
 	{
-		HOME, DROPS, SLAYER, LOG, STATS, HISTORY, JOURNAL, MANAGE, KILLS
+		HOME, DROPS, SLAYER, LOG, STATS, HISTORY, JOURNAL, KILLS
 	}
 
 	/**
@@ -150,7 +150,6 @@ class ChroniclePanel extends PluginPanel
 	// kept for the preview harness, which reaches it by name
 	private boolean histBosses;
 
-	private JLabel manage;
 
 	// Whether the journal is reaching disk. Nothing else in the panel shows it:
 	// the views are served from memory and look the same either way.
@@ -337,33 +336,6 @@ class ChroniclePanel extends PluginPanel
 		});
 		homeTicker.start();
 
-		manage = new JLabel("manage");
-		manage.setFont(FontManager.getRunescapeSmallFont());
-		manage.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
-		manage.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-		manage.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
-		manage.setToolTipText("Import, and where your journal lives");
-		manage.addMouseListener(new java.awt.event.MouseAdapter()
-		{
-			@Override
-			public void mouseClicked(java.awt.event.MouseEvent e)
-			{
-				view = view == View.MANAGE ? View.JOURNAL : View.MANAGE;
-				rebuild();
-			}
-
-			@Override
-			public void mouseEntered(java.awt.event.MouseEvent e)
-			{
-				manage.setForeground(accent());
-			}
-
-			@Override
-			public void mouseExited(java.awt.event.MouseEvent e)
-			{
-				manage.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
-			}
-		});
 		JPanel manageRow = new JPanel();
 		manageRow.setLayout(new BoxLayout(manageRow, BoxLayout.X_AXIS));
 		manageRow.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -371,7 +343,9 @@ class ChroniclePanel extends PluginPanel
 		// panel right.
 		manageRow.setAlignmentX(Component.CENTER_ALIGNMENT);
 		manageRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 16));
-		manageRow.add(manage);
+		// Import and the manual push moved into the plugin settings; what is left
+		// of this row is the heartbeat, which is the one thing here that reports
+		// rather than acts.
 		manageRow.add(javax.swing.Box.createHorizontalGlue());
 		manageRow.add(heartbeat);
 		north.add(manageRow);
@@ -509,7 +483,6 @@ class ChroniclePanel extends PluginPanel
 			case HISTORY:
 				return Tab.SKILLING;
 			case JOURNAL:
-			case MANAGE:
 			case STATS:
 			case HOME:
 			default:
@@ -530,7 +503,6 @@ class ChroniclePanel extends PluginPanel
 			case STATS:
 				return "Ledger";
 			case JOURNAL:
-			case MANAGE:
 				return "Journal";
 			case HISTORY:
 				return "Skills";
@@ -1167,11 +1139,6 @@ class ChroniclePanel extends PluginPanel
 		heartbeat.setIconTextGap(4);
 		heartbeat.setForeground(pulse);
 		heartbeat.setFont(FontManager.getRunescapeSmallFont());
-		if (manage != null)
-		{
-			// Selecting the first tab rebuilds before the header is built.
-			manage.setVisible(view == View.JOURNAL || view == View.MANAGE);
-		}
 		display.removeAll();
 		// The period governs every board except the sitting, which is now and can
 		// be nothing else. Drawn above the tabs, so it is plainly over all of them
@@ -1240,9 +1207,6 @@ class ChroniclePanel extends PluginPanel
 					break;
 				case JOURNAL:
 					body = buildJournal();
-					break;
-				case MANAGE:
-					body = buildManage();
 					break;
 				case HOME:
 				default:
@@ -6904,63 +6868,10 @@ class ChroniclePanel extends PluginPanel
 		return null;
 	}
 
-	// Everything administrative, kept off the reading surface.
-	private JPanel buildManage()
-	{
-		JPanel p = column();
-		JButton importBtn = new JButton("Import a journal…");
-		importBtn.addActionListener(ev -> onImportClicked());
-		importBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
-		importBtn.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
-		p.add(importBtn);
-		p.add(vgap(4));
-		p.add(note("your journal is plain JSON in .runelite/chronicle/. An import "
-			+ "merges another copy of THIS account's record in (a backup, another "
-			+ "computer, a record kept for you elsewhere). Everything floors, so "
-			+ "importing twice changes nothing."));
-		p.add(vgap(8));
-		if (plugin.cloudActive())
-		{
-			p.add(buildCloudSection());
-		}
-		else
-		{
-			p.add(note("Journaling locally: nothing leaves this computer. "
-				+ "Cloud sync lives under Advanced in the plugin settings."));
-		}
-		return p;
-	}
 
-	// Cloud sync is an upward mirror: status and a push button is all there is.
-	private JPanel buildCloudSection()
-	{
-		JPanel s = column();
-		JLabel t = new JLabel("Cloud sync");
-		t.setFont(FontManager.getRunescapeBoldFont());
-		t.setForeground(accent());
-		t.setAlignmentX(Component.LEFT_ALIGNMENT);
-		s.add(t);
-		s.add(vgap(4));
-		String rsn = plugin.syncedRsn();
-		if (rsn != null && !rsn.isEmpty())
-		{
-			s.add(row("Mirroring " + rsn + " upward", "", null));
-		}
-		s.add(row(plugin.statusLine(), "", null));
-		s.add(vgap(4));
-		s.add(note("The journal on this computer is the record; the server only "
-			+ "receives a copy. Nothing here depends on it."));
-		s.add(vgap(6));
-		JButton push = new JButton("Push stats now");
-		push.addActionListener(e -> plugin.actionPushNow());
-		push.setAlignmentX(Component.LEFT_ALIGNMENT);
-		push.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
-		s.add(push);
-		return s;
-	}
 
-	// Ask for a journal file and hand it to the plugin.
-	private void onImportClicked()
+	/** Ask for a journal file and hand it to the plugin. Reached from settings. */
+	void promptImport()
 	{
 		javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
 		fc.setDialogTitle("Import a Chronicle journal");

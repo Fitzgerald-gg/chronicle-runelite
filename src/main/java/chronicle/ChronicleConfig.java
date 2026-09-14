@@ -105,4 +105,38 @@ public interface ChronicleConfig extends Config
 
 	// import and the journal folder live in the panel's "manage" view; a RuneLite
 	// config item can't be a button.
+
+	// RuneLite's config has no button type, so an action is a tick that runs and
+	// clears itself. These two used to be a "manage" link under the Journal,
+	// which put a settings screen inside a reading panel.
+
+	@ConfigItem(
+		keyName = "importJournal",
+		name = "Import a journal",
+		description = "Tick to choose a journal file to merge into THIS account's "
+			+ "record: a backup, another computer, a copy kept for you elsewhere. "
+			+ "Your journal is plain JSON in .runelite/chronicle/. Everything "
+			+ "floors, so importing twice changes nothing. The tick clears itself "
+			+ "when the file chooser opens.",
+		position = 40,
+		section = advancedSection
+	)
+	default boolean importJournal()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "pushNow",
+		name = "Push stats now",
+		description = "Tick to send the journal upward immediately rather than "
+			+ "waiting for the next flush. Does nothing unless cloud sync is on "
+			+ "above. The tick clears itself.",
+		position = 41,
+		section = advancedSection
+	)
+	default boolean pushNow()
+	{
+		return false;
+	}
 }

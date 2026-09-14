@@ -184,7 +184,6 @@ public class PanelPreviewTest
 			shoot(panel, out, prefix + "-leftbehind-item", "DROPS");
 			set(panel, "leftBehindItem", null);
 		}
-		shoot(panel, out, prefix + "-manage", "MANAGE");
 		set(panel, "journalLens", "Slayer");
 		shoot(panel, out, prefix + "-journal-slayer", "JOURNAL");
 		set(panel, "journalLens", "All");

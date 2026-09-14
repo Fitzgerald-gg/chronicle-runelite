@@ -417,6 +417,25 @@ public class ChroniclePlugin extends Plugin
 			return;
 		}
 		String key = e.getKey();
+		// An action, not a setting: RuneLite's config has no button, so the tick
+		// runs the thing and clears itself. Cleared FIRST, so a failure leaves the
+		// box unticked rather than armed to fire again on the next change.
+		if ("importJournal".equals(key) && "true".equals(e.getNewValue()))
+		{
+			configManager.setConfiguration(GROUP, "importJournal", false);
+			final ChroniclePanel asking = panel;
+			if (asking != null)
+			{
+				javax.swing.SwingUtilities.invokeLater(asking::promptImport);
+			}
+			return;
+		}
+		if ("pushNow".equals(key) && "true".equals(e.getNewValue()))
+		{
+			configManager.setConfiguration(GROUP, "pushNow", false);
+			actionPushNow();
+			return;
+		}
 		if ("pushIntervalMinutes".equals(key) || "cloudSync".equals(key)
 			|| "serverBaseUrl".equals(key) || "manualToken".equals(key))
 		{
