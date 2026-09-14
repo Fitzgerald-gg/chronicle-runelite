@@ -3476,6 +3476,56 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				// a non-numeric entry is not a kill count
 			}
 		}
+		// And where the page's own lines were captured, the LABELLED one wins. kcs
+		// holds whichever number came first on the page, which is not always the
+		// kills: Wintertodt's first line counts rewards claimed. Worse, a reading
+		// taken before those labels were captured could be half of a best time,
+		// and kcs is floor-merged, so the Gauntlet's 55 would outlive the 31 that
+		// corrects it. A named line is not a guess and replaces it outright.
+		for (java.util.Map.Entry<String, Long> e : pageKillLines(clog).entrySet())
+		{
+			out.put(e.getKey(), e.getValue());
+		}
+		return out;
+	}
+
+	/**
+	 * Each page's own kill count, by the name the page gives it: the first line
+	 * whose label says kills or completions. A page carrying only rewards claimed
+	 * or a best time has none, which is the honest answer for it.
+	 */
+	static java.util.Map<String, Long> pageKillLines(JsonObject clog)
+	{
+		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		if (clog == null || !clog.has("kc_lines") || !clog.get("kc_lines").isJsonObject())
+		{
+			return out;
+		}
+		for (java.util.Map.Entry<String, JsonElement> pg
+			: clog.getAsJsonObject("kc_lines").entrySet())
+		{
+			if (!pg.getValue().isJsonObject())
+			{
+				continue;
+			}
+			for (java.util.Map.Entry<String, JsonElement> ln
+				: pg.getValue().getAsJsonObject().entrySet())
+			{
+				String label = ln.getKey().toLowerCase(java.util.Locale.ROOT);
+				if (!label.contains("kill") && !label.contains("completion"))
+				{
+					continue;
+				}
+				long v = asLong(ln.getValue());
+				if (v > 0)
+				{
+					// the first such line on the page: the Gauntlet's own count
+					// comes before the corrupted one, which is its own page
+					out.put(pg.getKey(), v);
+					break;
+				}
+			}
+		}
 		return out;
 	}
 
