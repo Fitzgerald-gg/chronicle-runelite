@@ -2613,13 +2613,110 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel backRow()
 	{
-		JPanel r = row("< Back", "", null);
-		JLabel l = (JLabel) ((BorderLayout) r.getLayout()).getLayoutComponent(BorderLayout.CENTER);
+		return backRow(null);
+	}
+
+	/**
+	 * The way back, and where a page can be carried off, the way to take it. The
+	 * copy rides the right of the same row so it costs no height, and it hands
+	 * back plain text rather than anything this panel's own shape: the point is to
+	 * paste it somewhere that has never heard of Chronicle.
+	 *
+	 * <p>Swing dispatches a click to the deepest component that is listening, so
+	 * the label's own listener takes the copy and the row's takes everything else.
+	 */
+	private JPanel backRow(java.util.function.Supplier<String> copy)
+	{
+		JPanel r = row("< Back", copy == null ? "" : "copy", null);
+		BorderLayout layout = (BorderLayout) r.getLayout();
+		JLabel l = (JLabel) layout.getLayoutComponent(BorderLayout.CENTER);
 		l.setFont(FontManager.getRunescapeSmallFont());
 		l.setForeground(accent());
 		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 		r.addMouseListener(clicker(this::backDetail));
+		JLabel take = copy == null ? null
+			: (JLabel) layout.getLayoutComponent(BorderLayout.EAST);
+		if (take != null)
+		{
+			take.setFont(FontManager.getRunescapeSmallFont());
+			take.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+			take.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			take.setToolTipText("Copy this page as text");
+			take.addMouseListener(clicker(() ->
+			{
+				boolean ok = toClipboard(copy.get());
+				take.setText(ok ? "copied" : "cannot copy");
+				take.setForeground(ok ? accent() : ColorScheme.PROGRESS_ERROR_COLOR);
+			}));
+		}
 		return r;
+	}
+
+	/** False where there is no desktop clipboard to reach, rather than throwing. */
+	private static boolean toClipboard(String text)
+	{
+		if (text == null || text.isEmpty())
+		{
+			return false;
+		}
+		try
+		{
+			java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+				.setContents(new java.awt.datatransfer.StringSelection(text), null);
+			return true;
+		}
+		catch (Throwable ignored)   // noqa: headless, or a desktop that refuses
+		{
+			return false;
+		}
+	}
+
+	/**
+	 * A source's whole page as plain text: what the card says, then EVERY line of
+	 * its loot rather than the twenty five the page mounts. Somebody copying this
+	 * wants the record, not the view of it.
+	 */
+	private String sourceAsText(String name, LocalStore.SourceRow sr,
+		List<LocalStore.BagItem> bag)
+	{
+		StringBuilder b = new StringBuilder(name);
+		if (sr != null)
+		{
+			b.append("\nKills tracked: ")
+				.append(sr.kc > 0 ? fmt(sr.kc) : fmt(sr.loots) + " drops");
+			b.append("\nThe take: ").append(gp(sr.value)).append(" gp");
+			if (sr.kc > 0)
+			{
+				b.append(" (").append(gp(sr.value / Math.max(1, sr.kc))).append(" gp/kc)");
+			}
+			if (sr.pb != null)
+			{
+				b.append("\nPersonal best: ").append(pb(sr.pb));
+			}
+			if (sr.firstMs > 0)
+			{
+				b.append("\nTracked since: ")
+					.append(TASK_DAY.format(Instant.ofEpochMilli(sr.firstMs)));
+			}
+		}
+		if (!bag.isEmpty())
+		{
+			b.append("\n\nLoot (").append(fmt(bag.size())).append(bag.size() == 1
+				? " item):" : " items):");
+			for (LocalStore.BagItem it : bag)
+			{
+				b.append("\n").append(it.name);
+				if (it.qty > 1)
+				{
+					b.append(" x").append(fmt(it.qty));
+				}
+				if (it.value > 0)
+				{
+					b.append(" - ").append(gp(it.value)).append(" gp");
+				}
+			}
+		}
+		return b.toString();
 	}
 
 	// The item under the glass: total obtained, worth, and every source of it.
@@ -2695,17 +2792,22 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildSourceDetail(String name)
 	{
 		JPanel p = column();
-		p.add(backRow());
-		p.add(vgap(4));
-		LocalStore.SourceRow sr = null;
+		LocalStore.SourceRow found = null;
 		for (LocalStore.SourceRow r : plugin.dropSources())
 		{
 			if (r.name.equalsIgnoreCase(name))
 			{
-				sr = r;
+				found = r;
 				break;
 			}
 		}
+		final LocalStore.SourceRow sr = found;
+		// Read before the row is built, because the copy hands back the WHOLE
+		// page: every loot line, not the twenty five the page mounts.
+		final List<LocalStore.BagItem> bag = plugin.sourceItems(sr != null ? sr.name : name);
+		bag.sort(Comparator.comparingLong((LocalStore.BagItem b) -> b.value).reversed());
+		p.add(backRow(() -> sourceAsText(name, sr, bag)));
+		p.add(vgap(4));
 		JPanel head = card(name);
 		if (sr != null)
 		{
@@ -2757,8 +2859,6 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(head);
 		p.add(vgap(6));
-		List<LocalStore.BagItem> bag = plugin.sourceItems(sr != null ? sr.name : name);
-		bag.sort(Comparator.comparingLong((LocalStore.BagItem b) -> b.value).reversed());
 		if (!bag.isEmpty())
 		{
 			JPanel grid = new JPanel(new GridLayout(0, 5, 3, 3));

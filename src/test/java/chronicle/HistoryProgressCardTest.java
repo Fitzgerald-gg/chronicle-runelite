@@ -3576,6 +3576,33 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void aLootPageCanBeTakenAwayAsText() throws Exception
+	{
+		// A page worth reading is a page worth sharing, and what leaves has to be
+		// the whole record rather than the view of it: the page mounts twenty five
+		// loot lines behind a "show more", and the copy carries every one.
+		ChroniclePanel p = panel(stub(true));
+		Method m = ChroniclePanel.class.getDeclaredMethod("sourceAsText", String.class,
+			LocalStore.SourceRow.class, List.class);
+		m.setAccessible(true);
+
+		List<LocalStore.BagItem> bag = new ArrayList<>();
+		for (int i = 0; i < 40; i++)
+		{
+			bag.add(new LocalStore.BagItem(0, "Item " + i, 2, 100));
+		}
+		String text = (String) m.invoke(p, "Zalcano", null, bag);
+		assertTrue("the page does not name itself: " + text, text.startsWith("Zalcano"));
+		assertTrue(text, text.contains("Loot (40 items):"));
+		assertTrue("the copy stopped where the page does", text.contains("Item 39"));
+		assertTrue("quantities are lost", text.contains("Item 0 x2"));
+		assertTrue("values are lost", text.contains("100 gp"));
+		// plain text, so it can be pasted somewhere that never heard of Chronicle
+		assertFalse(text.contains("<"));
+		assertFalse(text.contains("JLabel"));
+	}
+
+	@Test
 	public void theStripCarriesTheFourTabs() throws Exception
 	{
 		// What each tab is FOR, rather than what its fields are called. The eight
