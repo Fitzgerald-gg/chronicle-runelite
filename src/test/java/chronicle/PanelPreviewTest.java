@@ -1051,6 +1051,7 @@ public class PanelPreviewTest
 		s.rsn = rsn;
 		s.sources = store.dropSources();
 		s.untaken = store.untakenSources();
+		s.untakenItems = store.untakenItems();
 		s.recent = store.recentDrops();
 		s.clog = store.clogSnapshot();
 		s.clogFinished = store.clogFraction()[0];
@@ -1094,6 +1095,7 @@ public class PanelPreviewTest
 		s.rsn = rsn;
 		s.sources = store.dropSources();
 		s.untaken = store.untakenSources();
+		s.untakenItems = store.untakenItems();
 		s.recent = store.recentDrops();
 		s.clog = store.clogSnapshot();
 		s.clogFinished = store.clogFraction()[0];
