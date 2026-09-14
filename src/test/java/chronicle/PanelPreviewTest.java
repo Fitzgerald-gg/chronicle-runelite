@@ -126,6 +126,11 @@ public class PanelPreviewTest
 		// the boss board, which is the hiscores roster and not the log's pages
 		shoot(panel, out, prefix + "-kills", "KILLS");
 		shoot(panel, out, prefix + "-drops", "DROPS");
+		// the log narrowed: what the journal dates as landing inside the window
+		set(panel, "histGranularity", "Month");
+		shoot(panel, out, prefix + "-log-month", "LOG");
+		set(panel, "histGranularity", "Lifetime");
+
 		// the same board narrowed: off the dated roll, not the running totals
 		set(panel, "histGranularity", "Month");
 		shoot(panel, out, prefix + "-drops-month", "DROPS");

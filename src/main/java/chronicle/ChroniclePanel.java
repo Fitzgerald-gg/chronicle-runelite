@@ -618,6 +618,11 @@ class ChroniclePanel extends PluginPanel
 	private static List<Boss> bossRoster;
 	// the window's kill movement, computed once per build rather than per cell
 	private Map<String, Long> movedKcs;
+	// and the kills the dated roll can place inside it, for the keys the spine
+	// has no base for
+	private Map<String, Long> rolledKcs;
+	// whether any cell on this build was counted off the roll rather than the spine
+	private boolean rollUsed;
 	// which cell has its card open, if any
 	private String bossOpen;
 
@@ -797,9 +802,72 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 		}
+		if (moved != null)
+		{
+			return Math.max(0, moved);
+		}
+		// The spine has no base to measure from, but that does not mean the
+		// record cannot date these kills: the loot roll keeps one entry a day
+		// per source, so a species whose count only reached the journal today is
+		// still dated by what it dropped. Sarachnis was killed 22 times today and
+		// drew a dash, because the spine first heard of it this morning.
+		Long rolled = rolledKills(name);
+		if (rolled != null)
+		{
+			rollUsed = true;
+			return rolled;
+		}
 		// minus one, not zero: a dash says the record cannot answer, and drawing
 		// a nought would claim it counted none
-		return moved == null ? -1 : Math.max(0, moved);
+		return -1;
+	}
+
+	/**
+	 * Kills the loot roll dates inside the window, per source. A floor rather
+	 * than a count: it sees a kill only where the kill dropped something. Null
+	 * where the roll holds nothing for this source, or holds no day of the window
+	 * at all.
+	 */
+	private Long rolledKills(String name)
+	{
+		if (plugin.lootRollFrom() <= 0)
+		{
+			return null;
+		}
+		if (rolledKcs == null)
+		{
+			Window w = window();
+			rolledKcs = new LinkedHashMap<>();
+			for (String[] r : plugin.lootBetween(w.start, w.end).sources)
+			{
+				long n = safeParse(r[1]);
+				if (n > 0)
+				{
+					rolledKcs.put(LocalStore.kindOf(r[0]), n);
+				}
+			}
+		}
+		return rolledKcs.get(LocalStore.kindOf(name));
+	}
+
+	/**
+	 * Whether any cell on the board is counted off the roll rather than the
+	 * spine, and the roll does not reach the window's start. Those cells are a
+	 * floor over part of the window, which the board has to say once at the top
+	 * rather than leave as a number meaning something different from its
+	 * neighbours.
+	 */
+	private java.time.LocalDate rollShortOf()
+	{
+		long from = plugin.lootRollFrom();
+		if (from <= 0)
+		{
+			return null;
+		}
+		Window w = window();
+		java.time.LocalDate began = java.time.Instant.ofEpochMilli(from)
+			.atZone(ZoneId.systemDefault()).toLocalDate();
+		return began.isAfter(w.start) ? began : null;
 	}
 
 	/**
@@ -863,6 +931,13 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildKills()
 	{
 		JPanel p = column();
+		// Cleared HERE, not in rebuild(): the board can be built without one --
+		// the preview harness does, and so does a test -- and a memo of the last
+		// window's movement surviving into this one is a wrong number, not a
+		// stale one.
+		movedKcs = null;
+		rolledKcs = null;
+		rollUsed = false;
 		List<Boss> roster = bossRoster(plugin.gson());
 		if (roster.isEmpty())
 		{
@@ -884,15 +959,33 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		int cut = at < 0 ? roster.size() : Math.min(roster.size(), (at / 3 + 1) * 3);
-		p.add(bossSheet(roster.subList(0, cut)));
-		if (at >= 0)
+		// Built before anything is added, because building is what discovers
+		// whether a cell had to fall back to the roll.
+		JPanel opening = bossSheet(roster.subList(0, cut));
+		JPanel card = at >= 0 ? bossCard(roster.get(at)) : null;
+		JPanel rest = at >= 0 && cut < roster.size()
+			? bossSheet(roster.subList(cut, roster.size())) : null;
+		java.time.LocalDate shortFrom = rollUsed ? rollShortOf() : null;
+		if (shortFrom != null)
+		{
+			// A cell the spine cannot date is counted from what the kills
+			// dropped, and that reaches back only so far. Said once at the top
+			// rather than left as a number meaning something its neighbours do
+			// not: those cells are a floor, over part of the window.
+			p.add(note("Kills the journal cannot date are counted from loot "
+				+ "instead, which reaches back only to " + shortFrom.format(FULL_DAY)
+				+ " and sees a kill only where it dropped something."));
+			p.add(vgap(4));
+		}
+		p.add(opening);
+		if (card != null)
 		{
 			p.add(vgap(4));
-			p.add(bossCard(roster.get(at)));
+			p.add(card);
 			p.add(vgap(4));
-			if (cut < roster.size())
+			if (rest != null)
 			{
-				p.add(bossSheet(roster.subList(cut, roster.size())));
+				p.add(rest);
 			}
 		}
 		p.add(vgap(6));
@@ -1083,7 +1176,6 @@ class ChroniclePanel extends PluginPanel
 		// The period governs every board except the sitting, which is now and can
 		// be nothing else. Drawn above the tabs, so it is plainly over all of them
 		// rather than looking like one tab's control.
-		movedKcs = null;
 		periodHolder.removeAll();
 		if (view != View.HOME)
 		{
@@ -2738,16 +2830,54 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
+	/**
+	 * What the log gained inside the window, read off the journal rather than off
+	 * the log. Every slot is dated as it lands, so "what did I log this month" is
+	 * a question the record can answer even though the log itself holds no dates
+	 * at all.
+	 */
+	private JPanel logInWindow(JPanel p)
+	{
+		Window w = window();
+		List<JsonObject> got = new ArrayList<>();
+		for (JsonObject e : plugin.feedNewest(4000))
+		{
+			if ("COLLECTION".equals(typeOf(e)) && insideWindow(safeLong(e.get("ts"))))
+			{
+				got.add(e);
+			}
+		}
+		if (got.isEmpty())
+		{
+			p.add(note("Nothing new was logged inside " + w.label + "."));
+			return p;
+		}
+		JPanel head = card("Collection log");
+		head.add(row("Slots logged", fmt(got.size()), accent()));
+		p.add(head);
+		p.add(vgap(6));
+		for (JsonObject e : got)
+		{
+			JsonObject d = e.has("data") && e.get("data").isJsonObject()
+				? e.getAsJsonObject("data") : new JsonObject();
+			final String name = str(d, "itemName", "new item");
+			JPanel line = row(name, stamp(e), null);
+			line.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			line.addMouseListener(clicker(() -> openItem(name)));
+			p.add(line);
+		}
+		return p;
+	}
+
 	private JPanel buildLog()
 	{
 		JPanel p = column();
-		// The log is a snapshot of what has been obtained, not a dated record of
-		// when. It is the one board the period cannot touch, and it says so.
+		// The log records what has been obtained and not when, so the SHEET
+		// cannot be narrowed. The journal dates every slot as it lands though, so
+		// a window is still answerable -- from the other end.
 		if (!wholeRecord())
 		{
-			p.add(note("As it stands today. The log records what has been "
-				+ "obtained, not when, so it cannot narrow to " + window().label + "."));
-			p.add(vgap(4));
+			return logInWindow(p);
 		}
 		int avail = Math.max(plugin.clogAvailable(), 1712);
 		int fin = plugin.clogFinished();

@@ -3424,6 +3424,37 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void killsTheSpineCannotDateAreCountedFromWhatTheyDropped() throws Exception
+	{
+		// A species whose count only reached the journal today has no earlier
+		// baseline to measure against, so the spine drops it -- and 22 Sarachnis
+		// killed this morning drew a dash. The loot roll dates them anyway: it
+		// keeps one entry a day per source, so what a kill dropped places it even
+		// when the kill count cannot.
+		PanelPreviewTest.StubPlugin st = stub(true);
+		st.lootRollDay = LocalDate.now().minusDays(2);
+		LocalStore.LootWindow held = new LocalStore.LootWindow();
+		held.sources.add(new String[]{"Sarachnis", "22", "626995"});
+		st.lootWindow = held;
+		ChroniclePanel p = panel(st);
+		set(p, "histGranularity", "Week");
+		List<String> week = labels(kills(p));
+		assertTrue("the roll could date these and the board still said nothing: "
+			+ week, week.contains("22"));
+
+		// and it says so once, rather than leaving a number that means something
+		// its neighbours do not
+		assertTrue("the board did not declare the mixed source: " + week,
+			week.toString().contains("counted from loot"));
+
+		// a boss the roll has nothing for stays a dash: not a nought, which would
+		// claim it counted none
+		st.lootWindow = new LocalStore.LootWindow();
+		List<String> bare = labels(kills(p));
+		assertFalse("a ghost came back: " + bare, bare.contains("22"));
+	}
+
+	@Test
 	public void theBossBoardCountsTheWindowAndNotTheLifetime() throws Exception
 	{
 		// The period governs this board too. A boss sheet drawn under "last week"
