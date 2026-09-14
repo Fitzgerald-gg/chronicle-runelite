@@ -657,6 +657,7 @@ class ChroniclePanel extends PluginPanel
 
 	/** Where the hiscores and the collection log name one fight differently. */
 	private static final Map<String, String> LOG_PAGE_FOR = new LinkedHashMap<>();
+	private static final Map<String, String> PAYS_OUT = new LinkedHashMap<>();
 
 	static
 	{
@@ -665,6 +666,12 @@ class ChroniclePanel extends PluginPanel
 		LOG_PAGE_FOR.put("Sol Heredit", "Fortis Colosseum");
 		// One page counts both, and each of them is its own row on the board.
 		LOG_PAGE_FOR.put("The Corrupted Gauntlet", "The Gauntlet");
+		// Where a fight's takings are filed under another name entirely. NOT the
+		// creatures inside it -- a crystalline bear's shards are not the
+		// Gauntlet's loot -- but the payout at the end of it, which the ledger
+		// files against the fight that hands it over.
+		PAYS_OUT.put("The Gauntlet", "Crystalline Hunllef");
+		PAYS_OUT.put("The Corrupted Gauntlet", "Corrupted Hunllef");
 	}
 
 	/**
@@ -1296,7 +1303,8 @@ class ChroniclePanel extends PluginPanel
 				}
 				continue;
 			}
-			if (namesInBrackets(r.name, b.name))
+			if (namesInBrackets(r.name, b.name)
+				|| r.name.equalsIgnoreCase(PAYS_OUT.get(b.name)))
 			{
 				paidOut.add(r);
 			}
