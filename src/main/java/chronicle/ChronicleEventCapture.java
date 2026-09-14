@@ -213,6 +213,11 @@ public class ChronicleEventCapture
 	// matches them up at GameTick.
 	private final Map<TileItem, GroundLoot> pendingSelf = new IdentityHashMap<>();
 	private final List<UntakenItem> untakenBatch = new ArrayList<>();
+	// Stacks that were tracked when the scene unloaded. Only these can come back on
+	// a new object; anything else spawning is a fresh drop, even where it is the
+	// same thing on the same tile as one we already hold.
+	private final java.util.Set<TileItem> unloaded =
+		java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
 	// The kills of the last few ticks, each carrying the source name stamped onto the
 	// loot it produced so the Uncollected ledger can say where things were left.
 	private final List<RecentKill> recentKills = new ArrayList<>();
@@ -494,6 +499,29 @@ public class ChronicleEventCapture
 	// its GameTick) has landed by the time it is judged. A spawn that never sits near a
 	// kill is a manual drop and is discarded.
 	/**
+	 * A stack already tracked at this place, whatever object now carries it. Matched
+	 * on tile, id and quantity together: a stack that changed size is a different
+	 * stack, and two of the same thing in the same place at the same size are
+	 * indistinguishable anyway.
+	 */
+	private TileItem trackedStack(WorldPoint where, int id, int qty)
+	{
+		if (where == null)
+		{
+			return null;
+		}
+		for (TileItem key : unloaded)
+		{
+			GroundLoot g = groundLoot.get(key);
+			if (g != null && g.id == id && g.qty == qty && where.equals(g.at))
+			{
+				return key;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Bank anything that passed its own despawn tick without us ever seeing it
 	 * despawn. Walking far enough from a stack unloads it with the scene and no
 	 * despawn is posted, so without this the item would neither be counted nor
@@ -524,6 +552,7 @@ public class ChronicleEventCapture
 		for (TileItem it : gone)
 		{
 			groundLoot.remove(it);
+			unloaded.remove(it);
 		}
 	}
 
@@ -754,6 +783,22 @@ public class ChronicleEventCapture
 		{
 			return;
 		}
+		// Tracked, but on an object that no longer exists. A reload in place keeps
+		// the same TileItems; leaving the area entirely destroys them, and coming
+		// back rebuilds the stack as a NEW object, so identity cannot carry across a
+		// round trip. It is the same stack if it is the same thing in the same
+		// place, so move the tracking onto the new object rather than entering it
+		// as a fresh drop: otherwise returning for loot would read as abandoning it,
+		// and the sweep would bank it the moment its time was up.
+		Tile back = event.getTile();
+		TileItem prior = trackedStack(back == null ? null : back.getWorldLocation(),
+			it.getId(), it.getQuantity());
+		if (prior != null)
+		{
+			groundLoot.put(it, groundLoot.remove(prior));
+			unloaded.remove(prior);
+			return;
+		}
 		if (isOwnDrop(it, event.getTile(), now))
 		{
 			return;   // the game confirming a Drop click, not kill loot
@@ -774,6 +819,7 @@ public class ChronicleEventCapture
 	{
 		pendingSelf.remove(event.getItem());   // may despawn before reconcile runs
 		GroundLoot g = groundLoot.remove(event.getItem());
+		unloaded.remove(event.getItem());
 		if (g == null)
 		{
 			return;
@@ -1557,6 +1603,11 @@ public class ChronicleEventCapture
 		//
 		// A hop or a logout is different: the world goes away and no despawn is ever
 		// coming, so those are still banked here.
+		if (state == GameState.LOADING)
+		{
+			// It may come back on a different object, and only these may.
+			unloaded.addAll(groundLoot.keySet());
+		}
 		if (state == GameState.HOPPING || state == GameState.LOGIN_SCREEN)
 		{
 			for (GroundLoot g : groundLoot.values())
@@ -1565,6 +1616,7 @@ public class ChronicleEventCapture
 					g.killIndex));
 			}
 			groundLoot.clear();
+			unloaded.clear();
 		}
 		if (state == GameState.LOGGING_IN || state == GameState.HOPPING || state == GameState.LOGIN_SCREEN)
 		{

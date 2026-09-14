@@ -37,6 +37,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -52,6 +53,7 @@ public class LeftBehindKillsTest
 	private static final int SPIKE = 30_000;
 	private static final int BONES = 526;
 	private static final int DESPAWN = 300;
+	private static final WorldPoint HERE = new WorldPoint(3200, 3200, 0);
 	private static final String BEAR = "Corrupted Bear";
 	private static final String WOLF = "Wolf";
 
@@ -429,6 +431,40 @@ public class LeftBehindKillsTest
 		assertEquals(1, rows.size());
 		assertEquals(1, items(rows.get(0)));
 		assertEquals("the kill it came from was lost", 1, kills(rows.get(0)));
+	}
+
+	// Leaving the area entirely destroys the TileItems; coming back rebuilds the
+	// stack as a NEW object. Tracking keyed on identity would miss the pickup and
+	// the sweep would bank it the moment its time was up -- so going back for your
+	// loot would be recorded as having abandoned it.
+	@Test
+	public void loootFetchedOnASecondTripIsNotAbandoned()
+	{
+		kill(100, BEAR);
+		TileItem first = spawnAt(101, BONES, HERE);
+		gameTick(101);
+
+		// away: the scene unloads, no despawn is posted, the object dies
+		GameStateChanged away = new GameStateChanged();
+		away.setGameState(GameState.LOADING);
+		capture.onGameStateChanged(away);
+		gameTick(102);
+
+		// back again, and the same stack returns as a different object
+		TileItem rebuilt = spawnAt(140, BONES, HERE);
+		assertNotSame(first, rebuilt);
+		gameTick(141);
+
+		// and taken, before its despawn tick
+		pickUp(142, rebuilt);
+		gameTick(143);
+		assertEquals("going back for it was read as leaving it",
+			0, untakenRows().size());
+
+		// and it is no longer tracked, so the sweep cannot bank it later either
+		gameTick(DESPAWN + 10);
+		assertEquals("the sweep banked a stack already taken",
+			0, untakenRows().size());
 	}
 
 	// ── kills told apart by tile ───────────────────────────────────────────
