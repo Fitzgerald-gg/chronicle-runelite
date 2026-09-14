@@ -262,6 +262,9 @@ public class ChroniclePlugin extends Plugin
 		// plugins down, would otherwise drop everything counted since the last fold.
 		if (localName != null && localStore.isReadyFor(localName))
 		{
+			// As at logout, and for the same reason: closing the client is the more
+			// common way to end a session than walking back to the login screen.
+			localStore.setCharacter(localName, null, 0, clogCapture.snapshot(), null);
 			localStore.setTrackers(sessionView(), localName);
 			localStore.rebase(localName);
 			// A settings toggle stops the plugin on the EDT and the flush is an fsync plus
@@ -638,6 +641,12 @@ public class ChroniclePlugin extends Plugin
 		// record onto this model. Guarded in case the load never finished.
 		if (localName != null && localStore.isReadyFor(localName))
 		{
+			// The collection log first: it is only folded in by the write interval
+			// otherwise, so a player who opened their log and logged out inside that
+			// window lost the whole capture -- the Kill Log included, which is the
+			// one instruction a new install is given. setCharacter takes the log
+			// alone; the player is already gone, so there are no skills to read.
+			localStore.setCharacter(localName, null, 0, clogCapture.snapshot(), null);
 			localStore.setTrackers(sessionView(), localName);
 			appendHistoryBaseline();
 			recordSessionLine();
@@ -650,6 +659,9 @@ public class ChroniclePlugin extends Plugin
 		}
 		executor.submit(() -> localStore.flush(localDir()));
 		localStore.endSession();
+		// Now that it is banked, and not before: one account's log must not accrete
+		// onto the next one's.
+		clogCapture.reset();
 		eventCapture.resetSessionFlags();
 		// Reset the gate so the next login syncs its own snapshot even if identical.
 		achievementSync.reset();
