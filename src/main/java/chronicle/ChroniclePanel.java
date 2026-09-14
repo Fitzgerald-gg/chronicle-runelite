@@ -2625,7 +2625,7 @@ class ChroniclePanel extends PluginPanel
 	 * <p>Swing dispatches a click to the deepest component that is listening, so
 	 * the label's own listener takes the copy and the row's takes everything else.
 	 */
-	private JPanel backRow(java.util.function.Supplier<String> copy)
+	private JPanel backRow(java.util.function.BooleanSupplier copy)
 	{
 		JPanel r = row("< Back", copy == null ? "" : "copy", null);
 		BorderLayout layout = (BorderLayout) r.getLayout();
@@ -2644,7 +2644,7 @@ class ChroniclePanel extends PluginPanel
 			take.setToolTipText("Copy this page as text");
 			take.addMouseListener(clicker(() ->
 			{
-				boolean ok = toClipboard(copy.get());
+				boolean ok = copy.getAsBoolean();
 				take.setText(ok ? "copied" : "cannot copy");
 				take.setForeground(ok ? accent() : ColorScheme.PROGRESS_ERROR_COLOR);
 			}));
@@ -2652,22 +2652,130 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	/** False where there is no desktop clipboard to reach, rather than throwing. */
-	private static boolean toClipboard(String text)
+	/**
+	 * A page on the clipboard as BOTH a picture and its text, so the place it is
+	 * pasted takes whichever it understands: a chat window takes the image and
+	 * arrives looking like the panel, a spreadsheet or a wiki takes the text and
+	 * can still be searched and edited. Offering one would have been choosing for
+	 * everyone who pastes it.
+	 */
+	private static final class PageCopy implements java.awt.datatransfer.Transferable
 	{
-		if (text == null || text.isEmpty())
+		private final java.awt.Image image;
+		private final String text;
+
+		private PageCopy(java.awt.Image image, String text)
+		{
+			this.image = image;
+			this.text = text;
+		}
+
+		@Override
+		public java.awt.datatransfer.DataFlavor[] getTransferDataFlavors()
+		{
+			return image == null
+				? new java.awt.datatransfer.DataFlavor[]{
+					java.awt.datatransfer.DataFlavor.stringFlavor}
+				: new java.awt.datatransfer.DataFlavor[]{
+					java.awt.datatransfer.DataFlavor.imageFlavor,
+					java.awt.datatransfer.DataFlavor.stringFlavor};
+		}
+
+		@Override
+		public boolean isDataFlavorSupported(java.awt.datatransfer.DataFlavor flavor)
+		{
+			for (java.awt.datatransfer.DataFlavor f : getTransferDataFlavors())
+			{
+				if (f.equals(flavor))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		@Override
+		public Object getTransferData(java.awt.datatransfer.DataFlavor flavor)
+			throws java.awt.datatransfer.UnsupportedFlavorException
+		{
+			if (java.awt.datatransfer.DataFlavor.imageFlavor.equals(flavor) && image != null)
+			{
+				return image;
+			}
+			if (java.awt.datatransfer.DataFlavor.stringFlavor.equals(flavor))
+			{
+				return text;
+			}
+			throw new java.awt.datatransfer.UnsupportedFlavorException(flavor);
+		}
+	}
+
+	/** False where there is no desktop clipboard to reach, rather than throwing. */
+	private static boolean toClipboard(java.awt.Image image, String text)
+	{
+		if ((text == null || text.isEmpty()) && image == null)
 		{
 			return false;
 		}
 		try
 		{
 			java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
-				.setContents(new java.awt.datatransfer.StringSelection(text), null);
+				.setContents(new PageCopy(image, text), null);
 			return true;
 		}
 		catch (Throwable ignored)   // noqa: headless, or a desktop that refuses
 		{
 			return false;
+		}
+	}
+
+	/**
+	 * A built page drawn to an image at its WHOLE height, not the window's. The
+	 * page is a strip in a scroll pane; what wants sharing is all of it.
+	 */
+	private static java.awt.Image pageImage(JPanel page)
+	{
+		try
+		{
+			// Wider than the panel on purpose. The sidebar is 225px and long item
+			// names truncate in it -- "Guthixian temple teleport x..." -- which a
+			// reader can live with because they can widen or hover. Somebody
+			// receiving a picture can do neither, so it is drawn with the room the
+			// names actually need.
+			int w = COPY_WIDTH;
+			page.setSize(w, 8000);
+			layOut(page);
+			int h = Math.max(1, Math.min(8000, page.getPreferredSize().height));
+			page.setSize(w, h);
+			layOut(page);
+			java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(
+				w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+			java.awt.Graphics2D g = img.createGraphics();
+			g.setColor(ColorScheme.DARK_GRAY_COLOR);
+			g.fillRect(0, 0, w, h);
+			page.printAll(g);
+			g.dispose();
+			return img;
+		}
+		catch (Throwable ignored)   // noqa: a picture is never worth losing the text
+		{
+			return null;
+		}
+	}
+
+	// what a shared picture is drawn at; the panel itself is 225
+	private static final int COPY_WIDTH = 340;
+
+	/** Lay a tree out by hand: it was never added to a window, so nothing else will. */
+	private static void layOut(java.awt.Component c)
+	{
+		c.doLayout();
+		if (c instanceof java.awt.Container)
+		{
+			for (java.awt.Component k : ((java.awt.Container) c).getComponents())
+			{
+				layOut(k);
+			}
 		}
 	}
 
@@ -2700,6 +2808,50 @@ class ChroniclePanel extends PluginPanel
 			b.append('\n');
 		}
 		return b.toString();
+	}
+
+	/**
+	 * Put a source's page on the clipboard as a picture of itself and as its text.
+	 * The picture is built from a FRESH page with the loot cap lifted, because
+	 * what the reader is looking at stops at twenty five items behind a "show
+	 * more" and what they are sharing should not.
+	 */
+	private boolean copySourcePage(String name, LocalStore.SourceRow sr,
+		List<LocalStore.BagItem> bag)
+	{
+		String text = sourceAsText(name, sr, bag);
+		java.awt.Image shot = null;
+		Integer was = drillShown.get(name);
+		try
+		{
+			drillShown.put(name, Integer.MAX_VALUE);
+			JPanel page = buildSourceDetail(name);
+			// The way back and the copy itself are navigation, and navigation has no
+			// business in a picture somebody is sharing. They are the first two
+			// things the page adds, and the card follows.
+			if (page.getComponentCount() > 2)
+			{
+				page.remove(1);
+				page.remove(0);
+			}
+			shot = pageImage(page);
+		}
+		catch (Throwable ignored)   // noqa: the text still goes, which is the point
+		{
+			shot = null;
+		}
+		finally
+		{
+			if (was == null)
+			{
+				drillShown.remove(name);
+			}
+			else
+			{
+				drillShown.put(name, was);
+			}
+		}
+		return toClipboard(shot, text);
 	}
 
 	/**
@@ -2837,7 +2989,7 @@ class ChroniclePanel extends PluginPanel
 		// page: every loot line, not the twenty five the page mounts.
 		final List<LocalStore.BagItem> bag = plugin.sourceItems(sr != null ? sr.name : name);
 		bag.sort(Comparator.comparingLong((LocalStore.BagItem b) -> b.value).reversed());
-		p.add(backRow(() -> sourceAsText(name, sr, bag)));
+		p.add(backRow(() -> copySourcePage(name, sr, bag)));
 		p.add(vgap(4));
 		JPanel head = card(name);
 		if (sr != null)

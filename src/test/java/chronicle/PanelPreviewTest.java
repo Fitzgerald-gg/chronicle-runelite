@@ -154,6 +154,43 @@ public class PanelPreviewTest
 			shoot(panel, out, prefix + "-source-detail", "DROPS");
 			set(panel, "detailSource", null);
 		}
+
+		// the very picture the copy puts on the clipboard: a fresh page with the
+		// loot cap lifted, drawn at its whole height
+		if (!src.isEmpty())
+		{
+			final String top = src.get(0).name;
+			edt(() ->
+			{
+				Field ds = ChroniclePanel.class.getDeclaredField("drillShown");
+				ds.setAccessible(true);
+				@SuppressWarnings("unchecked")
+				Map<String, Integer> shown = (Map<String, Integer>) ds.get(panel);
+				shown.put(top, Integer.MAX_VALUE);
+				Method bd = ChroniclePanel.class.getDeclaredMethod("buildSourceDetail",
+					String.class);
+				bd.setAccessible(true);
+				javax.swing.JPanel page = (javax.swing.JPanel) bd.invoke(panel, top);
+				// the same strip copySourcePage does, or the shot shows navigation
+				// the clipboard never receives
+				if (page.getComponentCount() > 2)
+				{
+					page.remove(1);
+					page.remove(0);
+				}
+				Method pi = ChroniclePanel.class.getDeclaredMethod("pageImage",
+					javax.swing.JPanel.class);
+				pi.setAccessible(true);
+				Object img = pi.invoke(null, page);
+				if (img != null)
+				{
+					ImageIO.write((BufferedImage) img, "png",
+						new File(out, prefix + "-copy-image.png"));
+				}
+				shown.remove(top);
+			});
+		}
+
 		for (LocalStore.SourceRow sr : src)
 		{
 			List<LocalStore.BagItem> bag = stub.sourceItems(sr.name);
