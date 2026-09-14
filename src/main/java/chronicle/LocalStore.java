@@ -1781,6 +1781,79 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
+	/**
+	 * The superior forms, which a task's monster roll names but never marks as
+	 * one. Taken from the site's own reference (reference/osrs_superiors.json,
+	 * itself from the wiki) so the two count the same thing. Matched without
+	 * case: the journal has "Shadow Wyrm" and "Malevolent Mage" as the game
+	 * spelled them at the time.
+	 */
+	private static final java.util.Set<String> SUPERIORS = new java.util.HashSet<>(
+		java.util.Arrays.asList(
+		"abhorrent spectre", "ancient custodian", "basilisk sentinel",
+		"blood-starved venator", "cave abomination", "chasm crawler",
+		"choke devil", "cockathrice", "colossal hydra", "crushing hand",
+		"dire gryphon", "dreadborn araxyte", "elder aquanite",
+		"flaming pyrelord", "giant rockslug", "greater abyssal demon",
+		"guardian drake", "infernal pyrelord", "insatiable bloodveld",
+		"insatiable mutated bloodveld", "king kurask", "magma strykewyrm",
+		"malevolent mage", "marble gargoyle", "monstrous basilisk",
+		"mutated terrorbird", "mutated tortoise", "nechryarch", "night beast",
+		"nuclear smoke devil", "repugnant spectre", "screaming banshee",
+		"screaming twisted banshee", "shadow wyrm", "spiked turoth",
+		"vitreous chilled jelly", "vitreous jelly", "vitreous warped jelly"));
+
+	/**
+	 * What the on-task loot was killed out of, inside the same window: the kills
+	 * that dropped something, and how many of those were a superior. Kills that
+	 * dropped nothing are counted separately by the task and are not here, which
+	 * is why this reads lower than a slayer counter.
+	 */
+	long[] onTaskTally(long fromMs, long toMs)
+	{
+		long kills = 0;
+		long superiors = 0;
+		synchronized (lock)
+		{
+			if (root == null || !root.has("slayer") || !root.get("slayer").isJsonObject())
+			{
+				return new long[]{0, 0};
+			}
+			JsonObject sl = root.getAsJsonObject("slayer");
+			if (!sl.has("tasks") || !sl.get("tasks").isJsonArray())
+			{
+				return new long[]{0, 0};
+			}
+			for (JsonElement e : sl.getAsJsonArray("tasks"))
+			{
+				if (!e.isJsonObject())
+				{
+					continue;
+				}
+				JsonObject t = e.getAsJsonObject();
+				long ms = (long) (asDouble(t.get("ts")) * 1000);
+				if (ms > 0 && (ms < fromMs || ms > toMs))
+				{
+					continue;
+				}
+				kills += asLong(t.get("kills"));
+				if (!t.has("monsters") || !t.get("monsters").isJsonObject())
+				{
+					continue;
+				}
+				for (java.util.Map.Entry<String, JsonElement> m
+					: t.getAsJsonObject("monsters").entrySet())
+				{
+					if (SUPERIORS.contains(m.getKey().toLowerCase(java.util.Locale.ROOT)))
+					{
+						superiors += asLong(m.getValue());
+					}
+				}
+			}
+		}
+		return new long[]{kills, superiors};
+	}
+
 	chronicle.ChronicleApiClient.SlayerJourney slayerJourney()
 	{
 		synchronized (lock)

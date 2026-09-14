@@ -3588,7 +3588,7 @@ public class HistoryProgressCardTest
 		bd.setAccessible(true);
 		Method strip = ChroniclePanel.class.getDeclaredMethod("stripChrome", JPanel.class);
 		strip.setAccessible(true);
-		Method pi = ChroniclePanel.class.getDeclaredMethod("pageImage", JPanel.class);
+		Method pi = ChroniclePanel.class.getDeclaredMethod("copyImage", JPanel.class);
 		pi.setAccessible(true);
 
 		final Object[] out = new Object[2];
@@ -3606,6 +3606,77 @@ public class HistoryProgressCardTest
 		assertTrue("drawn at the sidebar's width, so long names truncate",
 			img.getWidth(null) > 225);
 		assertTrue("nothing was drawn", img.getHeight(null) > 0);
+	}
+
+	@Test
+	public void aBoardTooLongForOneColumnIsSetInSeveralRatherThanCutOff() throws Exception
+	{
+		// A whole grind to 99 leaves hundreds of kinds of loot behind it, and that
+		// is precisely the board somebody wants to show. Sixty rows is a readable
+		// column, not a limit on what can be shared: past sixty the picture takes
+		// another column rather than a tail saying what was thrown away.
+		ChroniclePanel p = panel(stub(true));
+		final List<LocalStore.BagItem> bag = new ArrayList<>();
+		for (int i = 0; i < 287; i++)
+		{
+			bag.add(new LocalStore.BagItem(i + 1, "Thing " + i, 1, 10));
+		}
+		Method ot = ChroniclePanel.class.getDeclaredMethod("onTaskLootPicture",
+			List.class, long.class, long.class, long[].class);
+		ot.setAccessible(true);
+		Method ci = ChroniclePanel.class.getDeclaredMethod("copyImage", JPanel.class);
+		ci.setAccessible(true);
+
+		final Object[] out = new Object[2];
+		edt(() ->
+		{
+			JPanel page = (JPanel) ot.invoke(p, bag, 287L, 2_870L, new long[]{300, 4});
+			// read before drawing: the drawing takes the page apart to set it
+			out[0] = labels(page);
+			out[1] = ci.invoke(null, page);
+		});
+		@SuppressWarnings("unchecked")
+		List<String> said = (List<String>) out[0];
+		assertTrue("the first row is missing: " + said.size(), said.contains("Thing 0"));
+		assertTrue("the board was cut short at " + said.size() + " rows",
+			said.contains("Thing 286"));
+		for (String line : said)
+		{
+			assertFalse("a tail was written instead of another column: " + line,
+				line.endsWith(" more"));
+		}
+
+		java.awt.Image img = (java.awt.Image) out[1];
+		assertNotNull("no picture was drawn", img);
+		assertTrue("287 rows were drawn in one column: " + img.getWidth(null),
+			img.getWidth(null) >= 340 * 4);
+		assertTrue("the ribbon was never broken up: " + img.getHeight(null),
+			img.getHeight(null) < 2_000);
+	}
+
+	@Test
+	public void thereIsStillACeilingOnHowBigAPictureCanGet() throws Exception
+	{
+		// Columns are not a licence for a picture the size of a wall. Past six
+		// columns two hundred deep the rest is named rather than drawn, which no
+		// real board reaches.
+		ChroniclePanel p = panel(stub(true));
+		final List<LocalStore.BagItem> bag = new ArrayList<>();
+		for (int i = 0; i < 1_250; i++)
+		{
+			bag.add(new LocalStore.BagItem(i + 1, "Thing " + i, 1, 10));
+		}
+		Method ot = ChroniclePanel.class.getDeclaredMethod("onTaskLootPicture",
+			List.class, long.class, long.class, long[].class);
+		ot.setAccessible(true);
+
+		final Object[] out = new Object[1];
+		edt(() -> out[0] = labels(
+			(JPanel) ot.invoke(p, bag, 1_250L, 12_500L, new long[]{1_300, 9})));
+		@SuppressWarnings("unchecked")
+		List<String> said = (List<String>) out[0];
+		assertTrue("the ceiling is gone: " + said.size() + " rows",
+			said.contains("+ 50 more"));
 	}
 
 	@Test

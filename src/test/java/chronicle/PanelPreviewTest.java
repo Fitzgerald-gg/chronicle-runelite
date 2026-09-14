@@ -178,7 +178,7 @@ public class PanelPreviewTest
 					page.remove(1);
 					page.remove(0);
 				}
-				Method pi = ChroniclePanel.class.getDeclaredMethod("pageImage",
+				Method pi = ChroniclePanel.class.getDeclaredMethod("copyImage",
 					javax.swing.JPanel.class);
 				pi.setAccessible(true);
 				Object img = pi.invoke(null, page);
@@ -188,6 +188,31 @@ public class PanelPreviewTest
 						new File(out, prefix + "-copy-image.png"));
 				}
 				shown.remove(top);
+
+				// the on-task board's picture, reflowed into columns
+				Method ot = ChroniclePanel.class.getDeclaredMethod("onTaskLootPicture",
+					List.class, long.class, long.class, long[].class);
+				ot.setAccessible(true);
+				List<LocalStore.BagItem> task = stub.onTaskLoot(Long.MIN_VALUE / 2,
+					Long.MAX_VALUE / 2);
+				if (!task.isEmpty())
+				{
+					long q = 0;
+					long v = 0;
+					for (LocalStore.BagItem b : task)
+					{
+						q += b.qty;
+						v += b.value;
+					}
+					javax.swing.JPanel tp = (javax.swing.JPanel) ot.invoke(panel, task, q, v,
+						stub.onTaskTally(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2));
+					Object timg = pi.invoke(null, tp);
+					if (timg != null)
+					{
+						ImageIO.write((BufferedImage) timg, "png",
+							new File(out, prefix + "-copy-ontask-image.png"));
+					}
+				}
 
 				// and the item page's own picture
 				List<LocalStore.BagItem> topBag = stub.sourceItems(top);
@@ -1230,6 +1255,12 @@ public class PanelPreviewTest
 		{
 			return store != null ? store.onTaskLoot(fromMs, toMs)
 				: new java.util.ArrayList<>();
+		}
+
+		@Override
+		long[] onTaskTally(long fromMs, long toMs)
+		{
+			return store != null ? store.onTaskTally(fromMs, toMs) : new long[]{0, 0};
 		}
 
 		@Override

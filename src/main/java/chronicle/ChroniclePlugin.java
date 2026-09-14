@@ -1016,6 +1016,12 @@ public class ChroniclePlugin extends Plugin
 		return localStore.onTaskLoot(fromMs, toMs);
 	}
 
+	/** The kills behind that loot, and how many of them were a superior. */
+	long[] onTaskTally(long fromMs, long toMs)
+	{
+		return localStore.onTaskTally(fromMs, toMs);
+	}
+
 	java.util.List<LocalStore.BagItem> untakenItemsOf(String source)
 	{
 		return localStore.untakenItemsOf(source);
