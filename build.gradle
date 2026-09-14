@@ -86,7 +86,21 @@ tasks.register('shadowJar', Jar) {
 // PanelPreviewTest renders against a real journal when asked:
 //   gradle test -Dchronicle.realJournal=true
 tasks.named('test') {
-	if (System.getProperty('chronicle.realJournal')) {
-		systemProperty 'chronicle.realJournal', System.getProperty('chronicle.realJournal')
+	// Gradle forks a test JVM, so a -D on the gradle command line sets the
+	// property on the DAEMON and never reaches the worker. Every property a test
+	// reads has to be forwarded by name, and one that is not simply reads null:
+	// the /example export ran green for a day writing nothing at all because of it.
+	[
+		'chronicle.realJournal',      // PanelPreviewTest renders the real journal
+		'chronicle.exportExample',    // ExampleExportTest writes the panel recording
+		'chronicle.exampleJournal',   // ... over this journal directory
+		'chronicle.exampleIcons',     // ... with item icons rendered from the cache
+		'chronicle.exampleItemNames', // ... and the wiki's id -> name mapping
+		'chronicle.exampleSprites',   // ... and the game's own sprites, dumped from the cache
+		'chronicle.exampleStates',    // how many states the crawl walks
+	].each { key ->
+		if (System.getProperty(key)) {
+			systemProperty key, System.getProperty(key)
+		}
 	}
 }
