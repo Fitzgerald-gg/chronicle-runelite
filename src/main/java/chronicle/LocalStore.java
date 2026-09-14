@@ -3376,10 +3376,30 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			byKind.put(kindOf(name), name);
 		}
+		java.util.Map<String, Long> stated = killLogCounts(clog);
+		java.util.Map<String, Long> statedByKind = new java.util.HashMap<>();
+		for (java.util.Map.Entry<String, Long> e : stated.entrySet())
+		{
+			statedByKind.putIfAbsent(kindOf(e.getKey()), e.getValue());
+		}
 		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
 		for (SourceRow r : sources)
 		{
 			long kills = Math.max(r.kc, r.loots);
+			// TWO STATEMENTS AGREEING BEAT A TALLY OF ROWS. The ledger keeps both
+			// the count the game gave for a kill and the number of loot events it
+			// wrote down, and they can part: Zalcano holds 2,024 rows against
+			// 2,023 kills, because a drop imported from the old cloud journal
+			// carried no kill with it. Where the Kill Log independently says the
+			// same number the rows are the odd one out, and a row is not a kill.
+			// Where the two statements DIFFER, the ledger's is a partial count of
+			// some kind -- a task counter, not a lifetime -- and is no evidence
+			// against the rows at all, so nothing is clamped.
+			Long agreed = r.kc > 0 ? statedByKind.get(kindOf(r.name)) : null;
+			if (agreed != null && agreed.longValue() == r.kc && r.loots > r.kc)
+			{
+				kills = r.kc;
+			}
 			String name = r.name;
 			String known = byKind.get(kindOf(r.name));
 			if (known != null)
