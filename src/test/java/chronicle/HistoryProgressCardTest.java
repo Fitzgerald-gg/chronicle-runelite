@@ -3742,6 +3742,71 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void whatGoesOnTheClipboardIsAnActualPng() throws Exception
+	{
+		// AWT's imageFlavor advertises public.png on a Mac and then hands back
+		// TIFF under it, so a chat client asks for a PNG, receives a TIFF, calls
+		// it image.png and uploads a file nobody can open. That is not a thing a
+		// reader can see in a preview: the only way to hold it is to look at the
+		// bytes that leave.
+		Method pp = ChroniclePanel.class.getDeclaredMethod("pngPayload",
+			java.awt.Image.class);
+		pp.setAccessible(true);
+		java.awt.image.BufferedImage img =
+			new java.awt.image.BufferedImage(120, 90, java.awt.image.BufferedImage.TYPE_INT_RGB);
+		java.awt.Graphics2D g = img.createGraphics();
+		g.setColor(java.awt.Color.ORANGE);
+		g.fillRect(0, 0, 120, 90);
+		g.dispose();
+
+		Object payload = pp.invoke(null, img);
+		if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac"))
+		{
+			// everywhere else AWT writes a real image and must be left alone
+			assertNull("the mac path fired off a mac", payload);
+			return;
+		}
+		assertNotNull("nothing was encoded to put on the clipboard", payload);
+		java.awt.datatransfer.Transferable t = (java.awt.datatransfer.Transferable) payload;
+		java.awt.datatransfer.DataFlavor[] fl = t.getTransferDataFlavors();
+		assertEquals("the clipboard was offered more than the PNG", 1, fl.length);
+		assertEquals("image/png", fl[0].getPrimaryType() + "/" + fl[0].getSubType());
+
+		byte[] bytes = readAll((java.io.InputStream) t.getTransferData(fl[0]));
+		// the eight bytes every PNG starts with, which the TIFF did not
+		byte[] magic = {(byte) 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a};
+		for (int i = 0; i < magic.length; i++)
+		{
+			assertEquals("byte " + i + " is not PNG, it is "
+				+ String.format("%02x", bytes[i]), magic[i], bytes[i]);
+		}
+		// and it decodes back to the picture it was made from
+		java.awt.image.BufferedImage back = javax.imageio.ImageIO.read(
+			new java.io.ByteArrayInputStream(bytes));
+		assertNotNull("the bytes do not decode as an image", back);
+		assertEquals(120, back.getWidth());
+		assertEquals(90, back.getHeight());
+		// encoded, not raw: the whole page went across as six megabytes before
+		assertTrue("this is not compressed, it is a bitmap: " + bytes.length,
+			bytes.length < 120 * 90 * 4);
+		// and the board is read more than once, so the bytes must survive it
+		assertEquals("the second read came back short", bytes.length,
+			readAll((java.io.InputStream) t.getTransferData(fl[0])).length);
+	}
+
+	private static byte[] readAll(java.io.InputStream in) throws Exception
+	{
+		java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+		byte[] buf = new byte[8192];
+		int n;
+		while ((n = in.read(buf)) > 0)
+		{
+			out.write(buf, 0, n);
+		}
+		return out.toByteArray();
+	}
+
+	@Test
 	public void aBoardTooLongForOneColumnIsSetInSeveralRatherThanCutOff() throws Exception
 	{
 		// A whole grind to 99 leaves hundreds of kinds of loot behind it, and that

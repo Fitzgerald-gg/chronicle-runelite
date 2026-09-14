@@ -53,6 +53,7 @@ import net.runelite.client.ui.components.IconTextField;
 import net.runelite.client.ui.components.materialtabs.MaterialTab;
 import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 import net.runelite.client.util.ImageUtil;
+import net.runelite.client.util.OSType;
 
 /**
  * The journal's face: a search field, seven tabs, and a detail overlay over
@@ -2877,13 +2878,127 @@ class ChroniclePanel extends PluginPanel
 		}
 		try
 		{
+			java.awt.datatransfer.Transferable payload = pngPayload(image);
 			java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
-				.setContents(new PageCopy(image), null);
+				.setContents(payload != null ? payload : new PageCopy(image), null);
 			return true;
 		}
 		catch (Throwable ignored)   // noqa: headless, or a desktop that refuses
 		{
 			return false;
+		}
+	}
+
+	/** image/png as bytes, which is the only honest way to say PNG on a Mac. */
+	private static final java.awt.datatransfer.DataFlavor PNG_BYTES = pngFlavor();
+	private static boolean pngNativeMapped;
+
+	private static java.awt.datatransfer.DataFlavor pngFlavor()
+	{
+		try
+		{
+			return new java.awt.datatransfer.DataFlavor("image/png;class=java.io.InputStream");
+		}
+		catch (ClassNotFoundException ignored)   // noqa: cannot happen for InputStream
+		{
+			return null;
+		}
+	}
+
+	/**
+	 * The picture as real PNG bytes, on macOS only, or null to leave the ordinary
+	 * path alone.
+	 *
+	 * AWT's imageFlavor is a trap here. It advertises public.png on the Mac
+	 * pasteboard and then hands back TIFF under it: every image type on the board
+	 * returns the same bytes, and those bytes begin MM\0* rather than the PNG
+	 * magic. Anything that asks the pasteboard for a PNG, which is what a chat
+	 * client does, receives a TIFF, names it image.png and uploads something
+	 * nobody can open. It is also raw, so a page that is ninety kilobytes encoded
+	 * went across as six megabytes.
+	 *
+	 * So the PNG is encoded here and offered as bytes mapped onto the pasteboard's
+	 * own public.png. macOS derives a valid TIFF from it for anything that wants
+	 * one, and Java reads it back as an image as before. Only the write direction
+	 * is mapped: teaching the map to READ public.png as this flavour would change
+	 * what every other plugin in the client sees on the clipboard.
+	 */
+	private static java.awt.datatransfer.Transferable pngPayload(java.awt.Image image)
+	{
+		if (PNG_BYTES == null || OSType.getOSType() != OSType.MacOS
+			|| !(image instanceof java.awt.image.RenderedImage))
+		{
+			return null;
+		}
+		try
+		{
+			java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+			// A memory cache, or ImageIO writes a scratch file to encode a picture
+			// that is already in memory.
+			javax.imageio.stream.MemoryCacheImageOutputStream ios =
+				new javax.imageio.stream.MemoryCacheImageOutputStream(out);
+			if (!javax.imageio.ImageIO.write((java.awt.image.RenderedImage) image, "png", ios))
+			{
+				return null;
+			}
+			ios.flush();
+			final byte[] png = out.toByteArray();
+			if (png.length == 0)
+			{
+				return null;
+			}
+			mapPngNative();
+			return new PngCopy(png);
+		}
+		catch (Throwable ignored)   // noqa: fall back to the image itself
+		{
+			return null;
+		}
+	}
+
+	private static synchronized void mapPngNative()
+	{
+		if (pngNativeMapped)
+		{
+			return;
+		}
+		((java.awt.datatransfer.SystemFlavorMap)
+			java.awt.datatransfer.SystemFlavorMap.getDefaultFlavorMap())
+			.addUnencodedNativeForFlavor(PNG_BYTES, "public.png");
+		pngNativeMapped = true;
+	}
+
+	/** Encoded PNG bytes, handed out fresh each time the board is read. */
+	private static final class PngCopy implements java.awt.datatransfer.Transferable
+	{
+		private final byte[] png;
+
+		private PngCopy(byte[] png)
+		{
+			this.png = png;
+		}
+
+		@Override
+		public java.awt.datatransfer.DataFlavor[] getTransferDataFlavors()
+		{
+			return new java.awt.datatransfer.DataFlavor[]{PNG_BYTES};
+		}
+
+		@Override
+		public boolean isDataFlavorSupported(java.awt.datatransfer.DataFlavor flavor)
+		{
+			return PNG_BYTES.equals(flavor);
+		}
+
+		@Override
+		public Object getTransferData(java.awt.datatransfer.DataFlavor flavor)
+			throws java.awt.datatransfer.UnsupportedFlavorException
+		{
+			if (PNG_BYTES.equals(flavor))
+			{
+				return new java.io.ByteArrayInputStream(png);
+			}
+			throw new java.awt.datatransfer.UnsupportedFlavorException(flavor);
 		}
 	}
 
