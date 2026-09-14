@@ -79,6 +79,33 @@ public class KillCountsTest
 	// the Kill Log has only the lying number on record, and the chat line the game
 	// prints on every kill is the game itself saying otherwise. The larger must
 	// NOT win here, because the lie is the larger.
+	// A drop imported from the old cloud journal carried no kill with it, so
+	// Zalcano holds 2,024 loot rows against 2,023 kills and has read one high
+	// ever since. Two independent statements -- the count the game gave for a
+	// kill, and the Kill Log -- say 2,023, and a row is not a kill.
+	@Test
+	public void aRowWithNoKillBehindItIsNotAKill() throws Exception
+	{
+		Map<String, Long> kc = plugin("{\"schema\":1,\"rsn\":\"Tester\","
+			+ "\"drops\":{\"Zalcano\":{\"kc\":2023,\"loots\":2024,\"value\":1}},"
+			+ "\"collection_log\":{\"slayer_kcs\":{\"Zalcano\":2023}}}").killCounts();
+		assertEquals(Long.valueOf(2_023), kc.get("Zalcano"));
+	}
+
+	// But where the two statements DIFFER the ledger's is a partial count of some
+	// kind, not a lifetime, and is no evidence against the rows: a slayer
+	// monster's kc is its task counter, and clamping to it would throw away
+	// hundreds of kills the ledger actually watched.
+	@Test
+	public void aPartialCountIsNoEvidenceAgainstTheRows() throws Exception
+	{
+		Map<String, Long> kc = plugin("{\"schema\":1,\"rsn\":\"Tester\","
+			+ "\"drops\":{\"Dust devil\":{\"kc\":2804,\"loots\":2997,\"value\":1}},"
+			+ "\"collection_log\":{\"slayer_kcs\":{\"Dust devils\":3328}}}").killCounts();
+		assertEquals("the rows were thrown away on a task counter's word",
+			Long.valueOf(3_328), kc.get("Dust devils"));
+	}
+
 	@Test
 	public void theGamesOwnCountBeatsAPageCounterCountingSomethingElse() throws Exception
 	{
