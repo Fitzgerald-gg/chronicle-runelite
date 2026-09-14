@@ -2130,13 +2130,13 @@ class ChroniclePanel extends PluginPanel
 		}
 		final long qty = count;
 		final long value = worth;
-		JPanel head = card("On-task loot");
-		head.add(row("Items", fmt(qty), accent()));
-		head.add(row("Worth", gp(value) + " gp", null));
-		head.add(row("Kinds", fmt(bag.size()), null));
-		p.add(head);
+		final long[] tally = plugin.onTaskTally(from, to);
+		p.add(onTaskHead(bag.size(), qty, value, tally));
 		p.add(vgap(6));
-		p.add(copyHeader("Drops", () -> toClipboard(pageImage(onTaskLootPage()))));
+		p.add(copyHeader("Drops", () ->
+		{
+			return copyPicture(onTaskLootPicture(bag, qty, value, tally));
+		}));
 		int mounted = 0;
 		for (LocalStore.BagItem b : bag)
 		{
@@ -2155,10 +2155,56 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	/** The board on its own, for the picture: no lens strip, no journey above it. */
-	private JPanel onTaskLootPage()
+	/**
+	 * What the on-task take amounts to. The loot itself, then what it was killed
+	 * out of: the kills that dropped something, and the superiors among them.
+	 * Kills that dropped nothing belong to the task rather than to the loot, so
+	 * they are counted on the task's own page and not here.
+	 */
+	private JPanel onTaskHead(int kinds, long qty, long value, long[] tally)
 	{
-		return addOnTaskLoot(column(), COPY_ROWS);
+		JPanel head = card("On-task loot");
+		head.add(row("Items", fmt(qty), accent()));
+		head.add(row("Worth", gp(value) + " gp", null));
+		head.add(row("Kinds", fmt(kinds), null));
+		if (tally != null && tally.length > 0 && tally[0] > 0)
+		{
+			head.add(row("Kills logged", fmt(tally[0]), null));
+		}
+		// Nothing to say to an account that never unlocked Bigger and Badder.
+		if (tally != null && tally.length > 1 && tally[1] > 0)
+		{
+			head.add(row("Superiors", fmt(tally[1]), null));
+		}
+		return head;
+	}
+
+	/**
+	 * The board as a picture: the card, then the whole list, set in columns rather
+	 * than cut off at sixty. A full grind to 99 runs to hundreds of kinds, and
+	 * that is exactly the page somebody wants to show; truncating it would throw
+	 * away the thing being shared.
+	 */
+	private JPanel onTaskLootPicture(List<LocalStore.BagItem> bag, long qty, long value,
+		long[] tally)
+	{
+		JPanel p = column();
+		p.add(onTaskHead(bag.size(), qty, value, tally));
+		p.add(vgap(6));
+
+		List<LocalStore.BagItem> shown = bag.size() > COPY_MOST
+			? bag.subList(0, COPY_MOST)
+			: bag;
+		for (LocalStore.BagItem b : shown)
+		{
+			p.add(row(b.name + (b.qty > 1 ? " \u00d7" + fmt(b.qty) : ""),
+				b.value > 0 ? gp(b.value) + " gp" : "", null));
+		}
+		if (shown.size() < bag.size())
+		{
+			p.add(ghostRow("+ " + fmt(bag.size() - shown.size()) + " more", ""));
+		}
+		return p;
 	}
 
 
@@ -2814,16 +2860,11 @@ class ChroniclePanel extends PluginPanel
 	 * A built page drawn to an image at its WHOLE height, not the window's. The
 	 * page is a strip in a scroll pane; what wants sharing is all of it.
 	 */
-	private static java.awt.Image pageImage(JPanel page)
+	private static java.awt.Image pageImage(JPanel page, int width)
 	{
 		try
 		{
-			// Wider than the panel on purpose. The sidebar is 225px and long item
-			// names truncate in it -- "Guthixian temple teleport x..." -- which a
-			// reader can live with because they can widen or hover. Somebody
-			// receiving a picture can do neither, so it is drawn with the room the
-			// names actually need.
-			int w = COPY_WIDTH;
+			int w = width;
 			page.setSize(w, 8000);
 			layOut(page);
 			int h = Math.max(1, Math.min(8000, page.getPreferredSize().height));
@@ -2844,7 +2885,12 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	// what a shared picture is drawn at; the panel itself is 225
+	/**
+	 * What one column of a shared picture is drawn at. Wider than the panel on
+	 * purpose: the sidebar is 225px and long item names truncate in it, which a
+	 * reader can live with because they can hover. Somebody receiving a picture
+	 * cannot.
+	 */
 	private static final int COPY_WIDTH = 340;
 
 	/** Lay a tree out by hand: it was never added to a window, so nothing else will. */
@@ -2866,12 +2912,88 @@ class ChroniclePanel extends PluginPanel
 	 * copy is fenced: a proportional font throws it away.
 	 */
 	/**
-	 * What a copy carries before it stops being pasteable. Discord takes two
-	 * thousand characters and the on-task board runs to 287 kinds, which is ten
-	 * thousand; a picture of all of them is five thousand pixels tall and nobody
-	 * reads it either. The tail says what was left rather than trailing off.
+	 * How deep a column of a shared picture runs before the next one starts. A
+	 * board that is longer is not cut: it is set in columns, the way a newspaper
+	 * sets a long list. Sixty rows is about a screen; six hundred in one column
+	 * is a ribbon nobody reads.
 	 */
 	private static final int COPY_ROWS = 60;
+	/** Columns before the columns themselves start running deeper than sixty. */
+	private static final int COPY_COLUMNS = 6;
+	/** The space between them, which the picture is widened by. */
+	private static final int COPY_GAP = 10;
+	/**
+	 * The ceiling, which is six columns two hundred deep. A whole grind to 99
+	 * leaves a few hundred kinds of loot behind it, so nothing real reaches this;
+	 * it is here so that a page can never ask for a picture the size of a wall.
+	 */
+	private static final int COPY_MOST = COPY_COLUMNS * 200;
+
+	/**
+	 * A built page on the clipboard as a picture of itself, set in as many columns
+	 * as its own length asks for. Every board that can be copied comes through
+	 * here, so none of them can quietly grow a different answer to being long.
+	 */
+	private static boolean copyPicture(JPanel page)
+	{
+		return toClipboard(copyImage(page));
+	}
+
+	/** The picture itself, so that a preview can be drawn without a clipboard. */
+	static java.awt.Image copyImage(JPanel page)
+	{
+		int cols = copyColumns(page.getComponentCount());
+		return pageImage(reflowed(page, cols), copyImageWidth(cols));
+	}
+
+	/** How many columns a list of this many rows is set in. */
+	private static int copyColumns(int rows)
+	{
+		int held = Math.max(0, Math.min(rows, COPY_MOST));
+		return Math.max(1, Math.min(COPY_COLUMNS, (held + COPY_ROWS - 1) / COPY_ROWS));
+	}
+
+	/** What that many columns is drawn at, gaps included. */
+	private static int copyImageWidth(int cols)
+	{
+		return COPY_WIDTH * cols + COPY_GAP * (cols - 1);
+	}
+
+	/**
+	 * A tall page set in columns. Its children are dealt out in order, left to
+	 * right, so the summary card heads the first column and the list runs on from
+	 * under it. Nothing is dropped; the page only changes shape.
+	 */
+	private static JPanel reflowed(JPanel page, int cols)
+	{
+		if (cols <= 1)
+		{
+			return page;
+		}
+		Component[] kids = page.getComponents();
+		page.removeAll();
+		int per = (kids.length + cols - 1) / cols;
+		JPanel grid = new JPanel(new GridLayout(1, cols, COPY_GAP, 0));
+		grid.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+		for (int c = 0; c < cols; c++)
+		{
+			JPanel col = column();
+			for (int i = c * per; i < Math.min(kids.length, (c + 1) * per); i++)
+			{
+				col.add(kids[i]);
+			}
+			// Pinned to the top: a short column would otherwise float in the middle
+			// of a cell the tallest one sized.
+			JPanel cell = new JPanel(new BorderLayout());
+			cell.setBackground(ColorScheme.DARK_GRAY_COLOR);
+			cell.add(col, BorderLayout.NORTH);
+			grid.add(cell);
+		}
+		JPanel out = column();
+		out.add(grid);
+		return out;
+	}
 
 
 
@@ -2882,22 +3004,20 @@ class ChroniclePanel extends PluginPanel
 	/** The item's page on the clipboard, as a picture of itself and as its text. */
 	private boolean copyItemPage(String name)
 	{
-		java.awt.Image shot = null;
 		int was = itemSourceCap;
 		try
 		{
-			itemSourceCap = COPY_ROWS;
-			shot = pageImage(stripChrome(buildItemDetail(name)));
+			itemSourceCap = COPY_MOST;
+			return copyPicture(stripChrome(buildItemDetail(name)));
 		}
-		catch (Throwable ignored)   // noqa: the text still goes, which is the point
+		catch (Throwable ignored)   // noqa: a picture is never worth an exception
 		{
-			shot = null;
+			return false;
 		}
 		finally
 		{
 			itemSourceCap = was;
 		}
-		return toClipboard(shot);
 	}
 
 	/**
@@ -2923,16 +3043,15 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private boolean copySourcePage(String name)
 	{
-		java.awt.Image shot = null;
 		Integer was = drillShown.get(name);
 		try
 		{
-			drillShown.put(name, COPY_ROWS);
-			shot = pageImage(stripChrome(buildSourceDetail(name)));
+			drillShown.put(name, COPY_MOST);
+			return copyPicture(stripChrome(buildSourceDetail(name)));
 		}
-		catch (Throwable ignored)   // noqa: the text still goes, which is the point
+		catch (Throwable ignored)   // noqa: a picture is never worth an exception
 		{
-			shot = null;
+			return false;
 		}
 		finally
 		{
@@ -2945,7 +3064,6 @@ class ChroniclePanel extends PluginPanel
 				drillShown.put(name, was);
 			}
 		}
-		return toClipboard(shot);
 	}
 
 
