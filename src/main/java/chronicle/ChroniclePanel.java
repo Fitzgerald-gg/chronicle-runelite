@@ -324,12 +324,14 @@ class ChroniclePanel extends PluginPanel
 		// the panel rebuilds per game tick.
 		homeTicker = new Timer(3000, e ->
 		{
-			// A detail opened from Home leaves the view on HOME, and a tick
-			// rebuilds the whole display — which would throw the reader back to
-			// the top of a fresh scroll pane every three seconds.
-			if (view == View.HOME && searchQuery().isEmpty()
-				&& detailItem == null && detailSource == null && detailTask < 0
-				&& leftBehindSource == null && leftBehindItem == null)
+			// A page opened from Home leaves the view on HOME, and a tick rebuilds
+			// the whole display: the scroll pane is replaced and the bar re-set
+			// under a reader who is in the middle of scrolling it. On the trackers
+			// page, which runs to two hundred rows and four thousand pixels, that
+			// reads as the scroll itself lagging. Only the sitting refreshes, and
+			// showingSitting is the one place that knows what the sitting is; this
+			// used to keep its own copy of that list and fell behind it twice.
+			if (showingSitting())
 			{
 				// Same view, same content: the reader stays where they were reading.
 				keepScroll = true;
