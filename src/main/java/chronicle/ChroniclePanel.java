@@ -933,6 +933,35 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
+	/**
+	 * Whether this source is something killed. The roster of fights, or a species
+	 * the game's own Kill Log counts; everything else pays out without dying --
+	 * the Rift is searched, a casket opened, a reward cart emptied.
+	 */
+	private boolean isKillSource(String name)
+	{
+		String kind = LocalStore.kindOf(name);
+		for (Boss b : bossRoster(plugin.gson()))
+		{
+			if (LocalStore.kindOf(b.name).equals(kind))
+			{
+				return true;
+			}
+		}
+		JsonObject cl = plugin.clogSnapshot();
+		if (cl != null && cl.has("slayer_kcs") && cl.get("slayer_kcs").isJsonObject())
+		{
+			for (String said : cl.getAsJsonObject("slayer_kcs").keySet())
+			{
+				if (LocalStore.kindOf(said).equals(kind))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	/** One source's takings, openable. */
 	private JPanel dropsRow(String label, LocalStore.SourceRow r)
 	{
@@ -2092,9 +2121,13 @@ class ChroniclePanel extends PluginPanel
 			JPanel card = cardPlain();
 			card.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 			card.add(row(r.name, gp(r.value) + " gp", accent()));
-			String sub = (r.kc > 0 ? fmt(r.kc) + " kc" : fmt(r.loots) + " drops")
+			// "kc" is a kill count, and the Rift is searched rather than killed
+			boolean killed = isKillSource(r.name);
+			String sub = (r.kc > 0 ? fmt(r.kc) + (killed ? " kc" : " drops")
+				: fmt(r.loots) + " drops")
 				+ (r.pb != null ? " · PB " + pb(r.pb) : "");
-			card.add(row(sub, r.kc > 0 ? gp(r.value / Math.max(1, r.kc)) + " gp/kc" : "", null));
+			card.add(row(sub, r.kc > 0
+				? gp(r.value / Math.max(1, r.kc)) + (killed ? " gp/kc" : " gp each") : "", null));
 			final String src = r.name;
 			card.addMouseListener(clicker(() -> openSource(src)));
 			p.add(card);
@@ -2587,7 +2620,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			head.add(row("Killed without loot", fmt(t.noLootKills), null));
 		}
-		head.add(row("The take", gp(t.totalValue) + " gp", null));
+		head.add(row("Worth", gp(t.totalValue) + " gp", null));
 		if (t.ts > 0)
 		{
 			head.add(row(t.inProgress ? "Started" : "Finished",
@@ -3529,10 +3562,26 @@ class ChroniclePanel extends PluginPanel
 		JPanel head = card(name);
 		if (sr != null)
 		{
-			head.add(row("Kills tracked", sr.kc > 0 ? fmt(sr.kc) : fmt(sr.loots) + " drops",
-				accent()));
-			head.add(row("The take", gp(sr.value) + " gp"
-				+ (sr.kc > 0 ? " · " + gp(sr.value / Math.max(1, sr.kc)) + " gp/kc" : ""), null));
+			// Not everything that drops loot is killed. The Rift is searched, a
+			// casket is opened, a cart is emptied: calling any of that "kills
+			// tracked" is the page telling the reader something untrue about what
+			// they did.
+			boolean killed = isKillSource(sr.name);
+			long count = sr.kc > 0 ? sr.kc : sr.loots;
+			head.add(row(killed ? "Kills tracked" : "Times looted",
+				sr.kc > 0 ? fmt(sr.kc) : fmt(sr.loots) + " drops", accent()));
+			head.add(row("Worth", gp(sr.value) + " gp"
+				+ (sr.kc > 0 ? " · " + gp(sr.value / Math.max(1, count))
+					+ (killed ? " gp/kill" : " gp each") : ""), null));
+			// what the log's own page counts for it, in the log's own words
+			for (Map.Entry<String, Long> pbLine : bestTimes(sr.name))
+			{
+				head.add(row(pbLine.getKey(), clock(pbLine.getValue()), null));
+			}
+			for (Map.Entry<String, Long> ln : logLines(sr.name))
+			{
+				head.add(row(ln.getKey(), fmt(ln.getValue()), null));
+			}
 			if (sr.pb != null)
 			{
 				head.add(row("Personal best", pb(sr.pb), null));

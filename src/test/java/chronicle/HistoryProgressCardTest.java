@@ -3550,6 +3550,38 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void somethingThatIsNotKilledIsNotCalledAKill() throws Exception
+	{
+		// The Rift is searched, a casket is opened, a reward cart is emptied.
+		// Calling any of it "kills tracked" tells the reader something untrue
+		// about what they did.
+		PanelPreviewTest.StubPlugin st = stub(true);
+		st.sources = Arrays.asList(
+			new LocalStore.SourceRow("Guardians of the Rift", 4_955, 4_955,
+				39_768_743L, null, 0, 0),
+			new LocalStore.SourceRow("Vorkath", 156, 143, 81_000_000L, null, 0, 0));
+		st.bags.put("Guardians of the Rift", Arrays.asList(
+			new LocalStore.BagItem(0, "Abyssal pearls", 4_000, 39_768_743L)));
+
+		ChroniclePanel p = panel(st);
+		Method bd = ChroniclePanel.class.getDeclaredMethod("buildSourceDetail", String.class);
+		bd.setAccessible(true);
+		final List<List<String>> seen = new ArrayList<>();
+		edt(() ->
+		{
+			seen.add(labels((JPanel) bd.invoke(p, "Guardians of the Rift")));
+			seen.add(labels((JPanel) bd.invoke(p, "Vorkath")));
+		});
+		List<String> rift = seen.get(0);
+		assertFalse("the Rift is not killed: " + rift, rift.contains("Kills tracked"));
+		assertTrue(rift.toString(), rift.contains("Times looted"));
+		assertFalse("the take is still being taken: " + rift, rift.contains("The take"));
+		assertTrue(rift.toString(), rift.contains("Worth"));
+		// and a fight still says kills
+		assertTrue(seen.get(1).toString(), seen.get(1).contains("Kills tracked"));
+	}
+
+	@Test
 	public void aFightPaidOutInAContainerStillShowsItsLoot() throws Exception
 	{
 		// Wintertodt hands its loot over in a cart and Tempoross in a pool, under
