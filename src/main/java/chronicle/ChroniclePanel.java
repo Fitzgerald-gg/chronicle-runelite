@@ -2672,51 +2672,82 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * A source's whole page as plain text: what the card says, then EVERY line of
-	 * its loot rather than the twenty five the page mounts. Somebody copying this
+	 * Two columns, the names padded and the figures right aligned under each
+	 * other, the way the page itself sets them. Alignment is the whole reason the
+	 * copy is fenced: a proportional font throws it away.
+	 */
+	private static String aligned(List<String[]> rows)
+	{
+		int left = 0;
+		int right = 0;
+		for (String[] r : rows)
+		{
+			left = Math.max(left, r[0].length());
+			right = Math.max(right, r[1] == null ? 0 : r[1].length());
+		}
+		StringBuilder b = new StringBuilder();
+		for (String[] r : rows)
+		{
+			b.append(r[0]);
+			if (r[1] != null && !r[1].isEmpty())
+			{
+				for (int i = r[0].length(); i < left + 2 + (right - r[1].length()); i++)
+				{
+					b.append(' ');
+				}
+				b.append(r[1]);
+			}
+			b.append('\n');
+		}
+		return b.toString();
+	}
+
+	/**
+	 * A source's whole page as text: what the card says, then EVERY line of its
+	 * loot rather than the twenty five the page mounts. Somebody copying this
 	 * wants the record, not the view of it.
+	 *
+	 * <p>Fenced, because the place this is going is a chat window. Discord sets a
+	 * bare paste in a proportional font, which lines up none of the figures and
+	 * makes a long drop table unreadable; inside a fence it arrives as the page
+	 * drew it. The fence costs six characters where it is not wanted.
 	 */
 	private String sourceAsText(String name, LocalStore.SourceRow sr,
 		List<LocalStore.BagItem> bag)
 	{
-		StringBuilder b = new StringBuilder(name);
+		StringBuilder b = new StringBuilder("```\n").append(name).append("\n");
 		if (sr != null)
 		{
-			b.append("\nKills tracked: ")
-				.append(sr.kc > 0 ? fmt(sr.kc) : fmt(sr.loots) + " drops");
-			b.append("\nThe take: ").append(gp(sr.value)).append(" gp");
-			if (sr.kc > 0)
-			{
-				b.append(" (").append(gp(sr.value / Math.max(1, sr.kc))).append(" gp/kc)");
-			}
+			List<String[]> head = new ArrayList<>();
+			head.add(new String[]{"Kills tracked",
+				sr.kc > 0 ? fmt(sr.kc) : fmt(sr.loots) + " drops"});
+			head.add(new String[]{"The take", gp(sr.value) + " gp"
+				+ (sr.kc > 0 ? " (" + gp(sr.value / Math.max(1, sr.kc)) + " gp/kc)" : "")});
 			if (sr.pb != null)
 			{
-				b.append("\nPersonal best: ").append(pb(sr.pb));
+				head.add(new String[]{"Personal best", pb(sr.pb)});
 			}
 			if (sr.firstMs > 0)
 			{
-				b.append("\nTracked since: ")
-					.append(TASK_DAY.format(Instant.ofEpochMilli(sr.firstMs)));
+				head.add(new String[]{"Tracked since",
+					TASK_DAY.format(Instant.ofEpochMilli(sr.firstMs))});
 			}
+			b.append(aligned(head));
 		}
 		if (!bag.isEmpty())
 		{
-			b.append("\n\nLoot (").append(fmt(bag.size())).append(bag.size() == 1
-				? " item):" : " items):");
+			b.append("\n").append(bag.size() == 1 ? "1 item" : fmt(bag.size()) + " items")
+				.append("\n");
+			List<String[]> loot = new ArrayList<>();
 			for (LocalStore.BagItem it : bag)
 			{
-				b.append("\n").append(it.name);
-				if (it.qty > 1)
-				{
-					b.append(" x").append(fmt(it.qty));
-				}
-				if (it.value > 0)
-				{
-					b.append(" - ").append(gp(it.value)).append(" gp");
-				}
+				loot.add(new String[]{
+					it.name + (it.qty > 1 ? " x" + fmt(it.qty) : ""),
+					it.value > 0 ? gp(it.value) + " gp" : ""});
 			}
+			b.append(aligned(loot));
 		}
-		return b.toString();
+		return b.append("```").toString();
 	}
 
 	// The item under the glass: total obtained, worth, and every source of it.

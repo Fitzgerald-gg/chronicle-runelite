@@ -3592,14 +3592,26 @@ public class HistoryProgressCardTest
 			bag.add(new LocalStore.BagItem(0, "Item " + i, 2, 100));
 		}
 		String text = (String) m.invoke(p, "Zalcano", null, bag);
-		assertTrue("the page does not name itself: " + text, text.startsWith("Zalcano"));
-		assertTrue(text, text.contains("Loot (40 items):"));
+		// fenced, or Discord sets it proportional and lines up none of the figures
+		assertTrue("not fenced: " + text, text.startsWith("```"));
+		assertTrue("not fenced: " + text, text.endsWith("```"));
+		assertTrue("the page does not name itself: " + text,
+			text.startsWith("```\nZalcano\n"));
+		assertTrue(text, text.contains("40 items"));
 		assertTrue("the copy stopped where the page does", text.contains("Item 39"));
 		assertTrue("quantities are lost", text.contains("Item 0 x2"));
 		assertTrue("values are lost", text.contains("100 gp"));
-		// plain text, so it can be pasted somewhere that never heard of Chronicle
-		assertFalse(text.contains("<"));
-		assertFalse(text.contains("JLabel"));
+
+		// and the figures line up under each other: every loot line the same width
+		java.util.Set<Integer> widths = new java.util.HashSet<>();
+		for (String line : text.split("\n"))
+		{
+			if (line.contains(" gp") && line.startsWith("Item "))
+			{
+				widths.add(line.length());
+			}
+		}
+		assertEquals("the columns do not line up: " + widths, 1, widths.size());
 	}
 
 	@Test
