@@ -1030,6 +1030,52 @@ public class PanelPreviewTest
 	}
 
 	// a second stub fed from the real journal on this machine, when there is one
+	/**
+	 * A plugin fed from a named journal in a named directory.
+	 *
+	 * <p>The /example crawler calls this by reflection to build the panel over
+	 * the fixture journal rather than over whatever this machine happens to have
+	 * played. It is the same assembly as {@link #realJournalPlugin()}, which
+	 * finds its own journal instead; both exist because the preview harness
+	 * wants the newest real one and the crawler wants a named one.
+	 */
+	static StubPlugin journalStub(String dirPath, String rsn) throws Exception
+	{
+		File dir = new File(dirPath);
+		ItemManager im = mockItems();
+		LocalStore store = new LocalStore(im, new Gson());
+		store.load(dir, rsn);
+
+		StubPlugin s = new StubPlugin(im);
+		s.spriteManager = mockSprites();
+		s.rsn = rsn;
+		s.sources = store.dropSources();
+		s.untaken = store.untakenSources();
+		s.recent = store.recentDrops();
+		s.clog = store.clogSnapshot();
+		s.clogFinished = store.clogFraction()[0];
+		s.clogAvailable = store.clogFraction()[1];
+		s.lifetime = store.trackersSnapshot();
+		s.feed = store.feedNewest(2000);
+		s.store = store;
+		s.history = new HistoryLog(new Gson()).read(dir, rsn);
+		s.journey = store.slayerJourney();
+		s.consumVals = store.consumableValues();
+		s.grinds = new GrindBook(new Gson()).grinds(store.clogSnapshot(), store.dropSources());
+		JsonObject clKc = store.clogSnapshot();
+		s.kcs.putAll(LocalStore.clogKillCounts(clKc));
+		for (Map.Entry<String, Long> e
+			: LocalStore.sourceKills(clKc, store.dropSources()).entrySet())
+		{
+			if (!s.kcs.containsKey(e.getKey()))
+			{
+				s.ledgerKcs.put(e.getKey(), e.getValue());
+			}
+			s.kcs.merge(e.getKey(), e.getValue(), Math::max);
+		}
+		return s;
+	}
+
 	private StubPlugin realJournalPlugin()
 	{
 		File dir = new File(System.getProperty("user.home"), ".runelite/chronicle");
@@ -1124,17 +1170,50 @@ public class PanelPreviewTest
 	// A sprite cache that answers, so the shots show what a line wears when the
 	// record has no item for it: a plain lozenge stands in for the game's own
 	// sidebar sprite, which only a running client can hand over.
+	/**
+	 * The sprite cache, answered with the game's own art where it has been dumped
+	 * out of the cache (-Dchronicle.exampleSprites=&lt;dir&gt; holding
+	 * sprite-&lt;id&gt;-&lt;frame&gt;.png), and with a plain token otherwise.
+	 *
+	 * <p>The token matters for the tests, which only care that something was
+	 * drawn. The real art matters for the /example recording: the boss board is
+	 * seventy one cells each wearing an IconBoss25x25 sprite, and a recording
+	 * made against the token says every one of them is the same brown oval.
+	 */
 	private static net.runelite.client.game.SpriteManager mockSprites()
 	{
+		String dir = System.getProperty("chronicle.exampleSprites");
+		File art = dir == null ? null : new File(dir);
 		net.runelite.client.game.SpriteManager sm =
 			Mockito.mock(net.runelite.client.game.SpriteManager.class);
 		Mockito.doAnswer(inv ->
 		{
-			BufferedImage img = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
-			Graphics2D g = img.createGraphics();
-			g.setColor(new java.awt.Color(140, 120, 70));
-			g.fillOval(3, 3, 26, 26);
-			g.dispose();
+			int id = inv.getArgument(0);
+			int frame = inv.getArgument(1);
+			BufferedImage img = null;
+			if (art != null)
+			{
+				File f = new File(art, "sprite-" + id + "-" + frame + ".png");
+				if (f.isFile())
+				{
+					try
+					{
+						img = ImageIO.read(f);
+					}
+					catch (Exception ignored)
+					{
+						img = null;
+					}
+				}
+			}
+			if (img == null)
+			{
+				img = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
+				Graphics2D g = img.createGraphics();
+				g.setColor(new java.awt.Color(140, 120, 70));
+				g.fillOval(3, 3, 26, 26);
+				g.dispose();
+			}
 			((java.util.function.Consumer<BufferedImage>) inv.getArgument(2)).accept(img);
 			return null;
 		}).when(sm).getSpriteAsync(Mockito.anyInt(), Mockito.anyInt(),
@@ -1142,7 +1221,7 @@ public class PanelPreviewTest
 		return sm;
 	}
 
-	private ItemManager mockItems()
+	private static ItemManager mockItems()
 	{
 		// a client thread that actually runs what it is handed: an image the cache
 		// already holds answers onLoaded through it, so a mock that swallows the
