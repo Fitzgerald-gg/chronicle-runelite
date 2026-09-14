@@ -1,0 +1,286 @@
+[
+ {
+  "name": "Abyssal Sire",
+  "sprite": 4276
+ },
+ {
+  "name": "Alchemical Hydra",
+  "sprite": 4289
+ },
+ {
+  "name": "Amoxliatl",
+  "sprite": 5639
+ },
+ {
+  "name": "Araxxor",
+  "sprite": 5638
+ },
+ {
+  "name": "Artio",
+  "sprite": 5622
+ },
+ {
+  "name": "Barrows Chests",
+  "sprite": 4267
+ },
+ {
+  "name": "Bryophyta",
+  "sprite": 4262
+ },
+ {
+  "name": "Callisto",
+  "sprite": 5622
+ },
+ {
+  "name": "Calvar'ion",
+  "sprite": 5623
+ },
+ {
+  "name": "Cerberus",
+  "sprite": 4280
+ },
+ {
+  "name": "Chambers of Xeric",
+  "sprite": 4288
+ },
+ {
+  "name": "Chambers of Xeric: Challenge Mode",
+  "sprite": 4296
+ },
+ {
+  "name": "Chaos Elemental",
+  "sprite": 5621
+ },
+ {
+  "name": "Chaos Fanatic",
+  "sprite": 5625
+ },
+ {
+  "name": "Commander Zilyana",
+  "sprite": 4284
+ },
+ {
+  "name": "Corporeal Beast",
+  "sprite": 4287
+ },
+ {
+  "name": "Crazy Archaeologist",
+  "sprite": 5626
+ },
+ {
+  "name": "Dagannoth Prime",
+  "sprite": 4294
+ },
+ {
+  "name": "Dagannoth Rex",
+  "sprite": 4293
+ },
+ {
+  "name": "Dagannoth Supreme",
+  "sprite": 4292
+ },
+ {
+  "name": "Deranged Archaeologist",
+  "sprite": 5627
+ },
+ {
+  "name": "Duke Sucellus",
+  "sprite": 5632
+ },
+ {
+  "name": "General Graardor",
+  "sprite": 4282
+ },
+ {
+  "name": "Giant Mole",
+  "sprite": 4263
+ },
+ {
+  "name": "Grotesque Guardians",
+  "sprite": 4264
+ },
+ {
+  "name": "Hespori",
+  "sprite": 4271
+ },
+ {
+  "name": "Kalphite Queen",
+  "sprite": 4270
+ },
+ {
+  "name": "King Black Dragon",
+  "sprite": 4274
+ },
+ {
+  "name": "Kraken",
+  "sprite": 4275
+ },
+ {
+  "name": "Kree'arra",
+  "sprite": 4285
+ },
+ {
+  "name": "K'ril Tsutsaroth",
+  "sprite": 4283
+ },
+ {
+  "name": "Lunar Chests",
+  "sprite": 5637
+ },
+ {
+  "name": "Mimic",
+  "sprite": 4260
+ },
+ {
+  "name": "Nex",
+  "sprite": 4291
+ },
+ {
+  "name": "Nightmare",
+  "sprite": 4286
+ },
+ {
+  "name": "Phosani's Nightmare",
+  "sprite": 4286
+ },
+ {
+  "name": "Obor",
+  "sprite": 4261
+ },
+ {
+  "name": "Phantom Muspah",
+  "sprite": 4299
+ },
+ {
+  "name": "Sarachnis",
+  "sprite": 4269
+ },
+ {
+  "name": "Scorpia",
+  "sprite": 5628
+ },
+ {
+  "name": "Scurrius",
+  "sprite": 5635
+ },
+ {
+  "name": "Skotizo",
+  "sprite": 4272
+ },
+ {
+  "name": "Sol Heredit",
+  "sprite": 5636
+ },
+ {
+  "name": "Spindel",
+  "sprite": 5624
+ },
+ {
+  "name": "Tempoross",
+  "sprite": 4265
+ },
+ {
+  "name": "The Gauntlet",
+  "sprite": 4278
+ },
+ {
+  "name": "The Corrupted Gauntlet",
+  "sprite": 4295
+ },
+ {
+  "name": "The Hueycoatl",
+  "sprite": 5640
+ },
+ {
+  "name": "The Leviathan",
+  "sprite": 5633
+ },
+ {
+  "name": "The Royal Titans",
+  "sprite": 6345
+ },
+ {
+  "name": "The Whisperer",
+  "sprite": 5631
+ },
+ {
+  "name": "Theatre of Blood",
+  "sprite": 4290
+ },
+ {
+  "name": "Theatre of Blood: Hard Mode",
+  "sprite": 4290
+ },
+ {
+  "name": "Thermonuclear Smoke Devil",
+  "sprite": 4277
+ },
+ {
+  "name": "Tombs of Amascut",
+  "sprite": 4297
+ },
+ {
+  "name": "Tombs of Amascut: Expert Mode",
+  "sprite": 4298
+ },
+ {
+  "name": "TzKal-Zuk",
+  "sprite": 5630
+ },
+ {
+  "name": "TzTok-Jad",
+  "sprite": 5629
+ },
+ {
+  "name": "Vardorvis",
+  "sprite": 5634
+ },
+ {
+  "name": "Venenatis",
+  "sprite": 5624
+ },
+ {
+  "name": "Vet'ion",
+  "sprite": 5623
+ },
+ {
+  "name": "Vorkath",
+  "sprite": 4281
+ },
+ {
+  "name": "Wintertodt",
+  "sprite": 4266
+ },
+ {
+  "name": "Zalcano",
+  "sprite": 4273
+ },
+ {
+  "name": "Zulrah",
+  "sprite": 4279
+ },
+ {
+  "name": "Brutus",
+  "sprite": 6352
+ },
+ {
+  "name": "Doom of Mokhaiotl",
+  "sprite": 6347
+ },
+ {
+  "name": "The Mad Angel",
+  "sprite": 8359
+ },
+ {
+  "name": "Maggot King",
+  "sprite": 8358
+ },
+ {
+  "name": "Shellbane Gryphon",
+  "sprite": 6349
+ },
+ {
+  "name": "Yama",
+  "sprite": 6346
+ }
+]

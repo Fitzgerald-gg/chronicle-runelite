@@ -123,6 +123,8 @@ public class PanelPreviewTest
 		expandSection(panel, "home:xp");
 		shoot(panel, out, prefix + "-home-xp", "HOME");
 		collapseAll(panel);
+		// the boss board, which is the hiscores roster and not the log's pages
+		shoot(panel, out, prefix + "-kills", "KILLS");
 		shoot(panel, out, prefix + "-drops", "DROPS");
 		// the journey lands via invokeLater after the first paint, so shoot twice
 		// and let the settled view overwrite the file
@@ -1523,6 +1525,26 @@ public class PanelPreviewTest
 		edt(() ->
 		{
 			setEnum(panel, "view", "chronicle.ChroniclePanel$View", view);
+			// A board is reached by a tab and a sub-tab now, so setting the view
+			// alone leaves the strip above it naming another tab's boards. The
+			// panel already knows which pair owns a board; ask it, or the shot
+			// shows a sub-tab strip that could never appear over that board.
+			Object v = get(panel, "view");
+			Method tabFor = ChroniclePanel.class.getDeclaredMethod("tabFor",
+				Class.forName("chronicle.ChroniclePanel$View"));
+			tabFor.setAccessible(true);
+			Object owner = tabFor.invoke(panel, v);
+			Field tf = ChroniclePanel.class.getDeclaredField("tab");
+			tf.setAccessible(true);
+			tf.set(panel, owner);
+			Method subFor = ChroniclePanel.class.getDeclaredMethod("subFor",
+				Class.forName("chronicle.ChroniclePanel$View"));
+			subFor.setAccessible(true);
+			Field sf = ChroniclePanel.class.getDeclaredField("subByTab");
+			sf.setAccessible(true);
+			@SuppressWarnings("unchecked")
+			Map<Object, String> subs = (Map<Object, String>) sf.get(panel);
+			subs.put(owner, (String) subFor.invoke(panel, v));
 			Method rebuild = ChroniclePanel.class.getDeclaredMethod("rebuild");
 			rebuild.setAccessible(true);
 			rebuild.invoke(panel);

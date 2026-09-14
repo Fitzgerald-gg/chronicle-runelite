@@ -88,7 +88,7 @@ class ChroniclePanel extends PluginPanel
 
 	private enum View
 	{
-		HOME, DROPS, SLAYER, LOG, STATS, HISTORY, JOURNAL, MANAGE
+		HOME, DROPS, SLAYER, LOG, STATS, HISTORY, JOURNAL, MANAGE, KILLS
 	}
 
 	/**
@@ -459,7 +459,7 @@ class ChroniclePanel extends PluginPanel
 						return View.STATS;
 					case "Kills":
 					default:
-						return View.HISTORY;
+						return View.KILLS;
 				}
 			case SKILLING:
 				return View.HISTORY;
@@ -487,6 +487,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			case DROPS:
 			case SLAYER:
+			case KILLS:
 				return Tab.PVM;
 			case LOG:
 				return Tab.LOG;
@@ -505,6 +506,8 @@ class ChroniclePanel extends PluginPanel
 	{
 		switch (v)
 		{
+			case KILLS:
+				return "Kills";
 			case DROPS:
 				return "Loot";
 			case SLAYER:
@@ -576,6 +579,266 @@ class ChroniclePanel extends PluginPanel
 		detailStack.clear();
 		searchField.setText("");
 		rebuild();
+	}
+
+
+	// ------------------------------------------------------------------
+	// The boss board
+	// ------------------------------------------------------------------
+
+	/** One boss on the board: the hiscores name, and the game's own icon for it. */
+	private static final class Boss
+	{
+		final String name;
+		final int sprite;
+
+		Boss(String name, int sprite)
+		{
+			this.name = name;
+			this.sprite = sprite;
+		}
+	}
+
+	private static List<Boss> bossRoster;
+	// which cell has its card open, if any
+	private String bossOpen;
+
+	/**
+	 * The board is the hiscores roster, which is the list the official plugin
+	 * shows. The collection log is NOT the list: it files by DROP TABLE, so it
+	 * gives one page to all three Dagannoth Kings, one to both Gauntlets, and
+	 * names three of its own pages "Callisto and Artio", "Venenatis and Spindel"
+	 * and "Vet'ion and Calvar'ion". The hiscores counts ENCOUNTERS, which is what
+	 * a kill count means.
+	 *
+	 * <p>The icons are the game's own IconBoss25x25, fetched through the same
+	 * SpriteManager the facet strip uses. Three of them are pooled by the game the
+	 * way the log pools its pages, so Callisto and Artio wear one icon between
+	 * them; the count beside it is still each encounter's own.
+	 */
+	private static synchronized List<Boss> bossRoster(com.google.gson.Gson gson)
+	{
+		if (bossRoster != null)
+		{
+			return bossRoster;
+		}
+		List<Boss> out = new ArrayList<>();
+		try (java.io.InputStream in = ChroniclePanel.class.getResourceAsStream("osrs_bosses.json"))
+		{
+			if (in != null)
+			{
+				com.google.gson.JsonArray arr = gson.fromJson(
+					new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8),
+					com.google.gson.JsonArray.class);
+				for (com.google.gson.JsonElement e : arr)
+				{
+					JsonObject o = e.getAsJsonObject();
+					out.add(new Boss(o.get("name").getAsString(),
+						o.has("sprite") ? o.get("sprite").getAsInt() : -1));
+				}
+			}
+		}
+		catch (Exception ex)   // noqa: a missing resource leaves the board empty
+		{
+			// the same silence the taxonomy keeps: an empty board, not a stack trace
+		}
+		bossRoster = out;
+		return out;
+	}
+
+	/** Where the hiscores and the collection log name one fight differently. */
+	private static final Map<String, String> LOG_PAGE_FOR = new LinkedHashMap<>();
+
+	static
+	{
+		LOG_PAGE_FOR.put("TzTok-Jad", "The Fight Caves");
+		LOG_PAGE_FOR.put("TzKal-Zuk", "The Inferno");
+		LOG_PAGE_FOR.put("Sol Heredit", "Fortis Colosseum");
+	}
+
+	/**
+	 * How many of a boss have been killed. The collection log page's own header
+	 * counter is NOT a kill count and must not be read as one: Wintertodt's line
+	 * counts rewards claimed, so it says 1,078 where 447 were killed, and a page
+	 * not opened in a while is simply stale, which is how Vorkath came to read 19
+	 * against 156.
+	 *
+	 * <p>Two sources are honest, both per encounter and both only growing: the
+	 * game's own Kill Log, and the killCount the game stamped on a loot event.
+	 * Either can be the fresher, so the larger wins. The page counter answers
+	 * only where neither of them has anything to say.
+	 */
+	private long bossKills(String name)
+	{
+		JsonObject cl = plugin.clogSnapshot();
+		long best = 0;
+		if (cl != null && cl.has("slayer_kcs") && cl.get("slayer_kcs").isJsonObject())
+		{
+			com.google.gson.JsonElement v = cl.getAsJsonObject("slayer_kcs").get(name);
+			if (v != null)
+			{
+				best = Math.max(best, safeLong(v));
+			}
+		}
+		String kind = LocalStore.kindOf(name);
+		for (LocalStore.SourceRow r : plugin.dropSources())
+		{
+			if (LocalStore.kindOf(r.name).equals(kind))
+			{
+				best = Math.max(best, r.kc);
+			}
+		}
+		if (best > 0)
+		{
+			return best;
+		}
+		if (cl != null && cl.has("kcs") && cl.get("kcs").isJsonObject())
+		{
+			String page = LOG_PAGE_FOR.containsKey(name) ? LOG_PAGE_FOR.get(name) : name;
+			com.google.gson.JsonElement v = cl.getAsJsonObject("kcs").get(page);
+			if (v != null)
+			{
+				return safeLong(v);
+			}
+		}
+		return 0;
+	}
+
+	/**
+	 * The bosses as a sheet, the way the skills are: the roster three across, each
+	 * wearing the game's own icon with its count beside it. A boss never fought
+	 * shows a dash rather than a zero, because a dash reads as none and a sheet of
+	 * forty zeros reads as noise.
+	 *
+	 * <p>Opening one drops a card in under its own ROW rather than at the foot of
+	 * seventy, so what it says is beside what was clicked.
+	 */
+	private JPanel buildKills()
+	{
+		JPanel p = column();
+		List<Boss> roster = bossRoster(plugin.gson());
+		if (roster.isEmpty())
+		{
+			p.add(note("The boss roster did not load."));
+			return p;
+		}
+		int at = -1;
+		for (int i = 0; i < roster.size(); i++)
+		{
+			if (roster.get(i).name.equals(bossOpen))
+			{
+				at = i;
+				break;
+			}
+		}
+		int cut = at < 0 ? roster.size() : Math.min(roster.size(), (at / 3 + 1) * 3);
+		p.add(bossSheet(roster.subList(0, cut)));
+		if (at >= 0)
+		{
+			p.add(vgap(4));
+			p.add(bossCard(roster.get(at)));
+			p.add(vgap(4));
+			if (cut < roster.size())
+			{
+				p.add(bossSheet(roster.subList(cut, roster.size())));
+			}
+		}
+		p.add(vgap(6));
+		return p;
+	}
+
+	private JPanel bossSheet(List<Boss> rows)
+	{
+		JPanel grid = new JPanel(new GridLayout(0, 3, 2, 2));
+		grid.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+		for (Boss b : rows)
+		{
+			grid.add(bossCell(b));
+		}
+		return grid;
+	}
+
+	private JPanel bossCell(Boss b)
+	{
+		final long kc = bossKills(b.name);
+		final boolean lit = b.name.equals(bossOpen);
+		JPanel cell = new JPanel(new BorderLayout(3, 0));
+		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		cell.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
+		cell.setToolTipText(b.name + (kc > 0 ? ", " + fmt(kc) + " killed" : ""));
+		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+
+		JLabel icon = new JLabel();
+		if (b.sprite > 0)
+		{
+			// 24, not the sprite's own 25: a cell leaves about 32px beside the
+			// icon and a five figure count needs 32 of them.
+			wearSprite(icon, b.sprite, 24, 24);
+		}
+		cell.add(icon, BorderLayout.WEST);
+
+		JLabel fig = new JLabel(kc > 0 ? fmt(kc) : "-", JLabel.RIGHT);
+		fig.setFont(FontManager.getRunescapeSmallFont());
+		fig.setForeground(lit ? accent()
+			: (kc > 0 ? Color.WHITE : ColorScheme.LIGHT_GRAY_COLOR.darker()));
+		cell.add(fig, BorderLayout.EAST);
+		cell.addMouseListener(clicker(() ->
+		{
+			bossOpen = lit ? null : b.name;
+			rebuildInPlace();
+		}));
+		return cell;
+	}
+
+	/**
+	 * What one boss came to. The count on the cell is kills; this answers the two
+	 * things the cell cannot: how many of those kills the plugin was watching for
+	 * loot, which is a smaller number and a different question, and what they
+	 * came to. The second opens the source's own page.
+	 */
+	private JPanel bossCard(Boss b)
+	{
+		JPanel card = new JPanel();
+		card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+		card.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		card.setBorder(BorderFactory.createEmptyBorder(6, CARD_INSET, 6, CARD_INSET));
+		card.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JLabel title = new JLabel(b.name.toUpperCase(Locale.ROOT));
+		title.setFont(FontManager.getRunescapeSmallFont());
+		title.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+		title.setAlignmentX(Component.LEFT_ALIGNMENT);
+		card.add(title);
+		card.add(vgap(3));
+
+		String kind = LocalStore.kindOf(b.name);
+		LocalStore.SourceRow src = null;
+		for (LocalStore.SourceRow r : plugin.dropSources())
+		{
+			if (LocalStore.kindOf(r.name).equals(kind))
+			{
+				src = r;
+				break;
+			}
+		}
+		if (src == null)
+		{
+			card.add(row("Kills tracked", "-", null));
+			card.add(note("No loot from here has reached the journal yet."));
+			return card;
+		}
+		card.add(row("Kills tracked", fmt(src.loots), accent()));
+		long qty = 0;
+		for (LocalStore.BagItem it : plugin.sourceItems(src.name))
+		{
+			qty += it.qty;
+		}
+		JPanel drops = row("Drops", fmt(qty) + " · " + gp(src.value) + " gp", null);
+		drops.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		final String open = src.name;
+		drops.addMouseListener(clicker(() -> openSource(open)));
+		card.add(drops);
+		return card;
 	}
 
 	// ------------------------------------------------------------------
@@ -675,6 +938,9 @@ class ChroniclePanel extends PluginPanel
 		{
 			switch (view)
 			{
+				case KILLS:
+					body = buildKills();
+					break;
 				case DROPS:
 					body = buildDrops();
 					break;
