@@ -189,6 +189,7 @@ public class ExampleExportTest
 			seedPeriods();
 			seedViews();
 			seedDrills();
+			seedBoards();
 			gatherCorpus();
 			while (!queue.isEmpty() && states.size() < STATE_BUDGET)
 			{
@@ -267,6 +268,144 @@ public class ExampleExportTest
 		 * the one a reader really lands on rather than a guess at which fields it
 		 * sets.
 		 */
+		/**
+		 * Every board, reached the way the panel reaches it.
+		 *
+		 * <p>The crawl is a breadth-first walk of clicks, and the panel now has
+		 * more clicks than the budget: eight hundred and twenty six drills and a
+		 * seventy one cell sheet come first, and the Ledger's own families, the
+		 * Activities board and a task's page never come up at all. Seeding them
+		 * by hand is not a shortcut past the crawl -- the screens are still drawn
+		 * by the panel and still recorded whole -- it is the difference between
+		 * coverage that is decided and coverage that is hoped for.
+		 */
+		/**
+		 * Stand on a tab and one of its sub-tabs, the way clicking its pill does.
+		 *
+		 * <p>A board is chosen by the pair, not by the `view` field: PvM's Combat
+		 * and Record's Ledger are the same builder reading different families,
+		 * and writing `view` alone leaves whichever tab the panel was last on.
+		 */
+		@SuppressWarnings({"unchecked", "rawtypes"})
+		private void openSub(String tabName, String subName) throws Exception
+		{
+			Class<?> tabType = Class.forName("chronicle.ChroniclePanel$Tab");
+			Object target = Enum.valueOf((Class) tabType, tabName);
+			if (subName != null)
+			{
+				Map<Object, String> subs = (Map<Object, String>) field("subByTab").get(panel);
+				subs.put(target, subName);
+			}
+			Method apply = ChroniclePanel.class.getDeclaredMethod("applyTab", tabType);
+			apply.setAccessible(true);
+			edt(() -> apply.invoke(panel, target));
+		}
+
+		private void seedBoards() throws Exception
+		{
+			Map<String, Object> home = snapshot();
+			Class<?> viewType = Class.forName("chronicle.ChroniclePanel$View");
+			Method applyTab = ChroniclePanel.class.getDeclaredMethod("applyTab", viewType);
+			applyTab.setAccessible(true);
+
+			// Every sub-tab of every tab, opened the way its own pill opens it.
+			// The crawl does reach most of them, but it reaches them in whatever
+			// order the budget allows and PvM's fourth board never came up at
+			// all; seeding the grid makes the coverage a decision.
+			for (String[] pair : new String[][]{
+				{"RECORD", "Now"}, {"RECORD", "Journal"}, {"RECORD", "Ledger"},
+				{"PVM", "Kills"}, {"PVM", "Loot"}, {"PVM", "Slayer"}, {"PVM", "Combat"},
+				{"SKILLING", "Skills"}, {"SKILLING", "Activities"}, {"LOG", null}})
+			{
+				restore(home);
+				openSub(pair[0], pair[1]);
+				remember();
+			}
+
+			// each family the Ledger board offers, and one section of each
+			// opened: the ghost heads, the verb drills and the nested
+			// destinations only exist inside a fold, and a fold needs a click the
+			// crawl's budget never reaches. Combat is not among them -- it is a
+			// family of the same table, but it hangs under PvM's own sub-tab and
+			// was seeded above, where setting `statsFamily` under Record would
+			// have recorded a screen the panel cannot actually be left on.
+			String[][] families = {
+				{"Ledger & Roads", "Teleports"}, {"Living", "Food"}
+			};
+			for (String[] fam : families)
+			{
+				for (String fold : new String[]{null, fam[1]})
+				{
+					if (fold == null && fam[1] != null && false)
+					{
+						continue;
+					}
+					restore(home);
+					final Object stats = Enum.valueOf((Class) viewType, "STATS");
+					edt(() -> applyTab.invoke(panel, stats));
+					field("statsFamily").set(panel, fam[0]);
+					if (fold != null)
+					{
+						@SuppressWarnings("unchecked")
+						java.util.Set<String> folds =
+							(java.util.Set<String>) field("openFolds").get(panel);
+						folds.add(fam[0] + ":" + fold);
+					}
+					remember();
+					if (fold == null && fam[1] == null)
+					{
+						break;
+					}
+				}
+			}
+			// both readings of the Skilling tab
+			for (String facet : new String[]{"Skills", "Activities"})
+			{
+				restore(home);
+				final Object hist = Enum.valueOf((Class) viewType, "HISTORY");
+				edt(() -> applyTab.invoke(panel, hist));
+				field("histFacet").set(panel, facet);
+				remember();
+			}
+			// the slayer lenses, and the loot board's two
+			for (String lens : new String[]{"Tasks", "Monsters", "Drops"})
+			{
+				restore(home);
+				final Object sl = Enum.valueOf((Class) viewType, "SLAYER");
+				edt(() -> applyTab.invoke(panel, sl));
+				field("slayerLens").set(panel, lens);
+				remember();
+			}
+			for (boolean left : new boolean[]{false, true})
+			{
+				restore(home);
+				final Object dr = Enum.valueOf((Class) viewType, "DROPS");
+				edt(() -> applyTab.invoke(panel, dr));
+				field("dropsLeftBehind").set(panel, left);
+				remember();
+			}
+			// a task's own page, and the trackers page a search lands on
+			restore(home);
+			// a task row sets the field straight from its click handler
+			field("detailTask").set(panel, 0);
+			remember();
+
+			restore(home);
+			Method openAll = ChroniclePanel.class.getDeclaredMethod("openAllTrackers");
+			openAll.setAccessible(true);
+			edt(() -> openAll.invoke(panel));
+			remember();
+
+			// one skill drilled from the grid
+			restore(home);
+			Method openSkill = ChroniclePanel.class.getDeclaredMethod("openSkill", String.class);
+			openSkill.setAccessible(true);
+			edt(() -> openSkill.invoke(panel, "Slayer"));
+			remember();
+
+			restore(home);
+		}
+
 		private void seedDrills() throws Exception
 		{
 			Map<String, Object> home = snapshot();
@@ -1212,12 +1351,28 @@ public class ExampleExportTest
 			});
 		stub.itemManager = im;
 
+		// The game's sprites, which the boss sheet wears. Two spellings, because
+		// two dumps produced them: a whole-index dump names every frame
+		// (`sprite-<id>-<frame>.png`) and sits in its own folder, while the older
+		// hand-picked few sit beside the item art under frame-less names. A
+		// sprite that answers neither leaves its label bare, and a bare label is
+		// recorded as a spacer -- which is how seventy one boss cells once came
+		// out of a recording wearing nothing at all.
+		String spriteDir = System.getProperty("chronicle.exampleSprites");
+		File sprites = spriteDir == null ? null : new File(spriteDir);
 		net.runelite.client.game.SpriteManager sm =
 			org.mockito.Mockito.mock(net.runelite.client.game.SpriteManager.class);
 		org.mockito.Mockito.doAnswer(inv ->
 		{
-			File f = new File(icons, "sprite-" + inv.getArgument(0) + ".png");
-			BufferedImage img = f.exists() ? ImageIO.read(f) : null;
+			int id = inv.getArgument(0);
+			int frame = inv.getArgument(1);
+			File f = sprites == null ? null
+				: new File(sprites, "sprite-" + id + "-" + frame + ".png");
+			if (f == null || !f.isFile())
+			{
+				f = new File(icons, "sprite-" + id + ".png");
+			}
+			BufferedImage img = f.isFile() ? ImageIO.read(f) : null;
 			if (img != null)
 			{
 				((java.util.function.Consumer<BufferedImage>) inv.getArgument(2)).accept(img);
