@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.HashSet;
 import java.util.Set;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -3188,9 +3189,14 @@ public class HistoryProgressCardTest
 
 		set(p, "histGranularity", "Lifetime");
 		List<String> lifetime = labels(history(p));
-		// the Stats tab's own family pills, which the progress card never had
+		// the Stats tab's own family pills, which the progress card never had.
+		// They are the TAB's families now: the Ledger holds what a life costs and
+		// where it went, PvM's fourth board is Combat, and Skilling is opened from
+		// a cell in the grid rather than offered as a pill here.
 		assertTrue("no family pills: " + lifetime, lifetime.contains("Ledger & Roads"));
-		assertTrue(lifetime.toString(), lifetime.contains("Skilling"));
+		assertTrue(lifetime.toString(), lifetime.contains("Living"));
+		assertFalse("Skilling is reached from the grid now: " + lifetime,
+			lifetime.contains("Skilling"));
 		assertFalse(lifetime.toString(), lifetime.contains("TRACKED PROGRESS"));
 	}
 
@@ -3232,6 +3238,51 @@ public class HistoryProgressCardTest
 		List<String> all = labels(history(p));
 		assertTrue("the tab is blank: " + all, all.contains("THE PERIOD"));
 		assertTrue(all.toString(), all.contains("ATT"));
+	}
+
+	@Test
+	public void everyCraftTheRegistryFilesUnderIsOpenableFromTheGrid() throws Exception
+	{
+		// Scoping the stats pills to their tab is only safe while the Skilling
+		// family has another way in, and that way is a cell in the grid. A craft
+		// the registry can file a counter under but no cell can open is an orphan,
+		// and orphaning it once already cost a revert.
+		java.lang.reflect.Field f = chronicle.panel.StatRegistry.class.getDeclaredField("SKILLS");
+		f.setAccessible(true);
+		List<?> specs = (List<?>) f.get(null);
+		assertFalse("no crafts at all", specs.isEmpty());
+
+		Set<String> openable = new HashSet<>();
+		for (net.runelite.api.Skill sk : net.runelite.api.Skill.values())
+		{
+			openable.add(chronicle.panel.StatRegistry.prettify(sk.name().toLowerCase(Locale.ROOT)));
+		}
+		List<String> orphans = new ArrayList<>();
+		for (Object spec : specs)
+		{
+			java.lang.reflect.Field nf = spec.getClass().getDeclaredField("name");
+			nf.setAccessible(true);
+			String craft = (String) nf.get(spec);
+			// the registry files by craft and subgroup() hands that straight back,
+			// so this is exactly what openSkill would be asked to find
+			if (!openable.contains(craft))
+			{
+				orphans.add(craft);
+			}
+		}
+		assertTrue("crafts no grid cell can open: " + orphans, orphans.isEmpty());
+
+		// and the family only ever claims a key it could name a craft for, so a
+		// Skilling counter can never fall into the family's flat top list
+		for (String key : new String[]{"logsChopped", "oresMined", "runesCrafted",
+			"bonesBuried", "lapsCompleted"})
+		{
+			if ("Skilling".equals(chronicle.panel.StatRegistry.family(key)))
+			{
+				assertFalse(key + " files under Skilling with no craft",
+					chronicle.panel.StatRegistry.subgroup(key).isEmpty());
+			}
+		}
 	}
 
 	@Test

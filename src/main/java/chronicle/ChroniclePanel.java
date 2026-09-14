@@ -3370,11 +3370,23 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel p = column();
 		consumVals = plugin.consumableValues();
-		// All four families stay reachable here. Scoping them to the tab reads
-		// tidier and was tried, but the Skilling family's per-craft counters have
-		// no other way in until a skill cell opens on its own trackers: the grid
-		// carries a tooltip, not a click. Narrowing this would orphan them.
-		String[] families = StatRegistry.FAMILIES;
+		// The tab already chose the family's half of the sheet: the Ledger holds
+		// what a life costs and where it went, PvM's fourth board is Combat alone,
+		// and Skilling is reached by opening a cell in the grid rather than by a
+		// pill here. Offering all four would let a reader stand under one tab
+		// reading another tab's board.
+		//
+		// This was tried once before and reverted, because narrowing it orphaned
+		// the Skilling family: the grid carried a tooltip, not a click. Now that
+		// the cell opens, nothing is orphaned, and a test holds the invariant that
+		// makes it safe -- every craft the registry can file under is a skill the
+		// grid draws, so every Skilling counter has a way in.
+		String[] families = tab == Tab.PVM ? new String[]{"Combat"}
+			: tab == Tab.RECORD ? new String[]{"Ledger & Roads", "Living"}
+			: StatRegistry.FAMILIES;
+		// Which family is SELECTED is navigation's business, not a builder's:
+		// applyCommon already sets it when a tab is opened, and resetting it here
+		// would mean a build could silently change what it was asked to draw.
 		JPanel pills = new JPanel(new GridLayout(0, 2, 3, 3));
 		pills.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		for (String fam : families)
