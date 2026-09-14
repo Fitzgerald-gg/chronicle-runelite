@@ -90,7 +90,15 @@ public class ChronicleEventCapture
 	// suffix's own colon stays in the name.
 	static final Pattern KILL_COUNT = Pattern.compile(
 		"^Your (?:completed )?(?<subject>.+?)"
-			+ "(?: (?:kill|chest|lap|harvest|success|completion))? count is: (?<tally>[\\d,]+)\\.$");
+			+ "(?: (?<kind>kill|chest|lap|harvest|success|completion))? count is: (?<tally>[\\d,]+)\\.$");
+
+	// Of the words that expression admits, these two are not kills: a lap of an
+	// agility course and a herbiboar harvest are activities whose sources the loot
+	// ledger already follows. Everything else is the game counting an encounter,
+	// including the lines that carry no word at all ("Your subdued Wintertodt
+	// count is:", "Your completed Chambers of Xeric count is:").
+	private static final java.util.Set<String> NOT_A_KILL =
+		new java.util.HashSet<>(java.util.Arrays.asList("lap", "harvest"));
 
 	static final Pattern COLLECTION_ITEM = Pattern.compile(
 		"^New item added to your collection log: (?<entry>.+)$");
@@ -1338,8 +1346,26 @@ public class ChronicleEventCapture
 		{
 			try
 			{
-				recentKc.put(cleanKey(kc.group("subject")),
-					Integer.parseInt(kc.group("tally").replace(",", "")));
+				String subject = Text.removeTags(kc.group("subject")).trim();
+				int tally = Integer.parseInt(kc.group("tally").replace(",", ""));
+				recentKc.put(cleanKey(subject), tally);
+				// And into the journal on the spot. This line is the game stating its
+				// own count, on the kill itself, with no interface opened and nothing
+				// fetched -- but it used to live only in recentKc, which is read in
+				// one place: to stamp the loot event that follows. A source whose
+				// reward is not an NPC drop never gets that event, so Wintertodt,
+				// Tempoross and the Gauntlet had their true count announced and
+				// discarded on every single kill, leaving them on a Kill Log reading
+				// that only moves when the player opens an interface.
+				String kind = kc.group("kind");
+				if (kind == null || !NOT_A_KILL.contains(kind))
+				{
+					String owner = localName();
+					if (owner != null && localStore.isReadyFor(owner))
+					{
+						localStore.noteKillCount(subject, tally, owner);
+					}
+				}
 			}
 			catch (NumberFormatException ignored)
 			{

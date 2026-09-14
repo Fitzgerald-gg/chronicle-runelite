@@ -87,6 +87,49 @@ public class LocalStorePersistenceTest
 		assertEquals(99, store.skillSheet().get("Slayer")[0]);
 	}
 
+	// The chat box states a count on the kill itself; it only ever counts up, and
+	// a line from an older session must never pull a later reading back.
+	@Test
+	public void theChatCountFloorsAndSurvivesAReload() throws Exception
+	{
+		LocalStore store = mounted();
+		store.noteKillCount("subdued Wintertodt", 448, RSN);
+		store.noteKillCount("subdued Wintertodt", 440, RSN);   // a straggler
+		store.noteKillCount("Zulrah", 501, RSN);
+		store.noteKillCount("", 9, RSN);                        // no name
+		store.noteKillCount("Nothing", 0, RSN);                 // no count
+		store.noteKillCount("Other", 5, "Someone Else");        // not this journal
+
+		assertEquals(Long.valueOf(448), store.chatKillCounts().get("subdued Wintertodt"));
+		assertEquals(Long.valueOf(501), store.chatKillCounts().get("Zulrah"));
+		assertEquals(2, store.chatKillCounts().size());
+
+		store.flush(dir);
+		LocalStore back = newStore();
+		back.load(dir, RSN);
+		assertEquals("the counts did not survive the write",
+			Long.valueOf(448), back.chatKillCounts().get("subdued Wintertodt"));
+	}
+
+	// importJournal names every key it carries, so one left out is dropped in
+	// silence: the counts have to travel with the journal like the rest.
+	@Test
+	public void theChatCountTravelsWithAnImport()
+	{
+		LocalStore store = mounted();
+		store.noteKillCount("Zulrah", 100, RSN);
+
+		JsonObject incoming = new JsonObject();
+		JsonObject counts = new JsonObject();
+		counts.addProperty("Zulrah", 501);
+		counts.addProperty("subdued Wintertodt", 448);
+		incoming.add("chat_kcs", counts);
+		store.importJournal(incoming, RSN);
+
+		assertEquals(Long.valueOf(501), store.chatKillCounts().get("Zulrah"));
+		assertEquals(Long.valueOf(448), store.chatKillCounts().get("subdued Wintertodt"));
+	}
+
 	private void kill(LocalStore store, String source, int kc, int itemId, int qty)
 	{
 		JsonObject data = new JsonObject();

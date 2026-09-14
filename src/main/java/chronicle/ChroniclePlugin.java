@@ -977,7 +977,15 @@ public class ChroniclePlugin extends Plugin
 		// notable drop imported without a kill put Zalcano one above its own log.
 		// The Kill Log is the game counting the encounter, so where it speaks it
 		// is the answer.
-		out.putAll(LocalStore.killLogCounts(cl));
+		// What the game itself says about the encounter: the Kill Log, and the chat
+		// line it prints on the kill. The Kill Log only moves when the player opens
+		// an interface, so a number resting on it alone is frozen between visits;
+		// the chat line arrives on every kill, with nothing opened and nothing
+		// fetched. Both are the game counting and both only count up, so between
+		// the two the larger is the later reading.
+		Map<String, Long> game = LocalStore.killLogCounts(cl);
+		LocalStore.foldChatCounts(game, localStore.chatKillCounts(), out.keySet());
+		out.putAll(game);
 		return out;
 	}
 

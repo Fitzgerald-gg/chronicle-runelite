@@ -781,6 +781,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			o.addProperty("first_seen", nowSec());
 		}
 		ensureObject(o, "skills");
+		ensureObject(o, "chat_kcs");
 		ensureObject(o, "collection_log");
 		ensureObject(o, "achievements");
 		ensureObject(o, "drops");
@@ -2367,6 +2368,22 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					? root.getAsJsonObject("collection_log") : new JsonObject();
 				root.add("collection_log", mergeClog(cl, in.getAsJsonObject("collection_log")));
 			}
+			// The chat box's counts travel with it. This block names every key it
+			// carries, so one left out is dropped in silence.
+			if (in.has("chat_kcs") && in.get("chat_kcs").isJsonObject())
+			{
+				ensureObject(root, "chat_kcs");
+				JsonObject mine = root.getAsJsonObject("chat_kcs");
+				for (java.util.Map.Entry<String, JsonElement> e
+					: in.getAsJsonObject("chat_kcs").entrySet())
+				{
+					long n = asLong(e.getValue());
+					if (n > (mine.has(e.getKey()) ? asLong(mine.get(e.getKey())) : 0))
+					{
+						mine.addProperty(e.getKey(), n);
+					}
+				}
+			}
 			// The gathered ledger travels too, or ore mined on the other machine goes
 			// unrecognised here.
 			if (in.has("gathered_items") && in.get("gathered_items").isJsonArray())
@@ -3345,6 +3362,61 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/**
+	 * A kill count the game announced in the chat box, under the name it used.
+	 * Stored raw: "subdued Wintertodt" is what was said, and mapping that onto a
+	 * source is the reader's job, so a mapping that turns out wrong can be fixed
+	 * later without the reading being lost.
+	 *
+	 * <p>Floor-merged like every other count. The game only ever counts up, and a
+	 * line from an older session must not pull a later one back.
+	 */
+	void noteKillCount(String subject, int tally, String rsn)
+	{
+		if (subject == null || subject.isEmpty() || tally <= 0 || !isReadyFor(rsn))
+		{
+			return;
+		}
+		synchronized (lock)
+		{
+			if (root == null)
+			{
+				return;
+			}
+			ensureObject(root, "chat_kcs");
+			JsonObject m = root.getAsJsonObject("chat_kcs");
+			if (m.has(subject) && asLong(m.get(subject)) >= tally)
+			{
+				return;
+			}
+			m.addProperty(subject, tally);
+			root.addProperty("updated_at", nowSec());
+		}
+	}
+
+	/** Every count the chat box has announced, by the name the game used. */
+	java.util.Map<String, Long> chatKillCounts()
+	{
+		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		synchronized (lock)
+		{
+			if (root == null || !root.has("chat_kcs") || !root.get("chat_kcs").isJsonObject())
+			{
+				return out;
+			}
+			for (java.util.Map.Entry<String, JsonElement> e
+				: root.getAsJsonObject("chat_kcs").entrySet())
+			{
+				long v = asLong(e.getValue());
+				if (v > 0)
+				{
+					out.put(e.getKey(), v);
+				}
+			}
+		}
+		return out;
+	}
+
+	/**
 	 * The game's own Kill Log, by species: a per-encounter tally of lifetime
 	 * kills. This is what a kill count MEANS, and it is the only one of the three
 	 * sources that is always one: a collection log page's header counter can be
@@ -3411,6 +3483,76 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * Loose identity for a source: the collection log says "Tormented Demons"
 	 * where the ledger says "Tormented Demon", and they are one thing.
 	 */
+	/**
+	 * Fold the chat box's counts into a set of counts already keyed by source.
+	 *
+	 * <p>Folded into the game's OWN counts, not into everything known: the
+	 * collection log's page counter is not always counting kills, and taking the
+	 * larger of the two would keep the lie forever because the lie is the larger.
+	 * Wintertodt's page counts rewards claimed and says 1,078 where 448 were
+	 * killed. The Kill Log and this line are both the game counting the encounter,
+	 * so between those two the larger is simply the later reading.
+	 *
+	 * <p>The game names things its own way on these lines, so each reading is
+	 * tried against the names already in hand under three readings: as said, with
+	 * its leading word dropped ("subdued Wintertodt" is Wintertodt), and as a
+	 * chest ("Your Barrows chest count" is the Barrows Chests page). A reading
+	 * that matches nothing is still carried in under its own name rather than
+	 * dropped: a source can be announced in chat long before it has a log page or
+	 * a loot row, and a first kill should not have to wait for one.
+	 */
+	static void foldChatCounts(java.util.Map<String, Long> out,
+		java.util.Map<String, Long> chat)
+	{
+		foldChatCounts(out, chat, java.util.Collections.emptySet());
+	}
+
+	static void foldChatCounts(java.util.Map<String, Long> out,
+		java.util.Map<String, Long> chat, java.util.Set<String> vocabulary)
+	{
+		if (out == null || chat == null || chat.isEmpty())
+		{
+			return;
+		}
+		java.util.Map<String, String> byKind = new java.util.HashMap<>();
+		for (String name : out.keySet())
+		{
+			byKind.putIfAbsent(chatKind(name), name);
+		}
+		// Names the game's own counts have not met yet still have to find their
+		// source, or a chat reading lands beside a page counter for the same thing
+		// instead of replacing it.
+		for (String name : vocabulary)
+		{
+			byKind.putIfAbsent(chatKind(name), name);
+		}
+		for (java.util.Map.Entry<String, Long> e : chat.entrySet())
+		{
+			String said = e.getKey();
+			String known = byKind.get(chatKind(said));
+			if (known == null)
+			{
+				int space = said.indexOf(' ');
+				if (space > 0)
+				{
+					known = byKind.get(chatKind(said.substring(space + 1)));
+				}
+			}
+			if (known == null)
+			{
+				known = byKind.get(chatKind(said + " chests"));
+			}
+			out.merge(known != null ? known : said, e.getValue(), Math::max);
+		}
+	}
+
+	/** kindOf, with a leading "the" dropped: the chat box says Gauntlet, the log says The Gauntlet. */
+	private static String chatKind(String name)
+	{
+		String n = kindOf(name);
+		return n.startsWith("the ") ? n.substring(4) : n;
+	}
+
 	static String kindOf(String name)
 	{
 		String n = name == null ? "" : name.trim().toLowerCase(java.util.Locale.ROOT);
