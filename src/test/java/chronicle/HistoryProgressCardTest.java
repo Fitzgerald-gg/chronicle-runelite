@@ -3536,6 +3536,46 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void trackersOpensOnEveryCounterInOnePlace() throws Exception
+	{
+		// The stats table files by family and a tab shows one family's half of the
+		// sheet, so the whole thing had nowhere to be asked for. The search asks.
+		PanelPreviewTest.StubPlugin st = stub(true);
+		st.lifetime.put("logsChopped", 95L);
+		st.lifetime.put("hitsBlocked", 12L);
+		ChroniclePanel p = panel(st);
+		// seeded on the lifetime map, so read the lifetime
+		set(p, "histGranularity", "Lifetime");
+		Method open = ChroniclePanel.class.getDeclaredMethod("openAllTrackers");
+		open.setAccessible(true);
+		edt(() -> open.invoke(p));
+
+		final JPanel[] board = new JPanel[1];
+		edt(() ->
+		{
+			Method m = ChroniclePanel.class.getDeclaredMethod("buildAllTrackers");
+			m.setAccessible(true);
+			board[0] = (JPanel) m.invoke(p);
+		});
+		List<String> said = labels(board[0]);
+		assertTrue("no way back out: " + said, said.contains("< Back"));
+		assertTrue(said.toString(), said.contains("TRACKERS"));
+		// families that no single tab shows together
+		assertTrue("skilling is missing: " + said, said.contains("Logs chopped"));
+		assertTrue("combat is missing: " + said, said.contains("Hits blocked"));
+		// and it says which period it is reading, since it is not under a tab
+		assertTrue("the board does not name its scope: " + said,
+			said.contains("Reading"));
+
+		// the row above a drill describes what is ON SCREEN, not the tab it was
+		// opened from: the trackers page reads the period, so "This session"
+		// would be describing the wrong thing
+		setView(p, "HOME");
+		assertFalse("the sitting's label leaked onto a drill: " + periodLabelsAsShown(p),
+			periodLabelsAsShown(p).contains("This session"));
+	}
+
+	@Test
 	public void theStripCarriesTheFourTabs() throws Exception
 	{
 		// What each tab is FOR, rather than what its fields are called. The eight

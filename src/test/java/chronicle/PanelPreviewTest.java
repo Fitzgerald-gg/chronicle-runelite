@@ -184,6 +184,11 @@ public class PanelPreviewTest
 			shoot(panel, out, prefix + "-leftbehind-item", "DROPS");
 			set(panel, "leftBehindItem", null);
 		}
+		// every tracker in one place, which the search opens on "trackers"
+		set(panel, "allTrackers", true);
+		shoot(panel, out, prefix + "-all-trackers", "HOME");
+		set(panel, "allTrackers", false);
+
 		set(panel, "journalLens", "Slayer");
 		shoot(panel, out, prefix + "-journal-slayer", "JOURNAL");
 		set(panel, "journalLens", "All");

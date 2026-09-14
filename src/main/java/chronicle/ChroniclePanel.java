@@ -141,6 +141,9 @@ class ChroniclePanel extends PluginPanel
 	// A skill under the glass, opened from its cell in the grid. Not on the back
 	// stack: the grid is the only place it opens from, so Back is the grid.
 	private String detailSkill;
+	// Every tracker in one place, which no tab holds: the stats table is filed by
+	// family and a reader who wants the whole sheet has nowhere to ask for it.
+	private boolean allTrackers;
 	private final java.util.ArrayDeque<String[]> detailStack = new java.util.ArrayDeque<>();
 	private String statsFamily = StatRegistry.FAMILIES[0];
 	private int dropsShown = ROW_CAP;
@@ -193,6 +196,12 @@ class ChroniclePanel extends PluginPanel
 			String q = searchQuery();
 			if (q.isEmpty())
 			{
+				return;
+			}
+			// the one query that names a VIEW rather than a thing in the record
+			if (q.equalsIgnoreCase("tracker") || q.equalsIgnoreCase("trackers"))
+			{
+				openAllTrackers();
 				return;
 			}
 			// exact (or singular) source name wins
@@ -387,7 +396,8 @@ class ChroniclePanel extends PluginPanel
 		String[] subs = SUBS.get(tab);
 		if (subs == null || subs.length == 0 || !searchQuery().isEmpty()
 			|| detailItem != null || detailSource != null || detailSkill != null
-			|| detailTask >= 0 || leftBehindSource != null || leftBehindItem != null)
+			|| allTrackers || detailTask >= 0
+			|| leftBehindSource != null || leftBehindItem != null)
 		{
 			return null;
 		}
@@ -561,6 +571,7 @@ class ChroniclePanel extends PluginPanel
 		detailItem = null;
 		detailSource = null;
 		detailSkill = null;
+		allTrackers = false;
 		detailTask = -1;
 		leftBehindSource = null;
 		leftBehindItem = null;
@@ -1174,6 +1185,10 @@ class ChroniclePanel extends PluginPanel
 		else if (detailSkill != null)
 		{
 			body = buildSkillDetail(detailSkill);
+		}
+		else if (allTrackers)
+		{
+			body = buildAllTrackers();
 		}
 		else if (detailTask >= 0)
 		{
@@ -2449,6 +2464,18 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
+	/** Every tracker the record keeps, in one place. */
+	void openAllTrackers()
+	{
+		allTrackers = true;
+		detailItem = null;
+		detailSource = null;
+		detailSkill = null;
+		detailTask = -1;
+		searchField.setText("");
+		rebuild();
+	}
+
 	/** One skill under the glass, from its own cell in the grid. */
 	void openSkill(String craft)
 	{
@@ -2553,6 +2580,12 @@ class ChroniclePanel extends PluginPanel
 
 	private void backDetail()
 	{
+		if (allTrackers)
+		{
+			allTrackers = false;
+			rebuild();
+			return;
+		}
 		if (detailSkill != null)
 		{
 			detailSkill = null;
@@ -3617,6 +3650,79 @@ class ChroniclePanel extends PluginPanel
 		}
 		Long cv = consumVals.get(e.getKey());
 		return cv != null && cv > 0 ? base + " · " + gp(cv) + " gp" : base;
+	}
+
+	/**
+	 * Every tracker the record keeps, in one place. The stats table files them by
+	 * family and a tab shows one family's half of the sheet, so the whole thing
+	 * had nowhere to be asked for. Typing "trackers" into the search asks for it.
+	 *
+	 * <p>Filed the way the table files them, family then section, so a reader who
+	 * knows where a counter lives still finds it where they expect. It reads the
+	 * period like every other board.
+	 */
+	private JPanel buildAllTrackers()
+	{
+		JPanel p = column();
+		p.add(backRow());
+		p.add(vgap(4));
+		consumVals = plugin.consumableValues();
+		Map<String, Long> counters = countersForPeriod();
+		if (counters == null)
+		{
+			p.add(noPeriod());
+			return p;
+		}
+		Map<String, Map<String, List<Map.Entry<String, Long>>>> filed = new LinkedHashMap<>();
+		for (String fam : StatRegistry.FAMILIES)
+		{
+			filed.put(fam, new LinkedHashMap<>());
+		}
+		int kept = 0;
+		for (Map.Entry<String, Long> e : counters.entrySet())
+		{
+			if (e.getValue() == null || e.getValue() <= 0 || StatRegistry.hidden(e.getKey()))
+			{
+				continue;
+			}
+			Map<String, List<Map.Entry<String, Long>>> fam =
+				filed.computeIfAbsent(StatRegistry.family(e.getKey()), k -> new LinkedHashMap<>());
+			fam.computeIfAbsent(StatRegistry.subgroup(e.getKey()), k -> new ArrayList<>()).add(e);
+			kept++;
+		}
+		JPanel head = card("Trackers");
+		head.add(row("Counters", fmt(kept), accent()));
+		head.add(row("Reading", wholeRecord() ? "Lifetime" : window().label, null));
+		p.add(head);
+		p.add(vgap(6));
+		if (kept == 0)
+		{
+			p.add(note("Nothing tracked inside " + window().label + "."));
+			return p;
+		}
+		for (Map.Entry<String, Map<String, List<Map.Entry<String, Long>>>> fam : filed.entrySet())
+		{
+			if (fam.getValue().isEmpty())
+			{
+				continue;
+			}
+			p.add(group(fam.getKey()));
+			for (Map.Entry<String, List<Map.Entry<String, Long>>> sec : fam.getValue().entrySet())
+			{
+				List<Map.Entry<String, Long>> rows = sec.getValue();
+				rows.sort(StatRegistry::compareRows);
+				if (!sec.getKey().isEmpty())
+				{
+					p.add(ghostRow(sec.getKey(), ""));
+				}
+				for (Map.Entry<String, Long> e : rows)
+				{
+					p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e), null));
+				}
+			}
+			p.add(vgap(4));
+		}
+		return p;
 	}
 
 	private JPanel buildStats()
@@ -6156,7 +6262,7 @@ class ChroniclePanel extends PluginPanel
 		// rather than offering to change it. It still draws, at the same height in
 		// the same place, because a control that vanishes on one tab moves every
 		// tab under it.
-		if (view == View.HOME)
+		if (showingSitting())
 		{
 			JLabel fixed = new JLabel("This session", JLabel.CENTER);
 			fixed.setFont(FontManager.getRunescapeFont());
@@ -6188,6 +6294,20 @@ class ChroniclePanel extends PluginPanel
 		lbl.addMouseListener(clicker(() -> periodMenu().show(r, 0, r.getHeight())));
 		r.add(lbl, BorderLayout.CENTER);
 		return r;
+	}
+
+	/**
+	 * Whether the sitting ITSELF is what is showing. A drill opened from it keeps
+	 * the tab's view but is not that board: the trackers page opened from Now
+	 * reads the period like everything else, and a row above it saying "This
+	 * session" would be describing the tab rather than what is on screen.
+	 */
+	private boolean showingSitting()
+	{
+		return view == View.HOME && !allTrackers && detailSkill == null
+			&& detailItem == null && detailSource == null && detailTask < 0
+			&& leftBehindSource == null && leftBehindItem == null
+			&& searchQuery().isEmpty();
 	}
 
 	/** Move the window one granule, or one span where exact dates are set. */
@@ -6889,6 +7009,18 @@ class ChroniclePanel extends PluginPanel
 		String ql = q.toLowerCase(Locale.ROOT);
 		int total = 0;
 		searchJump = null;
+
+		// The one query that names a VIEW rather than a thing in the record.
+		// Offered while it is being typed, so it is found rather than known.
+		if (!ql.isEmpty() && "trackers".startsWith(ql))
+		{
+			p.add(group("Views"));
+			JPanel open = row("All trackers", "every counter in one place", null);
+			open.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			open.addMouseListener(clicker(this::openAllTrackers));
+			p.add(open);
+			p.add(vgap(6));
+		}
 
 		// Trackers, via the registry: every counter is findable by label or key.
 		List<Map.Entry<String, Long>> statHits = new ArrayList<>();
