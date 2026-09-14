@@ -1941,6 +1941,41 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 		}
 		out.add("by_cat", byCat);
+		// Every counter a page carries, by the log's own name for it. Nested the
+		// way by_cat is -- page, then label -- and floor-merged the same way, so
+		// a page not opened this session keeps what it last said.
+		JsonObject kcLines = new JsonObject();
+		for (JsonObject src : new JsonObject[]{base, inc})
+		{
+			if (!src.has("kc_lines") || !src.get("kc_lines").isJsonObject())
+			{
+				continue;
+			}
+			for (java.util.Map.Entry<String, JsonElement> pg
+				: src.getAsJsonObject("kc_lines").entrySet())
+			{
+				if (!pg.getValue().isJsonObject())
+				{
+					continue;
+				}
+				JsonObject tgt = kcLines.has(pg.getKey())
+					? kcLines.getAsJsonObject(pg.getKey()) : new JsonObject();
+				for (java.util.Map.Entry<String, JsonElement> ln
+					: pg.getValue().getAsJsonObject().entrySet())
+				{
+					long n = asLong(ln.getValue());
+					if (n > (tgt.has(ln.getKey()) ? asLong(tgt.get(ln.getKey())) : 0))
+					{
+						tgt.addProperty(ln.getKey(), n);
+					}
+				}
+				kcLines.add(pg.getKey(), tgt);
+			}
+		}
+		if (kcLines.size() > 0)
+		{
+			out.add("kc_lines", kcLines);
+		}
 		for (String mapKey : new String[]{"kcs", "clog_items", "cat_counts", "slayer_kcs"})
 		{
 			JsonObject merged = new JsonObject();

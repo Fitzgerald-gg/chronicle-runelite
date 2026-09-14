@@ -3341,6 +3341,41 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void theBossCardNamesTheCountersTheLogPageCarries() throws Exception
+	{
+		// The page's own counters are not all kill counts, and a number without
+		// its label cannot be told apart from one: Wintertodt's line counts
+		// rewards claimed, and read as kills it said 1,078 where 447 were killed.
+		// So the card names them the way the log does.
+		PanelPreviewTest.StubPlugin st = stub(true);
+		com.google.gson.JsonObject cl = st.clog != null ? st.clog
+			: new com.google.gson.JsonObject();
+		com.google.gson.JsonObject lines = new com.google.gson.JsonObject();
+		com.google.gson.JsonObject todt = new com.google.gson.JsonObject();
+		todt.addProperty("Rewards claimed", 1_078);
+		lines.add("Wintertodt", todt);
+		com.google.gson.JsonObject gauntlet = new com.google.gson.JsonObject();
+		gauntlet.addProperty("Gauntlet completion count", 31);
+		gauntlet.addProperty("Corrupted Gauntlet completion count", 1);
+		lines.add("The Gauntlet", gauntlet);
+		cl.add("kc_lines", lines);
+		st.clog = cl;
+
+		ChroniclePanel p = panel(st);
+		set(p, "bossOpen", "Wintertodt");
+		List<String> todtCard = labels(kills(p));
+		assertTrue("the counter is unnamed: " + todtCard,
+			todtCard.contains("Rewards claimed"));
+		assertTrue(todtCard.toString(), todtCard.contains("1,078"));
+
+		// a pair stays whole: the Gauntlet's two only make sense read together
+		set(p, "bossOpen", "The Gauntlet");
+		List<String> both = labels(kills(p));
+		assertTrue(both.toString(), both.contains("Gauntlet completion count"));
+		assertTrue(both.toString(), both.contains("Corrupted Gauntlet completion count"));
+	}
+
+	@Test
 	public void theBossBoardCountsTheWindowAndNotTheLifetime() throws Exception
 	{
 		// The period governs this board too. A boss sheet drawn under "last week"

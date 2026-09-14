@@ -338,8 +338,11 @@ public class ClogCaptureTest
 	@Test
 	public void snapshotCarriesTheServersMergeKeys()
 	{
+		// Every key here has to be merged on BOTH sides -- LocalStore.mergeClog and
+		// the server's _clog_merge -- or a page not opened this session loses what
+		// it last said. This test exists to make adding one here fail until it is.
 		Set<String> expected = new HashSet<>(Arrays.asList(
-			"by_cat", "kcs", "slayer_kcs", "cat_counts", "clog_items",
+			"by_cat", "kcs", "kc_lines", "slayer_kcs", "cat_counts", "clog_items",
 			"finished", "available"));
 		assertEquals(expected, capture.snapshot().keySet());
 	}

@@ -9,6 +9,7 @@
 package chronicle;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -72,6 +73,10 @@ public class ClogCapture
 	// byCat: page -> {item name: quantity}. kcs: page -> kill count.
 	private final Map<String, Map<String, Integer>> byCat = new HashMap<>();
 	private final Map<String, Integer> kcs = new HashMap<>();
+	// page -> {label: count}, every counter the page carries under the name the
+	// log gives it. A number without its label cannot be told apart from a kill
+	// count, and several of these are not one.
+	private final Map<String, Map<String, Integer>> kcLines = new HashMap<>();
 	// Species -> lifetime kills. The kill log is one scrollable list; one open
 	// yields every monster.
 	private final Map<String, Integer> slayerKcs = new HashMap<>();
@@ -373,7 +378,16 @@ public class ClogCapture
 			{
 				return;
 			}
-			// Kill count: the first header line "<label>: N" that isn't "Obtained".
+			// EVERY header line "<label>: N" that isn't "Obtained", under the name
+			// the log gives it. Keeping only the first number and throwing the
+			// label away is what let a counter be read as a kill count when it
+			// was counting something else: Wintertodt's line counts rewards
+			// claimed, so it said 1,078 where 447 were killed, and the Gauntlet
+			// page carries two completion counts of which only one was ever kept.
+			// `kcs` still holds that first number, since the stored log and the
+			// site both still read it.
+			Map<String, Integer> lines = new LinkedHashMap<>();
+			Integer first = null;
 			for (int i = 1; i < head.length; i++)
 			{
 				String line = text(head[i]);
@@ -382,18 +396,37 @@ public class ClogCapture
 					continue;
 				}
 				Matcher m = COUNT_LINE.matcher(line);
-				if (m.find())
+				if (!m.find())
 				{
-					try
+					continue;
+				}
+				try
+				{
+					int n = Integer.parseInt(m.group(1).replace(",", ""));
+					// the match starts at the colon, so what precedes it is the
+					// label exactly as the page wrote it
+					String label = line.substring(0, m.start()).trim();
+					if (!label.isEmpty())
 					{
-						kcs.put(page, Integer.parseInt(m.group(1).replace(",", "")));
-						break;
+						lines.put(label, n);
 					}
-					catch (NumberFormatException ignored)
+					if (first == null)
 					{
-						// keep scanning
+						first = n;
 					}
 				}
+				catch (NumberFormatException ignored)
+				{
+					// keep scanning
+				}
+			}
+			if (first != null)
+			{
+				kcs.put(page, first);
+			}
+			if (!lines.isEmpty())
+			{
+				kcLines.put(page, lines);
 			}
 			// opacity 0 = obtained, anything greyed isn't.
 			Map<String, Integer> pageItems = byCat.computeIfAbsent(page, k -> new HashMap<>());
@@ -484,6 +517,7 @@ public class ClogCapture
 	{
 		byCat.clear();
 		kcs.clear();
+		kcLines.clear();
 		slayerKcs.clear();
 		clogItems.clear();
 		catCounts.clear();
@@ -501,6 +535,7 @@ public class ClogCapture
 		Map<String, Object> out = new HashMap<>();
 		out.put("by_cat", byCat);
 		out.put("kcs", kcs);
+		out.put("kc_lines", kcLines);
 		out.put("slayer_kcs", slayerKcs);
 		out.put("cat_counts", catCounts);
 		// empty until the player opens their log once this session.

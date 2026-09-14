@@ -778,6 +778,55 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
+	 * Every counter the log's own page carries, by the name the log gives it.
+	 * They belong on the card because they answer a different question than the
+	 * kill count does: "Rewards claimed" at Wintertodt, both completion counts at
+	 * the Gauntlet. A lone counter that only repeats the kill count is left out;
+	 * a pair stays whole, since the Gauntlet's two only make sense read together.
+	 */
+	private List<Map.Entry<String, Long>> logLines(String boss)
+	{
+		List<Map.Entry<String, Long>> out = new ArrayList<>();
+		JsonObject cl = plugin.clogSnapshot();
+		if (cl == null || !cl.has("kc_lines") || !cl.get("kc_lines").isJsonObject())
+		{
+			return out;
+		}
+		String page = LOG_PAGE_FOR.containsKey(boss) ? LOG_PAGE_FOR.get(boss) : boss;
+		JsonObject pages = cl.getAsJsonObject("kc_lines");
+		com.google.gson.JsonElement found = pages.get(page);
+		if (found == null)
+		{
+			for (Map.Entry<String, com.google.gson.JsonElement> e : pages.entrySet())
+			{
+				if (e.getKey().equalsIgnoreCase(page))
+				{
+					found = e.getValue();
+					break;
+				}
+			}
+		}
+		if (found == null || !found.isJsonObject())
+		{
+			return out;
+		}
+		for (Map.Entry<String, com.google.gson.JsonElement> ln
+			: found.getAsJsonObject().entrySet())
+		{
+			long n = safeLong(ln.getValue());
+			if (n > 0)
+			{
+				out.add(new java.util.AbstractMap.SimpleEntry<>(ln.getKey(), n));
+			}
+		}
+		if (out.size() == 1 && out.get(0).getValue() == bossKills(boss))
+		{
+			out.clear();
+		}
+		return out;
+	}
+
+	/**
 	 * The bosses as a sheet, the way the skills are: the roster three across, each
 	 * wearing the game's own icon with its count beside it. A boss never fought
 	 * shows a dash rather than a zero, because a dash reads as none and a sheet of
@@ -900,13 +949,23 @@ class ChroniclePanel extends PluginPanel
 				break;
 			}
 		}
+		List<Map.Entry<String, Long>> lines = logLines(b.name);
 		if (src == null)
 		{
 			card.add(row("Kills tracked", "-", null));
+			for (Map.Entry<String, Long> ln : lines)
+			{
+				card.add(row(ln.getKey(), fmt(ln.getValue()), null));
+			}
 			card.add(note("No loot from here has reached the journal yet."));
 			return card;
 		}
 		card.add(row("Kills tracked", fmt(src.loots), accent()));
+		// what the page itself counts, which need not be kills at all
+		for (Map.Entry<String, Long> ln : lines)
+		{
+			card.add(row(ln.getKey(), fmt(ln.getValue()), null));
+		}
 		long qty = 0;
 		for (LocalStore.BagItem it : plugin.sourceItems(src.name))
 		{
