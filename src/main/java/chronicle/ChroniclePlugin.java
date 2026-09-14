@@ -939,6 +939,14 @@ public class ChroniclePlugin extends Plugin
 		JsonObject cl = localStore.clogSnapshot();
 		Map<String, Long> out = LocalStore.clogKillCounts(cl);
 		out.putAll(LocalStore.sourceKills(cl, localStore.dropSources()));
+		// The Kill Log OVERRIDES both, rather than joining them at a max. A
+		// collection log page's header counter is not always a kill count --
+		// Wintertodt's counts rewards claimed, and read as kills it said 1,078
+		// where 447 were killed -- and a loot tally counts rows, which is how a
+		// notable drop imported without a kill put Zalcano one above its own log.
+		// The Kill Log is the game counting the encounter, so where it speaks it
+		// is the answer.
+		out.putAll(LocalStore.killLogCounts(cl));
 		return out;
 	}
 

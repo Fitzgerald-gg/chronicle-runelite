@@ -3169,6 +3169,39 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/**
+	 * The game's own Kill Log, by species: a per-encounter tally of lifetime
+	 * kills. This is what a kill count MEANS, and it is the only one of the three
+	 * sources that is always one: a collection log page's header counter can be
+	 * counting something else entirely (Wintertodt's counts rewards claimed), and
+	 * a loot tally counts rows rather than kills.
+	 */
+	static java.util.Map<String, Long> killLogCounts(JsonObject clog)
+	{
+		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		if (clog == null || !clog.has("slayer_kcs") || !clog.get("slayer_kcs").isJsonObject())
+		{
+			return out;
+		}
+		for (java.util.Map.Entry<String, JsonElement> e
+			: clog.getAsJsonObject("slayer_kcs").entrySet())
+		{
+			try
+			{
+				long v = e.getValue().getAsLong();
+				if (v > 0)
+				{
+					out.put(e.getKey(), v);
+				}
+			}
+			catch (RuntimeException ignored)
+			{
+				// a non-numeric entry is not a kill count
+			}
+		}
+		return out;
+	}
+
+	/**
 	 * The collection log's kill counts as the stored log lists them, by page name:
 	 * the positive numeric entries of its {@code kcs}, a non-numeric one being no
 	 * kill count. Empty with no log.

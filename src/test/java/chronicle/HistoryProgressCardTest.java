@@ -456,6 +456,18 @@ public class HistoryProgressCardTest
 		return labels(out[0]);
 	}
 
+	private static JPanel kills(ChroniclePanel panel) throws Exception
+	{
+		final JPanel[] out = new JPanel[1];
+		edt(() ->
+		{
+			Method m = ChroniclePanel.class.getDeclaredMethod("buildKills");
+			m.setAccessible(true);
+			out[0] = (JPanel) m.invoke(panel);
+		});
+		return out[0];
+	}
+
 	private static JPanel history(ChroniclePanel panel) throws Exception
 	{
 		final JPanel[] out = new JPanel[1];
@@ -3220,6 +3232,33 @@ public class HistoryProgressCardTest
 		List<String> all = labels(history(p));
 		assertTrue("the tab is blank: " + all, all.contains("THE PERIOD"));
 		assertTrue(all.toString(), all.contains("ATT"));
+	}
+
+	@Test
+	public void theBossBoardCountsTheWindowAndNotTheLifetime() throws Exception
+	{
+		// The period governs this board too. A boss sheet drawn under "last week"
+		// that still says 2,023 Zalcano is the same lie the log page counter told
+		// when it said 1,078 Wintertodt: a number answering a question nobody
+		// asked, under a heading claiming it answered theirs.
+		PanelPreviewTest.StubPlugin st = stub(true);
+		com.google.gson.JsonObject cl = st.clog != null ? st.clog
+			: new com.google.gson.JsonObject();
+		com.google.gson.JsonObject pages = new com.google.gson.JsonObject();
+		pages.addProperty("Zalcano", 2_023);
+		cl.add("kcs", pages);
+		st.clog = cl;
+		ChroniclePanel p = panel(st);
+
+		set(p, "histGranularity", "Lifetime");
+		List<String> ever = labels(kills(p));
+		assertTrue("a lifetime counts the kills themselves: " + ever,
+			ever.contains("2,023"));
+
+		set(p, "histGranularity", "Week");
+		List<String> week = labels(kills(p));
+		assertFalse("the lifetime count survived into a week: " + week,
+			week.contains("2,023"));
 	}
 
 	@Test

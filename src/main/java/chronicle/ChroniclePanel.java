@@ -683,15 +683,7 @@ class ChroniclePanel extends PluginPanel
 	private long bossKills(String name)
 	{
 		JsonObject cl = plugin.clogSnapshot();
-		long best = 0;
-		if (cl != null && cl.has("slayer_kcs") && cl.get("slayer_kcs").isJsonObject())
-		{
-			com.google.gson.JsonElement v = cl.getAsJsonObject("slayer_kcs").get(name);
-			if (v != null)
-			{
-				best = Math.max(best, safeLong(v));
-			}
-		}
+		long best = Math.max(0, lookup(cl, "slayer_kcs", name));
 		String kind = LocalStore.kindOf(name);
 		for (LocalStore.SourceRow r : plugin.dropSources())
 		{
@@ -704,16 +696,81 @@ class ChroniclePanel extends PluginPanel
 		{
 			return best;
 		}
-		if (cl != null && cl.has("kcs") && cl.get("kcs").isJsonObject())
+		String page = LOG_PAGE_FOR.containsKey(name) ? LOG_PAGE_FOR.get(name) : name;
+		return Math.max(0, lookup(cl, "kcs", page));
+	}
+
+	/**
+	 * A count out of one of the clog snapshot's maps, found without caring how the
+	 * key was cased. The journal writes page names as the game spells them, but
+	 * nothing guarantees that of an imported or older snapshot, and a board that
+	 * silently reads zero for a boss it has the count for is worse than a slow
+	 * one. Minus one where the map has no such key at all.
+	 */
+	private static long lookup(JsonObject clog, String map, String key)
+	{
+		if (clog == null || !clog.has(map) || !clog.get(map).isJsonObject())
 		{
-			String page = LOG_PAGE_FOR.containsKey(name) ? LOG_PAGE_FOR.get(name) : name;
-			com.google.gson.JsonElement v = cl.getAsJsonObject("kcs").get(page);
-			if (v != null)
+			return -1;
+		}
+		JsonObject o = clog.getAsJsonObject(map);
+		com.google.gson.JsonElement v = o.get(key);
+		if (v != null)
+		{
+			return safeLong(v);
+		}
+		for (Map.Entry<String, com.google.gson.JsonElement> e : o.entrySet())
+		{
+			if (e.getKey().equalsIgnoreCase(key))
 			{
-				return safeLong(v);
+				return safeLong(e.getValue());
+			}
+		}
+		return -1;
+	}
+
+	/** The same tolerance for the journal's own kcs, which a baseline carries. */
+	private static long kcOf(Map<String, Long> kcs, String key)
+	{
+		if (kcs == null)
+		{
+			return 0;
+		}
+		Long v = kcs.get(key);
+		if (v != null)
+		{
+			return v;
+		}
+		for (Map.Entry<String, Long> e : kcs.entrySet())
+		{
+			if (e.getKey().equalsIgnoreCase(key))
+			{
+				return e.getValue() == null ? 0 : e.getValue();
 			}
 		}
 		return 0;
+	}
+
+	/**
+	 * What the window moved this boss's count by. A lifetime is the count itself;
+	 * a narrower window is the distance between the two baselines bounding it,
+	 * read off the kcs the journal writes on every line. Minus one where the
+	 * spine cannot answer the window at all.
+	 */
+	private long bossKillsInWindow(String name)
+	{
+		if (wholeRecord())
+		{
+			return bossKills(name);
+		}
+		Span s = span();
+		if (s == null)
+		{
+			return -1;
+		}
+		long was = kcOf(s.opening.kcs, name);
+		long now = kcOf(s.closing.kcs, name);
+		return Math.max(0, now - was);
 	}
 
 	/**
@@ -732,6 +789,11 @@ class ChroniclePanel extends PluginPanel
 		if (roster.isEmpty())
 		{
 			p.add(note("The boss roster did not load."));
+			return p;
+		}
+		if (!wholeRecord() && span() == null)
+		{
+			p.add(noPeriod());
 			return p;
 		}
 		int at = -1;
@@ -773,12 +835,13 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel bossCell(Boss b)
 	{
-		final long kc = bossKills(b.name);
+		final long kc = bossKillsInWindow(b.name);
 		final boolean lit = b.name.equals(bossOpen);
 		JPanel cell = new JPanel(new BorderLayout(3, 0));
 		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		cell.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
-		cell.setToolTipText(b.name + (kc > 0 ? ", " + fmt(kc) + " killed" : ""));
+		cell.setToolTipText(b.name + (kc > 0
+			? ", " + fmt(kc) + (wholeRecord() ? " killed" : " in " + window().label) : ""));
 		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 
 		JLabel icon = new JLabel();
@@ -1508,6 +1571,16 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(lens);
 		p.add(vgap(6));
+		// The period governs what it can. The ledger totals each source as the
+		// kills land and keeps no dated roll of them, so this board cannot be
+		// narrowed -- and saying so is the whole point, because a lifetime drawn
+		// silently under a month's heading is the lie the boss counts were.
+		if (!wholeRecord())
+		{
+			p.add(note("Lifetime. The ledger totals each source as it goes and "
+				+ "keeps no dated roll, so it cannot narrow to " + window().label + "."));
+			p.add(vgap(4));
+		}
 
 		if (dropsLeftBehind)
 		{
@@ -2044,10 +2117,46 @@ class ChroniclePanel extends PluginPanel
 				+ "you play with the Slayer plugin on."));
 			return;
 		}
+		// The period governs this board too. A task carries the stamp of its own
+		// close, so a window is a filter over the journey rather than a delta,
+		// and the headline counts what it admitted rather than the lifetime.
+		List<ChronicleApiClient.SlayerTask> shown = new ArrayList<>();
+		List<Integer> where = new ArrayList<>();
+		for (int i = 0; i < j.tasks.size(); i++)
+		{
+			if (insideWindow((long) (j.tasks.get(i).ts * 1000)))
+			{
+				shown.add(j.tasks.get(i));
+				where.add(i);
+			}
+		}
+		if (shown.isEmpty() && !wholeRecord())
+		{
+			p.add(nothingInWindow("tasks closed"));
+			return;
+		}
+		long tasksDone = j.completedTasks;
+		long killsOnTask = j.totalKills;
+		long onTaskLoot = j.totalValueGp;
+		if (!wholeRecord())
+		{
+			tasksDone = 0;
+			killsOnTask = 0;
+			onTaskLoot = 0;
+			for (ChronicleApiClient.SlayerTask t : shown)
+			{
+				if (!t.inProgress)
+				{
+					tasksDone++;
+				}
+				killsOnTask += t.kills;
+				onTaskLoot += t.totalValue;
+			}
+		}
 		JPanel head = card("The journey");
-		head.add(row("Tasks done", fmt(j.completedTasks), accent()));
-		head.add(row("Kills on task", fmt(j.totalKills), null));
-		head.add(row("On-task loot", gp(j.totalValueGp) + " gp", null));
+		head.add(row("Tasks done", fmt(tasksDone), accent()));
+		head.add(row("Kills on task", fmt(killsOnTask), null));
+		head.add(row("On-task loot", gp(onTaskLoot) + " gp", null));
 		// Only an imported legacy journal carries this; nothing writes it now.
 		if (j.totalXpEst > 0)
 		{
@@ -2056,8 +2165,9 @@ class ChroniclePanel extends PluginPanel
 		p.add(head);
 		p.add(vgap(6));
 		int mounted = 0;
-		for (ChronicleApiClient.SlayerTask t : j.tasks)
+		for (int k = 0; k < shown.size(); k++)
 		{
+			ChronicleApiClient.SlayerTask t = shown.get(k);
 			if (mounted++ >= slayerShown)
 			{
 				break;
@@ -2065,7 +2175,8 @@ class ChroniclePanel extends PluginPanel
 			JPanel card = cardPlain();
 			// Lit name, no suffix: the card has no room for one.
 			card.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-			final int at = mounted - 1;
+			// the drill indexes the WHOLE journey, not the window's slice of it
+			final int at = where.get(k);
 			card.addMouseListener(clicker(() ->
 			{
 				detailTask = at;
@@ -2446,6 +2557,14 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildLog()
 	{
 		JPanel p = column();
+		// The log is a snapshot of what has been obtained, not a dated record of
+		// when. It is the one board the period cannot touch, and it says so.
+		if (!wholeRecord())
+		{
+			p.add(note("As it stands today. The log records what has been "
+				+ "obtained, not when, so it cannot narrow to " + window().label + "."));
+			p.add(vgap(4));
+		}
 		int avail = Math.max(plugin.clogAvailable(), 1712);
 		int fin = plugin.clogFinished();
 		JPanel head = card("Collection log");
@@ -3226,9 +3345,14 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel p = column();
 		consumVals = plugin.consumableValues();
+		// All four families stay reachable here. Scoping them to the tab reads
+		// tidier and was tried, but the Skilling family's per-craft counters have
+		// no other way in until a skill cell opens on its own trackers: the grid
+		// carries a tooltip, not a click. Narrowing this would orphan them.
+		String[] families = StatRegistry.FAMILIES;
 		JPanel pills = new JPanel(new GridLayout(0, 2, 3, 3));
 		pills.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		for (String fam : StatRegistry.FAMILIES)
+		for (String fam : families)
 		{
 			JLabel pill = new JLabel(fam, JLabel.CENTER);
 			pill.setOpaque(true);
@@ -3244,13 +3368,22 @@ class ChroniclePanel extends PluginPanel
 			}));
 			pills.add(pill);
 		}
-		p.add(pills);
-		p.add(vgap(4));
+		if (families.length > 1)
+		{
+			p.add(pills);
+			p.add(vgap(4));
+		}
+
 
 		// Rows file into sections. Generic floor totals (logsChopped,
 		// teleportsTotal) head their section instead of listing as a row, and the
 		// unresolved remainder reconciles as a ghost "Other".
-		Map<String, Long> counters = counters();
+		Map<String, Long> counters = countersForPeriod();
+		if (counters == null)
+		{
+			p.add(noPeriod());
+			return p;
+		}
 		resourcesDropped = counters.getOrDefault("resourcesDroppedValue", 0L);
 		Map<String, List<Map.Entry<String, Long>>> rowsBySection = new LinkedHashMap<>();
 		Map<String, Long> floorTotals = new LinkedHashMap<>();
@@ -5548,6 +5681,101 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
+	 * The spine's two ends for the window the period row is on. A period is the
+	 * distance between two closed baselines, so a window holding fewer than two
+	 * has none: the answer is null, and a board has to SAY so rather than quietly
+	 * drawing a lifetime under a month's heading.
+	 */
+	private static final class Span
+	{
+		final HistoryLog.Baseline opening;
+		final HistoryLog.Baseline earliest;
+		final HistoryLog.Baseline closing;
+
+		Span(HistoryLog.Baseline opening, HistoryLog.Baseline earliest,
+			HistoryLog.Baseline closing)
+		{
+			this.opening = opening;
+			this.earliest = earliest;
+			this.closing = closing;
+		}
+	}
+
+	private Span span()
+	{
+		if (historySpine == null)
+		{
+			gatherHistory();   // lands on a later pass, and rebuilds when it does
+			return null;
+		}
+		if (historySpine.isEmpty())
+		{
+			return null;
+		}
+		Window w = window();
+		Map.Entry<java.time.LocalDate, HistoryLog.Baseline> from =
+			HistoryLog.windowStart(historySpine, w.start, w.end);
+		Map.Entry<java.time.LocalDate, HistoryLog.Baseline> at =
+			historySpine.floorEntry(w.end);
+		if (at == null || from == null || at.getKey().equals(from.getKey()))
+		{
+			return null;
+		}
+		return new Span(HistoryLog.stateAt(historySpine, from.getKey()),
+			HistoryLog.earliest(historySpine, at.getKey()),
+			HistoryLog.stateAt(historySpine, at.getKey()));
+	}
+
+	/**
+	 * The counters a board should read. A lifetime is the totals themselves: a
+	 * delta measured from the first line the record holds reports nothing for
+	 * every total that joined the spine later. Any narrower window is what it
+	 * moved. Null where the spine cannot answer the window at all.
+	 */
+	private Map<String, Long> countersForPeriod()
+	{
+		if (wholeRecord())
+		{
+			return counters();
+		}
+		Span s = span();
+		return s == null ? null
+			: HistoryLog.gained(s.opening.counters, s.earliest.counters, s.closing.counters);
+	}
+
+	/**
+	 * The window as epoch millis, for the boards whose records carry a stamp
+	 * rather than a daily baseline: the feed, and the slayer journey. A lifetime
+	 * admits everything, which is what it means.
+	 */
+	private boolean insideWindow(long ts)
+	{
+		if (wholeRecord() || ts <= 0)
+		{
+			return true;
+		}
+		Window w = window();
+		java.time.LocalDate on = java.time.Instant.ofEpochMilli(ts)
+			.atZone(ZoneId.systemDefault()).toLocalDate();
+		return !on.isBefore(w.start) && !on.isAfter(w.end);
+	}
+
+	/** What a dated board says when the window simply held nothing. */
+	private JPanel nothingInWindow(String what)
+	{
+		return note("No " + what + " inside " + window().label + ".");
+	}
+
+	/** What a board says when the window holds too little to be a period. */
+	private JPanel noPeriod()
+	{
+		return note(historySpine == null
+			? "Reading your history..."
+			: "Nothing closed inside " + window().label + ". A period is the distance "
+				+ "between two baselines, and this window holds fewer than two.");
+	}
+
+	/**
 	 * The period, on one row above the tabs, because it governs all of them. The
 	 * arrows step the window and the label between them opens the list; at
 	 * Lifetime the arrows have nowhere to go, so they are not drawn and the label
@@ -6131,11 +6359,20 @@ class ChroniclePanel extends PluginPanel
 		List<JsonObject> feed = new ArrayList<>();
 		for (JsonObject e : all)
 		{
-			if (wanted.isEmpty() || (e.has("type")
-				&& wanted.contains(e.get("type").getAsString())))
+			boolean kind = wanted.isEmpty() || (e.has("type")
+				&& wanted.contains(e.get("type").getAsString()));
+			// The period governs this board too: a dated feed read under a
+			// month's heading must list that month and not everything.
+			if (kind && insideWindow(safeLong(e.get("ts"))))
 			{
 				feed.add(e);
 			}
+		}
+		if (feed.isEmpty() && !wholeRecord())
+		{
+			p.add(nothingInWindow("All".equals(journalLens)
+				? "milestones" : journalLens.toLowerCase(Locale.ROOT)));
+			return p;
 		}
 		if (feed.isEmpty())
 		{
