@@ -60,6 +60,12 @@ public class ClogCapture
 	};
 	// The kill/completion count in a "<label>: 1,234" header line.
 	private static final Pattern COUNT_LINE = Pattern.compile(":\\s*([\\d,]+)\\s*$");
+	// "Personal Best: 3:46", "Personal Best Corrupted: 13:11", and the hour shape
+	// a long raid reaches. Tried BEFORE the count, because a count expression
+	// reading the last ": number" on one of these lines comes back with the
+	// seconds and calls them kills.
+	private static final Pattern TIME_LINE = Pattern.compile(
+		"^(?<label>.+?):\\s*(?<h>\\d+:)?(?<m>\\d{1,3}):(?<s>\\d{2})(?:\\.\\d+)?\\s*$");
 
 	// The player's own open fires SETUP; we answer with the "Search" op and each
 	// obtained item comes back as a TRANSMIT pre-fire carrying its id + quantity.
@@ -77,6 +83,8 @@ public class ClogCapture
 	// log gives it. A number without its label cannot be told apart from a kill
 	// count, and several of these are not one.
 	private final Map<String, Map<String, Integer>> kcLines = new HashMap<>();
+	// page -> label -> seconds. A best time, which is a time and not a count.
+	private final Map<String, Map<String, Integer>> pbLines = new HashMap<>();
 	// Species -> lifetime kills. The kill log is one scrollable list; one open
 	// yields every monster.
 	private final Map<String, Integer> slayerKcs = new HashMap<>();
@@ -392,12 +400,34 @@ public class ClogCapture
 			// `kcs` still holds that first number, since the stored log and the
 			// site both still read it.
 			Map<String, Integer> lines = new LinkedHashMap<>();
+			Map<String, Integer> times = new LinkedHashMap<>();
 			Integer first = null;
 			for (int i = 1; i < head.length; i++)
 			{
 				String line = text(head[i]);
 				if (line == null || line.toLowerCase().startsWith("obtained"))
 				{
+					continue;
+				}
+				// a time first, or its seconds are read as a count
+				Matcher t = TIME_LINE.matcher(line);
+				if (t.matches())
+				{
+					String label = t.group("label").trim();
+					if (!label.isEmpty())
+					{
+						long secs = Integer.parseInt(t.group("m")) * 60L
+							+ Integer.parseInt(t.group("s"));
+						if (t.group("h") != null)
+						{
+							secs += Integer.parseInt(
+								t.group("h").substring(0, t.group("h").length() - 1)) * 3600L;
+						}
+						if (secs > 0 && secs < Integer.MAX_VALUE)
+						{
+							times.put(label, (int) secs);
+						}
+					}
 					continue;
 				}
 				Matcher m = COUNT_LINE.matcher(line);
@@ -444,6 +474,10 @@ public class ClogCapture
 			if (!lines.isEmpty())
 			{
 				kcLines.put(page, lines);
+			}
+			if (!times.isEmpty())
+			{
+				pbLines.put(page, times);
 			}
 			// opacity 0 = obtained, anything greyed isn't.
 			Map<String, Integer> pageItems = byCat.computeIfAbsent(page, k -> new HashMap<>());
@@ -543,6 +577,7 @@ public class ClogCapture
 		byCat.clear();
 		kcs.clear();
 		kcLines.clear();
+		pbLines.clear();
 		slayerKcs.clear();
 		clogItems.clear();
 		catCounts.clear();
@@ -561,6 +596,7 @@ public class ClogCapture
 		out.put("by_cat", byCat);
 		out.put("kcs", kcs);
 		out.put("kc_lines", kcLines);
+		out.put("pb_lines", pbLines);
 		out.put("slayer_kcs", slayerKcs);
 		out.put("cat_counts", catCounts);
 		// empty until the player opens their log once this session.

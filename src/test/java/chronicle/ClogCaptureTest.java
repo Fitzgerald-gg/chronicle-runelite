@@ -368,8 +368,8 @@ public class ClogCaptureTest
 		// the server's _clog_merge -- or a page not opened this session loses what
 		// it last said. This test exists to make adding one here fail until it is.
 		Set<String> expected = new HashSet<>(Arrays.asList(
-			"by_cat", "kcs", "kc_lines", "slayer_kcs", "cat_counts", "clog_items",
-			"finished", "available"));
+			"by_cat", "kcs", "kc_lines", "pb_lines", "slayer_kcs", "cat_counts",
+			"clog_items", "finished", "available"));
 		assertEquals(expected, capture.snapshot().keySet());
 	}
 
