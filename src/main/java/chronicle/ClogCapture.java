@@ -411,10 +411,22 @@ public class ClogCapture
 					// the match starts at the colon, so what precedes it is the
 					// label exactly as the page wrote it
 					String label = line.substring(0, m.start()).trim();
-					if (!label.isEmpty())
+					if (label.isEmpty())
 					{
-						lines.put(label, n);
+						continue;
 					}
+					// A PERSONAL BEST IS A TIME, NOT A COUNT. The expression takes
+					// the last ": number" on the line, so "Personal Best: 3:46"
+					// hands back 46 with "Personal Best: 3" as its label, and the
+					// seconds of a best time were being stored as a kill count:
+					// Tempoross read 46 where 455 were killed, Vorkath 19 where
+					// 156 were, the Gauntlet 55 where 31 were. A label left ending
+					// in a digit is the tell that a time was cut in half.
+					if (Character.isDigit(label.charAt(label.length() - 1)))
+					{
+						continue;
+					}
+					lines.put(label, n);
 					if (first == null)
 					{
 						first = n;

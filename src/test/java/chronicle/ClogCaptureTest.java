@@ -3,6 +3,7 @@
  */
 package chronicle;
 
+import com.google.gson.JsonObject;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -157,6 +158,31 @@ public class ClogCaptureTest
 			.thenReturn(header);
 		Mockito.when(client.getWidget(ComponentID.COLLECTION_LOG_ENTRY_ITEMS))
 			.thenReturn(items);
+	}
+
+	/** A page whose header lines are given verbatim, the way the game writes them. */
+	private void stubPage(String page, String... headerLines)
+	{
+		Widget[] head = new Widget[headerLines.length + 1];
+		head[0] = textWidget(page);
+		for (int i = 0; i < headerLines.length; i++)
+		{
+			head[i + 1] = textWidget(headerLines[i]);
+		}
+		Widget header = Mockito.mock(Widget.class);
+		Mockito.when(header.getDynamicChildren()).thenReturn(head);
+		Widget items = Mockito.mock(Widget.class);
+		Mockito.when(items.getDynamicChildren()).thenReturn(new Widget[0]);
+		Mockito.when(client.getWidget(ComponentID.COLLECTION_LOG_ENTRY_HEADER))
+			.thenReturn(header);
+		Mockito.when(client.getWidget(ComponentID.COLLECTION_LOG_ENTRY_ITEMS))
+			.thenReturn(items);
+	}
+
+	@SuppressWarnings("unchecked")
+	private Map<String, Map<String, Integer>> kcLines()
+	{
+		return (Map<String, Map<String, Integer>>) capture.snapshot().get("kc_lines");
 	}
 
 	@SuppressWarnings("unchecked")
@@ -345,6 +371,60 @@ public class ClogCaptureTest
 			"by_cat", "kcs", "kc_lines", "slayer_kcs", "cat_counts", "clog_items",
 			"finished", "available"));
 		assertEquals(expected, capture.snapshot().keySet());
+	}
+
+	// A PERSONAL BEST IS A TIME. The expression takes the last ": number" on the
+	// line, so "Personal Best: 3:46" hands back 46 under the label "Personal
+	// Best: 3", and the seconds of a best time were stored as the page's count:
+	// Tempoross read 46 where 455 were killed, Vorkath 19 where 156 were, the
+	// Gauntlet 55 where 31 were. Those were the three numbers that started all
+	// of this.
+	@Test
+	public void aPersonalBestIsNotAKillCount()
+	{
+		adventureLogOpen(false);
+		stubPage("Tempoross", "Obtained: 5/10", "Personal Best: 3:46",
+			"Reward permits claimed: 1,048", "Tempoross kills: 455");
+		logOpened();
+		pageDrawn();
+
+		Map<String, Integer> lines = kcLines().get("Tempoross");
+		assertNull("a best time was read as a count", lines.get("Personal Best: 3"));
+		assertEquals(Integer.valueOf(455), lines.get("Tempoross kills"));
+		assertEquals(Integer.valueOf(1_048), lines.get("Reward permits claimed"));
+		// and the page's headline number is no longer the seconds of that time
+		assertEquals(Integer.valueOf(1_048), kcs().get("Tempoross"));
+	}
+
+	@Test
+	public void theLabelledKillLineIsWhatAPageCountsFor()
+	{
+		// kcs keeps whichever number came first, which on this page counts
+		// rewards. Reading it by its label is what tells 447 from 1,078.
+		JsonObject clog = new JsonObject();
+		JsonObject pages = new JsonObject();
+		JsonObject todt = new JsonObject();
+		todt.addProperty("Rewards claimed", 1078);
+		todt.addProperty("Wintertodt kills", 447);
+		pages.add("Wintertodt", todt);
+		JsonObject gauntlet = new JsonObject();
+		gauntlet.addProperty("Gauntlet completion count", 31);
+		gauntlet.addProperty("Corrupted Gauntlet completion count", 1);
+		pages.add("The Gauntlet", gauntlet);
+		JsonObject gamble = new JsonObject();
+		gamble.addProperty("High-level Gambles", 2);
+		pages.add("Barbarian Assault", gamble);
+		clog.add("kc_lines", pages);
+		JsonObject kcs = new JsonObject();
+		kcs.addProperty("Wintertodt", 1078);
+		kcs.addProperty("The Gauntlet", 55);   // the old half-a-best-time reading
+		clog.add("kcs", kcs);
+
+		Map<String, Long> counts = LocalStore.clogKillCounts(clog);
+		assertEquals(Long.valueOf(447), counts.get("Wintertodt"));
+		assertEquals("a floor-merged bad reading outlived the line that corrects it",
+			Long.valueOf(31), counts.get("The Gauntlet"));
+		assertNull("gambles are not kills", counts.get("Barbarian Assault"));
 	}
 
 	// ── account boundary ───────────────────────────────────────────────────
