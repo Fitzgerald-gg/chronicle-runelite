@@ -3341,6 +3341,54 @@ public class HistoryProgressCardTest
 	}
 
 	@Test
+	public void aWindowWithNoDatedLootShowsNoLoot() throws Exception
+	{
+		// The ledger's running totals cannot be narrowed, so the board reads the
+		// dated roll instead. A range the roll holds nothing for shows nothing:
+		// that IS the answer, and filling it with the lifetime would be the same
+		// lie the boss counts told.
+		PanelPreviewTest.StubPlugin st = stub(true);
+		st.lootRollDay = LocalDate.now().minusYears(1);
+		st.lootWindow = new LocalStore.LootWindow();
+		ChroniclePanel p = panel(st);
+		set(p, "histGranularity", "Week");
+		List<String> empty = labels(drops(p));
+		assertTrue("an empty window said nothing about itself: " + empty,
+			empty.toString().contains("Nothing taken inside"));
+		assertFalse("a lifetime figure leaked into the window: " + empty,
+			empty.toString().contains(" gp"));
+
+		// and where the roll does hold the window, it is the roll that is drawn
+		LocalStore.LootWindow held = new LocalStore.LootWindow();
+		held.loots = 4;
+		held.value = 1_234;
+		held.sources.add(new String[]{"Vorkath", "4", "1234"});
+		st.lootWindow = held;
+		List<String> some = labels(drops(p));
+		assertTrue(some.toString(), some.contains("Vorkath"));
+		assertTrue(some.toString(), some.contains("4 · 1,234 gp"));
+
+		// a roll that does not reach the window's start says so rather than
+		// reporting the part it can see as the whole
+		st.lootRollDay = LocalDate.now();
+		List<String> short_ = labels(drops(p));
+		assertTrue("a partial roll was drawn as the whole: " + short_,
+			short_.toString().contains("begins"));
+	}
+
+	private static JPanel drops(ChroniclePanel panel) throws Exception
+	{
+		final JPanel[] out = new JPanel[1];
+		edt(() ->
+		{
+			Method m = ChroniclePanel.class.getDeclaredMethod("buildDrops");
+			m.setAccessible(true);
+			out[0] = (JPanel) m.invoke(panel);
+		});
+		return out[0];
+	}
+
+	@Test
 	public void theBossCardNamesTheCountersTheLogPageCarries() throws Exception
 	{
 		// The page's own counters are not all kill counts, and a number without

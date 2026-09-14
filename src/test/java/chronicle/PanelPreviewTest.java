@@ -126,6 +126,10 @@ public class PanelPreviewTest
 		// the boss board, which is the hiscores roster and not the log's pages
 		shoot(panel, out, prefix + "-kills", "KILLS");
 		shoot(panel, out, prefix + "-drops", "DROPS");
+		// the same board narrowed: off the dated roll, not the running totals
+		set(panel, "histGranularity", "Month");
+		shoot(panel, out, prefix + "-drops-month", "DROPS");
+		set(panel, "histGranularity", "Lifetime");
 		// the journey lands via invokeLater after the first paint, so shoot twice
 		// and let the settled view overwrite the file
 		shoot(panel, out, prefix + "-slayer", "SLAYER");
@@ -1141,14 +1145,24 @@ public class PanelPreviewTest
 		@Override
 		long lootRollFrom()
 		{
-			return lootRollDay == null ? 0 : lootRollDay
-				.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+			if (lootRollDay != null)
+			{
+				return lootRollDay.atStartOfDay(java.time.ZoneId.systemDefault())
+					.toInstant().toEpochMilli();
+			}
+			// a real journal behind the stub answers for itself, so a preview of
+			// the loot board shows the roll the account actually has
+			return store != null ? store.lootRollFrom() : 0;
 		}
 
 		@Override
 		LocalStore.LootWindow lootBetween(java.time.LocalDate from, java.time.LocalDate to)
 		{
-			return lootWindow != null ? lootWindow : new LocalStore.LootWindow();
+			if (lootWindow != null)
+			{
+				return lootWindow;
+			}
+			return store != null ? store.lootBetween(from, to) : new LocalStore.LootWindow();
 		}
 
 		@Override

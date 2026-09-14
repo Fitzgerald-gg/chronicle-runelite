@@ -1639,6 +1639,82 @@ class ChroniclePanel extends PluginPanel
 			StatRegistry.isGp(key) ? gp(v) + " gp" : fmt(v), null);
 	}
 
+	/**
+	 * The loot a window actually holds, off the dated roll rather than off the
+	 * ledger's running totals. A range the roll has nothing for shows nothing:
+	 * that is the answer, not an empty board to be filled with a lifetime.
+	 *
+	 * <p>The roll only starts the day it started. A window opening before that
+	 * has no dated account of its loot and says so, naming the day one begins,
+	 * rather than reporting the part it can see as the whole.
+	 */
+	private JPanel dropsInWindow(JPanel p)
+	{
+		Window win = window();
+		long rollFrom = plugin.lootRollFrom();
+		long fromMs = win.start.atStartOfDay(ZoneId.systemDefault())
+			.toInstant().toEpochMilli();
+		if (rollFrom <= 0)
+		{
+			p.add(note("No loot has been dated yet. The roll keeps one entry a "
+				+ "day and starts with the next drop that lands."));
+			return p;
+		}
+		if (rollFrom > fromMs)
+		{
+			java.time.LocalDate began = java.time.Instant.ofEpochMilli(rollFrom)
+				.atZone(ZoneId.systemDefault()).toLocalDate();
+			p.add(note("The dated loot roll begins " + began.format(FULL_DAY)
+				+ ", which is inside " + win.label + ". Naming the part it can see "
+				+ "as the whole period would be worse than saying nothing."));
+			return p;
+		}
+		LocalStore.LootWindow w = plugin.lootBetween(win.start, win.end);
+		List<String[]> ranked = dropsLeftBehind ? w.leftItems : w.sources;
+		if (ranked.isEmpty())
+		{
+			p.add(note("Nothing " + (dropsLeftBehind ? "left behind" : "taken")
+				+ " inside " + win.label + "."));
+			return p;
+		}
+		JPanel head = card(dropsLeftBehind ? "Left behind" : "Drops received");
+		if (dropsLeftBehind)
+		{
+			head.add(row("Items", fmt(w.left), accent()));
+			head.add(row("Worth", gp(w.leftValue) + " gp", null));
+			head.add(row("Kills that left one", fmt(w.leftKills), null));
+		}
+		else
+		{
+			head.add(row("Drops", fmt(w.loots), accent()));
+			head.add(row("Worth", gp(w.value) + " gp", null));
+		}
+		p.add(head);
+		p.add(vgap(6));
+		for (String[] r : ranked)
+		{
+			JPanel line = row(r[0], fmt(safeParse(r[1])) + " · "
+				+ gp(safeParse(r[2])) + " gp", null);
+			line.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			final String name = r[0];
+			// the drill is that source's or item's whole record, which is a
+			// different screen and says so by carrying its own dateline
+			line.addMouseListener(clicker(() ->
+			{
+				if (dropsLeftBehind)
+				{
+					openItem(name);
+				}
+				else
+				{
+					openSourceLoose(name);
+				}
+			}));
+			p.add(line);
+		}
+		return p;
+	}
+
 	private boolean dropsLeftBehind;
 
 	private JPanel buildDrops()
@@ -1664,15 +1740,13 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(lens);
 		p.add(vgap(6));
-		// The period governs what it can. The ledger totals each source as the
-		// kills land and keeps no dated roll of them, so this board cannot be
-		// narrowed -- and saying so is the whole point, because a lifetime drawn
-		// silently under a month's heading is the lie the boss counts were.
+		// The period governs this board too. The ledger's running totals cannot be
+		// narrowed, but the loot ROLL can: it keeps one entry a day holding what
+		// was taken and what was left, with the items and sources beside them, so
+		// it answers a window exactly.
 		if (!wholeRecord())
 		{
-			p.add(note("Lifetime. The ledger totals each source as it goes and "
-				+ "keeps no dated roll, so it cannot narrow to " + window().label + "."));
-			p.add(vgap(4));
+			return dropsInWindow(p);
 		}
 
 		if (dropsLeftBehind)
