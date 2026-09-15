@@ -107,7 +107,7 @@ public class ExampleExportTest
 		"detailSource", "detailItem", "detailSkill", "detailTask",
 		"allTrackers", "bossOpen", "slayerLens",
 		"clogPageSel", "journalLens", "dropsLeftBehind",
-		"dropsByKind", "lootKind", "lootTask",
+		"dropsByKind", "lootKind", "lootTask", "onTaskOnly",
 		"statsFamily", "leftBehindSource", "leftBehindItem", "clogTab",
 		"openFolds", "histListShown", "drillShown", "journalShown",
 		"dropsShown", "slayerShown",
@@ -138,7 +138,8 @@ public class ExampleExportTest
 			"resourcesDropped", "buildSources", "buildClog", "buildSpan",
 			"spanAsked", "historySpine", "historyFeed", "historyJourney",
 			"historyDay", "historyFeedTs", "historyEpoch", "skilled",
-			"itemsByName", "periodFrom", "periodTo", "searchJump"})
+			"itemsByName", "periodFrom", "periodTo", "searchJump",
+			"buildTaskItems", "buildTaskKills", "taskItemsEver"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
 		}

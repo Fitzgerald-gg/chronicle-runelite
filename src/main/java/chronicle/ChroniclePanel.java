@@ -1488,6 +1488,8 @@ class ChroniclePanel extends PluginPanel
 		buildClog = null;
 		buildSpan = null;
 		spanAsked = false;
+		buildTaskItems = null;
+		buildTaskKills = null;
 		// rebuild() throws the whole scroll pane away and hangs a fresh one, which
 		// starts at the top. Expanded, Home is longer than the panel.
 		int priorScroll = 0;
@@ -2179,6 +2181,122 @@ class ChroniclePanel extends PluginPanel
 		return bag;
 	}
 
+	/**
+	 * The period as epoch millis, for the records that carry a stamp rather than
+	 * a daily baseline. A lifetime admits everything, which is what it means.
+	 */
+	private long[] windowMs()
+	{
+		if (wholeRecord())
+		{
+			return new long[]{Long.MIN_VALUE / 2, Long.MAX_VALUE / 2};
+		}
+		Window w = window();
+		return new long[]{
+			w.start.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+			w.end.plusDays(1).atStartOfDay(ZoneId.systemDefault())
+				.toInstant().toEpochMilli() - 1};
+	}
+
+	// Answered once per rebuild, like the sources and the collection log above.
+	// A board of two hundred rows asks whether each of them has an on-task side,
+	// and the answer is one pass over ninety three tasks.
+	private Map<String, long[]> buildTaskItems;
+	private Map<String, Long> buildTaskKills;
+
+	/** Every item the tasks paid inside the period, name to qty and worth. */
+	private Map<String, long[]> taskItems()
+	{
+		if (buildTaskItems == null)
+		{
+			long[] w = windowMs();
+			buildTaskItems = plugin.onTaskItems(w[0], w[1]);
+		}
+		return buildTaskItems;
+	}
+
+	/** Every monster the tasks were fought against inside the period. */
+	private Map<String, Long> taskKills()
+	{
+		if (buildTaskKills == null)
+		{
+			long[] w = windowMs();
+			buildTaskKills = plugin.onTaskKills(w[0], w[1]);
+		}
+		return buildTaskKills;
+	}
+
+	// Whether the loot on show is narrowed to what slayer tasks logged. A lens,
+	// like the two beside it, and READ ONLY by a board that also draws the
+	// control: a number that changes with no control on screen to explain why is
+	// worse than a number the reader cannot narrow at all.
+	private boolean onTaskOnly;
+
+	/**
+	 * All, or only what the tasks logged. Drawn where the record can answer
+	 * both, and nowhere else.
+	 */
+	private JPanel onTaskPicker()
+	{
+		JPanel strip = new JPanel(new GridLayout(1, 2, 3, 3));
+		strip.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		for (String g : new String[]{"All", "On task"})
+		{
+			boolean on = "On task".equals(g) == onTaskOnly;
+			JLabel pill = new JLabel(g, JLabel.CENTER);
+			pill.setOpaque(true);
+			pill.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+			pill.setFont(FontManager.getRunescapeSmallFont());
+			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			pill.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+			pill.setToolTipText("All".equals(g) ? "Everything the ledger holds"
+				: "Only what slayer tasks logged");
+			pill.addMouseListener(clicker(() ->
+			{
+				onTaskOnly = "On task".equals(g);
+				lootKind = null;
+				rebuildInPlace();
+			}));
+			strip.add(pill);
+		}
+		JPanel hold = column();
+		hold.add(strip);
+		hold.add(vgap(6));
+		return hold;
+	}
+
+	/** What the tasks paid inside the period, as a bag the kind lens can read. */
+	private List<LocalStore.BagItem> onTaskBag()
+	{
+		long[] w = windowMs();
+		return plugin.onTaskLoot(w[0], w[1], null);
+	}
+
+	/**
+	 * Whether this account has ANY on-task loot, ever.
+	 *
+	 * <p>The control is offered on that, not on the period: an account that has
+	 * never been given a task is never shown a filter that would do nothing,
+	 * and an account that has, keeps the control in a week it happened not to
+	 * close one. A pill that disappears because you changed the period, leaving
+	 * the reading it set still in force, is a control the reader cannot undo.
+	 */
+	private boolean everOnTask()
+	{
+		return !taskItemsEver().isEmpty();
+	}
+
+	private Map<String, long[]> taskItemsEver;
+
+	private Map<String, long[]> taskItemsEver()
+	{
+		if (taskItemsEver == null)
+		{
+			taskItemsEver = plugin.onTaskItems(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2);
+		}
+		return taskItemsEver;
+	}
+
 	private boolean dropsLeftBehind;
 	// Which KIND of thing the loot boards are narrowed to, or null for all of
 	// them. A kind is a question a reader actually has -- "what have the tasks
@@ -2225,6 +2343,29 @@ class ChroniclePanel extends PluginPanel
 		if (!dropsLeftBehind)
 		{
 			p.add(groupingPicker());
+		}
+		// Only over the kinds, and only where the period holds a task at all. By
+		// SOURCE it cannot be offered: a task carries one items map over all its
+		// monsters, so there is no on-task figure for one of them.
+		final boolean canAskOnTask = !dropsLeftBehind && dropsByKind && everOnTask();
+		if (canAskOnTask)
+		{
+			p.add(onTaskPicker());
+		}
+		// Taken BEFORE the period branch, because the tasks are not the roll. The
+		// roll is dated day by day and only begins where it begins; a task
+		// carries the stamp of its own close, so the on-task reading answers a
+		// window on its own and must not be gated by a roll that cannot.
+		if (canAskOnTask && onTaskOnly)
+		{
+			List<LocalStore.BagItem> taskBag = onTaskBag();
+			if (taskBag.isEmpty())
+			{
+				p.add(note("No task closed inside " + window().label + "."));
+				return p;
+			}
+			return kindLens(p, wholeRecord() ? "On-task loot"
+				: "Tasks closed in " + window().label, taskBag, "ontask:");
 		}
 		// The period governs this board too. The ledger's running totals cannot be
 		// narrowed, but the loot ROLL can: it keeps one entry a day holding what
@@ -4145,17 +4286,42 @@ class ChroniclePanel extends PluginPanel
 			img.addTo(slot);
 			head.add(slot);
 		}
-		head.add(row("Obtained", "×" + fmt(qty), accent()));
-		if (value > 0)
+		long[] mine = taskItemsEver().get(properName(name, srcs));
+		final boolean hasTask = mine != null;
+		if (hasTask && onTaskOnly)
 		{
-			head.add(row("Worth", gp(value) + " gp", null));
+			// COUNTS ONLY on this page, no gp. The two readings sit one line
+			// apart here, and they are priced on different days: a task freezes
+			// what it paid when it closed, the ledger holds what it held when
+			// the drop landed and has been repriced since. On my own record 19
+			// items are worth MORE on task than in the whole ledger, Mithril
+			// spear at 84,000 gp against 4,158, and a reader would subtract
+			// them. Quantity never exceeds on any of the 655.
+			head.add(row("Obtained on task", "×" + fmt(mine[0]), accent()));
+			head.add(row("All sources", "×" + fmt(qty), null));
+		}
+		else
+		{
+			head.add(row("Obtained", "×" + fmt(qty), accent()));
+			if (value > 0)
+			{
+				head.add(row("Worth", gp(value) + " gp", null));
+			}
 		}
 		p.add(head);
 		p.add(vgap(6));
+		if (hasTask)
+		{
+			p.add(onTaskPicker());
+		}
 		if (srcs.isEmpty())
 		{
 			p.add(note("The journal hasn't seen this item drop yet."));
 			return p;
+		}
+		if (hasTask && onTaskOnly)
+		{
+			return byTaskRows(p, properName(name, srcs));
 		}
 		p.add(group("From"));
 		int mounted = 0;
@@ -4174,6 +4340,93 @@ class ChroniclePanel extends PluginPanel
 			p.add(r);
 		}
 		return p;
+	}
+
+	/**
+	 * The ledger's own spelling of an item name.
+	 *
+	 * <p>The task bag is keyed by the name the game gave the drop, and a page
+	 * can be opened from a search box where the reader typed it in any case at
+	 * all. Matching on the bag's own key is what makes "fire rune" find it.
+	 */
+	private String properName(String typed, List<Object[]> srcs)
+	{
+		for (String key : taskItemsEver().keySet())
+		{
+			if (key.equalsIgnoreCase(typed))
+			{
+				return key;
+			}
+		}
+		return typed;
+	}
+
+	/**
+	 * One item split by the TASK that paid it.
+	 *
+	 * <p>Not by monster, which the record cannot say: a task carries one items
+	 * map over every monster in it, and one of mine holds 45 blue dragons and
+	 * 97 Vorkath. The rows do not open anything, because what they name is an
+	 * assignment rather than a place the panel has a page for.
+	 */
+	private JPanel byTaskRows(JPanel p, String name)
+	{
+		long[] w = windowMs();
+		List<Object[]> split = plugin.onTaskItemByTask(name, w[0], w[1]);
+		if (split.isEmpty())
+		{
+			p.add(note("No task paid this inside " + window().label + "."));
+			return p;
+		}
+		p.add(group("By task"));
+		int mounted = 0;
+		for (Object[] t : split)
+		{
+			if (mounted++ >= itemSourceCap)
+			{
+				p.add(ghostRow("+ " + (split.size() - itemSourceCap) + " more tasks", ""));
+				break;
+			}
+			p.add(row("Task: " + t[0], "×" + fmt((long) t[1]), null));
+		}
+		return p;
+	}
+
+	/**
+	 * The slayer assignments this monster turned up in, newest first.
+	 *
+	 * <p>Labelled for the TASK, because that is what the figure beside it
+	 * belongs to. The kills are this monster's own and exact; a task's worth is
+	 * the whole assignment's and is not printed here at all, since one of mine
+	 * holds 45 blue dragons, 3 babies and 97 Vorkath, and no share of that
+	 * belongs to any one of them.
+	 */
+	private void addAssignments(JPanel p, String npc)
+	{
+		long[] w = windowMs();
+		List<LocalStore.Assignment> was = plugin.onTaskAssignments(npc, w[0], w[1]);
+		if (was.isEmpty())
+		{
+			return;
+		}
+		p.add(group("Killed on task"));
+		int cap = drillShown.getOrDefault("ontask:src:" + npc, ROW_CAP);
+		int mounted = 0;
+		for (LocalStore.Assignment a : was)
+		{
+			if (mounted++ >= cap)
+			{
+				p.add(expander("ontask:src:" + npc, cap, was.size()));
+				break;
+			}
+			JPanel r = row("Task: " + a.task, fmt(a.killsHere), null);
+			if (a.ts > 0)
+			{
+				r.setToolTipText(TASK_DAY.format(Instant.ofEpochMilli(a.ts)));
+			}
+			p.add(r);
+		}
+		p.add(vgap(6));
 	}
 
 	// The source under the glass: kills tracked, the take, and its whole bag.
@@ -4210,6 +4463,17 @@ class ChroniclePanel extends PluginPanel
 			head.add(row("Worth", gp(sr.value) + " gp"
 				+ (sr.kc > 0 ? " · " + gp(sr.value / Math.max(1, count))
 					+ (killed ? " gp/kill" : " gp each") : ""), null));
+			// Stated, not filtered. The kills are this monster's and exact; its
+			// LOOT on task does not exist as a figure, because a task carries one
+			// items map over every monster in it and one of mine holds 45 blue
+			// dragons beside 97 Vorkath. So the page says how many of these were
+			// killed on a task and lists the assignments, and never cuts the bag
+			// below by them.
+			Long onTask = taskKills().get(sr.name);
+			if (onTask != null && onTask > 0)
+			{
+				head.add(row("On task", fmt(onTask), null));
+			}
 			// what the log's own page counts for it, in the log's own words
 			for (Map.Entry<String, Long> pbLine : bestTimes(sr.name))
 			{
@@ -4263,6 +4527,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(head);
 		p.add(vgap(6));
+		if (sr != null)
+		{
+			addAssignments(p, sr.name);
+		}
 		if (!bag.isEmpty())
 		{
 			JPanel grid = new JPanel(new GridLayout(0, 5, 3, 3));
