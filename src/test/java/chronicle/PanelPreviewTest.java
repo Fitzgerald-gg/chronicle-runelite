@@ -1339,6 +1339,25 @@ public class PanelPreviewTest
 		}
 
 		@Override
+		java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task)
+		{
+			return store != null ? store.onTaskLoot(fromMs, toMs, task)
+				: new java.util.ArrayList<>();
+		}
+
+		@Override
+		java.util.List<LocalStore.BagItem> allLoot()
+		{
+			return store != null ? store.allLoot() : new java.util.ArrayList<>();
+		}
+
+		@Override
+		java.util.List<String> taskNames()
+		{
+			return store != null ? store.taskNames() : new java.util.ArrayList<>();
+		}
+
+		@Override
 		long[] onTaskTally(long fromMs, long toMs)
 		{
 			return store != null ? store.onTaskTally(fromMs, toMs) : new long[]{0, 0};
