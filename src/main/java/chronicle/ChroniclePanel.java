@@ -206,7 +206,7 @@ class ChroniclePanel extends PluginPanel
 				return;
 			}
 			// exact (or singular) source name wins
-			for (LocalStore.SourceRow r : plugin.dropSources())
+			for (LocalStore.SourceRow r : sources())
 			{
 				if (r.name.equalsIgnoreCase(q)
 					|| (q.endsWith("s") && r.name.equalsIgnoreCase(q.substring(0, q.length() - 1))))
@@ -216,7 +216,7 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 			// exact item name
-			for (LocalStore.SourceRow r : plugin.dropSources())
+			for (LocalStore.SourceRow r : sources())
 			{
 				for (LocalStore.BagItem b : plugin.sourceItems(r.name))
 				{
@@ -231,7 +231,7 @@ class ChroniclePanel extends PluginPanel
 			String bestItem = null;
 			long bestVal = -1;
 			String ql = q.toLowerCase(Locale.ROOT);
-			for (LocalStore.SourceRow r : plugin.dropSources())
+			for (LocalStore.SourceRow r : sources())
 			{
 				for (LocalStore.BagItem b : plugin.sourceItems(r.name))
 				{
@@ -247,7 +247,7 @@ class ChroniclePanel extends PluginPanel
 				openItem(bestItem);
 				return;
 			}
-			for (LocalStore.SourceRow r : plugin.dropSources())
+			for (LocalStore.SourceRow r : sources())
 			{
 				if (r.name.toLowerCase(Locale.ROOT).contains(ql))
 				{
@@ -691,10 +691,10 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private long bossKills(String name)
 	{
-		JsonObject cl = plugin.clogSnapshot();
+		JsonObject cl = clogNow();
 		long best = Math.max(0, lookup(cl, "slayer_kcs", name));
 		String kind = LocalStore.kindOf(name);
-		for (LocalStore.SourceRow r : plugin.dropSources())
+		for (LocalStore.SourceRow r : sources())
 		{
 			if (LocalStore.kindOf(r.name).equals(kind))
 			{
@@ -907,7 +907,7 @@ class ChroniclePanel extends PluginPanel
 	private List<Map.Entry<String, Long>> pageLines(String boss)
 	{
 		List<Map.Entry<String, Long>> out = new ArrayList<>();
-		JsonObject cl = plugin.clogSnapshot();
+		JsonObject cl = clogNow();
 		if (cl == null || !cl.has("kc_lines") || !cl.get("kc_lines").isJsonObject())
 		{
 			return out;
@@ -958,7 +958,7 @@ class ChroniclePanel extends PluginPanel
 				return true;
 			}
 		}
-		JsonObject cl = plugin.clogSnapshot();
+		JsonObject cl = clogNow();
 		if (cl != null && cl.has("slayer_kcs") && cl.get("slayer_kcs").isJsonObject())
 		{
 			for (String said : cl.getAsJsonObject("slayer_kcs").keySet())
@@ -1017,7 +1017,7 @@ class ChroniclePanel extends PluginPanel
 	private List<Map.Entry<String, Long>> bestTimes(String boss)
 	{
 		List<Map.Entry<String, Long>> out = new ArrayList<>();
-		JsonObject cl = plugin.clogSnapshot();
+		JsonObject cl = clogNow();
 		if (cl == null || !cl.has("pb_lines") || !cl.get("pb_lines").isJsonObject())
 		{
 			return out;
@@ -1296,7 +1296,7 @@ class ChroniclePanel extends PluginPanel
 		// four and a half million gp sat in the journal under a card saying no
 		// loot had reached it.
 		List<LocalStore.SourceRow> paidOut = new ArrayList<>();
-		for (LocalStore.SourceRow r : plugin.dropSources())
+		for (LocalStore.SourceRow r : sources())
 		{
 			if (LocalStore.kindOf(r.name).equals(kind))
 			{
@@ -1424,6 +1424,11 @@ class ChroniclePanel extends PluginPanel
 
 	private void rebuild()
 	{
+		// A new pass, so the per-rebuild answers are no longer answered.
+		buildSources = null;
+		buildClog = null;
+		buildSpan = null;
+		spanAsked = false;
 		// rebuild() throws the whole scroll pane away and hangs a fresh one, which
 		// starts at the top. Expanded, Home is longer than the panel.
 		int priorScroll = 0;
@@ -2130,7 +2135,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return buildLootByKind(p);
 		}
-		List<LocalStore.SourceRow> sources = plugin.dropSources();
+		List<LocalStore.SourceRow> sources = new ArrayList<>(sources());
 		sources.sort(Comparator.comparingLong((LocalStore.SourceRow r) -> r.value).reversed());
 		if (sources.isEmpty())
 		{
@@ -2903,7 +2908,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel addKillLog(JPanel p)
 	{
-		JsonObject cl = plugin.clogSnapshot();
+		JsonObject cl = clogNow();
 		List<Map.Entry<String, Long>> kcs = new ArrayList<>();
 		if (cl.has("slayer_kcs") && cl.get("slayer_kcs").isJsonObject())
 		{
@@ -3341,7 +3346,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return named;
 		}
-		List<LocalStore.SourceRow> all = plugin.dropSources();
+		List<LocalStore.SourceRow> all = sources();
 		String low = name.toLowerCase(Locale.ROOT);
 		LocalStore.SourceRow best = null;
 		for (LocalStore.SourceRow r : all)
@@ -3375,7 +3380,7 @@ class ChroniclePanel extends PluginPanel
 			// hundred times copies it two hundred times before a single row is
 			// drawn.
 			Map<String, String> index = new java.util.HashMap<>();
-			for (LocalStore.SourceRow r : plugin.dropSources())
+			for (LocalStore.SourceRow r : sources())
 			{
 				index.putIfAbsent(r.name.toLowerCase(Locale.ROOT), r.name);
 			}
@@ -3888,7 +3893,7 @@ class ChroniclePanel extends PluginPanel
 		long worth = 0;
 		int found = 0;
 		final List<Object[]> srcs = new ArrayList<>();
-		for (LocalStore.SourceRow r : plugin.dropSources())
+		for (LocalStore.SourceRow r : sources())
 		{
 			for (LocalStore.BagItem b : plugin.sourceItems(r.name))
 			{
@@ -3959,7 +3964,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel p = column();
 		LocalStore.SourceRow found = null;
-		for (LocalStore.SourceRow r : plugin.dropSources())
+		for (LocalStore.SourceRow r : sources())
 		{
 			if (r.name.equalsIgnoreCase(name))
 			{
@@ -4197,7 +4202,7 @@ class ChroniclePanel extends PluginPanel
 		p.add(pills);
 		p.add(vgap(6));
 
-		JsonObject cl = plugin.clogSnapshot();
+		JsonObject cl = clogNow();
 		Obtained ob = obtained(cl);
 		Map<String, Long> kcs = new LinkedHashMap<>();
 		if (cl.has("kcs") && cl.get("kcs").isJsonObject())
@@ -4913,6 +4918,43 @@ class ChroniclePanel extends PluginPanel
 		{
 			keepScroll = false;
 		}
+	}
+
+	// Answered once per rebuild.
+	//
+	// The Kills board asks the store for the same two things a hundred and
+	// seventy times over -- once per source row, and again per column -- and
+	// each ask takes the store's lock and hands back a fresh copy; the
+	// collection log is deep-copied whole. The record cannot change inside a
+	// build, because a build runs on the EDT and so does every write to it, so
+	// neither can the answer. Cleared at the top of rebuild(), which makes the
+	// memo exactly as fresh as the board on screen.
+	private List<LocalStore.SourceRow> buildSources;
+	private JsonObject buildClog;
+	private Span buildSpan;
+	private boolean spanAsked;
+
+	/**
+	 * Every source the ledger holds. Shared, so a caller that wants to sort it
+	 * takes its own copy first.
+	 */
+	private List<LocalStore.SourceRow> sources()
+	{
+		if (buildSources == null)
+		{
+			buildSources = plugin.dropSources();
+		}
+		return buildSources;
+	}
+
+	/** The collection log as the store holds it. Shared; read, never written. */
+	private JsonObject clogNow()
+	{
+		if (buildClog == null)
+		{
+			buildClog = plugin.clogSnapshot();
+		}
+		return buildClog;
 	}
 
 	// gp per consumable key, refreshed per rebuild. What the Food and Potions
@@ -6120,7 +6162,7 @@ class ChroniclePanel extends PluginPanel
 		Map<String, Long> out = new LinkedHashMap<>();
 		if (wholeRecord())
 		{
-			for (LocalStore.SourceRow r : plugin.dropSources())
+			for (LocalStore.SourceRow r : sources())
 			{
 				out.merge(r.name, r.value, Long::sum);
 			}
@@ -7449,6 +7491,24 @@ class ChroniclePanel extends PluginPanel
 
 	private Span span()
 	{
+		if (spanAsked)
+		{
+			return buildSpan;
+		}
+		spanAsked = true;
+		buildSpan = foldSpan();
+		return buildSpan;
+	}
+
+	/**
+	 * The spine folded to the window's two ends.
+	 *
+	 * <p>Not cheap: it walks the whole spine twice, and the Kills board asks for
+	 * it seventy one times -- once per cell -- which on a two year record is
+	 * fifty milliseconds of the same fold. span() answers it once per build.
+	 */
+	private Span foldSpan()
+	{
 		if (historySpine == null)
 		{
 			gatherHistory();   // lands on a later pass, and rebuilds when it does
@@ -8412,7 +8472,7 @@ class ChroniclePanel extends PluginPanel
 		// listed underneath it.
 		Map<String, long[]> itemAgg = new LinkedHashMap<>();       // name -> {qty, value}
 		Map<String, List<String>> itemSrcs = new LinkedHashMap<>();
-		for (LocalStore.SourceRow src : plugin.dropSources())
+		for (LocalStore.SourceRow src : sources())
 		{
 			for (LocalStore.BagItem b : plugin.sourceItems(src.name))
 			{
@@ -8430,7 +8490,7 @@ class ChroniclePanel extends PluginPanel
 		List<String> itemNames = new ArrayList<>(itemAgg.keySet());
 		itemNames.sort(Comparator.comparingLong((String n) -> itemAgg.get(n)[1]).reversed());
 		List<LocalStore.SourceRow> srcHits = new ArrayList<>();
-		for (LocalStore.SourceRow r : plugin.dropSources())
+		for (LocalStore.SourceRow r : sources())
 		{
 			if (r.name.toLowerCase(Locale.ROOT).contains(ql))
 			{
@@ -8478,7 +8538,7 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		// Collection log: the whole taxonomy, with your obtained state.
-		Obtained ob = obtained(plugin.clogSnapshot());
+		Obtained ob = obtained(clogNow());
 		// One hit per item: obtaining one whip lights every slot that holds it,
 		// so the first page carrying it stands in as its address.
 		Map<String, String> slotFirstPage = new LinkedHashMap<>();
