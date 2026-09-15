@@ -1072,6 +1072,11 @@ public class ChroniclePlugin extends Plugin
 		return localStore.onTaskTally(fromMs, toMs);
 	}
 
+	long[] onTaskTally(long fromMs, long toMs, String onlyTask)
+	{
+		return localStore.onTaskTally(fromMs, toMs, onlyTask);
+	}
+
 	java.util.List<LocalStore.BagItem> untakenItemsOf(String source)
 	{
 		return localStore.untakenItemsOf(source);

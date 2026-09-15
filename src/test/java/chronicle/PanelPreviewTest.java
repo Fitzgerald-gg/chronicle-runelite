@@ -1360,7 +1360,14 @@ public class PanelPreviewTest
 		@Override
 		long[] onTaskTally(long fromMs, long toMs)
 		{
-			return store != null ? store.onTaskTally(fromMs, toMs) : new long[]{0, 0};
+			return store != null ? store.onTaskTally(fromMs, toMs) : new long[]{0, 0, 0};
+		}
+
+		@Override
+		long[] onTaskTally(long fromMs, long toMs, String onlyTask)
+		{
+			return store != null ? store.onTaskTally(fromMs, toMs, onlyTask)
+				: new long[]{0, 0, 0};
 		}
 
 		@Override

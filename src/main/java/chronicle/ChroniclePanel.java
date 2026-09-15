@@ -2718,8 +2718,12 @@ class ChroniclePanel extends PluginPanel
 			p.add(taskPicker());
 			return kindDrill(p, bag, "task:");
 		}
-		final long[] tally = plugin.onTaskTally(from, to);
-		p.add(onTaskHead(bag.size(), qty, value, lootTask == null ? tally : null));
+		// Narrowed by the task on show, so the card counts the tasks, kills and
+		// superiors this bag actually came off. It used to be every task in the
+		// window, which is why the figures had to be dropped entirely the
+		// moment a reader picked one.
+		final long[] tally = plugin.onTaskTally(from, to, lootTask);
+		p.add(onTaskHead(qty, value, tally));
 		p.add(vgap(6));
 		p.add(taskPicker());
 
@@ -2777,7 +2781,7 @@ class ChroniclePanel extends PluginPanel
 		long[] tally)
 	{
 		JPanel page = column();
-		page.add(onTaskHead(bag.size(), qty, value, lootTask == null ? tally : null));
+		page.add(onTaskHead(qty, value, tally));
 		page.add(vgap(6));
 		if (lootTask != null)
 		{
@@ -2942,12 +2946,19 @@ class ChroniclePanel extends PluginPanel
 	 * Kills that dropped nothing belong to the task rather than to the loot, so
 	 * they are counted on the task's own page and not here.
 	 */
-	private JPanel onTaskHead(int kinds, long qty, long value, long[] tally)
+	private JPanel onTaskHead(long qty, long value, long[] tally)
 	{
 		JPanel head = card("On-task loot");
 		head.add(row("Items", fmt(qty), accent()));
 		head.add(row("Worth", gp(value) + " gp", null));
-		head.add(row("Distinct items", fmt(kinds), null));
+		// How many TASKS this is the take from, which is the thing that makes
+		// the rest of the card mean anything: 81M gp is a different sentence
+		// over four hundred tasks than over four. A count of distinct items sat
+		// here and said nothing the list below it did not already say.
+		if (tally != null && tally.length > 2)
+		{
+			head.add(row("Tasks", fmt(tally[2]), null));
+		}
 		if (tally != null && tally.length > 0 && tally[0] > 0)
 		{
 			head.add(row("Kills logged", fmt(tally[0]), null));
@@ -2970,7 +2981,7 @@ class ChroniclePanel extends PluginPanel
 		long[] tally)
 	{
 		JPanel p = column();
-		p.add(onTaskHead(bag.size(), qty, value, tally));
+		p.add(onTaskHead(qty, value, tally));
 		p.add(vgap(6));
 
 		List<LocalStore.BagItem> shown = bag.size() > COPY_MOST
