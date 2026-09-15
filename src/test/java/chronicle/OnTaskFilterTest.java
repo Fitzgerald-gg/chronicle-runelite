@@ -1,0 +1,258 @@
+package chronicle;
+
+import java.awt.Component;
+import java.awt.Container;
+import java.io.File;
+import java.io.FileWriter;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+import org.junit.Test;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+/**
+ * The All / On task filter: where it appears, what it narrows, and the two
+ * things it must never do.
+ *
+ * <p>It must never appear where the record has no on-task side to show, and it
+ * must never put a gp figure from the task bag beside one from the ledger. The
+ * two bags are priced on different days, so on the owner's own record 19 items
+ * are worth MORE on task than in the entire ledger while never exceeding it by
+ * quantity. Counts cross the filter; money does not.
+ */
+public class OnTaskFilterTest
+{
+	private static final String JOURNAL =
+		"{\"drops\":{"
+		+ "\"Blue dragon\":{\"kc\":300,\"loots\":300,\"value\":600,\"items\":{"
+		+ "\"536\":{\"id\":536,\"name\":\"Dragon bones\",\"qty\":300,\"value\":600},"
+		+ "\"554\":{\"id\":554,\"name\":\"Fire rune\",\"qty\":900,\"value\":900}}},"
+		+ "\"Zulrah\":{\"kc\":7,\"loots\":7,\"value\":900,\"items\":{"
+		+ "\"12934\":{\"id\":12934,\"name\":\"Zulrah's scales\",\"qty\":900,\"value\":900}}}"
+		+ "},\"slayer\":{\"tasks\":["
+		+ "{\"task\":\"Blue dragons\",\"ts\":1700000000,\"kills\":145,\"value\":300000,"
+		+ "\"monsters\":{\"Blue dragon\":45,\"Baby blue dragon\":3,\"Vorkath\":97},"
+		+ "\"items\":{\"Fire rune\":{\"id\":554,\"qty\":500,\"value\":9999}}},"
+		+ "{\"task\":\"Dust devils\",\"ts\":1700100000,\"kills\":206,\"value\":400000,"
+		+ "\"monsters\":{\"Dust devil\":206},"
+		+ "\"items\":{\"Fire rune\":{\"id\":554,\"qty\":100,\"value\":10}}}"
+		+ "]}}";
+
+	private static ChroniclePanel panel() throws Exception
+	{
+		File dir = new File(System.getProperty("java.io.tmpdir"), "chronicle-on-task-filter");
+		dir.mkdirs();
+		try (FileWriter w = new FileWriter(new File(dir, "filtery.json")))
+		{
+			w.write(JOURNAL);
+		}
+		PanelPreviewTest.StubPlugin s = PanelPreviewTest.journalStub(dir.getPath(), "filtery");
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(s));
+		ChroniclePanel p = hold[0];
+		set(p, "histGranularity", "Lifetime");
+		return p;
+	}
+
+	private static void set(ChroniclePanel p, String n, Object v) throws Exception
+	{
+		Field f = ChroniclePanel.class.getDeclaredField(n);
+		f.setAccessible(true);
+		f.set(p, v);
+	}
+
+	private static List<String> say(ChroniclePanel p, String method, Object... args)
+		throws Exception
+	{
+		final List<String> out = new ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = args.length == 0
+					? ChroniclePanel.class.getDeclaredMethod(method)
+					: ChroniclePanel.class.getDeclaredMethod(method, String.class);
+				m.setAccessible(true);
+				List<Component> flat = new ArrayList<>();
+				flatten((Component) (args.length == 0 ? m.invoke(p) : m.invoke(p, args)), flat);
+				for (Component c : flat)
+				{
+					if (c instanceof JLabel && ((JLabel) c).getText() != null)
+					{
+						out.add(((JLabel) c).getText());
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		return out;
+	}
+
+	private static void flatten(Component c, List<Component> out)
+	{
+		out.add(c);
+		if (c instanceof Container)
+		{
+			for (Component k : ((Container) c).getComponents())
+			{
+				flatten(k, out);
+			}
+		}
+	}
+
+	/** Card titles and group headings are drawn uppercase, so match without case. */
+	private static boolean has(List<String> said, String what)
+	{
+		for (String s : said)
+		{
+			if (s.toLowerCase(java.util.Locale.ROOT)
+				.contains(what.toLowerCase(java.util.Locale.ROOT)))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static String after(List<String> said, String label)
+	{
+		for (int i = 0; i < said.size() - 1; i++)
+		{
+			if (label.equals(said.get(i)))
+			{
+				return said.get(i + 1);
+			}
+		}
+		return null;
+	}
+
+	/** An item a task paid gets the filter. One no task paid does not. */
+	@Test
+	public void theFilterAppearsOnlyWhereThereIsSomethingToFilter() throws Exception
+	{
+		ChroniclePanel p = panel();
+		assertTrue("an item tasks paid was offered no filter",
+			has(say(p, "buildItemDetail", "Fire rune"), "On task"));
+		assertFalse("an item no task ever paid was offered a filter",
+			has(say(p, "buildItemDetail", "Zulrah's scales"), "On task"));
+	}
+
+	/** And a page with no filter on it ignores the setting entirely. */
+	@Test
+	public void aPageWithNoFilterIsNotGovernedByOne() throws Exception
+	{
+		ChroniclePanel p = panel();
+		set(p, "onTaskOnly", true);
+		List<String> said = say(p, "buildItemDetail", "Zulrah's scales");
+		assertEquals("the ledger figure changed under a control that is not there",
+			"×900", after(said, "Obtained"));
+		assertFalse(has(said, "On task"));
+	}
+
+	/** Counts cross the filter. Money does not. */
+	@Test
+	public void theItemPageCountsAndDoesNotPrice() throws Exception
+	{
+		ChroniclePanel p = panel();
+		set(p, "onTaskOnly", true);
+		List<String> said = say(p, "buildItemDetail", "Fire rune");
+		assertEquals("×600", after(said, "Obtained on task"));
+		assertEquals("×900", after(said, "All sources"));
+		// the task bag prices this at 10,009 and the ledger at 900. Both are
+		// true of different days, and one under the other is a subtraction
+		// nobody should be invited to make.
+		assertFalse("a gp figure crossed the filter", has(said, "gp"));
+	}
+
+	/** The split is by task, because the record cannot say which monster. */
+	@Test
+	public void theItemSplitsByTaskNotByMonster() throws Exception
+	{
+		ChroniclePanel p = panel();
+		set(p, "onTaskOnly", true);
+		List<String> said = say(p, "buildItemDetail", "Fire rune");
+		assertTrue(has(said, "By task"));
+		assertEquals("×500", after(said, "Task: Blue dragons"));
+		assertEquals("×100", after(said, "Task: Dust devils"));
+		assertFalse("a monster was named as if it had paid", has(said, "Blue dragon ×"));
+	}
+
+	/**
+	 * A monster's page is never filtered. It states its on-task kills, which are
+	 * exact, and lists the assignments it turned up in, labelled for the task,
+	 * because a task's take belongs to the task.
+	 */
+	@Test
+	public void aMonsterStatesItsKillsAndNamesTheTask() throws Exception
+	{
+		ChroniclePanel p = panel();
+		set(p, "onTaskOnly", true);
+		List<String> said = say(p, "buildSourceDetail", "Blue dragon");
+		assertEquals("45", after(said, "On task"));
+		assertTrue(has(said, "Killed on task"));
+		assertEquals("45", after(said, "Task: Blue dragons"));
+		assertFalse("a monster page grew a filter it cannot honour",
+			has(said, "All"));
+		// the whole ledger bag is still there, uncut
+		assertTrue(has(said, "Dragon bones"));
+	}
+
+	/** A monster never assigned says nothing about tasks at all. */
+	@Test
+	public void aMonsterNeverAssignedSaysNothing() throws Exception
+	{
+		ChroniclePanel p = panel();
+		List<String> said = say(p, "buildSourceDetail", "Zulrah");
+		assertFalse(has(said, "On task"));
+		assertFalse(has(said, "Killed on task"));
+	}
+
+	/** The loot board offers it over kinds, and never over sources. */
+	@Test
+	public void theLootBoardOffersItOverKindsOnly() throws Exception
+	{
+		ChroniclePanel p = panel();
+		set(p, "dropsByKind", false);
+		assertFalse("By source cannot answer it and must not offer it",
+			has(say(p, "buildDrops"), "On task"));
+		set(p, "dropsByKind", true);
+		assertTrue(has(say(p, "buildDrops"), "On task"));
+	}
+
+	/** On task, the board reads the tasks rather than the ledger. */
+	@Test
+	public void theLootBoardNarrowsToTheTasks() throws Exception
+	{
+		ChroniclePanel p = panel();
+		set(p, "dropsByKind", true);
+		set(p, "onTaskOnly", true);
+		List<String> said = say(p, "buildDrops");
+		assertTrue(has(said, "On-task loot"));
+		assertEquals("600 fire runes across two tasks", "600", after(said, "Items"));
+	}
+
+	/**
+	 * A period that closed no task says so and keeps the control, rather than
+	 * dropping the reader onto the ledger's own note with no way back.
+	 */
+	@Test
+	public void aPeriodWithNoTaskInItSaysSo() throws Exception
+	{
+		ChroniclePanel p = panel();
+		set(p, "dropsByKind", true);
+		set(p, "onTaskOnly", true);
+		set(p, "histGranularity", "Day");
+		List<String> said = say(p, "buildDrops");
+		assertTrue("the reader was left with no way back to All", has(said, "On task"));
+		assertTrue(has(said, "No task closed inside"));
+	}
+}
