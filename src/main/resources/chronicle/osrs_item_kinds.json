@@ -1,0 +1,417 @@
+{
+ "_comment": "Item name -> KIND, for the loot board's kind filter. ORDERED, first match wins, compared case-insensitively against the display name. Same matcher as osrs_skill_item_rules.json. Generated; see the generator beside this file's entry in the README.",
+ "_kinds": [
+  "Runes",
+  "Herbs",
+  "Seeds",
+  "Bones and ashes",
+  "Logs",
+  "Ores and bars",
+  "Gems",
+  "Potions",
+  "Ammunition",
+  "Weapons",
+  "Armour",
+  "Hides and leather",
+  "Food",
+  "Materials",
+  "Clues and caskets",
+  "Coins and tokens"
+ ],
+ "rules": [
+  {
+   "kind": "Ammunition",
+   "match": "in_set",
+   "value": [
+    "Rune arrow",
+    "Rune arrowtips",
+    "Rune javelin",
+    "Rune javelin heads",
+    "Rune knife",
+    "Rune dart",
+    "Rune dart tip",
+    "Rune bolts",
+    "Runite bolts",
+    "Runite bolts (unf)",
+    "Rune thrownaxe"
+   ]
+  },
+  {
+   "kind": "Materials",
+   "match": "in_set",
+   "value": [
+    "Rune essence",
+    "Pure essence",
+    "Daeyalt essence",
+    "Guardian essence",
+    "Blighted essence"
+   ]
+  },
+  {
+   "kind": "Runes",
+   "match": "regex",
+   "value": "(?i)^(?!rune\\b)(?!runite\\b).*\\brunes?$"
+  },
+  {
+   "kind": "Runes",
+   "match": "in_set",
+   "value": [
+    "Dust rune",
+    "Mist rune",
+    "Mud rune",
+    "Smoke rune",
+    "Steam rune",
+    "Lava rune",
+    "Elemental rune",
+    "Catalytic rune"
+   ]
+  },
+  {
+   "kind": "Herbs",
+   "match": "regex",
+   "value": "(?i)^grimy .+$"
+  },
+  {
+   "kind": "Herbs",
+   "match": "in_set",
+   "value": [
+    "Guam leaf",
+    "Marrentill",
+    "Tarromin",
+    "Harralander",
+    "Ranarr weed",
+    "Toadflax",
+    "Irit leaf",
+    "Avantoe",
+    "Kwuarm",
+    "Snapdragon",
+    "Cadantine",
+    "Lantadyme",
+    "Dwarf weed",
+    "Torstol",
+    "Huasca",
+    "Athelas"
+   ]
+  },
+  {
+   "kind": "Seeds",
+   "match": "endswith",
+   "value": "seed"
+  },
+  {
+   "kind": "Seeds",
+   "match": "endswith",
+   "value": "seeds"
+  },
+  {
+   "kind": "Seeds",
+   "match": "endswith",
+   "value": "sapling"
+  },
+  {
+   "kind": "Seeds",
+   "match": "in_set",
+   "value": [
+    "Acorn",
+    "Grape seeds"
+   ]
+  },
+  {
+   "kind": "Bones and ashes",
+   "match": "endswith",
+   "value": "bones"
+  },
+  {
+   "kind": "Bones and ashes",
+   "match": "endswith",
+   "value": "ashes"
+  },
+  {
+   "kind": "Bones and ashes",
+   "match": "in_set",
+   "value": [
+    "Bonemeal",
+    "Blessed bone shards",
+    "Unsired",
+    "Bone fragments"
+   ]
+  },
+  {
+   "kind": "Logs",
+   "match": "endswith",
+   "value": "logs"
+  },
+  {
+   "kind": "Logs",
+   "match": "in_set",
+   "value": [
+    "Logs",
+    "Bark",
+    "Anima-infused bark"
+   ]
+  },
+  {
+   "kind": "Ores and bars",
+   "match": "endswith",
+   "value": " ore"
+  },
+  {
+   "kind": "Ores and bars",
+   "match": "endswith",
+   "value": " bar"
+  },
+  {
+   "kind": "Ores and bars",
+   "match": "in_set",
+   "value": [
+    "Coal",
+    "Clay",
+    "Soft clay",
+    "Blurite ore",
+    "Lovakite ore",
+    "Lovakite bar",
+    "Gold leaf",
+    "Silver bar"
+   ]
+  },
+  {
+   "kind": "Gems",
+   "match": "in_set",
+   "value": [
+    "Uncut sapphire",
+    "Uncut emerald",
+    "Uncut ruby",
+    "Uncut diamond",
+    "Uncut dragonstone",
+    "Uncut onyx",
+    "Uncut zenyte",
+    "Sapphire",
+    "Emerald",
+    "Ruby",
+    "Diamond",
+    "Dragonstone",
+    "Onyx",
+    "Zenyte",
+    "Uncut opal",
+    "Uncut jade",
+    "Uncut red topaz",
+    "Opal",
+    "Jade",
+    "Red topaz",
+    "Crushed gem"
+   ]
+  },
+  {
+   "kind": "Hides and leather",
+   "match": "endswith",
+   "value": "hide"
+  },
+  {
+   "kind": "Hides and leather",
+   "match": "endswith",
+   "value": "hides"
+  },
+  {
+   "kind": "Hides and leather",
+   "match": "endswith",
+   "value": "leather"
+  },
+  {
+   "kind": "Hides and leather",
+   "match": "in_set",
+   "value": [
+    "Dragonhide",
+    "Snakeskin",
+    "Wool",
+    "Ball of wool",
+    "Suqah hide"
+   ]
+  },
+  {
+   "kind": "Potions",
+   "match": "regex",
+   "value": "(?i)\\(\\d\\)$"
+  },
+  {
+   "kind": "Potions",
+   "match": "in_set",
+   "value": [
+    "Vial",
+    "Vial of water",
+    "Vial of blood",
+    "Empty vial",
+    "Jug of wine",
+    "Coconut milk",
+    "Antidote",
+    "Antipoison"
+   ]
+  },
+  {
+   "kind": "Ammunition",
+   "match": "regex",
+   "value": "(?i)\\b(arrows?|arrowtips|bolts|bolt tips|darts?|dart tips?|javelins?|javelin heads|knives|knife|cannonball|thrownaxe|throwing axe)$"
+  },
+  {
+   "kind": "Food",
+   "match": "regex",
+   "value": "(?i)^raw .+$"
+  },
+  {
+   "kind": "Food",
+   "match": "regex",
+   "value": "(?i)\\b(pie|cake|bread|stew|pizza|kebab|potato|curry|gumbo|casserole|omelette|chocolate bomb)$"
+  },
+  {
+   "kind": "Food",
+   "match": "in_set",
+   "value": [
+    "Shark",
+    "Lobster",
+    "Swordfish",
+    "Monkfish",
+    "Karambwan",
+    "Cooked karambwan",
+    "Anglerfish",
+    "Manta ray",
+    "Sea turtle",
+    "Tuna",
+    "Bass",
+    "Trout",
+    "Salmon",
+    "Pike",
+    "Herring",
+    "Sardine",
+    "Anchovies",
+    "Mackerel",
+    "Cod",
+    "Dark crab",
+    "Seaweed",
+    "Grapes",
+    "Coconut",
+    "Banana",
+    "Watermelon",
+    "Strawberry",
+    "Tangled toads legs",
+    "Cooked chicken",
+    "Cooked meat",
+    "Ugthanki kebab"
+   ]
+  },
+  {
+   "kind": "Clues and caskets",
+   "match": "contains",
+   "value": "clue scroll"
+  },
+  {
+   "kind": "Clues and caskets",
+   "match": "contains",
+   "value": "casket"
+  },
+  {
+   "kind": "Clues and caskets",
+   "match": "in_set",
+   "value": [
+    "Scroll box",
+    "Reward casket",
+    "Giant egg sac(full)",
+    "Scroll sack"
+   ]
+  },
+  {
+   "kind": "Coins and tokens",
+   "match": "in_set",
+   "value": [
+    "Coins",
+    "Platinum token",
+    "Tokkul",
+    "Numulite",
+    "Golden nugget",
+    "Mermaid's tear",
+    "Stardust",
+    "Unidentified minerals",
+    "Coin pouch",
+    "Abyssal pearls",
+    "Hallowed mark",
+    "Mark of grace"
+   ]
+  },
+  {
+   "kind": "Materials",
+   "match": "endswith",
+   "value": "shard"
+  },
+  {
+   "kind": "Materials",
+   "match": "endswith",
+   "value": "shards"
+  },
+  {
+   "kind": "Materials",
+   "match": "endswith",
+   "value": "dust"
+  },
+  {
+   "kind": "Materials",
+   "match": "endswith",
+   "value": "scales"
+  },
+  {
+   "kind": "Materials",
+   "match": "endswith",
+   "value": "nails"
+  },
+  {
+   "kind": "Materials",
+   "match": "endswith",
+   "value": "plank"
+  },
+  {
+   "kind": "Materials",
+   "match": "endswith",
+   "value": "planks"
+  },
+  {
+   "kind": "Materials",
+   "match": "in_set",
+   "value": [
+    "Feather",
+    "Fishing bait",
+    "Flax",
+    "Swamp tar",
+    "White berries",
+    "Spirit flakes",
+    "Jug",
+    "Bucket",
+    "Pot",
+    "Bowl",
+    "Empty jug",
+    "Limpwurt root",
+    "Snape grass",
+    "Red spiders' eggs",
+    "Eye of newt",
+    "Unicorn horn dust",
+    "Blue dragon scale",
+    "Wine of zamorak",
+    "Potato cactus",
+    "Mort myre fungus",
+    "Bird nest",
+    "Molten glass",
+    "Soda ash",
+    "Seaweed spore",
+    "Bow string",
+    "Fire orb",
+    "Battlestaff"
+   ]
+  },
+  {
+   "kind": "Weapons",
+   "match": "regex",
+   "value": "(?i)\\b(sword|scimitar|dagger|mace|axe|battleaxe|longsword|spear|halberd|warhammer|hammer|claws|hasta|whip|bow|crossbow|staff|wand|sceptre|maul|rapier|blade|sickle|chinchompa|godsword|bulwark)$"
+  },
+  {
+   "kind": "Armour",
+   "match": "regex",
+   "value": "(?i)\\b(helm|helmet|platebody|platelegs|plateskirt|chainbody|kiteshield|shield|boots|gloves|gauntlets|vambraces|coif|body|legs|chaps|hood|cape|cloak|amulet|necklace|ring|bracelet|defender|book)$"
+  }
+ ]
+}
