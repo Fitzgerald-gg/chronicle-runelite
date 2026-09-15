@@ -104,8 +104,8 @@ public class ChatKillCountTest
 	@Test
 	public void theChatCountOvertakesAFrozenKillLog()
 	{
-		// The Kill Log said 447 when the player last opened it. Forty eight kills
-		// later the game itself has said 448, and that is the answer.
+		// The Kill Log said 447 when the player last opened it. One kill later the
+		// game itself has said 448, and that is the answer.
 		Map<String, Long> out = new LinkedHashMap<>();
 		out.put("Wintertodt", 447L);
 		Map<String, Long> chat = new LinkedHashMap<>();

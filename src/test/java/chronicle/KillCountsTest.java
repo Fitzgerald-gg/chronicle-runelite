@@ -74,11 +74,6 @@ public class KillCountsTest
 		+ "\"collection_log\":{\"kcs\":{\"Tormented Demons\":1302,\"Vorkath\":19,"
 		+ "\"Kraken\":237,\"Soul Wars\":346,\"Zulrah\":0,\"Rift\":\"many\"}}}";
 
-	// Wintertodt's collection log page counts REWARDS CLAIMED: read as kills it
-	// says 1,078 where 448 were killed. A player who opened that page but never
-	// the Kill Log has only the lying number on record, and the chat line the game
-	// prints on every kill is the game itself saying otherwise. The larger must
-	// NOT win here, because the lie is the larger.
 	// A drop imported from the old cloud journal carried no kill with it, so
 	// Zalcano holds 2,024 loot rows against 2,023 kills and has read one high
 	// ever since. Two independent statements -- the count the game gave for a
@@ -106,6 +101,11 @@ public class KillCountsTest
 			Long.valueOf(3_328), kc.get("Dust devils"));
 	}
 
+	// Wintertodt's collection log page counts REWARDS CLAIMED: read as kills it
+	// says 1,078 where 448 were killed. A player who opened that page but never
+	// the Kill Log has only the lying number on record, and the chat line the game
+	// prints on every kill is the game itself saying otherwise. The larger must
+	// NOT win here, because the lie is the larger.
 	@Test
 	public void theGamesOwnCountBeatsAPageCounterCountingSomethingElse() throws Exception
 	{

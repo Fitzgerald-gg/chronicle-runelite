@@ -285,8 +285,6 @@ public class HistoryProgressCardTest
 		return n;
 	}
 
-	// the labels of the skill grid alone: from the first cell's icon text to
-	// the end of the last cell
 	/**
 	 * The skill grid flattened the way it reads: the three letter code that
 	 * stands in for each icon, then the level (or the pair it climbed through),
@@ -413,11 +411,6 @@ public class HistoryProgressCardTest
 		return (Set<String>) f.get(panel);
 	}
 
-	// The tab as a reader sees it: the window controls, which buildHistory now
-	// hands up to the panel so they can hang above the scroll, and the body under
-	// them.
-	// the tab read on its PvM facet, for tests that want the kills, the deaths
-	// or the slayer tasks the headline used to carry for every facet at once
 	private static JPanel skills(PanelPreviewTest.StubPlugin stub) throws Exception
 	{
 		ChroniclePanel p = panel(stub);
@@ -425,6 +418,8 @@ public class HistoryProgressCardTest
 		return history(p);
 	}
 
+	// the tab read on its PvM facet, for tests that want the kills, the deaths
+	// or the slayer tasks the headline used to carry for every facet at once
 	private static JPanel pvm(PanelPreviewTest.StubPlugin stub) throws Exception
 	{
 		ChroniclePanel p = panel(stub);
@@ -432,8 +427,8 @@ public class HistoryProgressCardTest
 		return history(p);
 	}
 
-	// the Journal tab as the client draws it, for the milestones the Progression
-	// tab hands over to it
+	// the Journal tab as the client draws it, for the milestones the history
+	// board hands over to it
 	private static JPanel journal(ChroniclePanel panel) throws Exception
 	{
 		final JPanel[] out = new JPanel[1];
@@ -446,7 +441,6 @@ public class HistoryProgressCardTest
 		return out[0];
 	}
 
-	/** The period row on its own: it is above the tabs now, not inside a tab. */
 	@SuppressWarnings({"unchecked", "rawtypes"})
 	private static void setView(ChroniclePanel panel, String name) throws Exception
 	{
@@ -456,6 +450,7 @@ public class HistoryProgressCardTest
 		f.set(panel, Enum.valueOf((Class<Enum>) type.asSubclass(Enum.class), name));
 	}
 
+	/** The period row on its own: it is above the tabs now, not inside a tab. */
 	private static List<String> periodLabels(ChroniclePanel panel) throws Exception
 	{
 		// On the sitting the row states its scope instead of offering to change
@@ -565,7 +560,6 @@ public class HistoryProgressCardTest
 		return at < 0 ? new ArrayList<>() : all.subList(at, all.size());
 	}
 
-	// the figure beside a named line, or null when the line is absent
 	// the group heads a card draws, in the order it draws them
 	private static List<String> groupHeads(List<String> card)
 	{
@@ -583,6 +577,7 @@ public class HistoryProgressCardTest
 		return out;
 	}
 
+	// the figure beside a named line, or null when the line is absent
 	private static String beside(List<String> card, String label)
 	{
 		int at = card.indexOf(label);
@@ -4165,9 +4160,8 @@ public class HistoryProgressCardTest
 		assertEquals("asked again: " + s.spriteAsks, asked, s.spriteAsks.size());
 
 		// The bands want sprites too, for a line with nothing of its own to wear,
-		// and they want the very sprites the strip above already asked for. A
-		// board of two hundred rebuilt on every click is exactly where an
-		// unbounded queue would show, and none of it costs a single new ask.
+		// and a board of two hundred rebuilt on every click is exactly where an
+		// unbounded queue would show.
 		s.kcs.put("Zulrah", 108L);
 		s.kcs.put("Nechryael", 622L);
 		set(p, "histFacet", "PvM");

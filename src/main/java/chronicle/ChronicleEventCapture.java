@@ -501,11 +501,6 @@ public class ChronicleEventCapture
 		}
 	}
 
-	// Promote buffered self-owned spawns to tracked kill loot when they landed within
-	// KILL_ARM_TICKS of a kill. Runs at GameTick and keeps a spawn pending for that
-	// window, so the later-firing ServerNpcLoot (posted by LootManager, usually from
-	// its GameTick) has landed by the time it is judged. A spawn that never sits near a
-	// kill is a manual drop and is discarded.
 	/**
 	 * A stack already tracked at this place, whatever object now carries it. Matched
 	 * on tile, id and quantity together: a stack that changed size is a different
@@ -567,6 +562,11 @@ public class ChronicleEventCapture
 	// ticks past a stack's own despawn before we conclude nobody is going to tell us
 	private static final int TIMEOUT_GRACE = 5;
 
+	// Promote buffered self-owned spawns to tracked kill loot when they landed within
+	// KILL_ARM_TICKS of a kill. Runs at GameTick and keeps a spawn pending for that
+	// window, so the later-firing ServerNpcLoot (posted by LootManager, usually from
+	// its GameTick) has landed by the time it is judged. A spawn that never sits near a
+	// kill is a manual drop and is discarded.
 	private void reconcileKillLoot()
 	{
 		if (pendingSelf.isEmpty())
@@ -1440,8 +1440,9 @@ public class ChronicleEventCapture
 			return;
 		}
 
-		// Slayer: task-kill line stashes the task; the completed-count line then
-		// finalises. Either can arrive first within the reconciliation window.
+		// Slayer: the finished line stashes the task and arms the flush; the streak
+		// line that follows finalises it and disarms. Only that order is handled: a
+		// finished line arriving after its streak line flushes a second completion.
 		Matcher sk = SLAYER_FINISHED.matcher(msg);
 		if (sk.find())
 		{

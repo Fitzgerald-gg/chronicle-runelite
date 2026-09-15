@@ -144,8 +144,9 @@ public class GrindBookTest
 		assertFalse(chases(byPage).containsKey("smolcano"));
 	}
 
-	// Bloodhound has no rate in the book: no row, no placeholder, however much
-	// clue-hunting the journal holds.
+	// Bloodhound is priced, but only off a "Clue Scroll (Master)" count. "Master
+	// Treasure Trail" is a different key, matches nothing, and leaves the pet out
+	// of the map rather than in it at 0%. Pets the book did count still stand.
 	@Test
 	public void aPetWithoutARateHasNoChase()
 	{

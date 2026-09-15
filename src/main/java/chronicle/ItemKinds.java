@@ -68,7 +68,8 @@ final class ItemKinds
 	private static List<Rule> rules;
 	private static List<String> kinds;
 	// Answered once per name. A board of three hundred rows asks for each of
-	// them on every rebuild, and a regex sweep down forty rules is not free.
+	// them on every rebuild, and a miss is the common answer, so most names
+	// walk all 65 rules (18 of them regex) before coming back null.
 	private static final Map<String, String> answered = new LinkedHashMap<>();
 
 	private ItemKinds()

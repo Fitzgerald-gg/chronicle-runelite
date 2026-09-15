@@ -225,8 +225,9 @@ public final class StatKeys
 	public static final String RESOURCES_DROPPED_VALUE = "resourcesDroppedValue";
 
 	// ── Gathered by hand ──────────────────────────────────────────────────
-	// No experience drop behind these, so they're counted off the click or the
-	// inventory instead.
+	// No experience drop behind these, so each is counted off something else: a
+	// chat line for cabbages and flax, the weeds landing in the pack for
+	// patchesRaked, the menu click for animalsPetted.
 
 	public static final String CABBAGES_PICKED = "cabbagesPicked";
 	public static final String FLAX_GATHERED = "flaxGathered";

@@ -103,9 +103,6 @@ public interface ChronicleConfig extends Config
 		return 5;
 	}
 
-	// import and the journal folder live in the panel's "manage" view; a RuneLite
-	// config item can't be a button.
-
 	// RuneLite's config has no button type, so an action is a tick that runs and
 	// clears itself. These two used to be a "manage" link under the Journal,
 	// which put a settings screen inside a reading panel.
