@@ -57,6 +57,73 @@ public class ItemKindsTest
 		assertEquals("Materials", ItemKinds.kindOf("Pure essence"));
 	}
 
+	/**
+	 * A trailing (n) is a dose only when the name says so. In OSRS it is far
+	 * more often charges or a produce basket, and reading it as a dose files a
+	 * jewellery box and a greengrocer under Potions.
+	 */
+	@Test
+	public void aNumberInBracketsIsNotAlwaysADose()
+	{
+		assertEquals("Potions", ItemKinds.kindOf("Prayer potion(4)"));
+		assertEquals("Potions", ItemKinds.kindOf("Saradomin brew(2)"));
+		assertEquals("Potions", ItemKinds.kindOf("Anti-venom+(4)"));
+		assertEquals("Armour", ItemKinds.kindOf("Amulet of glory(6)"));
+		assertEquals("Armour", ItemKinds.kindOf("Ring of dueling(8)"));
+		assertEquals("Armour", ItemKinds.kindOf("Combat bracelet(6)"));
+		assertEquals("Armour", ItemKinds.kindOf("Black mask (8)"));
+		assertEquals("Food", ItemKinds.kindOf("Potatoes(9)"));
+		assertEquals("Food", ItemKinds.kindOf("Strawberries(5)"));
+	}
+
+	/**
+	 * The family word is not always the last word, and a word boundary does
+	 * not fire inside a compound. Both leave an end-anchored rule blind.
+	 */
+	@Test
+	public void theFamilyWordIsNotAlwaysWhereTheRuleLooks()
+	{
+		assertEquals("Weapons", ItemKinds.kindOf("Staff of fire"));
+		assertEquals("Weapons", ItemKinds.kindOf("Magic shortbow"));
+		assertEquals("Weapons", ItemKinds.kindOf("Magic shortbow (u)"));
+		assertEquals("Weapons", ItemKinds.kindOf("Earth battlestaff"));
+		assertEquals("Weapons", ItemKinds.kindOf("Rune pickaxe"));
+		assertEquals("Weapons", ItemKinds.kindOf("Warped sceptre (uncharged)"));
+		assertEquals("Armour", ItemKinds.kindOf("Amulet of fury"));
+		assertEquals("Armour", ItemKinds.kindOf("Mystic robe top (light)"));
+		assertEquals("Ammunition", ItemKinds.kindOf("Adamant dart(p)"));
+	}
+
+	/**
+	 * Sixty pieces of armour end in "legs" and four dishes do, so the four are
+	 * named outright rather than the word being read as food.
+	 */
+	@Test
+	public void legsAreArmourSixtyTimesAndDinnerFour()
+	{
+		assertEquals("Food", ItemKinds.kindOf("Tangled toad's legs"));
+		assertEquals("Food", ItemKinds.kindOf("Giant frog legs"));
+		assertEquals("Armour", ItemKinds.kindOf("Rock-shell legs"));
+		assertEquals("Armour", ItemKinds.kindOf("Graceful legs"));
+		assertEquals("Armour", ItemKinds.kindOf("Bandos tassets"));
+	}
+
+	/**
+	 * The Gauntlet's seeds are a weapon, a tool and a set of armour. Left to
+	 * the farming rule they file as Seeds and, because the row ranks by value,
+	 * they BECOME the Seeds row.
+	 */
+	@Test
+	public void aCrystalSeedIsNotPlanted()
+	{
+		assertEquals("Weapons", ItemKinds.kindOf("Crystal tool seed"));
+		assertEquals("Weapons", ItemKinds.kindOf("Crystal weapon seed"));
+		assertEquals("Armour", ItemKinds.kindOf("Crystal armour seed"));
+		assertEquals("Materials", ItemKinds.kindOf("Enhanced crystal teleport seed"));
+		assertEquals("Seeds", ItemKinds.kindOf("Snapdragon seed"));
+		assertEquals("Seeds", ItemKinds.kindOf("Mushroom spore"));
+	}
+
 	@Test
 	public void theOtherKindsFileWhatTheyShould()
 	{
@@ -75,6 +142,10 @@ public class ItemKindsTest
 		assertEquals("Coins and tokens", ItemKinds.kindOf("Coins"));
 		assertEquals("Clues and caskets", ItemKinds.kindOf("Clue scroll (elite)"));
 		assertEquals("Materials", ItemKinds.kindOf("Feather"));
+		assertEquals("Materials", ItemKinds.kindOf("Air talisman"));
+		assertEquals("Materials", ItemKinds.kindOf("Ensouled dragon head"));
+		assertEquals("Bones and ashes", ItemKinds.kindOf("Long bone"));
+		assertEquals("Clues and caskets", ItemKinds.kindOf("Scroll box (hard)"));
 	}
 
 	/**

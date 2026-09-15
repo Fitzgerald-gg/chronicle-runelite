@@ -1,5 +1,5 @@
 {
- "_comment": "Item name -> KIND, for the loot board's kind filter. ORDERED, first match wins, compared case-insensitively against the display name. Same matcher as osrs_skill_item_rules.json. Generated; see the generator beside this file's entry in the README.",
+ "_comment": "Item name -> KIND, for the loot board's kind filter. ORDERED and the first match wins, compared case-insensitively against the display name; same matcher as osrs_skill_item_rules. The order is the whole trick: a name that reads as one kind and is another (Rune arrow, Crystal tool seed, Amulet of glory(6), Black mask (8), Rock-shell legs) is claimed by its real kind before the obvious rule can see it. Held against every item name in the cache; the traps are asserted in ItemKindsTest.",
  "_kinds": [
   "Runes",
   "Herbs",
@@ -48,23 +48,50 @@
    ]
   },
   {
-   "kind": "Runes",
+   "kind": "Weapons",
    "match": "regex",
-   "value": "(?i)^(?!rune\\b)(?!runite\\b).*\\brunes?$"
+   "value": "(?i)^(enhanced )?crystal (weapon|tool|saw|chime) seed$"
+  },
+  {
+   "kind": "Armour",
+   "match": "regex",
+   "value": "(?i)^(enhanced )?crystal armour seed$"
+  },
+  {
+   "kind": "Materials",
+   "match": "regex",
+   "value": "(?i)^(enhanced )?crystal teleport seed$"
+  },
+  {
+   "kind": "Materials",
+   "match": "in_set",
+   "value": [
+    "Crystal seed",
+    "Crystal shard",
+    "Crystal dust"
+   ]
+  },
+  {
+   "kind": "Materials",
+   "match": "in_set",
+   "value": [
+    "Knife",
+    "Chisel",
+    "Needle",
+    "Hammer",
+    "Saw",
+    "Chocolate bar",
+    "Monkey bar",
+    "Fingernails",
+    "Dark totem top",
+    "Dark totem middle",
+    "Dark totem base"
+   ]
   },
   {
    "kind": "Runes",
-   "match": "in_set",
-   "value": [
-    "Dust rune",
-    "Mist rune",
-    "Mud rune",
-    "Smoke rune",
-    "Steam rune",
-    "Lava rune",
-    "Elemental rune",
-    "Catalytic rune"
-   ]
+   "match": "regex",
+   "value": "(?i)^(?!rune\\b)(?!runite\\b).*\\brunes?$"
   },
   {
    "kind": "Herbs",
@@ -89,8 +116,7 @@
     "Lantadyme",
     "Dwarf weed",
     "Torstol",
-    "Huasca",
-    "Athelas"
+    "Huasca"
    ]
   },
   {
@@ -110,10 +136,19 @@
   },
   {
    "kind": "Seeds",
+   "match": "endswith",
+   "value": "spore"
+  },
+  {
+   "kind": "Seeds",
+   "match": "endswith",
+   "value": "spores"
+  },
+  {
+   "kind": "Seeds",
    "match": "in_set",
    "value": [
-    "Acorn",
-    "Grape seeds"
+    "Acorn"
    ]
   },
   {
@@ -128,12 +163,20 @@
   },
   {
    "kind": "Bones and ashes",
+   "match": "endswith",
+   "value": " bone"
+  },
+  {
+   "kind": "Bones and ashes",
+   "match": "endswith",
+   "value": "bonemeal"
+  },
+  {
+   "kind": "Bones and ashes",
    "match": "in_set",
    "value": [
     "Bonemeal",
-    "Blessed bone shards",
-    "Unsired",
-    "Bone fragments"
+    "Blessed bone shards"
    ]
   },
   {
@@ -167,11 +210,7 @@
     "Coal",
     "Clay",
     "Soft clay",
-    "Blurite ore",
-    "Lovakite ore",
-    "Lovakite bar",
-    "Gold leaf",
-    "Silver bar"
+    "Gold leaf"
    ]
   },
   {
@@ -198,7 +237,9 @@
     "Opal",
     "Jade",
     "Red topaz",
-    "Crushed gem"
+    "Crushed gem",
+    "Amethyst",
+    "Uncut amethyst"
    ]
   },
   {
@@ -228,9 +269,14 @@
    ]
   },
   {
+   "kind": "Armour",
+   "match": "regex",
+   "value": "(?i)(^(amulet|necklace|ring|bracelet|tiara) of\\b|\\b(amulet|necklace|ring|bracelet)(?: ?\\((?:\\d+|t|g|i|or|a)\\))?$)"
+  },
+  {
    "kind": "Potions",
    "match": "regex",
-   "value": "(?i)\\(\\d\\)$"
+   "value": "(?i)\\b(potion|brew|mix|serum|anti-?dote\\+*|anti-?poison|restore|overload|absorption|anti-?fire|anti-?venom\\+*|stamina|combat|attack|strength|defence|magic|ranging|prayer|energy|agility|fishing|hunter|guthix rest|saradomin brew|zamorak brew|sanfew|dose)[^()]*\\(\\d\\)$"
   },
   {
    "kind": "Potions",
@@ -239,17 +285,17 @@
     "Vial",
     "Vial of water",
     "Vial of blood",
-    "Empty vial",
     "Jug of wine",
     "Coconut milk",
-    "Antidote",
-    "Antipoison"
+    "Antidote++",
+    "Anti-venom",
+    "Anti-venom+"
    ]
   },
   {
    "kind": "Ammunition",
    "match": "regex",
-   "value": "(?i)\\b(arrows?|arrowtips|bolts|bolt tips|darts?|dart tips?|javelins?|javelin heads|knives|knife|cannonball|thrownaxe|throwing axe)$"
+   "value": "(?i)\\b(arrows?|arrowtips|bolts|bolt tips|darts?|dart tips?|javelins?|javelin heads|javelin tips|knives|knife|cannonball|thrownaxe|throwing axe)(?: ?\\((?:\\d+|u|unf|uncharged|i|or|t|g|p|p\\+|p\\+\\+|l|nz|cr|light|dark|full|empty|broken|deg|inactive|sk|c|e|lg|a|shiny)\\))?$"
   },
   {
    "kind": "Food",
@@ -285,16 +331,57 @@
     "Mackerel",
     "Cod",
     "Dark crab",
-    "Seaweed",
-    "Grapes",
-    "Coconut",
     "Banana",
     "Watermelon",
     "Strawberry",
-    "Tangled toads legs",
     "Cooked chicken",
     "Cooked meat",
-    "Ugthanki kebab"
+    "Ugthanki kebab",
+    "Cake",
+    "Wine",
+    "Tangled toad's legs",
+    "Equa toad's legs",
+    "Coated frogs' legs",
+    "Giant frog legs"
+   ]
+  },
+  {
+   "kind": "Food",
+   "match": "regex",
+   "value": "(?i)^burnt (?!page\\b|diary\\b).+$"
+  },
+  {
+   "kind": "Food",
+   "match": "regex",
+   "value": "(?i)^(strawberries|bananas|oranges|apples|tomatoes|potatoes|onions|cabbages)\\(\\d\\)$"
+  },
+  {
+   "kind": "Food",
+   "match": "in_set",
+   "value": [
+    "Cabbage",
+    "Cheese",
+    "Egg",
+    "Tomato",
+    "Onion",
+    "Potato",
+    "Pineapple",
+    "Papaya fruit",
+    "Banana",
+    "Orange",
+    "Lemon",
+    "Lime",
+    "Watermelon",
+    "Jangerberries",
+    "Purple sweets",
+    "Edible seaweed",
+    "Chocolate slice",
+    "Blighted karambwan",
+    "Blighted manta ray",
+    "Blighted anglerfish",
+    "Keg of beer",
+    "Rum",
+    "Bandit's brew"
    ]
   },
   {
@@ -305,17 +392,93 @@
   {
    "kind": "Clues and caskets",
    "match": "contains",
+   "value": "scroll box"
+  },
+  {
+   "kind": "Clues and caskets",
+   "match": "contains",
    "value": "casket"
   },
   {
    "kind": "Clues and caskets",
    "match": "in_set",
    "value": [
-    "Scroll box",
-    "Reward casket",
-    "Giant egg sac(full)",
-    "Scroll sack"
+    "Scroll sack",
+    "Giant egg sac(full)"
    ]
+  },
+  {
+   "kind": "Materials",
+   "match": "endswith",
+   "value": "talisman"
+  },
+  {
+   "kind": "Materials",
+   "match": "endswith",
+   "value": "firelighter"
+  },
+  {
+   "kind": "Materials",
+   "match": "endswith",
+   "value": "roots"
+  },
+  {
+   "kind": "Materials",
+   "match": "regex",
+   "value": "(?i)^ensouled .+ head$"
+  },
+  {
+   "kind": "Materials",
+   "match": "in_set",
+   "value": [
+    "Harpoon",
+    "Dragon harpoon",
+    "Barb-tail harpoon",
+    "Infernal harpoon",
+    "Crystal harpoon",
+    "Lobster pot",
+    "Small fishing net",
+    "Big fishing net",
+    "Shears",
+    "Tinderbox",
+    "Lockpick",
+    "Rope",
+    "Spade",
+    "Papyrus",
+    "Thread",
+    "Bowl",
+    "Pie dish",
+    "Beer glass",
+    "Bucket of sand",
+    "Unpowered orb",
+    "Compost",
+    "Supercompost",
+    "Ultracompost",
+    "Saltpetre",
+    "Spice",
+    "Curry leaf",
+    "Xerician fabric",
+    "Kraken tentacle",
+    "Armoured kraken tentacle",
+    "Bow string spool",
+    "Molten glass",
+    "Bucket of slime",
+    "Soda ash",
+    "Seaweed ash",
+    "Oyster pearl",
+    "Oyster pearls",
+    "Oyster"
+   ]
+  },
+  {
+   "kind": "Materials",
+   "match": "endswith",
+   "value": "bowstring"
+  },
+  {
+   "kind": "Potions",
+   "match": "contains",
+   "value": "weapon poison"
   },
   {
    "kind": "Coins and tokens",
@@ -358,17 +521,17 @@
   {
    "kind": "Materials",
    "match": "endswith",
-   "value": "nails"
-  },
-  {
-   "kind": "Materials",
-   "match": "endswith",
    "value": "plank"
   },
   {
    "kind": "Materials",
    "match": "endswith",
    "value": "planks"
+  },
+  {
+   "kind": "Materials",
+   "match": "regex",
+   "value": "(?i)\\bnails$"
   },
   {
    "kind": "Materials",
@@ -384,7 +547,6 @@
     "Bucket",
     "Pot",
     "Bowl",
-    "Empty jug",
     "Limpwurt root",
     "Snape grass",
     "Red spiders' eggs",
@@ -397,21 +559,34 @@
     "Bird nest",
     "Molten glass",
     "Soda ash",
-    "Seaweed spore",
     "Bow string",
     "Fire orb",
-    "Battlestaff"
+    "Battlestaff",
+    "Seaweed",
+    "Grapes",
+    "Coconut",
+    "Giant seaweed"
    ]
   },
   {
    "kind": "Weapons",
    "match": "regex",
-   "value": "(?i)\\b(sword|scimitar|dagger|mace|axe|battleaxe|longsword|spear|halberd|warhammer|hammer|claws|hasta|whip|bow|crossbow|staff|wand|sceptre|maul|rapier|blade|sickle|chinchompa|godsword|bulwark)$"
+   "value": "(?i)^(staff|sword|scimitar|dagger|blade|bow|crossbow|axe|mace|hammer|spear|halberd|scythe|sceptre|wand|maul|whip) of\\b"
+  },
+  {
+   "kind": "Weapons",
+   "match": "regex",
+   "value": "(?i)\\b(sword|scimitar|dagger|mace|axe|battleaxe|longsword|spear|halberd|warhammer|hammer|claws|hasta|whip|bow|crossbow|staff|wand|sceptre|maul|rapier|blade|sickle|scythe|chinchompa|godsword|bulwark|shortbow|longbow|pickaxe|battlestaff|dart|blowpipe)(?: ?\\((?:\\d+|u|unf|uncharged|i|or|t|g|p|p\\+|p\\+\\+|l|nz|cr|light|dark|full|empty|broken|deg|inactive|sk|c|e|lg|a|shiny)\\))?$"
+  },
+  {
+   "kind": "Weapons",
+   "match": "regex",
+   "value": "(?i)(shortbow|longbow|pickaxe|battlestaff|crossbow)(?: ?\\((?:\\d+|u|unf|uncharged|i|or|t|g|p|p\\+|p\\+\\+|l|nz|cr|light|dark|full|empty|broken|deg|inactive|sk|c|e|lg|a|shiny)\\))?$"
   },
   {
    "kind": "Armour",
    "match": "regex",
-   "value": "(?i)\\b(helm|helmet|platebody|platelegs|plateskirt|chainbody|kiteshield|shield|boots|gloves|gauntlets|vambraces|coif|body|legs|chaps|hood|cape|cloak|amulet|necklace|ring|bracelet|defender|book)$"
+   "value": "(?i)\\b(helm|helmet|platebody|platelegs|plateskirt|chainbody|kiteshield|shield|boots|gloves|gauntlets|vambraces|coif|body|legs|chaps|hood|cape|cloak|amulet|necklace|ring|bracelet|defender|hat|mask|top|bottom|skirt|robe|shirt|trousers|tassets|chestplate|chainskirt|tiara|bracers|crown|mitre|stole|garb|bottoms|waders|shorts|apron|poncho|kilt)(?: ?\\((?:\\d+|u|unf|uncharged|i|or|t|g|p|p\\+|p\\+\\+|l|nz|cr|light|dark|full|empty|broken|deg|inactive|sk|c|e|lg|a|shiny)\\))?$"
   }
  ]
 }
