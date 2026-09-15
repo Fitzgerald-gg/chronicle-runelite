@@ -1050,6 +1050,22 @@ public class ChroniclePlugin extends Plugin
 		return localStore.onTaskLoot(fromMs, toMs);
 	}
 
+	java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task)
+	{
+		return localStore.onTaskLoot(fromMs, toMs, task);
+	}
+
+	java.util.List<LocalStore.BagItem> allLoot()
+	{
+		return localStore.allLoot();
+	}
+
+	/** Every task name the journey holds, newest first, without repeats. */
+	java.util.List<String> taskNames()
+	{
+		return localStore.taskNames();
+	}
+
 	/** The kills behind that loot, and how many of them were a superior. */
 	long[] onTaskTally(long fromMs, long toMs)
 	{

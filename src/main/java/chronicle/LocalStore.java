@@ -1755,6 +1755,120 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 */
 	java.util.List<BagItem> onTaskLoot(long fromMs, long toMs)
 	{
+		return onTaskLoot(fromMs, toMs, null);
+	}
+
+	/**
+	 * Every item the whole ledger holds, summed across sources and ranked by
+	 * what it came to. One walk of `drops` under one lock, rather than the
+	 * source list plus a bag read per source.
+	 */
+	java.util.List<BagItem> allLoot()
+	{
+		java.util.Map<String, long[]> summed = new java.util.LinkedHashMap<>();
+		java.util.Map<String, Integer> ids = new java.util.LinkedHashMap<>();
+		synchronized (lock)
+		{
+			if (root == null || !root.has("drops") || !root.get("drops").isJsonObject())
+			{
+				return new java.util.ArrayList<>();
+			}
+			for (java.util.Map.Entry<String, JsonElement> src
+				: root.getAsJsonObject("drops").entrySet())
+			{
+				if (!src.getValue().isJsonObject())
+				{
+					continue;
+				}
+				JsonObject o = src.getValue().getAsJsonObject();
+				if (!o.has("items") || !o.get("items").isJsonObject())
+				{
+					continue;
+				}
+				for (java.util.Map.Entry<String, JsonElement> it
+					: o.getAsJsonObject("items").entrySet())
+				{
+					if (!it.getValue().isJsonObject())
+					{
+						continue;
+					}
+					JsonObject v = it.getValue().getAsJsonObject();
+					String name = v.has("name") && !v.get("name").isJsonNull()
+						? v.get("name").getAsString() : null;
+					if (name == null || name.isEmpty())
+					{
+						continue;
+					}
+					long[] tot = summed.computeIfAbsent(name, k -> new long[2]);
+					tot[0] += asLong(v.get("qty"));
+					tot[1] += asLong(v.get("value"));
+					if (!ids.containsKey(name) && v.has("id"))
+					{
+						ids.put(name, (int) asLong(v.get("id")));
+					}
+				}
+			}
+		}
+		java.util.List<BagItem> out = new java.util.ArrayList<>();
+		for (java.util.Map.Entry<String, long[]> e : summed.entrySet())
+		{
+			out.add(new BagItem(ids.getOrDefault(e.getKey(), -1), e.getKey(),
+				e.getValue()[0], e.getValue()[1]));
+		}
+		out.sort(java.util.Comparator.comparingLong((BagItem b) -> b.value).reversed());
+		return out;
+	}
+
+	/**
+	 * Every task name the journey holds, newest first and without repeats, which
+	 * is the order a picker wants: what you fought lately, first.
+	 */
+	java.util.List<String> taskNames()
+	{
+		java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+		synchronized (lock)
+		{
+			if (root == null || !root.has("slayer") || !root.get("slayer").isJsonObject())
+			{
+				return new java.util.ArrayList<>();
+			}
+			JsonObject sl = root.getAsJsonObject("slayer");
+			if (!sl.has("tasks") || !sl.get("tasks").isJsonArray())
+			{
+				return new java.util.ArrayList<>();
+			}
+			com.google.gson.JsonArray arr = sl.getAsJsonArray("tasks");
+			// the journal keeps them oldest first; a picker wants the newest at
+			// the top, so this walks back
+			for (int i = arr.size() - 1; i >= 0; i--)
+			{
+				JsonElement e = arr.get(i);
+				if (!e.isJsonObject())
+				{
+					continue;
+				}
+				JsonObject t = e.getAsJsonObject();
+				if (t.has("task") && !t.get("task").isJsonNull())
+				{
+					String n = t.get("task").getAsString().trim();
+					if (!n.isEmpty())
+					{
+						names.add(n);
+					}
+				}
+			}
+		}
+		return new java.util.ArrayList<>(names);
+	}
+
+	/**
+	 * The same, narrowed to one task by name.
+	 *
+	 * <p>By NAME rather than by segment: a reader asking what Nechryael have
+	 * paid means all eleven of them, not the one that closed on Tuesday.
+	 */
+	java.util.List<BagItem> onTaskLoot(long fromMs, long toMs, String onlyTask)
+	{
 		java.util.Map<String, long[]> summed = new java.util.LinkedHashMap<>();
 		java.util.Map<String, Integer> ids = new java.util.LinkedHashMap<>();
 		synchronized (lock)
@@ -1777,6 +1891,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				JsonObject t = e.getAsJsonObject();
 				long ms = (long) (asDouble(t.get("ts")) * 1000);
 				if (ms > 0 && (ms < fromMs || ms > toMs))
+				{
+					continue;
+				}
+				if (onlyTask != null && !onlyTask.equalsIgnoreCase(
+					t.has("task") && !t.get("task").isJsonNull()
+						? t.get("task").getAsString() : ""))
 				{
 					continue;
 				}

@@ -570,6 +570,8 @@ class ChroniclePanel extends PluginPanel
 		dropsShown = ROW_CAP;
 		slayerShown = ROW_CAP;
 		lootKind = null;
+		lootTask = null;
+		dropsByKind = false;
 		drillShown.clear();
 		histListShown.clear();
 		detailItem = null;
@@ -2081,6 +2083,8 @@ class ChroniclePanel extends PluginPanel
 	// paid me in runes" -- and the alternative was a query language in a two
 	// hundred and twenty five pixel panel.
 	private String lootKind;
+	// Which task the on-task board is narrowed to, or null for all of them.
+	private String lootTask;
 
 	private JPanel buildDrops()
 	{
@@ -2117,6 +2121,14 @@ class ChroniclePanel extends PluginPanel
 		if (dropsLeftBehind)
 		{
 			return buildLeftBehind(p);
+		}
+		// The whole ledger, read the other way round: by what the thing IS
+		// rather than by what dropped it. "Every rune I have ever had" is a
+		// question about the record and had no board that could answer it.
+		p.add(groupingPicker());
+		if (dropsByKind)
+		{
+			return buildLootByKind(p);
 		}
 		List<LocalStore.SourceRow> sources = plugin.dropSources();
 		sources.sort(Comparator.comparingLong((LocalStore.SourceRow r) -> r.value).reversed());
@@ -2161,6 +2173,108 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
+	// Whether the loot board groups by what dropped a thing or by what it is.
+	private boolean dropsByKind;
+
+	/** Sources or kinds: the same ledger, read two ways. */
+	private JPanel groupingPicker()
+	{
+		JPanel strip = new JPanel(new GridLayout(1, 2, 3, 3));
+		strip.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		for (String g : new String[]{"By source", "By kind"})
+		{
+			boolean on = "By kind".equals(g) == dropsByKind;
+			JLabel pill = new JLabel(g, JLabel.CENTER);
+			pill.setOpaque(true);
+			pill.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+			pill.setFont(FontManager.getRunescapeSmallFont());
+			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			pill.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+			pill.addMouseListener(clicker(() ->
+			{
+				dropsByKind = "By kind".equals(g);
+				lootKind = null;
+				rebuildInPlace();
+			}));
+			strip.add(pill);
+		}
+		JPanel hold = column();
+		hold.add(strip);
+		hold.add(vgap(6));
+		return hold;
+	}
+
+	/**
+	 * The whole ledger folded into its kinds, and one kind opened out.
+	 *
+	 * <p>The same two screens the on-task board draws, over everything rather
+	 * than over the journey. A reader who wants every rune they have ever been
+	 * given asks here; one who wants only the ones slayer gave asks there.
+	 */
+	private JPanel buildLootByKind(JPanel p)
+	{
+		final List<LocalStore.BagItem> bag = plugin.allLoot();
+		if (bag.isEmpty())
+		{
+			p.add(note("Drops appear here as you play: every kill, priced as it lands."));
+			return p;
+		}
+		long[] sum = tallyOf(bag);
+		if (lootKind != null)
+		{
+			final List<LocalStore.BagItem> kept = ofKind(bag);
+			p.add(copyHeader(lootKind, () -> copyPicture(
+				lootPicture(lootKind, kept, tallyOf(kept)), true)));
+			p.add(backToKinds(kept.size()));
+			addBagRows(p, kept, drillShown.getOrDefault("all:" + lootKind, ROW_CAP),
+				"all:" + lootKind);
+			return p;
+		}
+		JPanel head = card("Everything dropped");
+		head.add(row("Items", fmt(sum[0]), accent()));
+		head.add(row("Worth", gp(sum[1]) + " gp", null));
+		head.add(row("Distinct items", fmt(bag.size()), null));
+		p.add(head);
+		p.add(vgap(6));
+		java.util.LinkedHashMap<String, java.util.function.BooleanSupplier> ways =
+			new java.util.LinkedHashMap<>();
+		ways.put("These kinds", () -> copyPicture(ledgerKindsPicture(bag, sum)));
+		ways.put("Every item", () -> copyPicture(
+			lootPicture("Everything dropped", bag, sum), true));
+		p.add(copyHeader("Drops", ways));
+		for (Kind k : kindsOf(bag))
+		{
+			JPanel r = row(k.name, fmt(k.qty) + " \u00b7 " + gp(k.value) + " gp", accent());
+			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			r.setToolTipText(fmt(k.kinds) + (k.kinds == 1 ? " kind" : " kinds") + " of thing");
+			final String pick = k.name;
+			r.addMouseListener(clicker(() ->
+			{
+				lootKind = pick;
+				rebuildInPlace();
+			}));
+			p.add(r);
+		}
+		return p;
+	}
+
+	/** The ledger's kinds as a picture. */
+	private JPanel ledgerKindsPicture(List<LocalStore.BagItem> bag, long[] sum)
+	{
+		JPanel page = column();
+		JPanel head = card("Everything dropped");
+		head.add(row("Items", fmt(sum[0]), accent()));
+		head.add(row("Worth", gp(sum[1]) + " gp", null));
+		head.add(row("Distinct items", fmt(bag.size()), null));
+		page.add(head);
+		page.add(vgap(6));
+		for (Kind k : kindsOf(bag))
+		{
+			page.add(row(k.name, fmt(k.qty) + " \u00b7 " + gp(k.value) + " gp", accent()));
+		}
+		return page;
+	}
+
 	// The uncollected ledger: what was walked past, by source and by item.
 	private JPanel buildLeftBehind(JPanel p)
 	{
@@ -2184,11 +2298,15 @@ class ChroniclePanel extends PluginPanel
 		p.add(head);
 		p.add(vgap(6));
 		p.add(group("By source"));
+		final int srcCap = drillShown.getOrDefault("left:source", ROW_CAP);
 		int shown = 0;
 		for (LocalStore.UntakenRow r : rows)
 		{
-			if (shown++ >= ROW_CAP)
+			if (shown++ >= srcCap)
 			{
+				// It used to stop here without a word. Every list in the panel
+				// stops somewhere; the ones a reader can walk past say so.
+				p.add(expander("left:source", srcCap, rows.size()));
 				break;
 			}
 			JPanel sr = row(r.name, fmt(r.qty) + " · " + gp(r.value) + " gp", ACCENT_RED);
@@ -2207,12 +2325,13 @@ class ChroniclePanel extends PluginPanel
 		{
 			items.sort(Comparator.comparingLong((LocalStore.UntakenRow r) -> r.value).reversed());
 			p.add(group("By item"));
+			final int itemCap = drillShown.getOrDefault("left:item", ROW_CAP);
 			int mounted = 0;
 			for (LocalStore.UntakenRow r : items)
 			{
-				if (mounted++ >= ROW_CAP)
+				if (mounted++ >= itemCap)
 				{
-					p.add(ghostRow("+ " + fmt(items.size() - ROW_CAP) + " more items", ""));
+					p.add(expander("left:item", itemCap, items.size()));
 					break;
 				}
 				JPanel ir = row(r.name, "×" + fmt(r.qty) + " · " + gp(r.value) + " gp", ACCENT_RED);
@@ -2400,30 +2519,21 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel addOnTaskLoot(JPanel p)
 	{
-		return addOnTaskLoot(p, Integer.MAX_VALUE);
-	}
-
-	private JPanel addOnTaskLoot(JPanel p, int cap)
-	{
 		Window w = window();
 		final long from = wholeRecord() ? Long.MIN_VALUE / 2
 			: w.start.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 		final long to = wholeRecord() ? Long.MAX_VALUE / 2
 			: w.end.plusDays(1).atStartOfDay(ZoneId.systemDefault())
 				.toInstant().toEpochMilli() - 1;
-		final List<LocalStore.BagItem> all = plugin.onTaskLoot(from, to);
-		if (all.isEmpty())
-		{
-			p.add(note(wholeRecord()
-				? "No task loot in the journal yet. It collects as tasks close."
-				: "No task loot inside " + w.label + "."));
-			return p;
-		}
-		final List<LocalStore.BagItem> bag = ofKind(all);
+		final List<LocalStore.BagItem> bag = plugin.onTaskLoot(from, to, lootTask);
 		if (bag.isEmpty())
 		{
-			p.add(kindPicker(0, all.size()));
-			p.add(note("Nothing of that kind in the task loot."));
+			p.add(taskPicker());
+			p.add(note(lootTask != null
+				? "No loot logged on " + lootTask + " inside " + w.label + "."
+				: wholeRecord()
+					? "No task loot in the journal yet. It collects as tasks close."
+					: "No task loot inside " + w.label + "."));
 			return p;
 		}
 		long count = 0;
@@ -2436,19 +2546,187 @@ class ChroniclePanel extends PluginPanel
 		final long qty = count;
 		final long value = worth;
 		final long[] tally = plugin.onTaskTally(from, to);
-		p.add(onTaskHead(bag.size(), qty, value, tally));
+		p.add(onTaskHead(bag.size(), qty, value, lootTask == null ? tally : null));
 		p.add(vgap(6));
-		p.add(kindPicker(bag.size(), all.size()));
-		p.add(copyHeader("Drops", () ->
+		p.add(taskPicker());
+
+		// Drilled into one kind: that kind's items, which is the only place the
+		// individual rows still live.
+		if (lootKind != null)
 		{
-			return copyPicture(onTaskLootPicture(bag, qty, value, tally));
+			final List<LocalStore.BagItem> kept = ofKind(bag);
+			p.add(copyHeader(lootKind, () -> copyPicture(
+				lootPicture(lootKind, kept, tallyOf(kept)), true)));
+			p.add(backToKinds(kept.size()));
+			addBagRows(p, kept, drillShown.getOrDefault(lootKind, ROW_CAP), lootKind);
+			return p;
+		}
+
+		// Otherwise the kinds, which is what makes this board readable: two
+		// hundred and eighty seven rows became sixteen, and the question a
+		// reader actually has -- what has slayer paid me in runes -- is one of
+		// them rather than a scroll.
+		java.util.LinkedHashMap<String, java.util.function.BooleanSupplier> ways =
+			new java.util.LinkedHashMap<>();
+		ways.put("These kinds", () -> copyKinds(bag, qty, value, tally));
+		ways.put("Every item", () -> copyPicture(
+			lootPicture(lootTask == null ? "On-task loot" : lootTask, bag,
+				new long[]{qty, value}), true));
+		p.add(copyHeader("Drops", ways));
+		for (Kind k : kindsOf(bag))
+		{
+			JPanel r = row(k.name, fmt(k.qty) + " \u00b7 " + gp(k.value) + " gp", accent());
+			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			r.setToolTipText(fmt(k.kinds) + (k.kinds == 1 ? " kind" : " kinds")
+				+ " of thing");
+			final String pick = k.name;
+			r.addMouseListener(clicker(() ->
+			{
+				lootKind = UNFILED.equals(pick) ? UNFILED : pick;
+				rebuildInPlace();
+			}));
+			p.add(r);
+		}
+		return p;
+	}
+
+	/**
+	 * One kind's whole list as a picture: the head, then every item, uncapped.
+	 * What is on screen is capped; what gets shared never is.
+	 */
+	private JPanel lootPicture(String title, List<LocalStore.BagItem> bag, long[] sum)
+	{
+		JPanel page = column();
+		JPanel head = card(title);
+		head.add(row("Items", fmt(sum[0]), accent()));
+		head.add(row("Worth", gp(sum[1]) + " gp", null));
+		head.add(row("Distinct items", fmt(bag.size()), null));
+		page.add(head);
+		page.add(vgap(6));
+		for (LocalStore.BagItem b : bag)
+		{
+			page.add(row(b.name + (b.qty > 1 ? " \u00d7" + fmt(b.qty) : ""),
+				b.value > 0 ? gp(b.value) + " gp" : "", null));
+		}
+		return page;
+	}
+
+	/** The summary as a picture: the head, then the kinds. */
+	private JPanel kindsPicture(List<LocalStore.BagItem> bag, long qty, long value,
+		long[] tally)
+	{
+		JPanel page = column();
+		page.add(onTaskHead(bag.size(), qty, value, lootTask == null ? tally : null));
+		page.add(vgap(6));
+		if (lootTask != null)
+		{
+			page.add(row("Task", lootTask, accent()));
+			page.add(vgap(4));
+		}
+		for (Kind k : kindsOf(bag))
+		{
+			page.add(row(k.name, fmt(k.qty) + " \u00b7 " + gp(k.value) + " gp", accent()));
+		}
+		return page;
+	}
+
+	/**
+	 * The copy pill on the summary: the sixteen kinds, or every item under them
+	 * in one tall column.
+	 */
+	private boolean copyKinds(List<LocalStore.BagItem> bag, long qty, long value,
+		long[] tally)
+	{
+		return copyPicture(kindsPicture(bag, qty, value, tally));
+	}
+
+	/**
+	 * The one shape every capped list uses to say it is capped.
+	 *
+	 * <p>A cap with no way past it is worse than no cap: the reader cannot tell
+	 * a short list from a truncated one. This says how many are held back and
+	 * opens another page of them.
+	 */
+	private JButton expander(String key, int cap, int of)
+	{
+		JButton more = new JButton("Show " + Math.min(ROW_CAP, of - cap)
+			+ " more of " + fmt(of));
+		more.addActionListener(e ->
+		{
+			drillShown.put(key, cap + ROW_CAP);
+			rebuildInPlace();
+		});
+		return more;
+	}
+
+	/** What everything of one kind came to, for one row of the summary. */
+	private static final class Kind
+	{
+		final String name;
+		long qty;
+		long value;
+		int kinds;
+
+		Kind(String name)
+		{
+			this.name = name;
+		}
+	}
+
+	/**
+	 * The name the summary gives everything the taxonomy does not claim. It is
+	 * a row like any other and opens like one: a unique is exactly the thing a
+	 * reader came to look at, and burying it would be the wrong way round.
+	 */
+	private static final String UNFILED = "Everything else";
+
+	/** A bag folded into its kinds, dearest first. */
+	private List<Kind> kindsOf(List<LocalStore.BagItem> bag)
+	{
+		Map<String, Kind> by = new LinkedHashMap<>();
+		for (LocalStore.BagItem b : bag)
+		{
+			String k = ItemKinds.kindOf(b.name);
+			Kind row = by.computeIfAbsent(k == null ? UNFILED : k, Kind::new);
+			row.qty += b.qty;
+			row.value += b.value;
+			row.kinds++;
+		}
+		List<Kind> out = new ArrayList<>(by.values());
+		out.sort(Comparator.comparingLong((Kind k) -> k.value).reversed());
+		return out;
+	}
+
+	/** The way back out of one kind, and what it holds. */
+	private JPanel backToKinds(int held)
+	{
+		JPanel r = row("< All kinds", fmt(held) + (held == 1 ? " kind" : " kinds"), null);
+		JLabel back = (JLabel) ((BorderLayout) r.getLayout())
+			.getLayoutComponent(BorderLayout.CENTER);
+		back.setFont(FontManager.getRunescapeSmallFont());
+		back.setForeground(accent());
+		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		r.addMouseListener(clicker(() ->
+		{
+			lootKind = null;
+			rebuildInPlace();
 		}));
+		return r;
+	}
+
+	/**
+	 * A bag as rows, capped, with the cap as a button rather than a dead line.
+	 * Every list in the panel stops somewhere; this is the one shape they all
+	 * use to say so.
+	 */
+	private void addBagRows(JPanel p, List<LocalStore.BagItem> bag, int cap, String key)
+	{
 		int mounted = 0;
 		for (LocalStore.BagItem b : bag)
 		{
 			if (mounted++ >= cap)
 			{
-				p.add(ghostRow("+ " + fmt(bag.size() - cap) + " more", ""));
+				p.add(expander(key, cap, bag.size()));
 				break;
 			}
 			JPanel r = row(b.name + (b.qty > 1 ? " \u00d7" + fmt(b.qty) : ""),
@@ -2458,7 +2736,18 @@ class ChroniclePanel extends PluginPanel
 			r.addMouseListener(clicker(() -> openItem(item)));
 			p.add(r);
 		}
-		return p;
+	}
+
+	private long[] tallyOf(List<LocalStore.BagItem> bag)
+	{
+		long q = 0;
+		long v = 0;
+		for (LocalStore.BagItem b : bag)
+		{
+			q += b.qty;
+			v += b.value;
+		}
+		return new long[]{q, v};
 	}
 
 	/**
@@ -2476,7 +2765,8 @@ class ChroniclePanel extends PluginPanel
 		List<LocalStore.BagItem> kept = new ArrayList<>();
 		for (LocalStore.BagItem b : bag)
 		{
-			if (lootKind.equals(ItemKinds.kindOf(b.name)))
+			String k = ItemKinds.kindOf(b.name);
+			if (UNFILED.equals(lootKind) ? k == null : lootKind.equals(k))
 			{
 				kept.add(b);
 			}
@@ -2495,7 +2785,7 @@ class ChroniclePanel extends PluginPanel
 		JPanel head = card("On-task loot");
 		head.add(row("Items", fmt(qty), accent()));
 		head.add(row("Worth", gp(value) + " gp", null));
-		head.add(row("Kinds", fmt(kinds), null));
+		head.add(row("Distinct items", fmt(kinds), null));
 		if (tally != null && tally.length > 0 && tally[0] > 0)
 		{
 			head.add(row("Kills logged", fmt(tally[0]), null));
@@ -2541,6 +2831,52 @@ class ChroniclePanel extends PluginPanel
 	 * A section head with a copy on its right. A board that is not a drill has no
 	 * back row to hang one on, and it should still be shareable.
 	 */
+	/**
+	 * A copy pill with more than one thing it could copy.
+	 *
+	 * <p>The summary board can be shared as the sixteen kinds or as every item
+	 * under them, and which of those a reader wants is not knowable from here.
+	 * The pill still answers in place, because the menu item does the copying
+	 * and then writes the word back.
+	 */
+	private JPanel copyHeader(String title,
+		java.util.LinkedHashMap<String, java.util.function.BooleanSupplier> choices)
+	{
+		JPanel r = row(title, "copy", null);
+		BorderLayout layout = (BorderLayout) r.getLayout();
+		JLabel t = (JLabel) layout.getLayoutComponent(BorderLayout.CENTER);
+		t.setFont(FontManager.getRunescapeSmallFont());
+		t.setForeground(accent());
+		JLabel take = (JLabel) layout.getLayoutComponent(BorderLayout.EAST);
+		if (take == null)
+		{
+			return r;
+		}
+		take.setFont(FontManager.getRunescapeSmallFont());
+		take.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+		take.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		take.setToolTipText("Copy this board as a picture");
+		take.addMouseListener(clicker(() ->
+		{
+			javax.swing.JPopupMenu menu = new javax.swing.JPopupMenu();
+			for (java.util.Map.Entry<String, java.util.function.BooleanSupplier> e
+				: choices.entrySet())
+			{
+				javax.swing.JMenuItem item = new javax.swing.JMenuItem(e.getKey());
+				item.setFont(FontManager.getRunescapeSmallFont());
+				item.addActionListener(a ->
+				{
+					boolean ok = e.getValue().getAsBoolean();
+					take.setText(ok ? "copied" : "cannot copy");
+					take.setForeground(ok ? accent() : ColorScheme.PROGRESS_ERROR_COLOR);
+				});
+				menu.add(item);
+			}
+			menu.show(take, 0, take.getHeight());
+		}));
+		return r;
+	}
+
 	private JPanel copyHeader(String title, java.util.function.BooleanSupplier copy)
 	{
 		JPanel r = row(title, "copy", null);
@@ -3395,13 +3731,31 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private static boolean copyPicture(JPanel page)
 	{
-		return toClipboard(copyImage(page));
+		return copyPicture(page, false);
+	}
+
+	/**
+	 * The same, but tall rather than wide when asked.
+	 *
+	 * <p>Columns are what make a three hundred row board readable at a glance.
+	 * A reader who has asked for every item is not glancing: they want the
+	 * whole list in the order it ranks, and a single column is the only shape
+	 * that keeps that order legible top to bottom.
+	 */
+	private static boolean copyPicture(JPanel page, boolean tall)
+	{
+		return toClipboard(copyImage(page, tall));
 	}
 
 	/** The picture itself, so that a preview can be drawn without a clipboard. */
 	static java.awt.Image copyImage(JPanel page)
 	{
-		int cols = copyColumns(page.getComponentCount());
+		return copyImage(page, false);
+	}
+
+	static java.awt.Image copyImage(JPanel page, boolean tall)
+	{
+		int cols = tall ? 1 : copyColumns(page.getComponentCount());
 		return pageImage(reflowed(page, cols), copyImageWidth(cols));
 	}
 
@@ -6941,33 +7295,36 @@ class ChroniclePanel extends PluginPanel
 	 * this wide, and the period control already established how this panel asks
 	 * a question with more answers than it has room for.
 	 */
-	private javax.swing.JPopupMenu kindMenu()
+	private javax.swing.JPopupMenu taskMenu()
 	{
 		javax.swing.JPopupMenu menu = new javax.swing.JPopupMenu();
-		javax.swing.JMenuItem all = new javax.swing.JMenuItem("Everything");
+		javax.swing.JMenuItem all = new javax.swing.JMenuItem("Every task");
 		all.setFont(FontManager.getRunescapeSmallFont());
-		if (lootKind == null)
+		if (lootTask == null)
 		{
 			all.setForeground(accent());
 		}
 		all.addActionListener(e ->
 		{
+			lootTask = null;
 			lootKind = null;
 			rebuildInPlace();
 		});
 		menu.add(all);
 		menu.addSeparator();
-		for (String kind : ItemKinds.kinds())
+		for (String task : plugin.taskNames())
 		{
-			javax.swing.JMenuItem item = new javax.swing.JMenuItem(kind);
+			javax.swing.JMenuItem item = new javax.swing.JMenuItem(task);
 			item.setFont(FontManager.getRunescapeSmallFont());
-			if (kind.equals(lootKind))
+			if (task.equals(lootTask))
 			{
 				item.setForeground(accent());
 			}
 			item.addActionListener(e ->
 			{
-				lootKind = kind;
+				lootTask = task;
+				// the kinds under one task are not the kinds under all of them
+				lootKind = null;
 				rebuildInPlace();
 			});
 			menu.add(item);
@@ -6976,13 +7333,12 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * The row that says which kind is on show and opens the menu. Drawn like the
-	 * period row above it, because it is the same kind of control. Named for
-	 * picking rather than for drawing: kindRow above already draws a BAND.
+	 * The row that says which TASK is on show and opens the menu. Drawn like the
+	 * period row above it, because it is the same kind of control.
 	 */
-	private JPanel kindPicker(int shown, int of)
+	private JPanel taskPicker()
 	{
-		JPanel r = row("Kind", lootKind == null ? "Everything" : lootKind, accent());
+		JPanel r = row("Task", lootTask == null ? "Every task" : lootTask, accent());
 		JLabel name = (JLabel) ((BorderLayout) r.getLayout())
 			.getLayoutComponent(BorderLayout.CENTER);
 		name.setFont(FontManager.getRunescapeSmallFont());
@@ -6990,12 +7346,10 @@ class ChroniclePanel extends PluginPanel
 		JLabel pick = (JLabel) ((BorderLayout) r.getLayout())
 			.getLayoutComponent(BorderLayout.EAST);
 		pick.setFont(FontManager.getRunescapeSmallFont());
-		pick.setToolTipText(shown == of
-			? "Narrow this board to one kind of thing"
-			: "Showing " + fmt(shown) + " of " + fmt(of) + " kinds");
+		pick.setToolTipText("Narrow this board to one task");
 		pick.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-		r.addMouseListener(clicker(() -> kindMenu().show(r, 0, r.getHeight())));
+		r.addMouseListener(clicker(() -> taskMenu().show(r, 0, r.getHeight())));
 		return r;
 	}
 
