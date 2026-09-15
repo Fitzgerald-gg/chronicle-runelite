@@ -107,10 +107,110 @@ public class ExampleExportTest
 		"detailSource", "detailItem", "detailSkill", "detailTask",
 		"allTrackers", "bossOpen", "slayerLens",
 		"clogPageSel", "journalLens", "dropsLeftBehind",
+		"dropsByKind", "lootKind", "lootTask",
 		"statsFamily", "leftBehindSource", "leftBehindItem", "clogTab",
 		"openFolds", "histListShown", "drillShown", "journalShown",
 		"dropsShown", "slayerShown",
 	};
+
+	/**
+	 * Everything else the panel declares, and why the crawl does not carry it.
+	 *
+	 * <p>This list exists so the one above cannot quietly go stale again. Three
+	 * of the boards the panel grew were unreachable for exactly that reason:
+	 * dropsByKind, lootKind and lootTask were never listed, so restore() put the
+	 * panel back on the source list every time and no state the crawl produced
+	 * could ever be a kind board. Four defects lived on screens the recording
+	 * had no way to reach.
+	 *
+	 * <p>A field belongs here for one of three reasons and the reason is written
+	 * down: it is DERIVED and restoring it would pin a stale answer; it is
+	 * PLUMBING that has nothing to do with where the reader is; or it is a value
+	 * no click can change, which would be a constant in every snapshot.
+	 */
+	private static final Map<String, String> NOT_STATE = notState();
+
+	private static Map<String, String> notState()
+	{
+		Map<String, String> m = new LinkedHashMap<>();
+		for (String n : new String[]{"movedKcs", "rolledKcs", "rollUsed",
+			"grindsCache", "journeyCache", "ledgerNames", "consumVals",
+			"resourcesDropped", "buildSources", "buildClog", "buildSpan",
+			"spanAsked", "historySpine", "historyFeed", "historyJourney",
+			"historyDay", "historyFeedTs", "historyEpoch", "skilled",
+			"itemsByName", "periodFrom", "periodTo", "searchJump"})
+		{
+			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
+		}
+		for (String n : new String[]{"grindsFetching", "journeyFetching",
+			"historyGathering"})
+		{
+			m.put(n, "DERIVED: whether a read is in flight, which the crawl never waits on");
+		}
+		for (String n : new String[]{"everShown", "staleWhileHidden", "keepScroll",
+			"buildsRun"})
+		{
+			m.put(n, "PLUMBING: about drawing, not about where the reader is");
+		}
+		m.put("itemSourceCap", "CONSTANT: no click moves it, only a copy, which puts it back");
+		return m;
+	}
+
+	/**
+	 * Every field the panel declares is either carried by the crawl or written
+	 * down as deliberately not carried. A new one is a failing test until
+	 * somebody decides which it is.
+	 */
+	@Test
+	public void everyPanelFieldIsClassified()
+	{
+		java.util.Set<String> carried = new java.util.LinkedHashSet<>(
+			java.util.Arrays.asList(STATE_FIELDS));
+		java.util.List<String> unclassified = new java.util.ArrayList<>();
+		for (Field f : ChroniclePanel.class.getDeclaredFields())
+		{
+			int mod = f.getModifiers();
+			if (java.lang.reflect.Modifier.isStatic(mod)
+				|| java.lang.reflect.Modifier.isFinal(mod))
+			{
+				continue;
+			}
+			if (!carried.contains(f.getName()) && !NOT_STATE.containsKey(f.getName()))
+			{
+				unclassified.add(f.getName());
+			}
+		}
+		org.junit.Assert.assertEquals(
+			"a panel field is neither carried by the crawl nor written down as "
+			+ "deliberately not carried, so the recording may not be able to reach "
+			+ "the screens it governs: " + unclassified,
+			java.util.Collections.emptyList(), unclassified);
+	}
+
+	/** And nothing is claimed in both lists, or claimed and then deleted. */
+	@Test
+	public void theTwoListsAgreeWithTheClass()
+	{
+		java.util.Set<String> declared = new java.util.LinkedHashSet<>();
+		for (Field f : ChroniclePanel.class.getDeclaredFields())
+		{
+			declared.add(f.getName());
+		}
+		for (String n : STATE_FIELDS)
+		{
+			org.junit.Assert.assertTrue(
+				"STATE_FIELDS names a field the panel no longer has: " + n,
+				declared.contains(n));
+			org.junit.Assert.assertFalse("named in both lists: " + n,
+				NOT_STATE.containsKey(n));
+		}
+		for (String n : NOT_STATE.keySet())
+		{
+			org.junit.Assert.assertTrue(
+				"NOT_STATE names a field the panel no longer has: " + n,
+				declared.contains(n));
+		}
+	}
 
 	@Test
 	public void export() throws Exception
