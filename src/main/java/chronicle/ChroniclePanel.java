@@ -569,6 +569,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		dropsShown = ROW_CAP;
 		slayerShown = ROW_CAP;
+		lootKind = null;
 		drillShown.clear();
 		histListShown.clear();
 		detailItem = null;
@@ -2075,6 +2076,11 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	private boolean dropsLeftBehind;
+	// Which KIND of thing the loot boards are narrowed to, or null for all of
+	// them. A kind is a question a reader actually has -- "what have the tasks
+	// paid me in runes" -- and the alternative was a query language in a two
+	// hundred and twenty five pixel panel.
+	private String lootKind;
 
 	private JPanel buildDrops()
 	{
@@ -2405,12 +2411,19 @@ class ChroniclePanel extends PluginPanel
 		final long to = wholeRecord() ? Long.MAX_VALUE / 2
 			: w.end.plusDays(1).atStartOfDay(ZoneId.systemDefault())
 				.toInstant().toEpochMilli() - 1;
-		final List<LocalStore.BagItem> bag = plugin.onTaskLoot(from, to);
-		if (bag.isEmpty())
+		final List<LocalStore.BagItem> all = plugin.onTaskLoot(from, to);
+		if (all.isEmpty())
 		{
 			p.add(note(wholeRecord()
 				? "No task loot in the journal yet. It collects as tasks close."
 				: "No task loot inside " + w.label + "."));
+			return p;
+		}
+		final List<LocalStore.BagItem> bag = ofKind(all);
+		if (bag.isEmpty())
+		{
+			p.add(kindPicker(0, all.size()));
+			p.add(note("Nothing of that kind in the task loot."));
 			return p;
 		}
 		long count = 0;
@@ -2425,6 +2438,7 @@ class ChroniclePanel extends PluginPanel
 		final long[] tally = plugin.onTaskTally(from, to);
 		p.add(onTaskHead(bag.size(), qty, value, tally));
 		p.add(vgap(6));
+		p.add(kindPicker(bag.size(), all.size()));
 		p.add(copyHeader("Drops", () ->
 		{
 			return copyPicture(onTaskLootPicture(bag, qty, value, tally));
@@ -2445,6 +2459,29 @@ class ChroniclePanel extends PluginPanel
 			p.add(r);
 		}
 		return p;
+	}
+
+	/**
+	 * A bag narrowed to the kind on show, or the whole bag where none is.
+	 *
+	 * <p>The kind is asked of the item's NAME rather than its id, because that
+	 * is what the taxonomy is keyed by and what the row already shows.
+	 */
+	private List<LocalStore.BagItem> ofKind(List<LocalStore.BagItem> bag)
+	{
+		if (lootKind == null)
+		{
+			return bag;
+		}
+		List<LocalStore.BagItem> kept = new ArrayList<>();
+		for (LocalStore.BagItem b : bag)
+		{
+			if (lootKind.equals(ItemKinds.kindOf(b.name)))
+			{
+				kept.add(b);
+			}
+		}
+		return kept;
 	}
 
 	/**
@@ -2915,6 +2952,22 @@ class ChroniclePanel extends PluginPanel
 		detailSkill = null;
 		detailTask = -1;
 		clearSearch();
+		rebuild();
+	}
+
+	/**
+	 * The on-task loot board, narrowed to one kind of thing. What the search
+	 * offers when a reader types the name of a kind.
+	 */
+	void openLootKind(String kind)
+	{
+		tab = Tab.PVM;
+		subByTab.put(Tab.PVM, "Slayer");
+		slayerLens = "Drops";
+		applyCommon();
+		// applyCommon clears the lens the way opening a tab does, so the kind is
+		// set AFTER it and the board is drawn once, already narrowed.
+		lootKind = kind;
 		rebuild();
 	}
 
@@ -6883,6 +6936,69 @@ class ChroniclePanel extends PluginPanel
 		return menu;
 	}
 
+	/**
+	 * The kinds, as a menu. Sixteen of them will not fit as pills in a panel
+	 * this wide, and the period control already established how this panel asks
+	 * a question with more answers than it has room for.
+	 */
+	private javax.swing.JPopupMenu kindMenu()
+	{
+		javax.swing.JPopupMenu menu = new javax.swing.JPopupMenu();
+		javax.swing.JMenuItem all = new javax.swing.JMenuItem("Everything");
+		all.setFont(FontManager.getRunescapeSmallFont());
+		if (lootKind == null)
+		{
+			all.setForeground(accent());
+		}
+		all.addActionListener(e ->
+		{
+			lootKind = null;
+			rebuildInPlace();
+		});
+		menu.add(all);
+		menu.addSeparator();
+		for (String kind : ItemKinds.kinds())
+		{
+			javax.swing.JMenuItem item = new javax.swing.JMenuItem(kind);
+			item.setFont(FontManager.getRunescapeSmallFont());
+			if (kind.equals(lootKind))
+			{
+				item.setForeground(accent());
+			}
+			item.addActionListener(e ->
+			{
+				lootKind = kind;
+				rebuildInPlace();
+			});
+			menu.add(item);
+		}
+		return menu;
+	}
+
+	/**
+	 * The row that says which kind is on show and opens the menu. Drawn like the
+	 * period row above it, because it is the same kind of control. Named for
+	 * picking rather than for drawing: kindRow above already draws a BAND.
+	 */
+	private JPanel kindPicker(int shown, int of)
+	{
+		JPanel r = row("Kind", lootKind == null ? "Everything" : lootKind, accent());
+		JLabel name = (JLabel) ((BorderLayout) r.getLayout())
+			.getLayoutComponent(BorderLayout.CENTER);
+		name.setFont(FontManager.getRunescapeSmallFont());
+		name.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+		JLabel pick = (JLabel) ((BorderLayout) r.getLayout())
+			.getLayoutComponent(BorderLayout.EAST);
+		pick.setFont(FontManager.getRunescapeSmallFont());
+		pick.setToolTipText(shown == of
+			? "Narrow this board to one kind of thing"
+			: "Showing " + fmt(shown) + " of " + fmt(of) + " kinds");
+		pick.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		r.addMouseListener(clicker(() -> kindMenu().show(r, 0, r.getHeight())));
+		return r;
+	}
+
 	/** The window the period control is on: its two ends, and what to call it. */
 	private static final class Window
 	{
@@ -7885,15 +8001,31 @@ class ChroniclePanel extends PluginPanel
 		int total = 0;
 		searchJump = null;
 
-		// The one query that names a VIEW rather than a thing in the record.
-		// Offered while it is being typed, so it is found rather than known.
-		if (!ql.isEmpty() && "trackers".startsWith(ql))
+		// The queries that name a VIEW rather than a thing in the record.
+		// Offered while they are being typed, so they are found rather than known.
+		String kind = ItemKinds.named(q);
+		if (!ql.isEmpty() && ("trackers".startsWith(ql) || kind != null))
 		{
 			p.add(group("Views"));
-			JPanel open = row("All trackers", "every counter in one place", null);
-			open.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-			open.addMouseListener(clicker(this::openAllTrackers));
-			p.add(open);
+			if ("trackers".startsWith(ql))
+			{
+				JPanel open = row("All trackers", "every counter in one place", null);
+				open.setCursor(java.awt.Cursor.getPredefinedCursor(
+					java.awt.Cursor.HAND_CURSOR));
+				open.addMouseListener(clicker(this::openAllTrackers));
+				p.add(open);
+			}
+			// A kind is a question about the LOOT, so it opens the board that
+			// holds the loot, already narrowed. Typing "run" is enough.
+			if (kind != null)
+			{
+				JPanel open = row(kind, "on-task loot", null);
+				open.setCursor(java.awt.Cursor.getPredefinedCursor(
+					java.awt.Cursor.HAND_CURSOR));
+				final String pick = kind;
+				open.addMouseListener(clicker(() -> openLootKind(pick)));
+				p.add(open);
+			}
 			p.add(vgap(6));
 		}
 
