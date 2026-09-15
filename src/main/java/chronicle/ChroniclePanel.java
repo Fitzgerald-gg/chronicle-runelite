@@ -973,7 +973,12 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 		}
-		return false;
+		// And anything a slayer task was fought against. The Kill Log lists the
+		// assignment rather than the thing, so it has no line for a superior:
+		// Choke devil read "Times looted 13" while the journal held thirteen
+		// task kills of it. A monster in a task's own monsters map is a thing
+		// this account killed, which is the whole question being asked.
+		return taskKillsEver().containsKey(name);
 	}
 
 	/** One source's takings, openable. */

@@ -4322,6 +4322,17 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	static String kindOf(String name)
 	{
 		String n = name == null ? "" : name.trim().toLowerCase(java.util.Locale.ROOT);
+		// "Jellies" is the Kill Log's name for the ledger's "Jelly", and
+		// stripping one s leaves "jellie", which meets nothing. It is the only
+		// name on my own record that the bare rule cannot bridge, out of 32
+		// that reach no ledger source at all.
+		//
+		// Only this one extra case. The obvious next rule, ves to f, turns "The
+		// Fight Caves" into "the fight caf", and nothing in the record needs it.
+		if (n.endsWith("ies"))
+		{
+			return n.substring(0, n.length() - 3) + "y";
+		}
 		return n.endsWith("s") ? n.substring(0, n.length() - 1) : n;
 	}
 
