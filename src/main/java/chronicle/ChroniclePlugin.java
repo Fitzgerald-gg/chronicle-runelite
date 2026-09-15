@@ -1051,6 +1051,11 @@ public class ChroniclePlugin extends Plugin
 		return localStore.onTaskTally(fromMs, toMs, onlyTask);
 	}
 
+	java.util.Map<String, Long> journalFacts()
+	{
+		return localStore.journalFacts();
+	}
+
 	java.util.Map<String, Long> chatKills()
 	{
 		return localStore.chatKillCounts();

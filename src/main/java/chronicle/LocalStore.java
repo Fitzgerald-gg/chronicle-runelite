@@ -57,6 +57,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private JsonObject root;          // the current account's model (guarded by lock)
 	private JsonObject trackersBase;  // lifetime counters frozen at load; +session = lifetime
 	private String currentRsn;        // whose model root holds
+	private File mountedDir;          // where the journal it came from lives
 	private volatile boolean ready;   // true once an account's file has been loaded
 	// Why the journal isn't reaching disk, or null. The panel shows it; a stalled
 	// journal still looks alive in memory otherwise.
@@ -111,6 +112,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	void load(File dir, String rsn)
 	{
 		JsonObject loaded = null;
+		mountedDir = dir;
 		File f = jsonPath(dir, rsn);
 		if (f.isFile())
 		{
@@ -4457,6 +4459,88 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			: rsn.trim().toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", "-");
 		s = s.replaceAll("(^-+|-+$)", "");
 		return s.isEmpty() ? "profile" : s;
+	}
+
+	/**
+	 * What the journal HOLDS, counted. Every other board answers a question
+	 * about the account; this answers one about the record itself.
+	 *
+	 * <p>Raw counts only, and no dates and no name: the whole point is a page
+	 * somebody can hand over. One pass, one lock.
+	 */
+	java.util.Map<String, Long> journalFacts()
+	{
+		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		synchronized (lock)
+		{
+			if (root == null)
+			{
+				return out;
+			}
+			out.put("schema", asLong(root.get("schema")));
+			JsonObject drops = root.has("drops") && root.get("drops").isJsonObject()
+				? root.getAsJsonObject("drops") : new JsonObject();
+			long rows = 0;
+			long loots = 0;
+			long worth = 0;
+			for (java.util.Map.Entry<String, JsonElement> e : drops.entrySet())
+			{
+				if (!e.getValue().isJsonObject())
+				{
+					continue;
+				}
+				JsonObject o = e.getValue().getAsJsonObject();
+				loots += asLong(o.get("loots"));
+				worth += asLong(o.get("value"));
+				if (o.has("items") && o.get("items").isJsonObject())
+				{
+					rows += o.getAsJsonObject("items").size();
+				}
+			}
+			out.put("sources", (long) drops.size());
+			out.put("itemRows", rows);
+			out.put("lootEvents", loots);
+			out.put("lootWorth", worth);
+			out.put("lootDays", (long) size(root, "loot_days"));
+			out.put("untakenSources", (long) size(root, "untaken"));
+			out.put("untakenItems", (long) size(root, "untaken_items"));
+
+			JsonObject sl = root.has("slayer") && root.get("slayer").isJsonObject()
+				? root.getAsJsonObject("slayer") : new JsonObject();
+			out.put("tasks", sl.has("tasks") && sl.get("tasks").isJsonArray()
+				? (long) sl.getAsJsonArray("tasks").size() : 0L);
+			out.put("tasksClosed", asLong(sl.get("completed")));
+
+			JsonObject cl = root.has("collection_log")
+				&& root.get("collection_log").isJsonObject()
+				? root.getAsJsonObject("collection_log") : new JsonObject();
+			out.put("clogSlots", asLong(cl.get("finished")));
+			out.put("clogAvailable", asLong(cl.get("available")));
+			out.put("clogItems", (long) size(cl, "clog_items"));
+			out.put("clogPages", (long) size(cl, "kcs"));
+			out.put("killLogLines", (long) size(cl, "slayer_kcs"));
+			out.put("pageKillLines", (long) size(cl, "kc_lines"));
+
+			out.put("trackers", (long) size(root, "trackers"));
+			out.put("skills", (long) size(root, "skills"));
+			out.put("feed", root.has("feed") && root.get("feed").isJsonArray()
+				? (long) root.getAsJsonArray("feed").size() : 0L);
+			out.put("chatCounts", (long) size(root, "chat_kcs"));
+			out.put("anchors", (long) size(root, "kc_anchors"));
+		}
+		File f = mountedDir == null || currentRsn == null
+			? null : jsonPath(mountedDir, currentRsn);
+		out.put("journalBytes", f != null && f.isFile() ? f.length() : 0L);
+		File spine = mountedDir == null || currentRsn == null ? null
+			: new File(mountedDir, slug(currentRsn) + ".history.jsonl");
+		out.put("spineBytes", spine != null && spine.isFile() ? spine.length() : 0L);
+		return out;
+	}
+
+	private static int size(JsonObject o, String key)
+	{
+		return o.has(key) && o.get(key).isJsonObject()
+			? o.getAsJsonObject(key).size() : 0;
 	}
 
 	private static File jsonPath(File dir, String rsn)

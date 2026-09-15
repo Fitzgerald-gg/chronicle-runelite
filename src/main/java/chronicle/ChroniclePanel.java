@@ -147,6 +147,10 @@ class ChroniclePanel extends PluginPanel
 	// Every tracker in one place, which no tab holds: the stats table is filed by
 	// family and a reader who wants the whole sheet has nowhere to ask for it.
 	private boolean allTrackers;
+	// The counts-of-the-record page. Reached by typing "info" and nothing else:
+	// it answers questions about the JOURNAL rather than about the account, and
+	// a tab for it would be a tab most readers never want.
+	private boolean showInfo;
 	private final java.util.ArrayDeque<String[]> detailStack = new java.util.ArrayDeque<>();
 	private String statsFamily = StatRegistry.FAMILIES[0];
 	private int dropsShown = ROW_CAP;
@@ -1555,6 +1559,10 @@ class ChroniclePanel extends PluginPanel
 		else if (allTrackers)
 		{
 			body = buildAllTrackers();
+		}
+		else if (showInfo)
+		{
+			body = buildInfo();
 		}
 		else if (detailTask >= 0)
 		{
@@ -3615,6 +3623,87 @@ class ChroniclePanel extends PluginPanel
 		pushDetail();
 		detailItem = name;
 		detailSource = null;
+		clearSearch();
+		rebuild();
+	}
+
+	/**
+	 * Every count the journal holds about itself.
+	 *
+	 * <p>No dates and no name anywhere on it, so it can be handed to somebody
+	 * who is helping without handing over the account with it. Everything here
+	 * is a size or a tally; nothing is derived and nothing is an opinion.
+	 */
+	private JPanel buildInfo()
+	{
+		JPanel p = column();
+		p.add(backRow(() -> copyPicture(stripChrome(buildInfo()))));
+		p.add(vgap(4));
+		Map<String, Long> f = plugin.journalFacts();
+
+		JPanel loot = card("Loot");
+		loot.add(row("Sources", fmt(f.getOrDefault("sources", 0L)), accent()));
+		loot.add(row("Item rows", fmt(f.getOrDefault("itemRows", 0L)), null));
+		loot.add(row("Loot events", fmt(f.getOrDefault("lootEvents", 0L)), null));
+		loot.add(row("Worth", gp(f.getOrDefault("lootWorth", 0L)) + " gp", null));
+		loot.add(row("Dated days", fmt(f.getOrDefault("lootDays", 0L)), null));
+		loot.add(row("Left behind", fmt(f.getOrDefault("untakenItems", 0L)) + " items, "
+			+ fmt(f.getOrDefault("untakenSources", 0L)) + " sources", null));
+		p.add(loot);
+		p.add(vgap(6));
+
+		JPanel slayer = card("Slayer");
+		slayer.add(row("Assignments", fmt(f.getOrDefault("tasks", 0L)), accent()));
+		slayer.add(row("Closed", fmt(f.getOrDefault("tasksClosed", 0L)), null));
+		p.add(slayer);
+		p.add(vgap(6));
+
+		JPanel log = card("Collection log");
+		log.add(row("Slots filled", fmt(f.getOrDefault("clogSlots", 0L)) + " of "
+			+ fmt(f.getOrDefault("clogAvailable", 0L)), accent()));
+		log.add(row("Items named", fmt(f.getOrDefault("clogItems", 0L)), null));
+		log.add(row("Pages with a count", fmt(f.getOrDefault("clogPages", 0L)), null));
+		log.add(row("Kill Log lines", fmt(f.getOrDefault("killLogLines", 0L)), null));
+		log.add(row("Labelled kill lines", fmt(f.getOrDefault("pageKillLines", 0L)), null));
+		p.add(log);
+		p.add(vgap(6));
+
+		JPanel counted = card("Counted");
+		counted.add(row("Trackers", fmt(f.getOrDefault("trackers", 0L)), accent()));
+		counted.add(row("Skills", fmt(f.getOrDefault("skills", 0L)), null));
+		counted.add(row("Feed entries", fmt(f.getOrDefault("feed", 0L)), null));
+		counted.add(row("Chat kill counts", fmt(f.getOrDefault("chatCounts", 0L)), null));
+		counted.add(row("Anchored counts", fmt(f.getOrDefault("anchors", 0L)), null));
+		p.add(counted);
+		p.add(vgap(6));
+
+		JPanel file = card("On disk");
+		file.add(row("Journal", bytes(f.getOrDefault("journalBytes", 0L)), accent()));
+		file.add(row("History spine", bytes(f.getOrDefault("spineBytes", 0L)), null));
+		file.add(row("Schema", fmt(f.getOrDefault("schema", 0L)), null));
+		p.add(file);
+		return p;
+	}
+
+	/** A file size the way a person says one. */
+	private static String bytes(long n)
+	{
+		if (n >= 1024 * 1024)
+		{
+			return String.format("%.1f MB", n / (1024.0 * 1024.0));
+		}
+		return n >= 1024 ? fmt(n / 1024) + " KB" : fmt(n) + " B";
+	}
+
+	/** What the journal holds, counted. Found by typing, not by a tab. */
+	void openInfo()
+	{
+		showInfo = true;
+		allTrackers = false;
+		detailItem = null;
+		detailSource = null;
+		detailSkill = null;
+		detailTask = -1;
 		clearSearch();
 		rebuild();
 	}
@@ -9067,9 +9156,18 @@ class ChroniclePanel extends PluginPanel
 		// The queries that name a VIEW rather than a thing in the record.
 		// Offered while they are being typed, so they are found rather than known.
 		String kind = ItemKinds.named(q);
-		if (!ql.isEmpty() && ("trackers".startsWith(ql) || kind != null))
+		if (!ql.isEmpty() && ("trackers".startsWith(ql) || "info".startsWith(ql)
+			|| kind != null))
 		{
 			p.add(group("Views"));
+			if ("info".startsWith(ql))
+			{
+				JPanel open = row("Info", "what the journal holds", null);
+				open.setCursor(java.awt.Cursor.getPredefinedCursor(
+					java.awt.Cursor.HAND_CURSOR));
+				open.addMouseListener(clicker(this::openInfo));
+				p.add(open);
+			}
 			if ("trackers".startsWith(ql))
 			{
 				JPanel open = row("All trackers", "every counter in one place", null);
