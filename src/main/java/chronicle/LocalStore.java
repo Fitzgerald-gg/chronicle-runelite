@@ -1956,24 +1956,34 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	/**
 	 * What the on-task loot was killed out of, inside the same window: the kills
-	 * that dropped something, and how many of those were a superior. Kills that
-	 * dropped nothing are counted separately by the task and are not here, which
-	 * is why this reads lower than a slayer counter.
+	 * that dropped something, how many of those were a superior, and how many
+	 * TASKS the loot came off. Kills that dropped nothing are counted separately
+	 * by the task and are not here, which is why this reads lower than a slayer
+	 * counter.
+	 *
+	 * <p>Narrowed by task name where one is given, so the figures belong to the
+	 * same bag the board is showing rather than to every task in the window.
 	 */
 	long[] onTaskTally(long fromMs, long toMs)
 	{
+		return onTaskTally(fromMs, toMs, null);
+	}
+
+	long[] onTaskTally(long fromMs, long toMs, String onlyTask)
+	{
 		long kills = 0;
 		long superiors = 0;
+		long tasks = 0;
 		synchronized (lock)
 		{
 			if (root == null || !root.has("slayer") || !root.get("slayer").isJsonObject())
 			{
-				return new long[]{0, 0};
+				return new long[]{0, 0, 0};
 			}
 			JsonObject sl = root.getAsJsonObject("slayer");
 			if (!sl.has("tasks") || !sl.get("tasks").isJsonArray())
 			{
-				return new long[]{0, 0};
+				return new long[]{0, 0, 0};
 			}
 			for (JsonElement e : sl.getAsJsonArray("tasks"))
 			{
@@ -1987,6 +1997,13 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				{
 					continue;
 				}
+				if (onlyTask != null && !onlyTask.equalsIgnoreCase(
+					t.has("task") && !t.get("task").isJsonNull()
+						? t.get("task").getAsString() : ""))
+				{
+					continue;
+				}
+				tasks++;
 				kills += asLong(t.get("kills"));
 				if (!t.has("monsters") || !t.get("monsters").isJsonObject())
 				{
@@ -2002,7 +2019,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				}
 			}
 		}
-		return new long[]{kills, superiors};
+		return new long[]{kills, superiors, tasks};
 	}
 
 	chronicle.ChronicleApiClient.SlayerJourney slayerJourney()
