@@ -395,6 +395,13 @@ public class ExampleExportTest
 		 * by the panel and still recorded whole -- it is the difference between
 		 * coverage that is decided and coverage that is hoped for.
 		 */
+		/** The newest assignment the fixture journal holds, or null for none. */
+		private String firstTaskName()
+		{
+			java.util.List<String> names = plugin.taskNames();
+			return names.isEmpty() ? null : names.get(0);
+		}
+
 		private void seedBoards() throws Exception
 		{
 			Map<String, Object> home = snapshot();
@@ -478,6 +485,66 @@ public class ExampleExportTest
 				field("dropsLeftBehind").set(panel, left);
 				remember();
 			}
+			// The loot board read by KIND, both readings of it, and one kind
+			// opened out of each. The crawl reaches the pills because they are
+			// on the board, but the screens BEHIND them need a click it never
+			// gets to: it spends its budget on eight hundred item drills first.
+			for (boolean onTask : new boolean[]{false, true})
+			{
+				for (String kind : new String[]{null, "Runes", "Everything else"})
+				{
+					restore(home);
+					final Object dr = Enum.valueOf((Class) viewType, "DROPS");
+					edt(() -> applyTab.invoke(panel, dr));
+					field("dropsByKind").set(panel, true);
+					field("onTaskOnly").set(panel, onTask);
+					field("lootKind").set(panel, kind);
+					remember();
+				}
+			}
+			// The on-task board narrowed to one assignment, which is the other
+			// half of the task picker.
+			for (String task : new String[]{null, firstTaskName()})
+			{
+				if (task == null)
+				{
+					continue;
+				}
+				restore(home);
+				final Object sl = Enum.valueOf((Class) viewType, "SLAYER");
+				edt(() -> applyTab.invoke(panel, sl));
+				field("slayerLens").set(panel, "Drops");
+				field("lootTask").set(panel, task);
+				remember();
+			}
+			// What says so: the fold under a kill count, which holds every
+			// statement the record has about one fight. Opened on a source that
+			// has more than one of them.
+			for (String src : new String[]{"Dust devil", "Vorkath"})
+			{
+				restore(home);
+				@SuppressWarnings("unchecked")
+				java.util.Set<String> folds =
+					(java.util.Set<String>) field("openFolds").get(panel);
+				folds.add("kcsrc:" + src);
+				field("detailSource").set(panel, src);
+				remember();
+			}
+			// An item read on task, which replaces its source list with the
+			// tasks that paid it.
+			for (String item : new String[]{"Fire rune", "Coins"})
+			{
+				restore(home);
+				field("detailItem").set(panel, item);
+				field("onTaskOnly").set(panel, true);
+				remember();
+			}
+			// The counts-of-the-record page. Typed, never clicked, so the crawl
+			// has no path to it at all.
+			restore(home);
+			field("showInfo").set(panel, true);
+			remember();
+			restore(home);
 			// a task's own page, and the trackers page a search lands on
 			restore(home);
 			// a task row sets the field straight from its click handler
