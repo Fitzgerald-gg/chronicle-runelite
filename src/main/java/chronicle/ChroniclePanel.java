@@ -3041,7 +3041,7 @@ class ChroniclePanel extends PluginPanel
 			take.setFont(FontManager.getRunescapeSmallFont());
 			take.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
 			take.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-			take.setToolTipText("Copy this board as text and a picture");
+			take.setToolTipText("Copy this board as a picture");
 			take.addMouseListener(clicker(() ->
 			{
 				boolean ok = copy.getAsBoolean();
@@ -3601,8 +3601,9 @@ class ChroniclePanel extends PluginPanel
 	/**
 	 * The way back, and where a page can be carried off, the way to take it. The
 	 * copy rides the right of the same row so it costs no height, and it hands
-	 * back plain text rather than anything this panel's own shape: the point is to
-	 * paste it somewhere that has never heard of Chronicle.
+	 * back a PICTURE of the page: the point is to paste it somewhere that has
+	 * never heard of Chronicle, and a picture is the one thing every chat
+	 * window takes.
 	 *
 	 * <p>Swing dispatches a click to the deepest component that is listening, so
 	 * the label's own listener takes the copy and the row's takes everything else.
@@ -3623,7 +3624,7 @@ class ChroniclePanel extends PluginPanel
 			take.setFont(FontManager.getRunescapeSmallFont());
 			take.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
 			take.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-			take.setToolTipText("Copy this page as text");
+			take.setToolTipText("Copy this page as a picture");
 			take.addMouseListener(clicker(() ->
 			{
 				boolean ok = copy.getAsBoolean();
