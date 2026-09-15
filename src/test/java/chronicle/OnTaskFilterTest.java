@@ -338,4 +338,79 @@ public class OnTaskFilterTest
 		assertTrue(has(card, "gp/drop"));
 		assertTrue(has(page, "gp/drop"));
 	}
+
+	/**
+	 * Searching a kind opens the LOOT TRACKER, not the slayer board.
+	 *
+	 * <p>It used to hard-code PvM's Slayer tab with its Drops lens up, so a
+	 * reader who typed "runes" wanting every rune they had ever been given got
+	 * only the ones tasks paid, with nothing on screen saying so. Both readings
+	 * are offered now, as two rows, and the slayer one only where the tasks
+	 * actually paid some of that kind.
+	 */
+	@Test
+	public void searchingAKindOpensTheLootTracker() throws Exception
+	{
+		ChroniclePanel p = panel();
+		List<String> said = say(p, "buildSearch", "runes");
+		assertTrue("the ledger reading was not offered",
+			has(said, "every one you have had"));
+		assertTrue("the slayer reading was not offered",
+			has(said, "from slayer tasks"));
+		assertFalse("the old on-task-only caption survived", has(said, "on-task loot"));
+	}
+
+	/** And a kind no task ever paid is offered once, not twice. */
+	@Test
+	public void aKindWithNoSlayerSideIsOfferedOnce() throws Exception
+	{
+		ChroniclePanel p = panel();
+		// the journal's only on-task item is a Fire rune, so Hides has none
+		List<String> said = say(p, "buildSearch", "hides");
+		assertTrue(has(said, "every one you have had"));
+		assertFalse("a slayer row was offered for a kind no task paid",
+			has(said, "from slayer tasks"));
+	}
+
+	/** Both rows land on the loot board, one on each reading. */
+	@Test
+	public void bothRowsLandOnTheLootBoard() throws Exception
+	{
+		ChroniclePanel p = panel();
+		Method open = ChroniclePanel.class.getDeclaredMethod(
+			"openLootKind", String.class, boolean.class);
+		open.setAccessible(true);
+		for (boolean onTask : new boolean[]{false, true})
+		{
+			SwingUtilities.invokeAndWait(() ->
+			{
+				try
+				{
+					open.invoke(p, "Runes", onTask);
+				}
+				catch (Exception e)
+				{
+					throw new RuntimeException(e);
+				}
+			});
+			Field tab = ChroniclePanel.class.getDeclaredField("subByTab");
+			tab.setAccessible(true);
+			assertTrue("a kind search left the loot tracker: " + tab.get(p),
+				tab.get(p).toString().contains("Loot"));
+			Field lens = ChroniclePanel.class.getDeclaredField("onTaskOnly");
+			lens.setAccessible(true);
+			assertEquals("the row did not set the reading it names",
+				onTask, lens.getBoolean(p));
+			Field kind = ChroniclePanel.class.getDeclaredField("lootKind");
+			kind.setAccessible(true);
+			assertEquals("Runes", kind.get(p));
+		}
+		// the ledger reading holds 900 fire runes, the slayer one 600 of them
+		Field lens = ChroniclePanel.class.getDeclaredField("onTaskOnly");
+		lens.setAccessible(true);
+		lens.setBoolean(p, false);
+		assertEquals("900", after(say(p, "buildDrops"), "Items"));
+		lens.setBoolean(p, true);
+		assertEquals("600", after(say(p, "buildDrops"), "Items"));
+	}
 }
