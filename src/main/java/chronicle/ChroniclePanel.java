@@ -175,6 +175,7 @@ class ChroniclePanel extends PluginPanel
 		super(false);
 		this.plugin = plugin;
 
+		watchForReturn();
 		setLayout(new BorderLayout());
 		setBorder(BorderFactory.createEmptyBorder(
 			PANEL_INSET, PANEL_INSET, PANEL_INSET, PANEL_INSET));
@@ -1374,11 +1375,42 @@ class ChroniclePanel extends PluginPanel
 		return plugin.lifetimeCounters();
 	}
 
+	// Whether a rebuild is already on its way to the EDT. A region load, a world
+	// hop and a push landing can all ask inside the same tick, and three
+	// rebuilds queued back to back draw the same board from the same record
+	// three times. The one already queued has not run yet, so it will read
+	// everything the later asks would have.
+	private final java.util.concurrent.atomic.AtomicBoolean queued =
+		new java.util.concurrent.atomic.AtomicBoolean();
+
+	// Whether the panel has ever been on screen. Until it has, nothing can be
+	// read from isShowing(): a panel the sidebar has not mounted yet is not
+	// showing either, and skipping its first build would leave it empty.
+	private boolean everShown;
+
+	// A rebuild asked for while the panel was off screen, owed back when it
+	// returns. The sidebar is a tabbed pane and only the selected tab shows, so
+	// a record that moves while the reader is on another plugin costs a whole
+	// board nobody is looking at.
+	private boolean staleWhileHidden;
+
 	/** Rebuild the panel from plugin state. Safe to call from any thread. */
 	void update()
 	{
+		if (!queued.compareAndSet(false, true))
+		{
+			return;
+		}
 		SwingUtilities.invokeLater(() ->
 		{
+			// Cleared first, so a record that moves DURING this build still earns
+			// a build of its own.
+			queued.set(false);
+			if (everShown && !getWrappedPanel().isShowing())
+			{
+				staleWhileHidden = true;
+				return;
+			}
 			// The record changing under a reader who did not ask to go anywhere: a
 			// push landing, the status line moving, the history read arriving. Only
 			// navigation starts at the top; returning a reader to the first line of
@@ -1392,6 +1424,28 @@ class ChroniclePanel extends PluginPanel
 			finally
 			{
 				keepScroll = false;
+			}
+		});
+	}
+
+	/**
+	 * Owe the reader a rebuild for every push that landed while they were
+	 * looking at something else, and pay it the moment they come back.
+	 */
+	private void watchForReturn()
+	{
+		getWrappedPanel().addHierarchyListener(e ->
+		{
+			if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) == 0
+				|| !getWrappedPanel().isShowing())
+			{
+				return;
+			}
+			everShown = true;
+			if (staleWhileHidden)
+			{
+				staleWhileHidden = false;
+				update();
 			}
 		});
 	}
@@ -1422,8 +1476,14 @@ class ChroniclePanel extends PluginPanel
 		return null;
 	}
 
+	// How many boards have actually been drawn. The two guards above exist to
+	// keep this well below the number of times update() is called, and this is
+	// what holds them to it.
+	private long buildsRun;
+
 	private void rebuild()
 	{
+		buildsRun++;
 		// A new pass, so the per-rebuild answers are no longer answered.
 		buildSources = null;
 		buildClog = null;
