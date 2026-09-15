@@ -156,4 +156,41 @@ public class OnTaskSliceTest
 		assertTrue(store.onTaskItemByTask(null, LO, HI).isEmpty());
 		assertTrue(store.onTaskAssignments(null, LO, HI).isEmpty());
 	}
+
+	/**
+	 * A price is seeded, never raised.
+	 *
+	 * <p>Both importers used to take the larger of two valuations of the same
+	 * drop. That is not recovering a number, it is ratcheting the record upward
+	 * on whichever day the import happened to run: one Mithril spear went from
+	 * 172 to 231 between one export and the next, and could only ever go up.
+	 * Quantity still floors, because a higher count is a drop this journal had
+	 * not seen.
+	 */
+	@Test
+	public void anImportFloorsQuantityAndLeavesPriceAlone() throws Exception
+	{
+		java.lang.reflect.Method merge = LocalStore.class.getDeclaredMethod(
+			"mergeSegmentDetail", com.google.gson.JsonObject.class,
+			com.google.gson.JsonObject.class, String.class);
+		merge.setAccessible(true);
+
+		com.google.gson.JsonObject seg = new com.google.gson.JsonParser()
+			.parse("{\"items\":{\"Mithril spear\":{\"id\":1243,\"qty\":2,\"value\":344}}}")
+			.getAsJsonObject();
+		com.google.gson.JsonObject inc = new com.google.gson.JsonParser()
+			.parse("{\"items\":{\"Mithril spear\":{\"id\":1243,\"qty\":7,\"value\":49000},"
+				+ "\"Bones\":{\"id\":526,\"qty\":3,\"value\":99}}}")
+			.getAsJsonObject();
+		merge.invoke(null, seg, inc, "items");
+
+		com.google.gson.JsonObject rows = seg.getAsJsonObject("items");
+		com.google.gson.JsonObject spear = rows.getAsJsonObject("Mithril spear");
+		assertEquals("a higher count is a drop this journal had not seen",
+			7, spear.get("qty").getAsLong());
+		assertEquals("the incoming valuation raised a price that was already set",
+			344, spear.get("value").getAsLong());
+		assertEquals("a row with no price of its own still takes one",
+			99, rows.getAsJsonObject("Bones").get("value").getAsLong());
+	}
 }

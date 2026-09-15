@@ -1184,19 +1184,41 @@ class LocalStore implements chronicle.counters.GatheredLedger
 						hit.addProperty("value", 0);
 						items.add(bagKey(b.itemId, b.name), hit);
 					}
+					// A floor on a FACT is fine: the archive counts every drop this
+					// account ever took, so a higher quantity is one this journal
+					// had not seen. A floor on a PRICE is not the same thing at
+					// all. The seed is one day's price multiplied by a lifetime
+					// quantity, so taking the larger of two valuations is not
+					// recovering anything, it is ratcheting the record upward on
+					// whichever day the import happened to run. It moved a
+					// Mithril spear from 172 to 231 between one export and the
+					// next, and it can only ever go up.
+					//
+					// So quantity is floored, and a price is only ever SEEDED:
+					// written into a row that has none, never over one that has.
 					if (b.qty > (hit.has("qty") ? hit.get("qty").getAsLong() : 0))
 					{
 						hit.addProperty("qty", b.qty);
 					}
-					if (b.value > (hit.has("value") ? hit.get("value").getAsLong() : 0))
+					if (!hit.has("value") || hit.get("value").getAsLong() <= 0)
 					{
 						hit.addProperty("value", b.value);
 					}
-					total += hit.get("value").getAsLong();
 				}
-				if (total > (src.has("value") ? src.get("value").getAsLong() : 0))
+				// The header is the sum of the bag under it, not the seed's own
+				// subtotal. Those two had drifted apart on 16 of my sources by
+				// 813,301 gp, with Vorkath's header 493,431 above its own rows.
+				long bagged = 0;
+				for (java.util.Map.Entry<String, JsonElement> e : items.entrySet())
 				{
-					src.addProperty("value", total);
+					if (e.getValue().isJsonObject())
+					{
+						bagged += asLong(e.getValue().getAsJsonObject().get("value"));
+					}
+				}
+				if (bagged > (src.has("value") ? src.get("value").getAsLong() : 0))
+				{
+					src.addProperty("value", bagged);
 				}
 			}
 			// Hundreds of rows have just been seeded from the Loot Tracker. None of
@@ -3001,8 +3023,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				JsonObject incRow = e.getValue().getAsJsonObject();
 				JsonObject curRow = cur.has(e.getKey()) && cur.get(e.getKey()).isJsonObject()
 					? cur.getAsJsonObject(e.getKey()) : new JsonObject();
+				// Quantity floors; a price does not. Same argument as the Loot
+				// Tracker seed above: the larger of two valuations of the same
+				// drop is not a better number, it is whichever day the import
+				// ran. A price is seeded into a row that has none and left
+				// alone otherwise.
 				floorNumber(curRow, incRow, "qty");
-				floorNumber(curRow, incRow, "value");
+				if (!curRow.has("value") || asLong(curRow.get("value")) <= 0)
+				{
+					floorNumber(curRow, incRow, "value");
+				}
 				if (!curRow.has("id") && incRow.has("id"))
 				{
 					curRow.add("id", incRow.get("id"));
