@@ -56,10 +56,12 @@ import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.OSType;
 
 /**
- * The journal's face: a search field, seven tabs, and a detail overlay over
- * whichever tab is open. Home reads the live session; the rest read the
- * lifetime journal. Lists mount a bounded number of rows, and views rebuild
- * on tab switch or, on Home, a slow timer.
+ * The journal's face: a period row, four tabs (Record, PvM, Skilling and the
+ * Collection log), a sub-tab strip under the first three, a search field, and a
+ * detail overlay over whichever board is open. Record's Now board reads the live
+ * sitting; the period row above the tabs governs every other board. Lists mount
+ * a bounded number of rows, and views rebuild on a tab or sub-tab switch, on a
+ * push landing, and on Now a slow timer.
  */
 class ChroniclePanel extends PluginPanel
 {
@@ -162,8 +164,8 @@ class ChroniclePanel extends PluginPanel
 	// period label, cleared by any pill.
 	private java.time.LocalDate histFrom;
 	private java.time.LocalDate histTo;
-	// The bundled taxonomy: tab -> page -> ordered slot names. Parsed on the
-	// first Log open.
+	// The bundled taxonomy: tab -> page -> ordered slot names. Parsed lazily, the
+	// first time any board asks for it.
 	private static Map<String, Map<String, List<String>>> taxonomy;
 
 	ChroniclePanel(ChroniclePlugin plugin)
@@ -881,11 +883,13 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * Every counter the log's own page carries, by the name the log gives it.
+	 * Every counter this fight's log page carries, by the name the log gives it.
 	 * They belong on the card because they answer a different question than the
-	 * kill count does: "Rewards claimed" at Wintertodt, both completion counts at
-	 * the Gauntlet. A lone counter that only repeats the kill count is left out;
-	 * a pair stays whole, since the Gauntlet's two only make sense read together.
+	 * kill count does: Wintertodt's "Rewards claimed" said 1,078 where 447 were
+	 * killed. A counter that only repeats the kill count is left out, however
+	 * many of them the page holds, and a line naming another fight has already
+	 * gone to that fight in {@link #lineBelongsTo}, so the Gauntlet's card never
+	 * carries the Corrupted Gauntlet's completion count.
 	 */
 	private List<Map.Entry<String, Long>> logLines(String boss)
 	{
@@ -1268,10 +1272,10 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * What one boss came to. The count on the cell is kills; this answers the two
-	 * things the cell cannot: how many of those kills the plugin was watching for
-	 * loot, which is a smaller number and a different question, and what they
-	 * came to. The second opens the source's own page.
+	 * What one boss came to. The cell carries the kills the window moved; the
+	 * card carries the whole record's, which is the count wherever one is known
+	 * and the ledger's own loot-event tally where none is. Below that, what those
+	 * kills paid, on a row that opens the source's own page.
 	 */
 	private JPanel bossCard(Boss b)
 	{
@@ -1449,13 +1453,12 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 
-	// Set only for the home ticker's own rebuild. Every other rebuild is a move to
-	// somewhere new (a tab, a search, an opened detail) and lands at the top.
+	// True while a rebuild is a redraw of the view the reader is already in, and
+	// rebuild() puts the scroll bar back where it was: the home ticker, a push
+	// landing under them, a fold or a "show more". Navigation, a tab or a search
+	// or an opened detail, leaves it false and lands at the top.
 	private boolean keepScroll;
 
-	// The History tab's period controls, hung above the scroll rather than inside
-	// it. Built by buildHistory, which is the only place that knows the window
-	// they name, and cleared on every rebuild so no other view inherits them.
 	// The period sits above the tab strip, because it governs every tab. Refilled
 	// on each rebuild so the label follows the window.
 	private final JPanel periodHolder = new JPanel(new BorderLayout());
@@ -1593,9 +1596,10 @@ class ChroniclePanel extends PluginPanel
 		scroll.setBorder(null);
 		scroll.getVerticalScrollBar().setUnitIncrement(14);
 		display.add(scroll, BorderLayout.CENTER);
-		// Everything that must not scroll away hangs here: the sub-tabs, which are
-		// navigation, and then the period, because the window a reader is looking
-		// at should not scroll away from the figures it chose.
+		// The sub-tabs hang outside the scroll pane, because navigation must not
+		// scroll away from the board it moves between. The period is not here: it
+		// hangs higher, in periodHolder above the tab strip, because it governs
+		// every tab rather than this one board.
 		JPanel above = new JPanel();
 		above.setLayout(new BoxLayout(above, BoxLayout.Y_AXIS));
 		above.setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -1689,11 +1693,6 @@ class ChroniclePanel extends PluginPanel
 		};
 	}
 
-	// The pinned xp total doubles as a fold head. Closed it is the row it has always
-	// been; open, the name takes the accent this panel's other fold heads use. The
-	// state is a key in the panel's one fold register, same as every other fold: the
-	// home ticker rebuilds every three seconds and would otherwise shut the fold on
-	// the reader between one glance and the next.
 	// how much of this session's damage the three styles account for; nothing to
 	// open when the record never typed it
 	private static long splitOf(Map<String, Integer> sess)
@@ -1719,6 +1718,11 @@ class ChroniclePanel extends PluginPanel
 		head.addMouseListener(clicker(() -> toggleFold(FOLD_HOME_DAMAGE)));
 	}
 
+	// The pinned xp total doubles as a fold head. Closed it is the row it has always
+	// been; open, the name takes the accent this panel's other fold heads use. The
+	// state is a key in the panel's one fold register, same as every other fold: the
+	// home ticker rebuilds every three seconds and would otherwise shut the fold on
+	// the reader between one glance and the next.
 	private void xpFoldHead(JPanel head)
 	{
 		JLabel name = (JLabel) ((BorderLayout) head.getLayout())
@@ -1852,8 +1856,8 @@ class ChroniclePanel extends PluginPanel
 		}
 		// Everything else the session moved, one row to a tracker, under the
 		// family it belongs to. Where a tracker has a parent total the parent is
-		// the row: a herb sack run says "Herbs sacked" once and leaves the twelve
-		// herbs to the Trackers tab, which is what that tab is for.
+		// the row: a herb sack run says "Herbs sacked" once, and the twelve herbs
+		// fold out under that row rather than standing as twelve rows of their own.
 		mounted += addSessionMovers(strip, plugin.sessionDisplayCounters(), shownKeys);
 		if (mounted == 0)
 		{
@@ -1900,7 +1904,8 @@ class ChroniclePanel extends PluginPanel
 	 * Whether a tracker already has a parent that speaks for it in this list.
 	 * The sack types every herb it swallows and the spellbook types every place
 	 * it sends you, but the session moved one tracker, not twelve or thirty: the
-	 * parent total carries them, and the typed rows belong to the Trackers tab.
+	 * parent total carries them, and the typed rows fold out under the parent's
+	 * own row.
 	 * A child is only hidden where its parent actually moved, so nothing the
 	 * session did can fall out of the strip.
 	 */
@@ -2706,11 +2711,9 @@ class ChroniclePanel extends PluginPanel
 	}
 	private int slayerShown = ROW_CAP;
 
-	// Which of the tab's two boards is up. Sticky, like every other lens in the
-	// panel: applyTab clears what is paged out and what is drilled into, never
-	// which lens a reader chose.
-	// Which of the three boards the Slayer tab is showing. A boolean held two and
-	// could not hold a third.
+	// Which of the Slayer tab's three boards is up. A boolean held two and could
+	// not hold a third. Sticky, like every other lens in the panel: applyTab clears
+	// what is paged out and what is drilled into, never which lens a reader chose.
 	private String slayerLens = "Tasks";
 
 	// The current task, then ONE of two boards: the journal's task-by-task
@@ -2756,9 +2759,9 @@ class ChroniclePanel extends PluginPanel
 		p.add(lens);
 		p.add(vgap(6));
 
-		// Asked for under either pill, because it is what the Tasks board opens
+		// Asked for under every pill, because it is what the Tasks board opens
 		// on: a read that only fired from that board would leave a reader who
-		// had been sitting on Monsters looking at "Reading the task journey"
+		// had been sitting on another one looking at "Reading the task journey"
 		// the first time they came back.
 		if (!journeyFetching)
 		{
@@ -2805,11 +2808,6 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	/**
-	 * The game's own count per monster, as last scraped from the Kill Log
-	 * interface. Its own board now: it answers "how many of these have I
-	 * killed", which the task journey never does.
-	 */
 	/**
 	 * Everything the tasks gave, summed across the journey and ranked by what it
 	 * came to. On-task by construction: the ledger's per-source totals cannot tell
@@ -3138,10 +3136,6 @@ class ChroniclePanel extends PluginPanel
 
 
 	/**
-	 * A section head with a copy on its right. A board that is not a drill has no
-	 * back row to hang one on, and it should still be shareable.
-	 */
-	/**
 	 * A copy pill with more than one thing it could copy.
 	 *
 	 * <p>The summary board can be shared as the sixteen kinds or as every item
@@ -3187,6 +3181,10 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
+	/**
+	 * A section head with a copy on its right. A board that is not a drill has no
+	 * back row to hang one on, and it should still be shareable.
+	 */
 	private JPanel copyHeader(String title, java.util.function.BooleanSupplier copy)
 	{
 		JPanel r = row(title, "copy", null);
@@ -3211,6 +3209,11 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
+	/**
+	 * The game's own count per monster, as last scraped from the Kill Log
+	 * interface. Its own board now: it answers "how many of these have I
+	 * killed", which the task journey never does.
+	 */
 	private JPanel addKillLog(JPanel p)
 	{
 		JsonObject cl = clogNow();
@@ -3573,7 +3576,10 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	// Rows mounted per open source view; "Show more" raises it per source.
+	// How much of one drilled-into list is mounted, keyed by that list: a source's
+	// own page, a kind drilled out of a bag, the window's source and left-behind
+	// lists, the lifetime Walked past board's two, and one monster's on-task
+	// assignments. "Show more" raises it per key.
 	private final Map<String, Integer> drillShown = new LinkedHashMap<>();
 
 	// ------------------------------------------------------------------
@@ -3612,7 +3618,9 @@ class ChroniclePanel extends PluginPanel
 		slayerLens = "Drops";
 		applyCommon();
 		// applyCommon clears the lens the way opening a tab does, so the kind is
-		// set AFTER it and the board is drawn once, already narrowed.
+		// set AFTER it. applyCommon ends with a rebuild of its own, so this costs
+		// two boards: the first unnarrowed, thrown away by the second. Both run
+		// inside one EDT event, so the reader only ever sees the narrowed one.
 		lootKind = kind;
 		rebuild();
 	}
@@ -4065,11 +4073,6 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * Two columns, the names padded and the figures right aligned under each
-	 * other, the way the page itself sets them. Alignment is the whole reason the
-	 * copy is fenced: a proportional font throws it away.
-	 */
-	/**
 	 * How deep a column of a shared picture runs before the next one starts. A
 	 * board that is longer is not cut: it is set in columns, the way a newspaper
 	 * sets a long list. Sixty rows is about a screen; six hundred in one column
@@ -4176,14 +4179,20 @@ class ChroniclePanel extends PluginPanel
 	// how many sources an item's page mounts; lifted while a copy is drawn
 	private int itemSourceCap = 40;
 
+	// Whether the page being built is bound for a picture rather than the panel.
+	// A screenshot leaves the reader's own machine, so it carries less than the
+	// board does.
+	private boolean drawingCopy;
 
-	/** The item's page on the clipboard, as a picture of itself and as its text. */
+
+	/** The item's page on the clipboard, as a picture of itself. */
 	private boolean copyItemPage(String name)
 	{
 		int was = itemSourceCap;
 		try
 		{
 			itemSourceCap = COPY_MOST;
+			drawingCopy = true;
 			return copyPicture(stripChrome(buildItemDetail(name)));
 		}
 		catch (Throwable ignored)   // noqa: a picture is never worth an exception
@@ -4192,6 +4201,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		finally
 		{
+			drawingCopy = false;
 			itemSourceCap = was;
 		}
 	}
@@ -4212,10 +4222,10 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * Put a source's page on the clipboard as a picture of itself and as its text.
-	 * The picture is built from a FRESH page with the loot cap lifted, because
-	 * what the reader is looking at stops at twenty five items behind a "show
-	 * more" and what they are sharing should not.
+	 * Put a source's page on the clipboard as a picture of itself. The picture is
+	 * built from a FRESH page with the loot cap lifted, because what the reader is
+	 * looking at stops at twenty five items behind a "show more" and what they are
+	 * sharing should not.
 	 */
 	private boolean copySourcePage(String name)
 	{
@@ -4223,6 +4233,7 @@ class ChroniclePanel extends PluginPanel
 		try
 		{
 			drillShown.put(name, COPY_MOST);
+			drawingCopy = true;
 			return copyPicture(stripChrome(buildSourceDetail(name)));
 		}
 		catch (Throwable ignored)   // noqa: a picture is never worth an exception
@@ -4231,6 +4242,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		finally
 		{
+			drawingCopy = false;
 			if (was == null)
 			{
 				drillShown.remove(name);
@@ -4487,13 +4499,20 @@ class ChroniclePanel extends PluginPanel
 			{
 				head.add(row("Personal best", pb(sr.pb), null));
 			}
-			if (sr.firstMs > 0)
+			// Not on a picture. It is the reader's own bookkeeping rather than
+			// anything about the fight, and on an account whose ledger carries
+			// imported rows it can name a day before the account existed, which
+			// is a date nobody should be handing out with a screenshot.
+			if (sr.firstMs > 0 && !drawingCopy)
 			{
 				head.add(row("Tracked since",
 					TASK_DAY.format(Instant.ofEpochMilli(sr.firstMs)), null));
 			}
-			// The chase, when the dryness ledger knows one for this source.
-			if (grindsCache == null && !grindsFetching)
+			// The chase, when the dryness ledger knows one for this source. Not
+			// on a picture: how dry somebody is running is the most personal
+			// line on the page, and a screenshot of a drop is not the place to
+			// volunteer it.
+			if (grindsCache == null && !grindsFetching && !drawingCopy)
 			{
 				grindsFetching = true;
 				final String src = sr.name;
@@ -4511,7 +4530,7 @@ class ChroniclePanel extends PluginPanel
 					}
 				}));
 			}
-			if (grindsCache != null)
+			if (grindsCache != null && !drawingCopy)
 			{
 				for (ChronicleApiClient.GrindRow g : grindsCache)
 				{
@@ -5326,8 +5345,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		catch (RuntimeException e)
 		{
-			// pace() throws on an unknown skill name; a real fault in there hides
-			// here too, as a section that simply prints no pace line.
+			// Not for an unknown skill name: pace() catches that one itself and
+			// hands back a Pace that prints nothing. This is the belt for a real
+			// fault in there, and it hides one: the section simply shows no pace
+			// line.
 			return;
 		}
 		if (pace == null)
@@ -5353,13 +5374,18 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	// Every fold in the panel that stands open this session, one key apiece:
-	// family:section on Stats, family:craft:verb a level under it, pets:page:name
-	// on a collection log pets page, and FOLD_HOME_XP for the one on Home. A field,
-	// not a local, because rebuild() throws the whole panel away several times a
-	// minute and a reader's fold has to outlive that. Everything foldable starts
-	// folded, and the register is dropped whole when the account changes. The preview
-	// harness reaches this by name, so a rename here has to be made there too.
+	// Every fold whose state a reader has moved off its default this session, one
+	// key apiece: family:section on Stats, family:craft:verb a level under it,
+	// pets:page:slot on a collection log pets page, home:xp and home:damage on
+	// Home, session:family and session:row:key on the session strip, and the
+	// History tab's under history:. A field, not a local, because rebuild() throws
+	// the whole panel away several times a minute and a reader's fold has to
+	// outlive that. Most foldables start folded and a key here means open; three
+	// stand open instead, so for those a key means SHUT: the session strip's family
+	// bands (session:family, not the session:row: rows under them), the History
+	// tab's progress groups (history:shut:) and its kind bands (history:kind:). The
+	// register is dropped whole when the account changes. The preview harness
+	// reaches this by name, so a rename here has to be made there too.
 	private final java.util.Set<String> openFolds = new java.util.HashSet<>();
 
 	// Home's xp total, broken out per skill.
@@ -6045,8 +6071,10 @@ class ChroniclePanel extends PluginPanel
 	 * ranked. A list longer than {@link #HIST_LIST_CAP} shows its top rows and
 	 * a "Show N more" tail.
 	 *
-	 * <p>Every fold starts shut and is keyed under "history:", apart from the
-	 * Stats tab's, so a reader's fold on one tab leaves the other as it was.
+	 * <p>The folds are keyed under "history:", apart from the Stats tab's, so a
+	 * reader's fold on one tab leaves the other as it was. A group stands open
+	 * and its key ("history:shut:") shuts it; the folds under a group, a figure's
+	 * names and a section's rows, start shut.
 	 */
 	private JPanel trackedProgress(HistoryProgress progress,
 		List<Map.Entry<String, Long>> gains, Map<String, List<String[]>> named)
@@ -6201,10 +6229,11 @@ class ChroniclePanel extends PluginPanel
 	// Stats tab's fold-head styling.
 	/**
 	 * A band heading carrying a count of the rows it holds. These bands stand
-	 * shut, so the count is the only account of them a reader has and it stays in
-	 * both states rather than jumping about as folds are clicked. The session
-	 * strip's bands stand open, where a count beside the rows it is counting is
-	 * noise, so that caller passes none. One treatment either way: see quietHead.
+	 * open and the fold shuts them, so the count has to stand in both states: the
+	 * lists under it are capped and paged, so how many the group holds is not
+	 * something the rows on screen can tell you. The session strip's bands go
+	 * straight to quietHead and drop the count while they are open, where a count
+	 * beside the rows it is counting is noise. One treatment either way.
 	 */
 	private JPanel groupHead(String name, String count, String stateKey, boolean open)
 	{
@@ -6344,11 +6373,6 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
-	// What one feed entry names, for the list its figure opens to: the item,
-	// the pet, the quest, the diary, the task and its tier, the skill and the
-	// level it reached. Null where the entry names nothing, which is what an
-	// imported milestone carries: the figure still counts it, and the list
-	// holds only what the record can actually name.
 	// The quest itself, out of the line the game announced it in ("You have
 	// completed Fallen From Grace!"). A name that arrives clean is left alone.
 	static String questName(String raw)
@@ -6366,6 +6390,11 @@ class ChroniclePanel extends PluginPanel
 		return q.isEmpty() ? raw : q;
 	}
 
+	// What one feed entry names, for the list its figure opens to: the item,
+	// the pet, the quest, the diary, the task and its tier, the skill and the
+	// level it reached. Null where the entry names nothing, which is what an
+	// imported milestone carries: the figure still counts it, and the list
+	// holds only what the record can actually name.
 	private static String feedName(JsonObject e)
 	{
 		String type = e.has("type") ? e.get("type").getAsString() : "";
@@ -6433,8 +6462,6 @@ class ChroniclePanel extends PluginPanel
 		FEED_SUMMARY_KEYS.put("LEVEL", "levelsGained");
 	}
 
-	// The oldest stamp in the feed slice, or 0 when it holds none: whether the
-	// slice reaches back past a window's start.
 	// whether the record was keeping sittings before this window opened
 	private static boolean sittingsCover(List<JsonObject> feed, long fromMs)
 	{
@@ -7165,9 +7192,8 @@ class ChroniclePanel extends PluginPanel
 		}));
 	}
 
-	// The facet's own sprite, which is the last thing a line can wear: it says
-	// at least what kind of thing the line is, and it is the same icon the strip
-	// above wears for that facet.
+	// The kind's own sprite, the last thing a line can wear: it says at least
+	// what sort of thing the line is.
 	private static int kindSprite(String kind)
 	{
 		if (KIND_ACTIVITY.equals(kind))
@@ -7245,12 +7271,6 @@ class ChroniclePanel extends PluginPanel
 		return m;
 	}
 
-	/**
-	 * Whether a collection log page is an activity rather than a monster. The
-	 * bundled taxonomy files every page under a tab; Minigames and Clues are the
-	 * activities, and where the taxonomy cannot be read the page names that end
-	 * in a treasure trail tier stand in, so the tab is never wholly empty.
-	 */
 	private boolean isActivityPage(String page)
 	{
 		Map<String, Map<String, List<String>>> tax = taxonomy(plugin.gson());
@@ -7377,12 +7397,12 @@ class ChroniclePanel extends PluginPanel
 
 	/**
 	 * The figures a reader wants first, each a plain labelled row: what the
-	 * period cost in time, what it added in experience and levels, and the
-	 * counts the rest of the tab breaks down. Only what the period holds.
+	 * period cost in time, what it added in experience, and the counts the rest
+	 * of the tab breaks down. Only what the period holds.
 	 *
-	 * <p>The levels and the 99s are drawn only while the same number of skills
-	 * speak at each end of the window: a count taken across a hole one side
-	 * alone has would read that hole as a gain.
+	 * <p>The 99s are counted only while the same number of skills speak at each
+	 * end of the window: a count taken across a hole one side alone has would
+	 * read that hole as a gain.
 	 */
 	private JPanel headline(HistoryProgress progress, List<Map.Entry<String, Long>> gains,
 		SkillStand stand, HistoryLog.Levels opened, long[] played)
@@ -7642,11 +7662,6 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 
-	/**
-	 * The four readings of a period and the game sprite each wears. The ids are
-	 * the live sidebar tabs: RuneLite's own interfacestyles plugin overrides
-	 * exactly these four when it redresses the client.
-	 */
 	static final String[][] FACETS = {
 		{"Skills", "775"},        // SideiconsInterface.STATS, the bar chart
 		{"PvM", "774"},           // SideiconsInterface.COMBAT, the crossed swords
@@ -7662,17 +7677,6 @@ class ChroniclePanel extends PluginPanel
 	// landed, each with the size it wants it at
 	private final Map<Integer, List<Object[]>> facetWaiting = new LinkedHashMap<>();
 
-	/**
-	 * The sprite a facet wears, once it has been fetched. Null until then.
-	 *
-	 * <p>It cannot simply be asked for: SpriteManager.getSprite asserts it is on
-	 * the client thread and a panel is built on the event thread, so asking
-	 * threw an AssertionError, which is an Error and not an exception. A catch
-	 * written for RuntimeException let it past and the whole tab came out
-	 * blank. Nothing here is worth a blank tab, so the fetch is asynchronous,
-	 * the label wears its word until the sprite lands, and every throwable is
-	 * swallowed.
-	 */
 	private java.awt.image.BufferedImage facetIcon(int spriteId)
 	{
 		return facetIcons.get(spriteId);
@@ -7681,12 +7685,18 @@ class ChroniclePanel extends PluginPanel
 	/**
 	 * Dress a label in a game sprite at the size it asks for, fetching it off the
 	 * client thread the first time anyone wants it and no more than that ever.
-	 * A width of zero means the sprite's own size, which is what the facet strip
-	 * wants; a row wants it shrunk into the icon column.
 	 *
-	 * <p>Several labels can want one sprite: the facet strip and every row in a
-	 * band that has nothing of its own to show. They queue, and the one fetch
-	 * dresses all of them.
+	 * <p>Several labels can want one sprite: a line in a band with nothing of its
+	 * own to wear takes the sprite of the kind it sits under, and the boss grid
+	 * wears one icon for each pair the game pools, so Callisto and Artio wait on
+	 * the same fetch. They queue, and the one fetch dresses all of them.
+	 *
+	 * <p>The sprite cannot simply be asked for: SpriteManager.getSprite asserts
+	 * it is on the client thread and a panel is built on the event thread, so
+	 * asking threw an AssertionError, which is an Error and not an exception. A
+	 * catch written for RuntimeException let it past and the whole tab came out
+	 * blank. Nothing here is worth a blank tab, so the fetch is asynchronous and
+	 * every throwable below is swallowed.
 	 */
 	private void wearSprite(JLabel label, int spriteId, int w, int h)
 	{
@@ -7775,11 +7785,11 @@ class ChroniclePanel extends PluginPanel
 	/** The periods the tab offers, widest first, as the list reads them. */
 	static final String[] PERIODS = {"Lifetime", "Year", "Month", "Week", "Day"};
 
-	// the choices, built fresh so the tick sits on whichever is current
 	// the visible period's own two ends, kept for the menu
 	private java.time.LocalDate periodFrom;
 	private java.time.LocalDate periodTo;
 
+	// the choices, built fresh so the tick sits on whichever is current
 	private javax.swing.JPopupMenu periodMenu()
 	{
 		javax.swing.JPopupMenu menu = new javax.swing.JPopupMenu();
@@ -7818,9 +7828,9 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * The kinds, as a menu. Sixteen of them will not fit as pills in a panel
-	 * this wide, and the period control already established how this panel asks
-	 * a question with more answers than it has room for.
+	 * The tasks, as a menu. A slayer career names more of them than will fit as
+	 * pills in a panel this wide, and the period control already established how
+	 * this panel asks a question with more answers than it has room for.
 	 */
 	private javax.swing.JPopupMenu taskMenu()
 	{
@@ -8109,8 +8119,9 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (rows.isEmpty())
 		{
-			// Seven of the twenty three file no counters at all, and a skill that
-			// tracks nothing should say so rather than open on a blank.
+			// Seven of the grid's skills file no counters at all: Attack, Strength,
+			// Defence, Hitpoints, Ranged, Magic and Slayer. A skill that tracks
+			// nothing should say so rather than open on a blank.
 			p.add(note("Nothing is tracked under " + craft
 				+ (wholeRecord() ? "." : " in " + window().label + ".")));
 			return p;
@@ -8138,7 +8149,7 @@ class ChroniclePanel extends PluginPanel
 	 * arrows step the window and the label between them opens the list; at
 	 * Lifetime the arrows have nowhere to go, so they are not drawn and the label
 	 * stands alone. This sitting is the one board it does not govern, and there
-	 * the row is not drawn at all.
+	 * the row states its scope rather than offering to change it.
 	 */
 	private JPanel periodRow()
 	{

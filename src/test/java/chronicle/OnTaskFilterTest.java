@@ -30,7 +30,8 @@ public class OnTaskFilterTest
 {
 	private static final String JOURNAL =
 		"{\"drops\":{"
-		+ "\"Blue dragon\":{\"kc\":300,\"loots\":300,\"value\":600,\"items\":{"
+		+ "\"Blue dragon\":{\"kc\":300,\"loots\":300,\"value\":600,"
+		+ "\"first_seen\":1600000000000,\"items\":{"
 		+ "\"536\":{\"id\":536,\"name\":\"Dragon bones\",\"qty\":300,\"value\":600},"
 		+ "\"554\":{\"id\":554,\"name\":\"Fire rune\",\"qty\":900,\"value\":900}}},"
 		+ "\"Zulrah\":{\"kc\":7,\"loots\":7,\"value\":900,\"items\":{"
@@ -254,5 +255,51 @@ public class OnTaskFilterTest
 		List<String> said = say(p, "buildDrops");
 		assertTrue("the reader was left with no way back to All", has(said, "On task"));
 		assertTrue(has(said, "No task closed inside"));
+	}
+
+	/**
+	 * A picture carries less than the board does. Two lines are the reader's
+	 * own bookkeeping rather than anything about the fight, and one of them can
+	 * name a day before the account existed on a ledger holding imported rows.
+	 */
+	@Test
+	public void aPictureLeavesTheReadersOwnBookkeepingBehind() throws Exception
+	{
+		ChroniclePanel p = panel();
+		List<String> onScreen = say(p, "buildSourceDetail", "Blue dragon");
+		assertTrue("the board should still say it", has(onScreen, "Tracked since"));
+
+		final List<String> shared = new ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Field f = ChroniclePanel.class.getDeclaredField("drawingCopy");
+				f.setAccessible(true);
+				f.setBoolean(p, true);
+				Method m = ChroniclePanel.class.getDeclaredMethod(
+					"buildSourceDetail", String.class);
+				m.setAccessible(true);
+				List<Component> flat = new ArrayList<>();
+				flatten((Component) m.invoke(p, "Blue dragon"), flat);
+				for (Component c : flat)
+				{
+					if (c instanceof JLabel && ((JLabel) c).getText() != null)
+					{
+						shared.add(((JLabel) c).getText());
+					}
+				}
+				f.setBoolean(p, false);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		assertFalse("a shared picture named the day tracking began",
+			has(shared, "Tracked since"));
+		assertFalse("a shared picture said how dry the reader is running",
+			has(shared, "Chasing"));
+		assertTrue("the picture lost the fight itself", has(shared, "Times looted"));
 	}
 }

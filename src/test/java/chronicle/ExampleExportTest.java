@@ -85,8 +85,6 @@ public class ExampleExportTest
 		}
 	}
 
-	// the fields that decide what the panel is showing. A click changes one of
-	// them; together they name a state.
 	/**
 	 * Every field a click can change, because a state is identified by their
 	 * values and restored by writing them back. A field left out is a board the
@@ -154,6 +152,7 @@ public class ExampleExportTest
 			m.put(n, "PLUMBING: about drawing, not about where the reader is");
 		}
 		m.put("itemSourceCap", "CONSTANT: no click moves it, only a copy, which puts it back");
+		m.put("drawingCopy", "PLUMBING: true only inside a copy, and put back before it returns");
 		return m;
 	}
 
@@ -364,23 +363,6 @@ public class ExampleExportTest
 		}
 
 		/**
-		 * Every source and every item the search can name, at the screen its own
-		 * click opens. The panel's own methods are called for it, so the state is
-		 * the one a reader really lands on rather than a guess at which fields it
-		 * sets.
-		 */
-		/**
-		 * Every board, reached the way the panel reaches it.
-		 *
-		 * <p>The crawl is a breadth-first walk of clicks, and the panel now has
-		 * more clicks than the budget: eight hundred and twenty six drills and a
-		 * seventy one cell sheet come first, and the Ledger's own families, the
-		 * Activities board and a task's page never come up at all. Seeding them
-		 * by hand is not a shortcut past the crawl -- the screens are still drawn
-		 * by the panel and still recorded whole -- it is the difference between
-		 * coverage that is decided and coverage that is hoped for.
-		 */
-		/**
 		 * Stand on a tab and one of its sub-tabs, the way clicking its pill does.
 		 *
 		 * <p>A board is chosen by the pair, not by the `view` field: PvM's Combat
@@ -402,6 +384,17 @@ public class ExampleExportTest
 			edt(() -> apply.invoke(panel, target));
 		}
 
+		/**
+		 * Every board, reached the way the panel reaches it.
+		 *
+		 * <p>The crawl is a breadth-first walk of clicks, and the panel now has
+		 * more clicks than the budget: eight hundred and twenty six drills and a
+		 * seventy one cell sheet come first, and the Ledger's own families, the
+		 * Activities board and a task's page never come up at all. Seeding them
+		 * by hand is not a shortcut past the crawl -- the screens are still drawn
+		 * by the panel and still recorded whole -- it is the difference between
+		 * coverage that is decided and coverage that is hoped for.
+		 */
 		private void seedBoards() throws Exception
 		{
 			Map<String, Object> home = snapshot();
@@ -507,6 +500,12 @@ public class ExampleExportTest
 			restore(home);
 		}
 
+		/**
+		 * Every source and every item the search can name, at the screen its own
+		 * click opens. The panel's own methods are called for it, so the state is
+		 * the one a reader really lands on rather than a guess at which fields it
+		 * sets.
+		 */
 		private void seedDrills() throws Exception
 		{
 			Map<String, Object> home = snapshot();
