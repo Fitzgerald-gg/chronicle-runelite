@@ -3717,25 +3717,47 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
+	 * The tallest a picture is drawn. A single column of six hundred rows is
+	 * thirteen thousand pixels, which is the point of the tall copy; this is
+	 * here so a page can never ask for one the size of a building.
+	 */
+	private static final int COPY_MAX_HEIGHT = 20000;
+
+	/**
 	 * A built page drawn to an image at its WHOLE height, not the window's. The
 	 * page is a strip in a scroll pane; what wants sharing is all of it.
+	 *
+	 * <p>Laid out at the height it asks for and then CROPPED, never laid out
+	 * inside a ceiling. A column of rows given less room than it wants does not
+	 * lose the rows off the bottom: the layout squeezes from the top, and a six
+	 * hundred row bag came out with its first hundred rows drawn at no height
+	 * at all. The reader saw a picture that started in the middle of their loot
+	 * and had no way to know.
 	 */
 	private static java.awt.Image pageImage(JPanel page, int width)
 	{
 		try
 		{
 			int w = width;
-			page.setSize(w, 8000);
+			page.setSize(w, COPY_MAX_HEIGHT);
 			layOut(page);
-			int h = Math.max(1, Math.min(8000, page.getPreferredSize().height));
-			page.setSize(w, h);
+			// the whole of it, whatever that is
+			int full = Math.max(1, page.getPreferredSize().height);
+			page.setSize(w, full);
 			layOut(page);
+
+			int h = Math.min(full, COPY_MAX_HEIGHT);
+			int lost = h < full ? pastTheEdge(page, h) : 0;
 			java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(
 				w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
 			java.awt.Graphics2D g = img.createGraphics();
 			g.setColor(ColorScheme.DARK_GRAY_COLOR);
 			g.fillRect(0, 0, w, h);
 			page.printAll(g);
+			if (lost > 0)
+			{
+				sayWhatDidNotFit(g, w, h, lost);
+			}
 			g.dispose();
 			return img;
 		}
@@ -3743,6 +3765,36 @@ class ChroniclePanel extends PluginPanel
 		{
 			return null;
 		}
+	}
+
+	/** How many of the page's own rows begin below the cut. */
+	private static int pastTheEdge(JPanel page, int cut)
+	{
+		int n = 0;
+		for (Component k : page.getComponents())
+		{
+			if (k.getY() >= cut)
+			{
+				n++;
+			}
+		}
+		return n;
+	}
+
+	/**
+	 * A picture that had to stop says so, in its own last line. A crop nobody is
+	 * told about is the same lie as a squeeze: the reader believes they are
+	 * holding the whole list.
+	 */
+	private static void sayWhatDidNotFit(java.awt.Graphics2D g, int w, int h, int lost)
+	{
+		int band = 20;
+		g.setColor(ColorScheme.DARKER_GRAY_COLOR);
+		g.fillRect(0, h - band, w, band);
+		g.setColor(ColorScheme.LIGHT_GRAY_COLOR);
+		g.setFont(FontManager.getRunescapeSmallFont());
+		String said = fmt(lost) + " more, past the height a picture can hold";
+		g.drawString(said, 6, h - 6);
 	}
 
 	/**
