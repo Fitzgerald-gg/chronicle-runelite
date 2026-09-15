@@ -2133,8 +2133,19 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(head);
 		p.add(vgap(6));
+		// Capped like every other list on the panel. A year of loot is hundreds
+		// of sources, and a board that simply runs on is a board the reader
+		// cannot get to the bottom of.
+		final String key = dropsLeftBehind ? "win:left" : "win:source";
+		final int cap = drillShown.getOrDefault(key, ROW_CAP);
+		int mounted = 0;
 		for (String[] r : ranked)
 		{
+			if (mounted++ >= cap)
+			{
+				p.add(expander(key, cap, ranked.size()));
+				break;
+			}
 			JPanel line = row(r[0], fmt(safeParse(r[1])) + " · "
 				+ gp(safeParse(r[2])) + " gp", null);
 			line.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
