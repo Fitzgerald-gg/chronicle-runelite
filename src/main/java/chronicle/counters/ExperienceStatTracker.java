@@ -138,7 +138,7 @@ public class ExperienceStatTracker implements StatTracker
 	// The window opens with the first XP counted, not with the login: the minutes
 	// spent at the bank before starting are not minutes of training. Tally and clock
 	// start together and are cleared together, so the two can never measure different
-	// spans — which is the whole of what makes the quoted rate true.
+	// spans, which is the whole of what makes the quoted rate true.
 	private synchronized void count(Skill skill, int gained)
 	{
 		if (sessionXp.isEmpty())

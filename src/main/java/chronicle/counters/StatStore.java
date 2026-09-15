@@ -21,7 +21,7 @@ import javax.inject.Singleton;
  * holds the lifetime record and folds these increments in on every refresh. The trackers
  * and {@link SkillDeriver} are the only writers of counts; on top of that the plugin
  * clears the whole store at an account boundary or a settings toggle. Nothing touches
- * RuneLite's config — a busy skilling tick costs no disk I/O.
+ * RuneLite's config, so a busy skilling tick costs no disk I/O.
  *
  * <p>Counters saturate at {@link Integer#MAX_VALUE}; they never wrap negative.
  *

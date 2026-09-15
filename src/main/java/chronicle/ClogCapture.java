@@ -91,7 +91,7 @@ public class ClogCapture
 	private int finished;
 	private int available;
 
-	// Enabled mid-session — no LOGGED_IN transition is coming. Read the varps now.
+	// Enabled mid-session: no LOGGED_IN transition is coming. Read the varps now.
 	void primeFromVarps(net.runelite.api.Client c)
 	{
 		int total = c.getVarpValue(VARP_CLOG_TOTAL);

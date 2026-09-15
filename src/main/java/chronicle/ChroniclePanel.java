@@ -260,8 +260,8 @@ class ChroniclePanel extends PluginPanel
 			if (target != null)
 			{
 				// select() returns early on the tab already showing, so its
-				// onSelectEvent — the only place the query is cleared and the
-				// panel rebuilt — never fires. Do that work here instead.
+				// onSelectEvent, the only place the query is cleared and the
+				// panel rebuilt, never fires. Do that work here instead.
 				if (target.isSelected())
 				{
 					applyTab(searchJump);
@@ -1454,7 +1454,7 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	// Set only for the home ticker's own rebuild. Every other rebuild is a move to
-	// somewhere new — a tab, a search, an opened detail — and lands at the top.
+	// somewhere new (a tab, a search, an opened detail) and lands at the top.
 	private boolean keepScroll;
 
 	// The History tab's period controls, hung above the scroll rather than inside
@@ -2654,7 +2654,7 @@ class ChroniclePanel extends PluginPanel
 			return addOnTaskLoot(p);
 		}
 
-		// Paint the cached journey at once — no flicker — and re-read the journal
+		// Paint the cached journey at once, with no flicker, and re-read the journal
 		// behind it. The read rebuilds only when the journey has actually moved,
 		// so an unchanged journal cannot start a loop.
 		if (journeyCache != null)
@@ -4566,7 +4566,7 @@ class ChroniclePanel extends PluginPanel
 	// sentence whole either way.
 
 	// Three dots as one glyph. The game font draws it as three single pixels, and
-	// it is 7px wide where "..." is 9 — worth two more letters of a name. Checked
+	// it is 7px wide where "..." is 9, worth two more letters of a name. Checked
 	// against the .notdef box the font falls back to for a glyph it lacks, which
 	// is why an em dash appears nowhere in these strings.
 	private static final String ELLIPSIS = "…";
@@ -4687,8 +4687,8 @@ class ChroniclePanel extends PluginPanel
 					return s;
 				}
 			}
-			// As short as this one goes. Keep whichever form is the narrower — a
-			// stub of a short name can cost more than the name — and move along to
+			// As short as this one goes. Keep whichever form is the narrower (a
+			// stub of a short name can cost more than the name) and move along to
 			// the next name in the order.
 			String shortest = stub(name, floor);
 			work.pieces.set(idx,

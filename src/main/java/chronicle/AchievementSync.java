@@ -88,7 +88,7 @@ public class AchievementSync
 		this.client = client;
 	}
 
-	// Client thread only. Every caller in a tick gets the same object — read-only.
+	// Client thread only. Every caller in a tick gets the same object, read-only.
 	JsonObject snapshot()
 	{
 		int tick = client.getTickCount();

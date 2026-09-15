@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026, Chronicle — BSD 2-Clause (see LICENSE).
+ * Copyright (c) 2026, Chronicle. BSD 2-Clause (see LICENSE).
  */
 package chronicle;
 
@@ -23,8 +23,8 @@ import static org.junit.Assert.assertTrue;
  * The pets page prints a chase in one line: where the kills went, and the share of
  * players holding the pet by that point. The row is narrow and Swing clips the end
  * of a label, so the line is fitted before it is mounted. What is tested here is
- * the bargain that fitting strikes — the names give up letters, the figures give up
- * nothing — and that whatever comes back really does measure inside the row.
+ * the bargain that fitting strikes: the names give up letters, the figures give up
+ * nothing, and that whatever comes back really does measure inside the row.
  */
 public class ChaseLineFitTest
 {
@@ -170,7 +170,7 @@ public class ChaseLineFitTest
 		assertFiguresWhole(line, "1,500", "900", "1");
 		if (!line.contains("Artio"))
 		{
-			// dropped rather than mangled — and the row says so
+			// dropped rather than mangled, and the row says so
 			assertFalse(line + " kept a stub of the second source",
 				line.contains("Art" + ellipsis()));
 			assertTrue(line + " dropped a source without saying so", line.endsWith(" +1"));
@@ -236,7 +236,7 @@ public class ChaseLineFitTest
 	}
 
 	/**
-	 * The font the panel draws rows in is a pixel font with holes in it — an em dash
+	 * The font the panel draws rows in is a pixel font with holes in it. An em dash
 	 * is why none of these strings carry one. The single-character ellipsis is not
 	 * one of the holes: it paints three pixels, where a glyph the font lacks paints
 	 * the .notdef box instead.

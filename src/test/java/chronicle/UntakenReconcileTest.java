@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026, Chronicle — BSD 2-Clause (see LICENSE).
+ * Copyright (c) 2026, Chronicle. BSD 2-Clause (see LICENSE).
  */
 package chronicle;
 
@@ -16,7 +16,7 @@ import static org.junit.Assert.assertEquals;
 
 /**
  * The uncollected ledger keeps the same leavings by source, by item and by the pair.
- * The pairs carry the detail, so the by-item totals are rebuilt from them on load —
+ * The pairs carry the detail, so the by-item totals are rebuilt from them on load,
  * but only when the pairs account for every source, since that is what makes them
  * safe to sum.
  */
@@ -53,7 +53,7 @@ public class UntakenReconcileTest
 	@Test
 	public void byItemTotalsAreRebuiltFromThePairs() throws Exception
 	{
-		// Bones is inflated and Swamp tar has no pair at all — the shape left behind
+		// Bones is inflated and Swamp tar has no pair at all: the shape left behind
 		// when something edits one store and not the others.
 		write("{\"schema\":1,\"rsn\":\"Tester\","
 			+ "\"untaken\":{\"Dust devil\":{\"qty\":12,\"value\":120}},"

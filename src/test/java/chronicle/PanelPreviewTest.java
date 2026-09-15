@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026, Chronicle — BSD 2-Clause (see LICENSE).
+ * Copyright (c) 2026, Chronicle. BSD 2-Clause (see LICENSE).
  */
 package chronicle;
 
@@ -1568,7 +1568,7 @@ public class PanelPreviewTest
 		@Override
 		String statusLine()
 		{
-			return "Journaling locally — nothing leaves this computer.";
+			return "Journaling locally. Nothing leaves this computer.";
 		}
 
 		@Override

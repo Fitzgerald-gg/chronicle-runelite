@@ -31,7 +31,7 @@ so the record starts years back rather than empty.
 ## How the collection log is read
 
 Two ways, both driven by you. Logging in gives the completion fraction from varps. Opening the
-log yourself gives the pages you look at — and, on that same open, Chronicle fires the log's own
+log yourself gives the pages you look at, and, on that same open, Chronicle fires the log's own
 Search operation so the server transmits every page at once, which is how one open records the
 whole log instead of only the tab you happened to click.
 
@@ -46,8 +46,8 @@ through a POH adventure log. No log, no read.
 ## Import
 
 The Journal tab can merge another copy of the same account's record: a backup, another computer,
-or one kept for you elsewhere. Every store merges as a floor — per-key maximum, earliest
-first-sighting, best personal best — so importing twice changes nothing and an older file can
+or one kept for you elsewhere. Every store merges as a floor (per-key maximum, earliest
+first-sighting, best personal best), so importing twice changes nothing and an older file can
 never lower what you already hold. A `<name>.history.jsonl` sitting beside the journal comes
 across too.
 
@@ -69,13 +69,13 @@ additionally sends a copy of the journal upward on the write interval and at log
 - Your own account only. Another player's stats, drops or activity are never submitted.
 - What travels: your display name, your account type, and your RuneLite account hash, alongside
   event data (raw item ids and quantities), counter totals, per-skill XP, collection-log and
-  achievement snapshots, and — on a group ironman — shared-storage movements. The account hash is
+  achievement snapshots, and, on a group ironman, shared-storage movements. The account hash is
   what lets a server follow an in-game rename without re-keying an alt that shares a token.
 - No images. Chronicle takes no screenshots, so nothing it sends can carry another player's name
   or a line of chat.
 
 > With cloud sync enabled the plugin transmits your player data, and your IP address, to the
-> server you configure — a third-party server not controlled or verified by the RuneLite
+> server you configure, a third-party server not controlled or verified by the RuneLite
 > developers. With it off, Chronicle never touches the network.
 
 ## The panel
@@ -92,8 +92,8 @@ the source's view from anywhere.
 
 Two of RuneLite's built-in plugins, declared with `@PluginDependency`: **Slayer**, so kills can be
 tagged on-task, and **Loot Tracker**, whose event carries chest, casket and pickpocket loot and whose stored
-archive a late install inherits. Disable either and only that slice stops — on-task tagging
-without Slayer, chest, casket and pickpocket loot without Loot Tracker — while everything else keeps
+archive a late install inherits. Disable either and only that slice stops: on-task tagging
+without Slayer, chest, casket and pickpocket loot without Loot Tracker, while everything else keeps
 working. The panel does not flag it, so RuneLite's own plugin list is where to check. No
 third-party plugins are needed.
 
