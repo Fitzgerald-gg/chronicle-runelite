@@ -23,7 +23,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class FoldRegisterTest
 {
-	// one key of every shape the register carries today
+	// A key of each shape this file drives: a Stats section, a Stats verb, a pets
+	// page and Home's xp. The register carries more shapes than these, the session
+	// strip's "session:" keys and the History view's "history:" keys, and nothing
+	// here toggles those.
 	private static final String STATS_SECTION = "Skilling:Roads";
 	private static final String STATS_VERB = "Skilling:craft:smelted";
 	private static final String PETS_PAGE = "pets:All Pets:Abyssal orphan";

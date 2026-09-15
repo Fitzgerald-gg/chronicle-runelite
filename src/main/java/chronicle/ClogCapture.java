@@ -76,7 +76,9 @@ public class ClogCapture
 	private final Client client;
 	private final ItemManager itemManager;
 
-	// byCat: page -> {item name: quantity}. kcs: page -> kill count.
+	// byCat: page -> {item name: quantity}. kcs: page -> the first counted
+	// line on its header, which is not always a kill count: Wintertodt's
+	// counts rewards claimed, 1,078 where 447 were killed.
 	private final Map<String, Map<String, Integer>> byCat = new HashMap<>();
 	private final Map<String, Integer> kcs = new HashMap<>();
 	// page -> {label: count}, every counter the page carries under the name the

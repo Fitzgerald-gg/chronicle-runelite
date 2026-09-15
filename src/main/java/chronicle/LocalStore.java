@@ -28,10 +28,10 @@ import net.runelite.client.game.ItemManager;
  * the record the side panel reads, and it never leaves this computer.
  *
  * <p>Threading: {@link #record} and {@link #setCharacter} run on the client thread
- * (they read {@link ItemManager}); {@link #load} and {@link #flush} run on a
- * background executor. The in-memory model is guarded by {@link #lock}, and the
- * file-writing methods hold it only long enough to serialise a string, so the
- * client thread never blocks on I/O.
+ * ({@link #record} prices through {@link ItemManager}); {@link #load} and
+ * {@link #flush} run on a background executor. The in-memory model is guarded by
+ * {@link #lock}, and the file-writing methods hold it only long enough to
+ * serialise a string, so the client thread never blocks on I/O.
  */
 @Singleton
 @Slf4j
@@ -505,7 +505,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** What the dated roll holds for a window, or null when it holds nothing. */
+	/** What the dated roll holds for a window; every figure zero and every list
+	 *  empty when the window holds nothing. */
 	static final class LootWindow
 	{
 		long loots;
@@ -1743,7 +1744,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** The journey as the journal knows it, shaped for the panel (newest first). */
 	/**
 	 * Every item the slayer journey logged inside a window, summed across tasks and
 	 * ranked by what it came to. A task carries the stamp of its own close, so this
@@ -2251,6 +2251,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return new long[]{kills, superiors, tasks};
 	}
 
+	/** The journey as the journal knows it, shaped for the panel (newest first). */
 	chronicle.ChronicleApiClient.SlayerJourney slayerJourney()
 	{
 		synchronized (lock)
@@ -4163,10 +4164,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/**
-	 * Loose identity for a source: the collection log says "Tormented Demons"
-	 * where the ledger says "Tormented Demon", and they are one thing.
-	 */
-	/**
 	 * Fold the chat box's counts into a set of counts already keyed by source.
 	 *
 	 * <p>Folded into the game's OWN counts, not into everything known: the
@@ -4280,6 +4277,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return n.startsWith("the ") ? n.substring(4) : n;
 	}
 
+	/**
+	 * Loose identity for a source: the collection log says "Tormented Demons"
+	 * where the ledger says "Tormented Demon", and they are one thing.
+	 */
 	static String kindOf(String name)
 	{
 		String n = name == null ? "" : name.trim().toLowerCase(java.util.Locale.ROOT);

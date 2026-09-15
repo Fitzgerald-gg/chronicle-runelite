@@ -676,11 +676,6 @@ public class MovementStatTracker implements StatTracker
 		return Text.removeTags(kids[index].getText()).trim();
 	}
 
-	// whether a chat menu is on screen: the chatbox options (group 219) or the
-	// scrollable list (group 187). Only asked while a teleport is pending, so an idle
-	// tick consults no widget. Group 187 names no UNIVERSE; its child 0 is LJ_LAYER2
-	// in gameval naming, and the list layer LJ_LAYER1 is read as well in case the
-	// root's visibility reads differently live.
 	// whether the pending is one whose destination is chosen from a chat menu
 	private boolean awaitsAMenu()
 	{
@@ -690,6 +685,12 @@ public class MovementStatTracker implements StatTracker
 			|| "spirit tree".equals(pendingLabel);
 	}
 
+	// whether a chat menu is on screen: the chatbox options (group 219), the
+	// scrollable list (group 187) or the newer list (group 947). Only asked while a
+	// teleport is pending, so an idle tick consults no widget. Group 187 names no
+	// UNIVERSE; its child 0 is LJ_LAYER2 in gameval naming, and the list layer
+	// LJ_LAYER1 is read as well in case the root's visibility reads differently
+	// live.
 	private boolean chatMenuOpen()
 	{
 		return showing(InterfaceID.Chatmenu.UNIVERSE)

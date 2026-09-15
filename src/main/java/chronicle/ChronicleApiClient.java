@@ -244,10 +244,11 @@ public class ChronicleApiClient
 		});
 	}
 
-	// Sends the collection log as {by_cat, kcs, slayer_kcs, cat_counts,
-	// clog_items, finished, available}. clog_items is every obtained item from a
-	// full-log read; slayer_kcs is per-monster lifetime kills. The server
-	// floor-merges partial snapshots; sending whatever has been scraped is fine.
+	// Sends the collection log as {by_cat, kcs, kc_lines, pb_lines, slayer_kcs,
+	// cat_counts, clog_items, finished, available}. clog_items is every obtained
+	// item from a full-log read; slayer_kcs is per-monster lifetime kills. The
+	// server floor-merges partial snapshots; sending whatever has been scraped
+	// is fine.
 	public void pushClog(String baseUrl, String token, String name, Map<String, Object> snapshot)
 	{
 		HttpUrl url = resolve(baseUrl, "api/clog/" + token);

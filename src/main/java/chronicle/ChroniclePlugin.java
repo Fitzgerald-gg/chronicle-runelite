@@ -962,20 +962,18 @@ public class ChroniclePlugin extends Plugin
 	// log's bosses and activities by kill count, raised by every drop-ledger
 	// source at the most any record has seen of it (LocalStore.sourceKills: its
 	// kill-count line, its loot events, the log's count for the page of the same
-	// name), under the log's spelling where the two name one thing. A page the
-	// ledger never saw loot from stands at the log's count; a paged source's
-	// figure already holds the page's count, so it stands in for it outright.
+	// name), under the log's spelling where the two name one thing. A paged
+	// source's figure already holds the page's count, so it stands in for it
+	// outright, and a page nothing else has counted stands at the log's count.
+	// But a page counter need not be counting kills at all, so what the game
+	// itself has stated -- the Kill Log, or the chat line it prints on the kill
+	// -- goes on first and the ledger floors that back up; a name only the chat
+	// box has ever counted comes in under its own. The order below is the whole
+	// of it.
 	Map<String, Long> killCounts()
 	{
 		JsonObject cl = localStore.clogSnapshot();
 		Map<String, Long> out = LocalStore.clogKillCounts(cl);
-		// The Kill Log OVERRIDES both, rather than joining them at a max. A
-		// collection log page's header counter is not always a kill count --
-		// Wintertodt's counts rewards claimed, and read as kills it said 1,078
-		// where 447 were killed -- and a loot tally counts rows, which is how a
-		// notable drop imported without a kill put Zalcano one above its own log.
-		// The Kill Log is the game counting the encounter, so where it speaks it
-		// is the answer.
 		// What the game itself says about the encounter: the Kill Log, and the chat
 		// line it prints on the kill. The Kill Log only moves when the player opens
 		// an interface, so a number resting on it alone is frozen between visits;
@@ -984,10 +982,6 @@ public class ChroniclePlugin extends Plugin
 		// the two the larger is the later reading.
 		Map<String, Long> stated = LocalStore.killLogCounts(cl);
 		LocalStore.foldChatCounts(stated, localStore.chatKillCounts(), out.keySet());
-		// A bare reading is a FLOOR. It was true when somebody last opened that
-		// interface and knows nothing of what has happened since, so it may not
-		// pull a live count down: Abyssal demons read 1,798 from a stale Kill Log
-		// beside the 2,346 the ledger had actually watched.
 		// A statement always beats the page counter, which need not be counting
 		// kills at all: Wintertodt's page counts rewards claimed and says 1,078
 		// where 448 were killed, and the larger of those two is the lie.
@@ -1188,7 +1182,8 @@ public class ChroniclePlugin extends Plugin
 			localStore.achievements(), pets);
 	}
 
-	// True once this session produced an on-task slayer kill.
+	// True once a kill landed while a slayer task was live this session,
+	// on-task or not.
 	boolean slayerSeenThisSession()
 	{
 		return eventCapture.slayerSeenThisSession();

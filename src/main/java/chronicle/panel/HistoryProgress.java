@@ -514,7 +514,8 @@ public final class HistoryProgress
 		add(out, c, gp, "dropsReceived");
 		// the kills whose loot was all picked up: received less the kills that
 		// left a stack, floored where more kills left something than the period
-		// counted, and drawn whenever the period received anything
+		// counted, and drawn only where the period received something and the
+		// record can date what was left
 		long received = at(c, "dropsReceived");
 		if (received > 0 && leftDated)
 		{

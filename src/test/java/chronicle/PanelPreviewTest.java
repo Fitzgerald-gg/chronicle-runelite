@@ -31,9 +31,10 @@ import org.mockito.Mockito;
 
 /**
  * Renders every ChroniclePanel surface to a PNG under {@code build/panel-preview/}
- * with no client and no login: a fixture set first, then a second set read from the
- * real journal in {@code ~/.runelite/chronicle/} when there is one. Also a
- * regression test, since a surface that throws while building fails here.
+ * with no client and no login: a fixture set first, then a second set read from
+ * the real journal in {@code ~/.runelite/chronicle/} when
+ * {@code -Dchronicle.realJournal} asks for it. Also a regression test, since a
+ * surface that throws while building fails here.
  */
 public class PanelPreviewTest
 {
@@ -1029,7 +1030,6 @@ public class PanelPreviewTest
 		return d.atTime(12, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
 	}
 
-	// a second stub fed from the real journal on this machine, when there is one
 	/**
 	 * A plugin fed from a named journal in a named directory.
 	 *
@@ -1077,6 +1077,8 @@ public class PanelPreviewTest
 		return s;
 	}
 
+	// the same assembly again, fed from the real journal on this machine, when
+	// there is one
 	private StubPlugin realJournalPlugin()
 	{
 		File dir = new File(System.getProperty("user.home"), ".runelite/chronicle");
@@ -1169,9 +1171,6 @@ public class PanelPreviewTest
 		return stem;
 	}
 
-	// A sprite cache that answers, so the shots show what a line wears when the
-	// record has no item for it: a plain lozenge stands in for the game's own
-	// sidebar sprite, which only a running client can hand over.
 	/**
 	 * The sprite cache, answered with the game's own art where it has been dumped
 	 * out of the cache (-Dchronicle.exampleSprites=&lt;dir&gt; holding
@@ -1666,9 +1665,9 @@ public class PanelPreviewTest
 
 		final Map<String, Long> kcs = new LinkedHashMap<>();
 
-		// headless: the facet strip falls back to its words. Set to have the
-		// manager throw, the way the real one does when asked off the client
-		// thread.
+		// headless: nothing wears a sprite, so the icon columns simply stay
+		// empty. Set to have the manager throw, the way the real one does when
+		// asked off the client thread.
 		boolean spritesThrow;
 		// a manager that counts what it is asked for, so a test can prove the
 		// panel asks once and not once a build
