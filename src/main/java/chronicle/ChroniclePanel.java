@@ -2287,6 +2287,20 @@ class ChroniclePanel extends PluginPanel
 	 * close one. A pill that disappears because you changed the period, leaving
 	 * the reading it set still in force, is a control the reader cannot undo.
 	 */
+	/** Whether any of what the tasks paid is of this kind. */
+	private boolean hasKindOnTask(String kind)
+	{
+		for (String name : taskItemsEver().keySet())
+		{
+			String k = ItemKinds.kindOf(name);
+			if (UNFILED.equals(kind) ? k == null : kind.equals(k))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private boolean everOnTask()
 	{
 		return !taskItemsEver().isEmpty();
@@ -3616,16 +3630,28 @@ class ChroniclePanel extends PluginPanel
 	 * The on-task loot board, narrowed to one kind of thing. What the search
 	 * offers when a reader types the name of a kind.
 	 */
-	void openLootKind(String kind)
+	/**
+	 * A kind of thing, opened on the loot tracker.
+	 *
+	 * <p>The WHOLE ledger, not the slayer board. This used to land on PvM's
+	 * Slayer tab with its Drops lens up, so a reader who typed "runes" wanting
+	 * every rune they had ever been given was shown only the ones tasks paid,
+	 * with nothing on screen saying so. The on-task reading is still one click
+	 * away, and search offers it as its own row when there is one.
+	 */
+	void openLootKind(String kind, boolean onTask)
 	{
 		tab = Tab.PVM;
-		subByTab.put(Tab.PVM, "Slayer");
-		slayerLens = "Drops";
+		subByTab.put(Tab.PVM, "Loot");
 		applyCommon();
-		// applyCommon clears the lens the way opening a tab does, so the kind is
-		// set AFTER it. applyCommon ends with a rebuild of its own, so this costs
-		// two boards: the first unnarrowed, thrown away by the second. Both run
-		// inside one EDT event, so the reader only ever sees the narrowed one.
+		// applyCommon clears where the reader was standing, the way opening a
+		// tab does, so the kind and the lens are set AFTER it. applyCommon ends
+		// with a rebuild of its own, so this costs two boards: the first
+		// unnarrowed, thrown away by the second. Both run inside one EDT event,
+		// so the reader only ever sees the narrowed one.
+		dropsLeftBehind = false;
+		dropsByKind = true;
+		onTaskOnly = onTask;
 		lootKind = kind;
 		rebuild();
 	}
@@ -9046,12 +9072,23 @@ class ChroniclePanel extends PluginPanel
 			// holds the loot, already narrowed. Typing "run" is enough.
 			if (kind != null)
 			{
-				JPanel open = row(kind, "on-task loot", null);
+				final String pick = kind;
+				JPanel open = row(kind, "every one you have had", null);
 				open.setCursor(java.awt.Cursor.getPredefinedCursor(
 					java.awt.Cursor.HAND_CURSOR));
-				final String pick = kind;
-				open.addMouseListener(clicker(() -> openLootKind(pick)));
+				open.addMouseListener(clicker(() -> openLootKind(pick, false)));
 				p.add(open);
+				// The slayer half as its own row rather than as a setting the
+				// reader has to find, and only where the tasks actually paid
+				// some of this kind.
+				if (everOnTask() && hasKindOnTask(pick))
+				{
+					JPanel tasks = row(kind, "from slayer tasks", null);
+					tasks.setCursor(java.awt.Cursor.getPredefinedCursor(
+						java.awt.Cursor.HAND_CURSOR));
+					tasks.addMouseListener(clicker(() -> openLootKind(pick, true)));
+					p.add(tasks);
+				}
 			}
 			p.add(vgap(6));
 		}
