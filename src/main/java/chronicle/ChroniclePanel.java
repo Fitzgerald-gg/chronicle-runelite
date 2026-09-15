@@ -572,7 +572,10 @@ class ChroniclePanel extends PluginPanel
 		slayerShown = ROW_CAP;
 		lootKind = null;
 		lootTask = null;
-		dropsByKind = false;
+		// dropsByKind is NOT cleared. It is a lens, like "Left behind" beside
+		// it, and a reader who chose to read the ledger by kind has not asked
+		// to be put back on sources every time they look at another tab. What
+		// IS cleared is where they were standing inside it.
 		drillShown.clear();
 		histListShown.clear();
 		detailItem = null;
@@ -2097,6 +2100,18 @@ class ChroniclePanel extends PluginPanel
 			return p;
 		}
 		LocalStore.LootWindow w = plugin.lootBetween(win.start, win.end);
+		// The roll keeps the window's ITEMS beside its sources, so the kind lens
+		// answers a period with the same two screens it draws over the whole
+		// ledger: what the month paid in runes, rather than what every month did.
+		if (!dropsLeftBehind && dropsByKind)
+		{
+			if (w.items.isEmpty())
+			{
+				p.add(note("Nothing taken inside " + win.label + "."));
+				return p;
+			}
+			return kindLens(p, win.label, bagOf(w.items), "win:");
+		}
 		List<String[]> ranked = dropsLeftBehind ? w.leftItems : w.sources;
 		if (ranked.isEmpty())
 		{
@@ -2142,6 +2157,21 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
+	/**
+	 * The roll's own rows as a bag. The roll holds a name, a count and a worth
+	 * per item and no id, which is all the kind lens reads: the taxonomy is
+	 * keyed by name, and so is the drill the row opens.
+	 */
+	private static List<LocalStore.BagItem> bagOf(List<String[]> rows)
+	{
+		List<LocalStore.BagItem> bag = new ArrayList<>();
+		for (String[] r : rows)
+		{
+			bag.add(new LocalStore.BagItem(0, r[0], safeParse(r[1]), safeParse(r[2])));
+		}
+		return bag;
+	}
+
 	private boolean dropsLeftBehind;
 	// Which KIND of thing the loot boards are narrowed to, or null for all of
 	// them. A kind is a question a reader actually has -- "what have the tasks
@@ -2174,6 +2204,21 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(lens);
 		p.add(vgap(6));
+		// The whole ledger, read the other way round: by what the thing IS
+		// rather than by what dropped it. "Every rune I have ever had" is a
+		// question about the record and had no board that could answer it.
+		//
+		// Offered on every period. It used to be drawn below the window branch,
+		// so choosing anything but Lifetime took the control off the board
+		// entirely -- and the roll dates its items as well as its sources, so
+		// there was never a reason it could not answer a window.
+		//
+		// Not offered on "Left behind", which is a list of items already: there
+		// is nothing there to group the other way.
+		if (!dropsLeftBehind)
+		{
+			p.add(groupingPicker());
+		}
 		// The period governs this board too. The ledger's running totals cannot be
 		// narrowed, but the loot ROLL can: it keeps one entry a day holding what
 		// was taken and what was left, with the items and sources beside them, so
@@ -2187,10 +2232,6 @@ class ChroniclePanel extends PluginPanel
 		{
 			return buildLeftBehind(p);
 		}
-		// The whole ledger, read the other way round: by what the thing IS
-		// rather than by what dropped it. "Every rune I have ever had" is a
-		// question about the record and had no board that could answer it.
-		p.add(groupingPicker());
 		if (dropsByKind)
 		{
 			return buildLootByKind(p);
@@ -2284,18 +2325,31 @@ class ChroniclePanel extends PluginPanel
 			p.add(note("Drops appear here as you play: every kill, priced as it lands."));
 			return p;
 		}
-		long[] sum = tallyOf(bag);
+		return kindLens(p, "Everything dropped", bag, "all:");
+	}
+
+	/**
+	 * A bag read by what its items ARE: the kinds it folds into, or one of them
+	 * opened out.
+	 *
+	 * <p>The same two screens wherever the bag came from -- the whole ledger, a
+	 * window of it, one slayer task -- so they are built once. A board that
+	 * grew its own answer to being drilled would be a board that disagreed with
+	 * the others about what the reader is looking at.
+	 *
+	 * @param title what the summary card above the kinds is called
+	 * @param key   what an opened kind remembers its row cap under, so two
+	 *              boards drilled into Runes do not share one cap
+	 */
+	private JPanel kindLens(JPanel p, String title, List<LocalStore.BagItem> bag,
+		String key)
+	{
+		final long[] sum = tallyOf(bag);
 		if (lootKind != null)
 		{
-			final List<LocalStore.BagItem> kept = ofKind(bag);
-			p.add(copyHeader(lootKind, () -> copyPicture(
-				lootPicture(lootKind, kept, tallyOf(kept)), true)));
-			p.add(backToKinds(kept.size()));
-			addBagRows(p, kept, drillShown.getOrDefault("all:" + lootKind, ROW_CAP),
-				"all:" + lootKind);
-			return p;
+			return kindDrill(p, bag, key);
 		}
-		JPanel head = card("Everything dropped");
+		JPanel head = card(title);
 		head.add(row("Items", fmt(sum[0]), accent()));
 		head.add(row("Worth", gp(sum[1]) + " gp", null));
 		head.add(row("Distinct items", fmt(bag.size()), null));
@@ -2303,15 +2357,15 @@ class ChroniclePanel extends PluginPanel
 		p.add(vgap(6));
 		java.util.LinkedHashMap<String, java.util.function.BooleanSupplier> ways =
 			new java.util.LinkedHashMap<>();
-		ways.put("These kinds", () -> copyPicture(ledgerKindsPicture(bag, sum)));
-		ways.put("Every item", () -> copyPicture(
-			lootPicture("Everything dropped", bag, sum), true));
+		ways.put("These kinds", () -> copyPicture(ledgerKindsPicture(title, bag, sum)));
+		ways.put("Every item", () -> copyPicture(lootPicture(title, bag, sum), true));
 		p.add(copyHeader("Drops", ways));
 		for (Kind k : kindsOf(bag))
 		{
 			JPanel r = row(k.name, fmt(k.qty) + " \u00b7 " + gp(k.value) + " gp", accent());
 			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-			r.setToolTipText(fmt(k.kinds) + (k.kinds == 1 ? " kind" : " kinds") + " of thing");
+			r.setToolTipText(fmt(k.distinct)
+				+ (k.distinct == 1 ? " distinct item" : " distinct items"));
 			final String pick = k.name;
 			r.addMouseListener(clicker(() ->
 			{
@@ -2323,11 +2377,45 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
+	/**
+	 * One kind of a bag, opened out: what it came to, the way back, and then
+	 * its items. Every board that offers kinds drills through here.
+	 */
+	private JPanel kindDrill(JPanel p, List<LocalStore.BagItem> bag, String key)
+	{
+		final List<LocalStore.BagItem> kept = ofKind(bag);
+		final long[] mine = tallyOf(kept);
+		// The head is the KIND's, not the bag's. It used to carry the whole
+		// bag's totals under the kind's name, which is a number that is wrong
+		// in the most believable way available.
+		JPanel head = card(lootKind);
+		head.add(row("Items", fmt(mine[0]), accent()));
+		head.add(row("Worth", gp(mine[1]) + " gp", null));
+		head.add(row("Distinct items", fmt(kept.size()), null));
+		p.add(head);
+		p.add(vgap(6));
+		p.add(backToKinds(kept.size()));
+		if (kept.isEmpty())
+		{
+			// reachable: a kind opened at one period, or under every task, and
+			// then a narrower one chosen that holds none of it. A board that
+			// draws nothing at all leaves the reader wondering what broke.
+			p.add(note("Nothing of this kind here."));
+			return p;
+		}
+		p.add(copyHeader(lootKind, () -> copyPicture(
+			lootPicture(lootKind, kept, mine), true)));
+		addBagRows(p, kept, drillShown.getOrDefault(key + lootKind, ROW_CAP),
+			key + lootKind);
+		return p;
+	}
+
 	/** The ledger's kinds as a picture. */
-	private JPanel ledgerKindsPicture(List<LocalStore.BagItem> bag, long[] sum)
+	private JPanel ledgerKindsPicture(String title, List<LocalStore.BagItem> bag,
+		long[] sum)
 	{
 		JPanel page = column();
-		JPanel head = card("Everything dropped");
+		JPanel head = card(title);
 		head.add(row("Items", fmt(sum[0]), accent()));
 		head.add(row("Worth", gp(sum[1]) + " gp", null));
 		head.add(row("Distinct items", fmt(bag.size()), null));
@@ -2610,22 +2698,19 @@ class ChroniclePanel extends PluginPanel
 		}
 		final long qty = count;
 		final long value = worth;
+
+		// Drilled into one kind: that kind's items, which is the only place the
+		// individual rows still live. The task picker stays above it, because
+		// changing task is the other half of the question being asked.
+		if (lootKind != null)
+		{
+			p.add(taskPicker());
+			return kindDrill(p, bag, "task:");
+		}
 		final long[] tally = plugin.onTaskTally(from, to);
 		p.add(onTaskHead(bag.size(), qty, value, lootTask == null ? tally : null));
 		p.add(vgap(6));
 		p.add(taskPicker());
-
-		// Drilled into one kind: that kind's items, which is the only place the
-		// individual rows still live.
-		if (lootKind != null)
-		{
-			final List<LocalStore.BagItem> kept = ofKind(bag);
-			p.add(copyHeader(lootKind, () -> copyPicture(
-				lootPicture(lootKind, kept, tallyOf(kept)), true)));
-			p.add(backToKinds(kept.size()));
-			addBagRows(p, kept, drillShown.getOrDefault(lootKind, ROW_CAP), lootKind);
-			return p;
-		}
 
 		// Otherwise the kinds, which is what makes this board readable: two
 		// hundred and eighty seven rows became sixteen, and the question a
@@ -2642,12 +2727,12 @@ class ChroniclePanel extends PluginPanel
 		{
 			JPanel r = row(k.name, fmt(k.qty) + " \u00b7 " + gp(k.value) + " gp", accent());
 			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-			r.setToolTipText(fmt(k.kinds) + (k.kinds == 1 ? " kind" : " kinds")
-				+ " of thing");
+			r.setToolTipText(fmt(k.distinct)
+				+ (k.distinct == 1 ? " distinct item" : " distinct items"));
 			final String pick = k.name;
 			r.addMouseListener(clicker(() ->
 			{
-				lootKind = UNFILED.equals(pick) ? UNFILED : pick;
+				lootKind = pick;
 				rebuildInPlace();
 			}));
 			p.add(r);
@@ -2730,7 +2815,8 @@ class ChroniclePanel extends PluginPanel
 		final String name;
 		long qty;
 		long value;
-		int kinds;
+		// how many distinct items this kind holds, which is not a count of kinds
+		int distinct;
 
 		Kind(String name)
 		{
@@ -2755,17 +2841,17 @@ class ChroniclePanel extends PluginPanel
 			Kind row = by.computeIfAbsent(k == null ? UNFILED : k, Kind::new);
 			row.qty += b.qty;
 			row.value += b.value;
-			row.kinds++;
+			row.distinct++;
 		}
 		List<Kind> out = new ArrayList<>(by.values());
 		out.sort(Comparator.comparingLong((Kind k) -> k.value).reversed());
 		return out;
 	}
 
-	/** The way back out of one kind, and what it holds. */
+	/** The way back out of one kind, and how many distinct items it holds. */
 	private JPanel backToKinds(int held)
 	{
-		JPanel r = row("< All kinds", fmt(held) + (held == 1 ? " kind" : " kinds"), null);
+		JPanel r = row("< All kinds", fmt(held) + (held == 1 ? " item" : " items"), null);
 		JLabel back = (JLabel) ((BorderLayout) r.getLayout())
 			.getLayoutComponent(BorderLayout.CENTER);
 		back.setFont(FontManager.getRunescapeSmallFont());
