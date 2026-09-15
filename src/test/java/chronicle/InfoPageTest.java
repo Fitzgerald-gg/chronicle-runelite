@@ -171,4 +171,34 @@ public class InfoPageTest
 		assertFalse(has(said, "2020"));
 		assertFalse(has(said, "Sept"));
 	}
+
+	/**
+	 * The back row leaves. It is not a page anybody drilled into, so it is not
+	 * on the detail stack, and popping an empty stack left the reader standing
+	 * on the page they were trying to leave.
+	 */
+	@Test
+	public void theBackRowLeaves() throws Exception
+	{
+		ChroniclePanel p = panel();
+		java.lang.reflect.Field f = ChroniclePanel.class.getDeclaredField("showInfo");
+		f.setAccessible(true);
+		f.setBoolean(p, true);
+		java.lang.reflect.Method back =
+			ChroniclePanel.class.getDeclaredMethod("backDetail");
+		back.setAccessible(true);
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				back.invoke(p);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		assertFalse("back left the reader on the page they were leaving",
+			f.getBoolean(p));
+	}
 }
