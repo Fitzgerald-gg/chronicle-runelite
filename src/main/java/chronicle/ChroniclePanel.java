@@ -583,7 +583,8 @@ class ChroniclePanel extends PluginPanel
 		detailItem = null;
 		detailSource = null;
 		detailSkill = null;
-		allTrackers = false;
+		// A tab click leaves them too, which is the half that bricked the strip.
+		leaveSentPage();
 		detailTask = -1;
 		leftBehindSource = null;
 		leftBehindItem = null;
@@ -3618,8 +3619,23 @@ class ChroniclePanel extends PluginPanel
 	// The pivot navigation: item view ⇄ source view
 	// ------------------------------------------------------------------
 
+	/**
+	 * Leave whichever whole-panel page the reader was SENT to.
+	 *
+	 * <p>rebuild() picks the first of these it finds and it looks for them
+	 * BEFORE it looks at the tab, so one left standing by a navigation that did
+	 * not think about it beats wherever the reader was actually going. That is
+	 * how the info page bricked the tab strip: every click rebuilt it.
+	 */
+	private void leaveSentPage()
+	{
+		allTrackers = false;
+		showInfo = false;
+	}
+
 	void openItem(String name)
 	{
+		leaveSentPage();
 		pushDetail();
 		detailItem = name;
 		detailSource = null;
@@ -3698,8 +3714,8 @@ class ChroniclePanel extends PluginPanel
 	/** What the journal holds, counted. Found by typing, not by a tab. */
 	void openInfo()
 	{
+		leaveSentPage();
 		showInfo = true;
-		allTrackers = false;
 		detailItem = null;
 		detailSource = null;
 		detailSkill = null;
@@ -3711,6 +3727,7 @@ class ChroniclePanel extends PluginPanel
 	/** Every tracker the record keeps, in one place. */
 	void openAllTrackers()
 	{
+		leaveSentPage();
 		allTrackers = true;
 		detailItem = null;
 		detailSource = null;
@@ -3753,6 +3770,7 @@ class ChroniclePanel extends PluginPanel
 	/** One skill under the glass, from its own cell in the grid. */
 	void openSkill(String craft)
 	{
+		leaveSentPage();
 		detailSkill = craft;
 		detailItem = null;
 		detailSource = null;
@@ -3763,6 +3781,7 @@ class ChroniclePanel extends PluginPanel
 
 	void openSource(String name)
 	{
+		leaveSentPage();
 		pushDetail();
 		detailSource = name;
 		detailItem = null;
