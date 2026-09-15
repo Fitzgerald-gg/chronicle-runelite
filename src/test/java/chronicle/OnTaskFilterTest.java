@@ -35,15 +35,19 @@ public class OnTaskFilterTest
 		+ "\"first_seen\":1600000000000,\"items\":{"
 		+ "\"536\":{\"id\":536,\"name\":\"Dragon bones\",\"qty\":300,\"value\":600},"
 		+ "\"554\":{\"id\":554,\"name\":\"Fire rune\",\"qty\":900,\"value\":900}}},"
+		+ "\"Jelly\":{\"kc\":141,\"loots\":252,\"value\":1000,\"items\":{"
+		+ "\"1\":{\"id\":1,\"name\":\"Chaos rune\",\"qty\":10,\"value\":1000}}},"
+		+ "\"Choke devil\":{\"kc\":11,\"loots\":13,\"value\":500,\"items\":{"
+		+ "\"2\":{\"id\":2,\"name\":\"Coins\",\"qty\":500,\"value\":500}}},"
 		+ "\"Zulrah\":{\"kc\":7,\"loots\":7,\"value\":900,\"items\":{"
 		+ "\"12934\":{\"id\":12934,\"name\":\"Zulrah's scales\",\"qty\":900,\"value\":900}}}"
-		+ "},\"collection_log\":{\"slayer_kcs\":{\"Blue dragons\":400}},"
+		+ "},\"collection_log\":{\"slayer_kcs\":{\"Blue dragons\":400,\"Jellies\":979}},"
 		+ "\"slayer\":{\"tasks\":["
 		+ "{\"task\":\"Blue dragons\",\"ts\":1700000000,\"kills\":145,\"value\":300000,"
 		+ "\"monsters\":{\"Blue dragon\":45,\"Baby blue dragon\":3,\"Vorkath\":97},"
 		+ "\"items\":{\"Fire rune\":{\"id\":554,\"qty\":500,\"value\":9999}}},"
 		+ "{\"task\":\"Dust devils\",\"ts\":1700100000,\"kills\":206,\"value\":400000,"
-		+ "\"monsters\":{\"Dust devil\":206},"
+		+ "\"monsters\":{\"Dust devil\":206,\"Choke devil\":13},"
 		+ "\"items\":{\"Fire rune\":{\"id\":554,\"qty\":100,\"value\":10}}}"
 		+ "]}}";
 
@@ -416,8 +420,33 @@ public class OnTaskFilterTest
 		Field lens = ChroniclePanel.class.getDeclaredField("onTaskOnly");
 		lens.setAccessible(true);
 		lens.setBoolean(p, false);
-		assertEquals("900", after(say(p, "buildDrops"), "Items"));
+		assertEquals("910", after(say(p, "buildDrops"), "Items"));
 		lens.setBoolean(p, true);
 		assertEquals("600", after(say(p, "buildDrops"), "Items"));
+	}
+
+	/**
+	 * Something that is killed says kills, however the Kill Log spells it.
+	 *
+	 * <p>Two ways a killed thing was being called looted. The Kill Log names the
+	 * assignment, "Jellies", and the ledger names the monster, "Jelly", and the
+	 * bridge between them stripped one trailing s and produced "jellie", which
+	 * meets nothing. And the Kill Log has no line at all for a superior, so a
+	 * Choke devil had no statement to be recognised by.
+	 */
+	@Test
+	public void aKilledThingSaysKillsHoweverItIsSpelled() throws Exception
+	{
+		ChroniclePanel p = panel();
+		List<String> jelly = say(p, "buildSourceDetail", "Jelly");
+		assertEquals("the Kill Log's plural never reached the ledger's singular",
+			"979", after(jelly, "Kills"));
+
+		// a superior the Kill Log does not list, recognised by the task it was
+		// fought on instead
+		List<String> choke = say(p, "buildSourceDetail", "Choke devil");
+		assertTrue("a superior killed on a task was called looted",
+			has(choke, "Kills"));
+		assertFalse(has(choke, "Times looted"));
 	}
 }
