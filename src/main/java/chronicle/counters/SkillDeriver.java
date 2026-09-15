@@ -267,7 +267,7 @@ public class SkillDeriver
 		return NPC_LEVEL.matcher(target).replaceFirst("").trim();
 	}
 
-	// "You plant 3 potato seeds in the allotment." — the crop is whatever sits
+	// "You plant 3 potato seeds in the allotment." The crop is whatever sits
 	// in front of the seed noun, and the count in the line is the seeds one
 	// planting takes, not a number of plantings. A line naming no seed (the
 	// quest lines that also start "You plant ") matches nothing and leaves the

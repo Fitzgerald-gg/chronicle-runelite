@@ -80,7 +80,7 @@ public class MagicStatTracker implements StatTracker
 	private final StatStore store;
 	private final Client client;
 
-	// Coins at the last inventory event. -1 until primed — the stack already in the pack
+	// Coins at the last inventory event. -1 until primed: the stack already in the pack
 	// at login is not income.
 	private int lastCoins = -1;
 	// A coin gain this tick still waiting to see if an alch pose explains it.

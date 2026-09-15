@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026, Chronicle — BSD 2-Clause (see LICENSE).
+ * Copyright (c) 2026, Chronicle. BSD 2-Clause (see LICENSE).
  */
 package chronicle;
 
@@ -28,8 +28,8 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * A collection log pets page is a list of names and nothing else. Each name that has
- * something under it — where an owned pet came from, or how far the chase for an
- * unearned one has run — gives it up on a click and takes it back on the next. A name
+ * something under it (where an owned pet came from, or how far the chase for an
+ * unearned one has run) gives it up on a click and takes it back on the next. A name
  * with nothing under it is not a fold at all.
  *
  * <p>The state is the panel's one fold register, the same Set every other fold in the

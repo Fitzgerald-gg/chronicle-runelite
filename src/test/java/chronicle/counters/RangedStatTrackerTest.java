@@ -163,7 +163,7 @@ public class RangedStatTrackerTest
 		tick();
 		assertEquals(0, consumed());
 
-		// packAmmoAtTickStart rebaselines every tick — the 28 now lying in the pack
+		// packAmmoAtTickStart rebaselines every tick, so the 28 now lying in the pack
 		// offset nothing
 		quiver(ARROW_ID, 71);
 		tick();
