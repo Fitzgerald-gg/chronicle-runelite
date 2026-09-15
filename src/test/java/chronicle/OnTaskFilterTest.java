@@ -26,6 +26,7 @@ import static org.junit.Assert.assertTrue;
  * are worth MORE on task than in the entire ledger while never exceeding it by
  * quantity. Counts cross the filter; money does not.
  */
+@SuppressWarnings("unchecked")
 public class OnTaskFilterTest
 {
 	private static final String JOURNAL =
@@ -36,7 +37,8 @@ public class OnTaskFilterTest
 		+ "\"554\":{\"id\":554,\"name\":\"Fire rune\",\"qty\":900,\"value\":900}}},"
 		+ "\"Zulrah\":{\"kc\":7,\"loots\":7,\"value\":900,\"items\":{"
 		+ "\"12934\":{\"id\":12934,\"name\":\"Zulrah's scales\",\"qty\":900,\"value\":900}}}"
-		+ "},\"slayer\":{\"tasks\":["
+		+ "},\"collection_log\":{\"slayer_kcs\":{\"Blue dragons\":400}},"
+		+ "\"slayer\":{\"tasks\":["
 		+ "{\"task\":\"Blue dragons\",\"ts\":1700000000,\"kills\":145,\"value\":300000,"
 		+ "\"monsters\":{\"Blue dragon\":45,\"Baby blue dragon\":3,\"Vorkath\":97},"
 		+ "\"items\":{\"Fire rune\":{\"id\":554,\"qty\":500,\"value\":9999}}},"
@@ -197,8 +199,20 @@ public class OnTaskFilterTest
 	{
 		ChroniclePanel p = panel();
 		set(p, "onTaskOnly", true);
+		// the on-task figure sits with the other counts of the same fight, under
+		// a fold that opens on a click
+		Field folds = ChroniclePanel.class.getDeclaredField("openFolds");
+		folds.setAccessible(true);
+		((java.util.Set<String>) folds.get(p)).add("kcsrc:Blue dragon");
 		List<String> said = say(p, "buildSourceDetail", "Blue dragon");
-		assertEquals("45", after(said, "On task"));
+		assertEquals("the game's own count, not the ledger's", "400", after(said, "Kills"));
+		assertTrue(has(said, "What says so"));
+		// 45 DROPPED on task, which is not the same as 45 killed: the journal
+		// counts a monster on a task when it pays, and 271 of my own on-task
+		// kills paid nothing at all.
+		assertEquals("400", after(said, "Kill Log"));
+		assertEquals("300", after(said, "Drops logged"));
+		assertEquals("45", after(said, "Dropped on task"));
 		assertTrue(has(said, "Killed on task"));
 		assertEquals("45", after(said, "Task: Blue dragons"));
 		assertFalse("a monster page grew a filter it cannot honour",
@@ -300,6 +314,28 @@ public class OnTaskFilterTest
 			has(shared, "Tracked since"));
 		assertFalse("a shared picture said how dry the reader is running",
 			has(shared, "Chasing"));
-		assertTrue("the picture lost the fight itself", has(shared, "Times looted"));
+		assertTrue("the picture lost the fight itself", has(shared, "Kills"));
+	}
+
+	/**
+	 * The card in the list and the page it opens carry the same two figures.
+	 * They used to disagree: the card took the ledger's own kill count and the
+	 * page worked out another, so Nechryael read 686 on one and 1,236 on the
+	 * other, one click apart.
+	 */
+	@Test
+	public void theListCardAgreesWithThePageItOpens() throws Exception
+	{
+		ChroniclePanel p = panel();
+		List<String> card = say(p, "buildDrops");
+		List<String> page = say(p, "buildSourceDetail", "Blue dragon");
+		assertEquals("the page does not lead with the reconciled count",
+			"400", after(page, "Kills"));
+		assertTrue("the card leads with a different number than the page: " + card,
+			has(card, "400 kc"));
+		// and the rate is over drops on both, because the worth accrues per
+		// drop and dividing it by kills was reading high
+		assertTrue(has(card, "gp/drop"));
+		assertTrue(has(page, "gp/drop"));
 	}
 }

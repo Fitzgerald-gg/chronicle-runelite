@@ -3568,12 +3568,12 @@ public class HistoryProgressCardTest
 			seen.add(labels((JPanel) bd.invoke(p, "Vorkath")));
 		});
 		List<String> rift = seen.get(0);
-		assertFalse("the Rift is not killed: " + rift, rift.contains("Kills tracked"));
+		assertFalse("the Rift is not killed: " + rift, rift.contains("Kills"));
 		assertTrue(rift.toString(), rift.contains("Times looted"));
 		assertFalse("the take is still being taken: " + rift, rift.contains("The take"));
 		assertTrue(rift.toString(), rift.contains("Worth"));
 		// and a fight still says kills
-		assertTrue(seen.get(1).toString(), seen.get(1).contains("Kills tracked"));
+		assertTrue(seen.get(1).toString(), seen.get(1).contains("Kills"));
 	}
 
 	@Test

@@ -1493,6 +1493,7 @@ class ChroniclePanel extends PluginPanel
 		spanAsked = false;
 		buildTaskItems = null;
 		buildTaskKills = null;
+		taskKillsEverCache = null;
 		// rebuild() throws the whole scroll pane away and hangs a fresh one, which
 		// starts at the top. Expanded, Home is longer than the panel.
 		int priorScroll = 0;
@@ -2406,13 +2407,17 @@ class ChroniclePanel extends PluginPanel
 			JPanel card = cardPlain();
 			card.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 			card.add(row(r.name, gp(r.value) + " gp", accent()));
-			// "kc" is a kill count, and the Rift is searched rather than killed
+			// The same two figures the page behind this card shows. It used to
+			// take its own from the ledger alone and disagree with the page it
+			// opens on 42 sources: Nechryael read 686 kc here and 1,236 there.
+			// "kc" is a kill count, and the Rift is searched rather than killed.
 			boolean killed = isKillSource(r.name);
-			String sub = (r.kc > 0 ? fmt(r.kc) + (killed ? " kc" : " drops")
+			String sub = (killed ? fmt(standingKills(r)) + " kc"
 				: fmt(r.loots) + " drops")
 				+ (r.pb != null ? " · PB " + pb(r.pb) : "");
-			card.add(row(sub, r.kc > 0
-				? gp(r.value / Math.max(1, r.kc)) + (killed ? " gp/kc" : " gp each") : "", null));
+			card.add(row(sub, r.loots > 0
+				? gp(r.value / Math.max(1, r.loots))
+					+ (killed ? " gp/drop" : " gp each") : "", null));
 			final String src = r.name;
 			card.addMouseListener(clicker(() -> openSource(src)));
 			p.add(card);
@@ -4405,6 +4410,117 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
+	 * The reconciled count, floored by what this journal has actually seen.
+	 *
+	 * <p>Bridged by chatKind rather than kindOf: killCounts is keyed as the game
+	 * spells it, so the ledger's "Dust devil" has to reach "Dust devils" and its
+	 * "Mad Angel" has to reach "The Mad Angel". Twenty four of the 182 sources
+	 * need the bridge.
+	 *
+	 * <p>Floored, because a reconciled figure that came back empty would
+	 * otherwise print zero over a page full of loot. It never does on a real
+	 * journal, and a preview built from a hand-made stub is exactly where it
+	 * would.
+	 */
+	private long standingKills(LocalStore.SourceRow sr)
+	{
+		long own = sr.kc > 0 ? sr.kc : sr.loots;
+		String want = LocalStore.chatKind(sr.name);
+		for (Map.Entry<String, Long> e : plugin.killCounts().entrySet())
+		{
+			if (LocalStore.chatKind(e.getKey()).equals(want))
+			{
+				return Math.max(own, e.getValue());
+			}
+		}
+		return own;
+	}
+
+	/**
+	 * What says so: every count of this fight the record actually holds, under
+	 * the name of whoever said it.
+	 *
+	 * <p>Three kinds of statement and one observation, and they disagree because
+	 * they are counting from different places rather than because one of them is
+	 * broken. None is ever written as a share of another: Choke devil has
+	 * thirteen drops on task against the eleven the game ever stamped a count
+	 * on, because the game stamps none on a superior, and Tombs of Amascut reads
+	 * two on its page against three in the ledger.
+	 *
+	 * <p>Drawn shut, and not at all where the record holds only one figure or
+	 * where the headline matches none of them. A headline nothing accounts for
+	 * is the one outcome worse than a headline that needed explaining.
+	 */
+	private void addKillSources(JPanel head, LocalStore.SourceRow sr, long headline)
+	{
+		if (headline < 0)
+		{
+			return;
+		}
+		String want = LocalStore.chatKind(sr.name);
+		Map<String, Long> rows = new LinkedHashMap<>();
+		putKind(rows, "Kill Log", LocalStore.killLogCounts(clogNow()), want);
+		putKind(rows, "Said in chat", plugin.chatKills(), want);
+		putKind(rows, "Collection log", LocalStore.pageKillLines(clogNow()), want);
+		putKind(rows, "Running count", plugin.anchoredKills(), want);
+		if (sr.loots > 0)
+		{
+			rows.put("Drops logged", (long) sr.loots);
+		}
+		Long dropped = taskKillsEver().get(sr.name);
+		if (dropped != null && dropped > 0)
+		{
+			rows.put("Dropped on task", dropped);
+		}
+		boolean accounted = false;
+		for (Long v : rows.values())
+		{
+			accounted |= v != null && v.longValue() == headline;
+		}
+		if (rows.size() < 2 || !accounted)
+		{
+			return;
+		}
+		final String key = "kcsrc:" + sr.name;
+		head.add(quietHead("What says so", "", key));
+		if (!openFolds.contains(key))
+		{
+			return;
+		}
+		for (Map.Entry<String, Long> e : rows.entrySet())
+		{
+			head.add(row(e.getKey(), fmt(e.getValue()), null));
+		}
+	}
+
+	/** One map's figure for this source, where it has one. */
+	private static void putKind(Map<String, Long> rows, String label,
+		Map<String, Long> from, String want)
+	{
+		for (Map.Entry<String, Long> e : from.entrySet())
+		{
+			if (LocalStore.chatKind(e.getKey()).equals(want) && e.getValue() > 0)
+			{
+				rows.put(label, e.getValue());
+				return;
+			}
+		}
+	}
+
+	// Lifetime, unlike taskKills(), because every figure it stands beside is a
+	// lifetime running total and a window would put a slice among them.
+	private Map<String, Long> taskKillsEverCache;
+
+	private Map<String, Long> taskKillsEver()
+	{
+		if (taskKillsEverCache == null)
+		{
+			taskKillsEverCache = plugin.onTaskKills(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2);
+		}
+		return taskKillsEverCache;
+	}
+
+	/**
 	 * The slayer assignments this monster turned up in, newest first.
 	 *
 	 * <p>Labelled for the TASK, because that is what the figure beside it
@@ -4469,23 +4585,24 @@ class ChroniclePanel extends PluginPanel
 			// tracked" is the page telling the reader something untrue about what
 			// they did.
 			boolean killed = isKillSource(sr.name);
-			long count = sr.kc > 0 ? sr.kc : sr.loots;
-			head.add(row(killed ? "Kills tracked" : "Times looted",
-				sr.kc > 0 ? fmt(sr.kc) : fmt(sr.loots) + " drops", accent()));
+			// The same figure the board the reader just clicked was showing.
+			// This page used to work one out for itself off the ledger alone and
+			// disagree with it on 42 sources: Nechryael's card said 686 kc and
+			// its page said 686, while the game's own Kill Log says 1,236.
+			//
+			// "Tracked" has to go with it. The reconciled count carries kills
+			// from before this plugin was ever installed, so the one word the
+			// old label leaned on is the one thing it is not.
+			long shown = killed ? standingKills(sr) : sr.loots;
+			head.add(row(killed ? "Kills" : "Times looted", fmt(shown), accent()));
+			// Divided by DROPS, not by kills. sr.value accrues once per loot
+			// event beside sr.loots, so loots is the only divisor its numerator
+			// matches; over sr.kc it read 38% high on Brutal black dragon, whose
+			// kc is an import floor of 50 under 69 logged drops.
 			head.add(row("Worth", gp(sr.value) + " gp"
-				+ (sr.kc > 0 ? " · " + gp(sr.value / Math.max(1, count))
-					+ (killed ? " gp/kill" : " gp each") : ""), null));
-			// Stated, not filtered. The kills are this monster's and exact; its
-			// LOOT on task does not exist as a figure, because a task carries one
-			// items map over every monster in it and one of mine holds 45 blue
-			// dragons beside 97 Vorkath. So the page says how many of these were
-			// killed on a task and lists the assignments, and never cuts the bag
-			// below by them.
-			Long onTask = taskKills().get(sr.name);
-			if (onTask != null && onTask > 0)
-			{
-				head.add(row("On task", fmt(onTask), null));
-			}
+				+ (sr.loots > 0 ? " · " + gp(sr.value / Math.max(1, sr.loots))
+					+ (killed ? " gp/drop" : " gp each") : ""), null));
+			addKillSources(head, sr, killed ? shown : -1);
 			// what the log's own page counts for it, in the log's own words
 			for (Map.Entry<String, Long> pbLine : bestTimes(sr.name))
 			{

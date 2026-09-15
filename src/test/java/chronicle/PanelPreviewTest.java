@@ -1370,6 +1370,18 @@ public class PanelPreviewTest
 		}
 
 		@Override
+		java.util.Map<String, Long> chatKills()
+		{
+			return store != null ? store.chatKillCounts() : new java.util.LinkedHashMap<>();
+		}
+
+		@Override
+		java.util.Map<String, Long> anchoredKills()
+		{
+			return store != null ? store.anchoredKills() : new java.util.LinkedHashMap<>();
+		}
+
+		@Override
 		java.util.Map<String, long[]> onTaskItems(long fromMs, long toMs)
 		{
 			return store != null ? store.onTaskItems(fromMs, toMs)
@@ -1652,6 +1664,15 @@ public class PanelPreviewTest
 		@Override
 		java.util.Map<String, Long> killCounts()
 		{
+			// The same reconciliation the client runs, not a second one. A stub
+			// that answers this question its own way lets a panel test agree
+			// with nothing the player will ever see.
+			if (store != null)
+			{
+				return LocalStore.reconciledKills(store.clogSnapshot(),
+					store.dropSources(), store.chatKillCounts(),
+					store.anchoredKills());
+			}
 			return kcs;
 		}
 

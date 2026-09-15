@@ -3769,6 +3769,44 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return sourceKills(clogSnapshot(), dropSources());
 	}
 
+	/**
+	 * Every count of a fight the record holds, folded into one figure each.
+	 *
+	 * <p>Static and given everything it needs, so the preview harness reconciles
+	 * exactly the way the client does. It used to reconcile differently: the
+	 * stub built its map from the page counters and the ledger and never applied
+	 * the Kill Log at all, so a panel test could watch a page print the ledger's
+	 * number while the real client printed the game's.
+	 */
+	static java.util.Map<String, Long> reconciledKills(JsonObject clog,
+		java.util.List<SourceRow> sources, java.util.Map<String, Long> chat,
+		java.util.Map<String, Long> anchored)
+	{
+		java.util.Map<String, Long> out = clogKillCounts(clog);
+		// What the game itself says about the encounter: the Kill Log, and the
+		// chat line it prints on the kill. The Kill Log only moves when the
+		// player opens an interface, so a number resting on it alone is frozen
+		// between visits; the chat line arrives on every kill, with nothing
+		// opened and nothing fetched. Both are the game counting and both only
+		// count up, so between the two the larger is the later reading.
+		java.util.Map<String, Long> stated = killLogCounts(clog);
+		foldChatCounts(stated, chat, out.keySet());
+		// A statement always beats the page counter, which need not be counting
+		// kills at all: Wintertodt's page counts rewards claimed and says 1,078
+		// where 448 were killed, and the larger of those two is the lie.
+		placeByKind(out, stated, false);
+		// The ledger is then a floor over that. A bare statement was true when
+		// somebody last opened an interface and knows nothing of what has
+		// happened since, so it may not pull down a count the ledger has
+		// actually watched: Abyssal demons read 1,798 from a stale Kill Log
+		// beside 2,346 seen.
+		placeByKind(out, sourceKills(clog, sources), true);
+		// And an anchored count is a statement carrying its own observations
+		// forward. It knows what has happened since, so it IS the count.
+		placeByKind(out, anchored, false);
+		return out;
+	}
+
 	static java.util.Map<String, Long> sourceKills(JsonObject clog,
 		java.util.List<SourceRow> sources)
 	{
@@ -4271,7 +4309,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** kindOf, with a leading "the" dropped: the chat box says Gauntlet, the log says The Gauntlet. */
-	private static String chatKind(String name)
+	static String chatKind(String name)
 	{
 		String n = kindOf(name);
 		return n.startsWith("the ") ? n.substring(4) : n;

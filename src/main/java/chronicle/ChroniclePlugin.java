@@ -972,29 +972,9 @@ public class ChroniclePlugin extends Plugin
 	// of it.
 	Map<String, Long> killCounts()
 	{
-		JsonObject cl = localStore.clogSnapshot();
-		Map<String, Long> out = LocalStore.clogKillCounts(cl);
-		// What the game itself says about the encounter: the Kill Log, and the chat
-		// line it prints on the kill. The Kill Log only moves when the player opens
-		// an interface, so a number resting on it alone is frozen between visits;
-		// the chat line arrives on every kill, with nothing opened and nothing
-		// fetched. Both are the game counting and both only count up, so between
-		// the two the larger is the later reading.
-		Map<String, Long> stated = LocalStore.killLogCounts(cl);
-		LocalStore.foldChatCounts(stated, localStore.chatKillCounts(), out.keySet());
-		// A statement always beats the page counter, which need not be counting
-		// kills at all: Wintertodt's page counts rewards claimed and says 1,078
-		// where 448 were killed, and the larger of those two is the lie.
-		LocalStore.placeByKind(out, stated, false);
-		// The ledger is then a floor over that. A bare statement was true when
-		// somebody last opened an interface and knows nothing of what has happened
-		// since, so it may not pull down a count the ledger has actually watched:
-		// Abyssal demons read 1,798 from a stale Kill Log beside 2,346 seen.
-		LocalStore.placeByKind(out, LocalStore.sourceKills(cl, localStore.dropSources()), true);
-		// And an anchored count is a statement carrying its own observations
-		// forward. It knows what has happened since, so it IS the count.
-		LocalStore.placeByKind(out, localStore.anchoredKills(), false);
-		return out;
+		return LocalStore.reconciledKills(localStore.clogSnapshot(),
+			localStore.dropSources(), localStore.chatKillCounts(),
+			localStore.anchoredKills());
 	}
 
 	// The ledger's sources the collection log has no page for, at the figures
@@ -1069,6 +1049,16 @@ public class ChroniclePlugin extends Plugin
 	long[] onTaskTally(long fromMs, long toMs, String onlyTask)
 	{
 		return localStore.onTaskTally(fromMs, toMs, onlyTask);
+	}
+
+	java.util.Map<String, Long> chatKills()
+	{
+		return localStore.chatKillCounts();
+	}
+
+	java.util.Map<String, Long> anchoredKills()
+	{
+		return localStore.anchoredKills();
 	}
 
 	java.util.Map<String, long[]> onTaskItems(long fromMs, long toMs)

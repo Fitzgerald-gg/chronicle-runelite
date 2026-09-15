@@ -137,7 +137,7 @@ public class ExampleExportTest
 			"spanAsked", "historySpine", "historyFeed", "historyJourney",
 			"historyDay", "historyFeedTs", "historyEpoch", "skilled",
 			"itemsByName", "periodFrom", "periodTo", "searchJump",
-			"buildTaskItems", "buildTaskKills", "taskItemsEver"})
+			"buildTaskItems", "buildTaskKills", "taskItemsEver", "taskKillsEverCache"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
 		}
