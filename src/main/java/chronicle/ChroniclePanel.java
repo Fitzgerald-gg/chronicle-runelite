@@ -4439,16 +4439,17 @@ class ChroniclePanel extends PluginPanel
 		{
 			head.add(row("Obtained on task", "×" + fmt(mine[0]), accent()));
 			head.add(row("All sources", "×" + fmt(qty), null));
-			// The same row the other reading carries, priced the way the tasks
-			// priced it. The two bags freeze value on different days: a task
-			// keeps what its take was worth when it closed, the ledger keeps
-			// what the drop was worth when it landed and has been repriced
-			// since. On my own record that puts 19 of 287 items HIGHER on task
-			// than in the whole ledger, Mithril spear at 84,000 gp against
-			// 4,158, so the row says which day it is quoting rather than
-			// leaving a reader to subtract two numbers that do not.
+			// The same row the other reading carries. What it is NOT is a price
+			// frozen at the drop, for anything imported: a drop that lands now
+			// is priced once and written to both trees identically, but the
+			// history that came in from the server was valued in bulk on the
+			// day it was imported, and the two halves of that import were
+			// valued by different means. That is why 19 of my 287 on-task items
+			// price higher than the same item does across the whole ledger, and
+			// why a Mithril spear reads 7,000 each here against 231 there.
 			JPanel priced = row("Worth", gp(mine[1]) + " gp", null);
-			priced.setToolTipText("What the tasks logged it at as they closed");
+			priced.setToolTipText("Priced as the drop landed, or in bulk on the day "
+				+ "the history was imported");
 			head.add(priced);
 		}
 		else
