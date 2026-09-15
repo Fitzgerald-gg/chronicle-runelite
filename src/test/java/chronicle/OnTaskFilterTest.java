@@ -161,19 +161,26 @@ public class OnTaskFilterTest
 		assertFalse(has(said, "On task"));
 	}
 
-	/** Counts cross the filter. Money does not. */
+	/**
+	 * Both readings carry the same rows. The money on each is true of a
+	 * different day, and the on-task row says so rather than inviting a
+	 * subtraction: 19 of the owner's 287 on-task items price HIGHER than the
+	 * same item does across his whole ledger.
+	 */
 	@Test
-	public void theItemPageCountsAndDoesNotPrice() throws Exception
+	public void bothReadingsCarryAWorthAndSayWhichDayItIsFrom() throws Exception
 	{
 		ChroniclePanel p = panel();
 		set(p, "onTaskOnly", true);
 		List<String> said = say(p, "buildItemDetail", "Fire rune");
 		assertEquals("×600", after(said, "Obtained on task"));
 		assertEquals("×900", after(said, "All sources"));
-		// the task bag prices this at 10,009 and the ledger at 900. Both are
-		// true of different days, and one under the other is a subtraction
-		// nobody should be invited to make.
-		assertFalse("a gp figure crossed the filter", has(said, "gp"));
+		// Both readings carry a Worth, and this journal is built so they
+		// disagree the way the owner's does: the tasks logged 10,009 gp for six
+		// hundred fire runes while the ledger holds 900 for nine hundred of
+		// them, because the two bags froze their prices on different days. The
+		// row has to say which day it is quoting.
+		assertEquals("10k gp", after(said, "Worth"));
 	}
 
 	/** The split is by task, because the record cannot say which monster. */
@@ -184,8 +191,8 @@ public class OnTaskFilterTest
 		set(p, "onTaskOnly", true);
 		List<String> said = say(p, "buildItemDetail", "Fire rune");
 		assertTrue(has(said, "By task"));
-		assertEquals("×500", after(said, "Task: Blue dragons"));
-		assertEquals("×100", after(said, "Task: Dust devils"));
+		assertEquals("×500 · 9,999 gp", after(said, "Task: Blue dragons"));
+		assertEquals("×100 · 10 gp", after(said, "Task: Dust devils"));
 		assertFalse("a monster was named as if it had paid", has(said, "Blue dragon ×"));
 	}
 
