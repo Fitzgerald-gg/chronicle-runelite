@@ -201,4 +201,67 @@ public class InfoPageTest
 		assertFalse("back left the reader on the page they were leaving",
 			f.getBoolean(p));
 	}
+
+	/**
+	 * A tab click leaves it, like a tab click leaves every other page a reader
+	 * was sent to.
+	 *
+	 * <p>rebuild() tests showInfo BEFORE it looks at which view is up, so a
+	 * flag left standing means every tab, every sub-tab and every search
+	 * redraws the info page and the panel stops navigating at all. The back row
+	 * was only half of it.
+	 */
+	@Test
+	public void aTabClickLeavesIt() throws Exception
+	{
+		ChroniclePanel p = panel();
+		java.lang.reflect.Field f = ChroniclePanel.class.getDeclaredField("showInfo");
+		f.setAccessible(true);
+		Class<?> tabType = Class.forName("chronicle.ChroniclePanel$Tab");
+		java.lang.reflect.Method applyTab =
+			ChroniclePanel.class.getDeclaredMethod("applyTab", tabType);
+		applyTab.setAccessible(true);
+		for (Object tab : tabType.getEnumConstants())
+		{
+			f.setBoolean(p, true);
+			SwingUtilities.invokeAndWait(() ->
+			{
+				try
+				{
+					applyTab.invoke(p, tab);
+				}
+				catch (Exception e)
+				{
+					throw new RuntimeException(e);
+				}
+			});
+			assertFalse("clicking " + tab + " left the reader on the info page",
+				f.getBoolean(p));
+		}
+	}
+
+	/** And so does opening anything from search. */
+	@Test
+	public void openingSomethingElseLeavesIt() throws Exception
+	{
+		ChroniclePanel p = panel();
+		java.lang.reflect.Field f = ChroniclePanel.class.getDeclaredField("showInfo");
+		f.setAccessible(true);
+		f.setBoolean(p, true);
+		java.lang.reflect.Method open =
+			ChroniclePanel.class.getDeclaredMethod("openAllTrackers");
+		open.setAccessible(true);
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				open.invoke(p);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		assertFalse("all-trackers opened behind the info page", f.getBoolean(p));
+	}
 }
