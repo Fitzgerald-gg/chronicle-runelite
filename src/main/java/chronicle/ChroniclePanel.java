@@ -3854,6 +3854,16 @@ class ChroniclePanel extends PluginPanel
 
 	private void backDetail()
 	{
+		// Both of these are pages the reader was SENT to rather than pages they
+		// drilled into, so neither is on the detail stack and neither can be
+		// left by popping it. Without a branch of its own the back row rebuilds
+		// the page it is standing on and reads as a dead button.
+		if (showInfo)
+		{
+			showInfo = false;
+			rebuild();
+			return;
+		}
 		if (allTrackers)
 		{
 			allTrackers = false;
