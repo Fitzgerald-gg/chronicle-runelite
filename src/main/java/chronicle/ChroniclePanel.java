@@ -150,10 +150,6 @@ class ChroniclePanel extends PluginPanel
 	private int dropsShown = ROW_CAP;
 	private String clogTab = "Bosses";
 	private String clogPageSel;
-	// History's Skills/Bosses lens. Both read the period the stepper is on.
-	// kept for the preview harness, which reaches it by name
-	private boolean histBosses;
-
 
 	// Whether the journal is reaching disk. Nothing else in the panel shows it:
 	// the views are served from memory and look the same either way.
