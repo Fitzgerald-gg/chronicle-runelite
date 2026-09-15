@@ -103,7 +103,7 @@ public class ExampleExportTest
 		"tab", "subByTab", "view",
 		"histFacet", "histGranularity", "histCursor", "histFrom", "histTo",
 		"detailSource", "detailItem", "detailSkill", "detailTask",
-		"allTrackers", "bossOpen", "slayerLens",
+		"allTrackers", "showInfo", "bossOpen", "slayerLens",
 		"clogPageSel", "journalLens", "dropsLeftBehind",
 		"dropsByKind", "lootKind", "lootTask", "onTaskOnly",
 		"statsFamily", "leftBehindSource", "leftBehindItem", "clogTab",

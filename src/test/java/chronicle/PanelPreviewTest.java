@@ -1370,6 +1370,12 @@ public class PanelPreviewTest
 		}
 
 		@Override
+		java.util.Map<String, Long> journalFacts()
+		{
+			return store != null ? store.journalFacts() : new java.util.LinkedHashMap<>();
+		}
+
+		@Override
 		java.util.Map<String, Long> chatKills()
 		{
 			return store != null ? store.chatKillCounts() : new java.util.LinkedHashMap<>();
