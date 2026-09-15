@@ -1371,6 +1371,34 @@ public class PanelPreviewTest
 		}
 
 		@Override
+		java.util.Map<String, long[]> onTaskItems(long fromMs, long toMs)
+		{
+			return store != null ? store.onTaskItems(fromMs, toMs)
+				: new java.util.LinkedHashMap<>();
+		}
+
+		@Override
+		java.util.Map<String, Long> onTaskKills(long fromMs, long toMs)
+		{
+			return store != null ? store.onTaskKills(fromMs, toMs)
+				: new java.util.LinkedHashMap<>();
+		}
+
+		@Override
+		java.util.List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
+		{
+			return store != null ? store.onTaskItemByTask(itemName, fromMs, toMs)
+				: new java.util.ArrayList<>();
+		}
+
+		@Override
+		java.util.List<LocalStore.Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
+		{
+			return store != null ? store.onTaskAssignments(npc, fromMs, toMs)
+				: new java.util.ArrayList<>();
+		}
+
+		@Override
 		LocalStore.LootWindow lootBetween(java.time.LocalDate from, java.time.LocalDate to)
 		{
 			if (lootWindow != null)

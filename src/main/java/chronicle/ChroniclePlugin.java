@@ -1077,6 +1077,26 @@ public class ChroniclePlugin extends Plugin
 		return localStore.onTaskTally(fromMs, toMs, onlyTask);
 	}
 
+	java.util.Map<String, long[]> onTaskItems(long fromMs, long toMs)
+	{
+		return localStore.onTaskItems(fromMs, toMs);
+	}
+
+	java.util.Map<String, Long> onTaskKills(long fromMs, long toMs)
+	{
+		return localStore.onTaskKills(fromMs, toMs);
+	}
+
+	java.util.List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
+	{
+		return localStore.onTaskItemByTask(itemName, fromMs, toMs);
+	}
+
+	java.util.List<LocalStore.Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
+	{
+		return localStore.onTaskAssignments(npc, fromMs, toMs);
+	}
+
 	java.util.List<LocalStore.BagItem> untakenItemsOf(String source)
 	{
 		return localStore.untakenItemsOf(source);

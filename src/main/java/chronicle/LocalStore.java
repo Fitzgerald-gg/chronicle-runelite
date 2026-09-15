@@ -1862,6 +1862,235 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/**
+	 * One slayer assignment, as an NPC's page reads it.
+	 *
+	 * <p>The take is the TASK's, not this monster's: a task carries one items
+	 * map and a separate monsters map, and nothing inside it links a drop to
+	 * the thing that dropped it. On this account one "Blue dragons" assignment
+	 * holds 45 blue dragons, 3 babies and 97 Vorkath, so cutting its loot up by
+	 * monster would hand a reader Vorkath's drops under a blue dragon. The row
+	 * is labelled for the task for that reason.
+	 */
+	static final class Assignment
+	{
+		final String task;
+		final long ts;
+		final long killsHere;
+		final long kills;
+		final long value;
+
+		Assignment(String task, long ts, long killsHere, long kills, long value)
+		{
+			this.task = task;
+			this.ts = ts;
+			this.killsHere = killsHere;
+			this.kills = kills;
+			this.value = value;
+		}
+	}
+
+	/** Whether a task's stamp puts it inside the window. An unstamped task is in. */
+	private static boolean taskInside(JsonObject t, long fromMs, long toMs)
+	{
+		long ms = (long) (asDouble(t.get("ts")) * 1000);
+		return !(ms > 0 && (ms < fromMs || ms > toMs));
+	}
+
+	private static String taskName(JsonObject t)
+	{
+		return t.has("task") && !t.get("task").isJsonNull()
+			? t.get("task").getAsString() : "";
+	}
+
+	private JsonArray taskArray()
+	{
+		if (root == null || !root.has("slayer") || !root.get("slayer").isJsonObject())
+		{
+			return new JsonArray();
+		}
+		JsonObject sl = root.getAsJsonObject("slayer");
+		return sl.has("tasks") && sl.get("tasks").isJsonArray()
+			? sl.getAsJsonArray("tasks") : new JsonArray();
+	}
+
+	/**
+	 * Every item the tasks paid, inside the window: name to {qty, value}.
+	 *
+	 * <p>One pass over the journey, because the answer is asked of every row of
+	 * a board rather than once. It is also the only honest way to ask whether an
+	 * item HAS an on-task side at all: 287 of the 655 names on this account do,
+	 * and the other 368 must not be offered a filter that would show them
+	 * nothing.
+	 */
+	java.util.Map<String, long[]> onTaskItems(long fromMs, long toMs)
+	{
+		java.util.Map<String, long[]> out = new java.util.LinkedHashMap<>();
+		synchronized (lock)
+		{
+			for (JsonElement e : taskArray())
+			{
+				if (!e.isJsonObject())
+				{
+					continue;
+				}
+				JsonObject t = e.getAsJsonObject();
+				if (!taskInside(t, fromMs, toMs)
+					|| !t.has("items") || !t.get("items").isJsonObject())
+				{
+					continue;
+				}
+				for (java.util.Map.Entry<String, JsonElement> it
+					: t.getAsJsonObject("items").entrySet())
+				{
+					if (!it.getValue().isJsonObject())
+					{
+						continue;
+					}
+					JsonObject v = it.getValue().getAsJsonObject();
+					long[] tot = out.computeIfAbsent(it.getKey(), k -> new long[2]);
+					tot[0] += asLong(v.get("qty"));
+					tot[1] += asLong(v.get("value"));
+				}
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Every monster the tasks were fought against, inside the window: name to
+	 * kills. Exact, unlike the loot: a task DOES say how many of each thing it
+	 * killed.
+	 */
+	java.util.Map<String, Long> onTaskKills(long fromMs, long toMs)
+	{
+		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		synchronized (lock)
+		{
+			for (JsonElement e : taskArray())
+			{
+				if (!e.isJsonObject())
+				{
+					continue;
+				}
+				JsonObject t = e.getAsJsonObject();
+				if (!taskInside(t, fromMs, toMs)
+					|| !t.has("monsters") || !t.get("monsters").isJsonObject())
+				{
+					continue;
+				}
+				for (java.util.Map.Entry<String, JsonElement> m
+					: t.getAsJsonObject("monsters").entrySet())
+				{
+					out.merge(m.getKey(), asLong(m.getValue()), Long::sum);
+				}
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * One item's on-task total split by the TASK that paid it, dearest first.
+	 * What the FROM list on an item's page becomes when the filter is on task:
+	 * the record can name the assignment exactly and the monster not at all.
+	 */
+	java.util.List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
+	{
+		java.util.Map<String, long[]> by = new java.util.LinkedHashMap<>();
+		if (itemName == null)
+		{
+			return new java.util.ArrayList<>();
+		}
+		synchronized (lock)
+		{
+			for (JsonElement e : taskArray())
+			{
+				if (!e.isJsonObject())
+				{
+					continue;
+				}
+				JsonObject t = e.getAsJsonObject();
+				if (!taskInside(t, fromMs, toMs)
+					|| !t.has("items") || !t.get("items").isJsonObject())
+				{
+					continue;
+				}
+				JsonObject items = t.getAsJsonObject("items");
+				for (java.util.Map.Entry<String, JsonElement> it : items.entrySet())
+				{
+					if (!it.getKey().equalsIgnoreCase(itemName)
+						|| !it.getValue().isJsonObject())
+					{
+						continue;
+					}
+					JsonObject v = it.getValue().getAsJsonObject();
+					long[] tot = by.computeIfAbsent(taskName(t), k -> new long[2]);
+					tot[0] += asLong(v.get("qty"));
+					tot[1] += asLong(v.get("value"));
+				}
+			}
+		}
+		java.util.List<Object[]> out = new java.util.ArrayList<>();
+		for (java.util.Map.Entry<String, long[]> e : by.entrySet())
+		{
+			out.add(new Object[]{e.getKey(), e.getValue()[0], e.getValue()[1]});
+		}
+		out.sort((a, b) -> Long.compare((Long) b[2], (Long) a[2]));
+		return out;
+	}
+
+	/**
+	 * Every assignment that included one monster, newest first.
+	 *
+	 * <p>This is what an NPC's page can honestly show on task. The kills are
+	 * that monster's and exact; the worth is the whole assignment's, which is
+	 * why the row names the task rather than the monster.
+	 */
+	java.util.List<Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
+	{
+		java.util.List<Assignment> out = new java.util.ArrayList<>();
+		if (npc == null)
+		{
+			return out;
+		}
+		synchronized (lock)
+		{
+			JsonArray tasks = taskArray();
+			for (int i = tasks.size() - 1; i >= 0; i--)
+			{
+				if (!tasks.get(i).isJsonObject())
+				{
+					continue;
+				}
+				JsonObject t = tasks.get(i).getAsJsonObject();
+				if (!taskInside(t, fromMs, toMs)
+					|| !t.has("monsters") || !t.get("monsters").isJsonObject())
+				{
+					continue;
+				}
+				long here = 0;
+				boolean found = false;
+				for (java.util.Map.Entry<String, JsonElement> m
+					: t.getAsJsonObject("monsters").entrySet())
+				{
+					if (m.getKey().equalsIgnoreCase(npc))
+					{
+						here += asLong(m.getValue());
+						found = true;
+					}
+				}
+				if (!found)
+				{
+					continue;
+				}
+				out.add(new Assignment(taskName(t),
+					(long) (asDouble(t.get("ts")) * 1000), here,
+					asLong(t.get("kills")), asLong(t.get("value"))));
+			}
+		}
+		return out;
+	}
+
+	/**
 	 * The same, narrowed to one task by name.
 	 *
 	 * <p>By NAME rather than by segment: a reader asking what Nechryael have
