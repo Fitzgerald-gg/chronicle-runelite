@@ -4702,12 +4702,11 @@ class ChroniclePanel extends PluginPanel
 				p.add(expander("ontask:src:" + npc, cap, was.size()));
 				break;
 			}
-			JPanel r = row("Task: " + a.task, fmt(a.killsHere), null);
-			if (a.ts > 0)
-			{
-				r.setToolTipText(TASK_DAY.format(Instant.ofEpochMilli(a.ts)));
-			}
-			p.add(r);
+			// No tooltip. Nothing here opens, and setToolTipText registers the
+			// row with the ToolTipManager, which adds a mouse listener: the row
+			// then reads as a control to anything asking whether it can be
+			// clicked, including the recording harness.
+			p.add(row("Task: " + a.task, fmt(a.killsHere), null));
 		}
 		p.add(vgap(6));
 	}

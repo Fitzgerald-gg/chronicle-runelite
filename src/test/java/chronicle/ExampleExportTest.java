@@ -715,6 +715,18 @@ public class ExampleExportTest
 			}
 			corpus.put("feed", feed);
 
+			// Which KINDS the tasks actually paid. Search offers a kind two
+			// ways, the whole ledger and the slayer half, and the second row
+			// must not be offered where the tasks paid none of that kind.
+			java.util.Set<String> taskKinds = new java.util.LinkedHashSet<>();
+			for (LocalStore.BagItem b : plugin.onTaskLoot(
+				Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, null))
+			{
+				String k = ItemKinds.kindOf(b.name);
+				taskKinds.add(k == null ? "Everything else" : k);
+			}
+			corpus.put("taskKinds", new java.util.ArrayList<>(taskKinds));
+
 			probeSearch();
 		}
 
