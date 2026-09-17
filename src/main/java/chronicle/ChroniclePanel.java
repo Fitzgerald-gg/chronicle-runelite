@@ -6293,7 +6293,11 @@ class ChroniclePanel extends PluginPanel
 				}
 				catch (InterruptedException e)
 				{
-					Thread.currentThread().interrupt();
+					// Not re-asserted. done() runs on the EDT, and setting the
+					// interrupt flag on the client's event thread to signal a
+					// caller that does not exist is a way to disturb Swing for
+					// nothing: the read is simply abandoned and the next
+					// rebuild asks again.
 					return;
 				}
 				catch (java.util.concurrent.ExecutionException e)
