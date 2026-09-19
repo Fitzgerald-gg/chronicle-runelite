@@ -1187,17 +1187,124 @@ class ChroniclePanel extends PluginPanel
 		{
 			histFacet = "Skills";
 			p.add(buildHistory());
-			sheetBandDrawn = true;
-			histFacet = "Activities";
-			p.add(buildHistory());
 		}
 		finally
 		{
 			histFacet = was;
 			sheetBandDrawn = false;
 		}
+		p.add(activitySheet());
 		p.add(buildKills());
 		return p;
+	}
+
+	/** The activities Chronicle can actually answer for, in the hiscores' shape. */
+	private static final String[][] ACTIVITIES = {
+		// label, and the clog page or ledger source it reads
+		{"Clues", ""},
+		{"Rifts closed", "Guardians of the Rift"},
+		{"Soul Wars", "Soul Wars"},
+		{"Collections", ""},
+	};
+
+	private static final String[] CLUE_TIERS = {
+		"Beginner", "Easy", "Medium", "Hard", "Elite", "Master"};
+
+	/**
+	 * The middle band of the sheet, three across, the way the skills above it and
+	 * the bosses below it are drawn.
+	 *
+	 * <p>It used to be a named list of every drop source filed under Activities or
+	 * Skilling, which made the sheet read grid, list, grid where the game's own
+	 * panel reads grid, grid, grid. Those sources were never activities anyway:
+	 * a Fishing Trawler casket is loot, and the Loot board already holds every one
+	 * of them by source.
+	 *
+	 * <p>Only what the journal can honestly answer is drawn. The hiscores' own
+	 * list carries Bounty Hunter, LMS and the PvP arenas, and Chronicle watches
+	 * none of those; printing a dash for them would say "you have not done this"
+	 * in a panel where a dash means exactly that.
+	 */
+	private JPanel activitySheet()
+	{
+		JPanel p = column();
+		p.add(group("ACTIVITIES"));
+		JPanel grid = new JPanel(new GridLayout(0, 3, 2, 2));
+		grid.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+		for (String[] a : ACTIVITIES)
+		{
+			grid.add(activityCell(a[0], a[1]));
+		}
+		p.add(grid);
+		p.add(vgap(6));
+		return p;
+	}
+
+	private JPanel activityCell(String label, String source)
+	{
+		JPanel cell = new JPanel(new BorderLayout(3, 0));
+		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		cell.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
+		JLabel icon = new JLabel();
+		icon.setPreferredSize(new Dimension(24, 24));
+		long figure;
+		String hover;
+		if ("Clues".equals(label))
+		{
+			long[] each = new long[CLUE_TIERS.length];
+			long[] worth = new long[CLUE_TIERS.length];
+			long all = 0;
+			long allWorth = 0;
+			for (LocalStore.SourceRow r : sources())
+			{
+				for (int i = 0; i < CLUE_TIERS.length; i++)
+				{
+					if (r.name.equalsIgnoreCase("Clue Scroll (" + CLUE_TIERS[i] + ")"))
+					{
+						each[i] = Math.max(r.kc, r.loots);
+						worth[i] = r.value;
+						all += each[i];
+						allWorth += r.value;
+					}
+				}
+			}
+			figure = all;
+			String[] labels = new String[CLUE_TIERS.length + 1];
+			String[] figures = new String[CLUE_TIERS.length + 1];
+			labels[0] = "All";
+			figures[0] = fmt(all) + (allWorth > 0 ? " · " + gp(allWorth) + " gp" : "");
+			for (int i = 0; i < CLUE_TIERS.length; i++)
+			{
+				labels[i + 1] = CLUE_TIERS[i];
+				figures[i + 1] = each[i] == 0 ? "0"
+					: fmt(each[i]) + (worth[i] > 0 ? " · " + gp(worth[i]) + " gp" : "");
+			}
+			hover = tip("Clues", labels, figures);
+			mountKindIcon(icon, "Clue Scroll (Hard)");
+		}
+		else if ("Collections".equals(label))
+		{
+			figure = plugin.clogFinished();
+			hover = tip("Collection log",
+				new String[]{"Obtained", "Available"},
+				new String[]{fmt(plugin.clogFinished()), fmt(plugin.clogAvailable())});
+			mountKindIcon(icon, label);
+		}
+		else
+		{
+			figure = bossKills(source);
+			hover = tip(label, new String[]{"Count"}, new String[]{fmt(figure)});
+			mountKindIcon(icon, source);
+		}
+		cell.setToolTipText(hover);
+		cell.add(icon, BorderLayout.WEST);
+		JLabel fig = new JLabel(figure > 0 ? fmt(figure) : "-", JLabel.RIGHT);
+		fig.setFont(FontManager.getRunescapeSmallFont());
+		fig.setForeground(figure > 0 ? ColorScheme.LIGHT_GRAY_COLOR
+			: ColorScheme.LIGHT_GRAY_COLOR.darker());
+		cell.add(fig, BorderLayout.EAST);
+		return cell;
 	}
 
 	private JPanel buildKills()
