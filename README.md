@@ -74,7 +74,9 @@ that skill's own counters, such as logs chopped by tree or essence crafted by ru
 </p>
 
 In the collection log tab you can see the whole log split across the five tabs the in-game one
-presents. Each line can be clicked on to show the drops inside.
+presents, under your completion figure, with the slots held and the kill count behind each
+line. Each line can be clicked on to show the drops inside. Opening the log in game records
+every page at once, not just the tab you clicked.
 
 ### Search
 
