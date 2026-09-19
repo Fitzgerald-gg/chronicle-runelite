@@ -1514,9 +1514,18 @@ class ChroniclePanel extends PluginPanel
 			JScrollPane was = paneIn(display);
 			priorScroll = was == null ? 0 : was.getVerticalScrollBar().getValue();
 		}
+		// Three states, worst first. A disk that will not take the journal is red
+		// and stops everything; a plugin we lean on being switched off is gold and
+		// loses one kind of capture, which the reader can fix in one click and
+		// previously had no way to learn about at all.
 		String stalled = plugin.journalWarning();
-		Color pulse = stalled == null ? ACCENT_SESSION : ColorScheme.PROGRESS_ERROR_COLOR;
-		heartbeat.setText(stalled == null ? "logging" : "not saving");
+		String capture = plugin.captureWarning();
+		Color pulse = stalled != null ? ColorScheme.PROGRESS_ERROR_COLOR
+			: capture != null ? accent() : ACCENT_SESSION;
+		heartbeat.setText(stalled != null ? "not saving"
+			: capture != null ? capture : "logging");
+		heartbeat.setToolTipText(stalled != null ? stalled
+			: capture != null ? plugin.captureWarningWhy() : null);
 		heartbeat.setIcon(dot(pulse));
 		heartbeat.setIconTextGap(4);
 		heartbeat.setForeground(pulse);

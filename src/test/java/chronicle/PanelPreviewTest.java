@@ -1577,18 +1577,6 @@ public class PanelPreviewTest
 		}
 
 		@Override
-		String syncedRsn()
-		{
-			return rsn;
-		}
-
-		@Override
-		String statusLine()
-		{
-			return "Journaling locally. Nothing leaves this computer.";
-		}
-
-		@Override
 		java.util.List<LocalStore.PetRow> pets()
 		{
 			return store != null ? store.pets() : new ArrayList<>(petRows);

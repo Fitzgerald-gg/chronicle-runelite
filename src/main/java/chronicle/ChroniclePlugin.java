@@ -163,7 +163,12 @@ public class ChroniclePlugin extends Plugin
 	private volatile String syncedRsn;
 	// The logged-in name: the journal's identity, and the push name when cloud is on.
 	private volatile String localName;
-	private volatile String statusLine = "Waiting for a login.";
+	// Null when both plugins we lean on are enabled, else a short label for the
+	// heartbeat and the sentence that explains it. This is the only status the
+	// panel has ever shown: the eight-writer statusLine it replaces was assigned
+	// everywhere and rendered nowhere, so its cloud messages went to nobody.
+	private volatile String captureWarning;
+	private volatile String captureWarningWhy;
 
 	@Provides
 	ChronicleConfig provideConfig(ConfigManager configManager)
@@ -214,13 +219,7 @@ public class ChroniclePlugin extends Plugin
 		achievementSync.reset();
 
 		reschedulePushLoop();
-		warnIfDisabled(SlayerPlugin.class,
-			"Turn on the Slayer plugin for on-task drop tagging.",
-			"Slayer plugin is disabled: on-task drop tagging is inactive.");
-		warnIfDisabled(LootTrackerPlugin.class,
-			"Turn on the Loot Tracker plugin. Chest and casket loot reaches Chronicle "
-				+ "through it.",
-			"Loot Tracker is disabled: non-NPC loot is not being captured.");
+		checkDependencies();
 		log.debug("Chronicle started - slayer service: {}",
 			eventCapture.hasSlayerService() ? "AVAILABLE" : "MISSING");
 
@@ -304,7 +303,34 @@ public class ChroniclePlugin extends Plugin
 	// Both of the plugins we lean on can be switched off by the player: chest and casket
 	// loot only reaches us through the core Loot Tracker, and on-task tagging needs the
 	// Slayer plugin's service. The dependency guarantees they are loaded, not enabled.
-	private void warnIfDisabled(Class<? extends Plugin> type, String status, String logLine)
+	// Re-checked on the write beat, so turning one back on clears the warning without
+	// a relog.
+	private void checkDependencies()
+	{
+		String was = captureWarning;
+		String now = null;
+		String why = null;
+		if (isOff(SlayerPlugin.class))
+		{
+			now = "Slayer off";
+			why = "Turn on the Slayer plugin for on-task drop tagging.";
+		}
+		else if (isOff(LootTrackerPlugin.class))
+		{
+			now = "Loot Tracker off";
+			why = "Turn on the Loot Tracker plugin. Chest and casket loot reaches "
+				+ "Chronicle through it.";
+		}
+		captureWarning = now;
+		captureWarningWhy = why;
+		if (!java.util.Objects.equals(was, now))
+		{
+			log.debug("capture warning: {}", now);
+			refreshPanel();
+		}
+	}
+
+	private boolean isOff(Class<? extends Plugin> type)
 	{
 		try
 		{
@@ -312,13 +338,7 @@ public class ChroniclePlugin extends Plugin
 			{
 				if (type.isInstance(p))
 				{
-					if (!pluginManager.isPluginEnabled(p))
-					{
-						statusLine = status;
-						refreshPanel();
-						log.debug(logLine);
-					}
-					return;
+					return !pluginManager.isPluginEnabled(p);
 				}
 			}
 		}
@@ -326,6 +346,7 @@ public class ChroniclePlugin extends Plugin
 		{
 			log.debug("plugin-enabled check failed for {}", type.getSimpleName(), e);
 		}
+		return false;
 	}
 
 	// ------------------------------------------------------------------
@@ -383,7 +404,6 @@ public class ChroniclePlugin extends Plugin
 		sessionStartMs = System.currentTimeMillis();
 		if (!cloudActive())
 		{
-			statusLine = "Journaling locally. Nothing leaves this computer.";
 		}
 		refreshPanel();
 		final String who = name;
@@ -508,15 +528,12 @@ public class ChroniclePlugin extends Plugin
 		}
 		if (token == null)
 		{
-			statusLine = "Cloud sync is on but this account has no token. Paste one "
-				+ "under Advanced in the plugin settings.";
 			refreshPanel();
 			return;
 		}
 		syncedRsn = name;
 		cachedToken = token;
 		cachedName = name;
-		statusLine = "Cloud sync on. Pushing on the next interval.";
 		refreshPanel();
 		// Push straight away so a freshly-launched client isn't stale.
 		pushCurrent();
@@ -696,21 +713,16 @@ public class ChroniclePlugin extends Plugin
 	{
 		if (result.ok)
 		{
-			statusLine = "Last push OK (" + result.changed + " changed) at " + nowClock() + ".";
 			log.debug("push ok: {} accepted, {} changed", result.accepted, result.changed);
 		}
 		else if (result.code == 409)
 		{
 			// The server holds higher totals than this journal, usually another computer.
 			// The client stays authoritative for its own record; just surface it.
-			statusLine = "Server totals are ahead of this journal (another computer?) at "
-				+ nowClock() + ".";
 			log.debug("push 409: server ahead; journal stays authoritative");
 		}
 		else
 		{
-			statusLine = "Last push failed (" + result.code + ")"
-				+ (result.error != null ? ": " + result.error : "") + " at " + nowClock() + ".";
 			log.debug("push failed code={} err={}", result.code, result.error);
 		}
 		refreshPanel();
@@ -758,11 +770,6 @@ public class ChroniclePlugin extends Plugin
 			return;
 		}
 		clientThread.invoke(this::pushCurrent);
-	}
-
-	String syncedRsn()
-	{
-		return syncedRsn;
 	}
 
 	// Cloud sync active: opted in and pointed at a server. Only the network is
@@ -1325,7 +1332,8 @@ public class ChroniclePlugin extends Plugin
 		{
 			localStore.setTrackers(sessionView(), localName);
 			// One closing baseline per day; the History tab and year cards subtract over it.
-			if (historyLog.dayRolledOver(localName))
+			checkDependencies();
+		if (historyLog.dayRolledOver(localName))
 			{
 				appendHistoryBaseline();
 			}
@@ -1543,9 +1551,16 @@ public class ChroniclePlugin extends Plugin
 		});
 	}
 
-	String statusLine()
+	/** A short label for the heartbeat while a plugin we lean on is switched off. */
+	String captureWarning()
 	{
-		return statusLine;
+		return captureWarning;
+	}
+
+	/** The sentence behind that label, shown as the heartbeat's tooltip. */
+	String captureWarningWhy()
+	{
+		return captureWarningWhy;
 	}
 
 	// Why the journal isn't keeping the record (a failed write, or a file a newer
@@ -1638,11 +1653,6 @@ public class ChroniclePlugin extends Plugin
 				// Chat unavailable (e.g. not logged in). The panel still shows status.
 			}
 		});
-	}
-
-	private static String nowClock()
-	{
-		return java.time.LocalTime.now().withNano(0).toString();
 	}
 
 	// The logged-in player's name, or null while it's still populating.
