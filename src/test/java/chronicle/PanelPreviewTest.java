@@ -1072,7 +1072,6 @@ public class PanelPreviewTest
 			{
 				s.ledgerKcs.put(e.getKey(), e.getValue());
 			}
-			s.kcs.merge(e.getKey(), e.getValue(), Math::max);
 		}
 		return s;
 	}
@@ -1111,9 +1110,11 @@ public class PanelPreviewTest
 		s.grinds = new GrindBook(new Gson()).grinds(store.clogSnapshot(), store.dropSources());
 		JsonObject clKc = store.clogSnapshot();
 		s.kcs.putAll(LocalStore.clogKillCounts(clKc));
-		// the same fold as ChroniclePlugin.killCounts and ledgerKills: every ledger
-		// source at the most any record saw of it, under the log's spelling where
-		// the two name one thing, and the ones the log has no page for apart
+		// Splits off the ledger sources the log has no page for, which is what
+		// ledgerKills() previews. NOT the fold ChroniclePlugin.killCounts does:
+		// that is reconciledKills, which REPLACES the page counter with the Kill
+		// Log and the chat line rather than max-merging onto it. The merge that
+		// used to sit here was the older fold the reconciler was written to stop.
 		for (Map.Entry<String, Long> e
 			: LocalStore.sourceKills(clKc, store.dropSources()).entrySet())
 		{
@@ -1121,7 +1122,6 @@ public class PanelPreviewTest
 			{
 				s.ledgerKcs.put(e.getKey(), e.getValue());
 			}
-			s.kcs.merge(e.getKey(), e.getValue(), Math::max);
 		}
 		return s;
 	}

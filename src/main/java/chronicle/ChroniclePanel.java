@@ -757,28 +757,6 @@ class ChroniclePanel extends PluginPanel
 		return -1;
 	}
 
-	/** The same tolerance for the journal's own kcs, which a baseline carries. */
-	private static long kcOf(Map<String, Long> kcs, String key)
-	{
-		if (kcs == null)
-		{
-			return 0;
-		}
-		Long v = kcs.get(key);
-		if (v != null)
-		{
-			return v;
-		}
-		for (Map.Entry<String, Long> e : kcs.entrySet())
-		{
-			if (e.getKey().equalsIgnoreCase(key))
-			{
-				return e.getValue() == null ? 0 : e.getValue();
-			}
-		}
-		return 0;
-	}
-
 	/**
 	 * What the window moved this boss's count by. A lifetime is the count itself;
 	 * a narrower window is the distance between the two baselines bounding it,
@@ -1501,9 +1479,15 @@ class ChroniclePanel extends PluginPanel
 		buildClog = null;
 		buildSpan = null;
 		spanAsked = false;
-		buildTaskItems = null;
-		buildTaskKills = null;
 		taskKillsEverCache = null;
+		taskItemsEver = null;
+		// The labels of the build just discarded are nobody's business now. Left to
+		// pile up, an icon that never lands would hold every label the panel ever
+		// drew, which is the same unbounded queue that made the trackers page lag.
+		// This used to sit inside buildHistory, so it ran only on one tab while the
+		// boss sheet and the kind rows queued labels from every other.
+		facetWaiting.clear();
+		itemWaiting.clear();
 		// rebuild() throws the whole scroll pane away and hangs a fresh one, which
 		// starts at the top. Expanded, Home is longer than the panel.
 		int priorScroll = 0;
@@ -2231,30 +2215,6 @@ class ChroniclePanel extends PluginPanel
 	// Answered once per rebuild, like the sources and the collection log above.
 	// A board of two hundred rows asks whether each of them has an on-task side,
 	// and the answer is one pass over ninety three tasks.
-	private Map<String, long[]> buildTaskItems;
-	private Map<String, Long> buildTaskKills;
-
-	/** Every item the tasks paid inside the period, name to qty and worth. */
-	private Map<String, long[]> taskItems()
-	{
-		if (buildTaskItems == null)
-		{
-			long[] w = windowMs();
-			buildTaskItems = plugin.onTaskItems(w[0], w[1]);
-		}
-		return buildTaskItems;
-	}
-
-	/** Every monster the tasks were fought against inside the period. */
-	private Map<String, Long> taskKills()
-	{
-		if (buildTaskKills == null)
-		{
-			long[] w = windowMs();
-			buildTaskKills = plugin.onTaskKills(w[0], w[1]);
-		}
-		return buildTaskKills;
-	}
 
 	// Whether the loot on show is narrowed to what slayer tasks logged. A lens,
 	// like the two beside it, and READ ONLY by a board that also draws the
@@ -2734,6 +2694,11 @@ class ChroniclePanel extends PluginPanel
 		historyGathering = false;
 		detailItem = null;
 		detailSource = null;
+		// Lifetime on-task loot, which is this account's and nobody else's. Its
+		// twin taskKillsEverCache was dropped every build; this was dropped on no
+		// trigger at all, so a switch showed the previous account's items.
+		taskItemsEver = null;
+		taskKillsEverCache = null;
 		detailStack.clear();
 		drillShown.clear();
 		histListShown.clear();
@@ -6530,7 +6495,7 @@ class ChroniclePanel extends PluginPanel
 			// the count stands in both states here, unlike the session strip's
 			// bands: these lists are capped and paged, so how many the group holds
 			// is not something the rows on screen can tell you
-			card.add(groupHead(name, fmt(lines), stateKey, open));
+			card.add(quietHead(name, fmt(lines), stateKey));
 			if (!open)
 			{
 				continue;
@@ -6651,21 +6616,6 @@ class ChroniclePanel extends PluginPanel
 	{
 		r.setBorder(BorderFactory.createEmptyBorder(1, ROW_INSET + 12, 1, ROW_INSET));
 		return r;
-	}
-
-	// A group's head: its name and the number of lines it opens to, in the
-	// Stats tab's fold-head styling.
-	/**
-	 * A band heading carrying a count of the rows it holds. These bands stand
-	 * open and the fold shuts them, so the count has to stand in both states: the
-	 * lists under it are capped and paged, so how many the group holds is not
-	 * something the rows on screen can tell you. The session strip's bands go
-	 * straight to quietHead and drop the count while they are open, where a count
-	 * beside the rows it is counting is noise. One treatment either way.
-	 */
-	private JPanel groupHead(String name, String count, String stateKey, boolean open)
-	{
-		return quietHead(name, count, stateKey);
 	}
 
 	private int shownCap(String key)
@@ -7699,25 +7649,6 @@ class ChroniclePanel extends PluginPanel
 		return m;
 	}
 
-	private boolean isActivityPage(String page)
-	{
-		Map<String, Map<String, List<String>>> tax = taxonomy(plugin.gson());
-		if (tax != null)
-		{
-			for (Map.Entry<String, Map<String, List<String>>> tab : tax.entrySet())
-			{
-				String name = tab.getKey().toLowerCase(Locale.ROOT);
-				if ((name.contains("minigame") || name.contains("clue"))
-					&& tab.getValue().containsKey(page))
-				{
-					return true;
-				}
-			}
-			return false;
-		}
-		return page.toLowerCase(Locale.ROOT).contains("treasure trails");
-	}
-
 	// Hiscores order. An ORDER only. The grid is built from the client's own
 	// skill list, so a skill Jagex adds shows up without an edit here. Overall is
 	// drawn separately, as its own headline.
@@ -8089,14 +8020,6 @@ class ChroniclePanel extends PluginPanel
 			}
 		});
 	}
-
-	static final String[][] FACETS = {
-		{"Skills", "775"},        // SideiconsInterface.STATS, the bar chart
-		{"PvM", "774"},           // SideiconsInterface.COMBAT, the crossed swords
-		{"Activities", "1053"},   // SideiconsInterface.MINIGAMES, the red star
-		{"Trackers", "2309"},     // SideiconsInterface.CHARACTER_SUMMARY
-	};
-
 	private String histFacet = "Skills";
 
 	private final Map<Integer, java.awt.image.BufferedImage> facetIcons = new LinkedHashMap<>();
@@ -8104,11 +8027,6 @@ class ChroniclePanel extends PluginPanel
 	// the labels still waiting on a sprite that has been asked for but has not
 	// landed, each with the size it wants it at
 	private final Map<Integer, List<Object[]>> facetWaiting = new LinkedHashMap<>();
-
-	private java.awt.image.BufferedImage facetIcon(int spriteId)
-	{
-		return facetIcons.get(spriteId);
-	}
 
 	/**
 	 * Dress a label in a game sprite at the size it asks for, fetching it off the
@@ -8664,11 +8582,6 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildHistory()
 	{
 		JPanel p = column();
-		// The labels of the build just discarded are nobody's business now. Left
-		// to pile up, an icon that never lands would hold every label the tab
-		// ever drew, which is the same unbounded queue that made it lag.
-		facetWaiting.clear();
-		itemWaiting.clear();
 		// The period is above the tabs now and the tabs replaced the facet strip,
 		// so this builds no controls of its own; it reads the window like anything
 		// else and draws the board the sub-tab asked for.
