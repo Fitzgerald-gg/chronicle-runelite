@@ -126,6 +126,8 @@ public class PanelPreviewTest
 		collapseAll(panel);
 		// the boss board, which is the hiscores roster and not the log's pages
 		shoot(panel, out, prefix + "-kills", "KILLS");
+		// and the whole sheet it now sits at the bottom of
+		shoot(panel, out, prefix + "-sheet", "SHEET");
 		shoot(panel, out, prefix + "-drops", "DROPS");
 		// the log narrowed: what the journal dates as landing inside the window
 		set(panel, "histGranularity", "Month");

@@ -91,7 +91,7 @@ class ChroniclePanel extends PluginPanel
 
 	private enum View
 	{
-		HOME, DROPS, SLAYER, LOG, STATS, HISTORY, JOURNAL, KILLS
+		HOME, DROPS, SLAYER, LOG, STATS, HISTORY, JOURNAL, KILLS, SHEET
 	}
 
 	/**
@@ -103,7 +103,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private enum Tab
 	{
-		RECORD, PVM, SKILLING, LOG
+		RECORD, HISCORES, LOG, TRACKERS
 	}
 
 	private static final Map<Tab, String[]> SUBS = new java.util.EnumMap<>(Tab.class);
@@ -114,12 +114,18 @@ class ChroniclePanel extends PluginPanel
 		// three are lifetime, and a tab called "This session" whose Journal lists
 		// other sittings is a worse lie than the scrolling it was meant to fix.
 		SUBS.put(Tab.RECORD, new String[]{"Now", "Journal", "Ledger"});
-		// Living is food, potions and vials: upkeep, not fighting, so it files
-		// with the purse and the roads under the Ledger. That leaves the fourth
-		// board here holding Combat alone and able to say so in a word that fits.
-		SUBS.put(Tab.PVM, new String[]{"Kills", "Loot", "Slayer", "Combat"});
-		SUBS.put(Tab.SKILLING, new String[]{"Skills", "Activities"});
+		// The bosses and the skills were two boards built from ONE widget that
+		// behaved in opposite ways on a click: a boss opened a card under its own
+		// grid row, a skill took over the screen. They are one sheet now, in the
+		// order the game's own hiscores panel puts them, which is the layout a
+		// player already knows: the skills, the combat and total levels, the
+		// activities, then the bosses.
+		SUBS.put(Tab.HISCORES, new String[]{"Hiscores", "Loot", "Slayer"});
 		SUBS.put(Tab.LOG, new String[0]);
+		// Every counter in one place. Combat's used to hang off PvM's fourth
+		// board, which put damage dealt and deaths a tab away from every other
+		// tally for no reason a reader could have guessed.
+		SUBS.put(Tab.TRACKERS, new String[0]);
 	}
 
 	private final ChroniclePlugin plugin;
@@ -313,9 +319,9 @@ class ChroniclePanel extends PluginPanel
 		// one of the 4,057 named sprites in runelite-api is a clock, an hourglass
 		// or a watch, so an all-sprite strip could not have had one.
 		addTab("tab_history.png", "Record", Tab.RECORD);
-		addTab("tab_pvm.png", "PvM", Tab.PVM);
-		addTab("tab_stats.png", "Skilling", Tab.SKILLING);
+		addTab("tab_pvm.png", "Hiscores", Tab.HISCORES);
 		addTab("tab_log.png", "Collection log", Tab.LOG);
+		addTab("tab_stats.png", "Trackers", Tab.TRACKERS);
 		north.add(tabGroup);
 		north.add(vgap(7));
 		north.add(searchField);
@@ -453,23 +459,21 @@ class ChroniclePanel extends PluginPanel
 	{
 		switch (tab)
 		{
-			case PVM:
+			case HISCORES:
 				switch (sub())
 				{
 					case "Loot":
 						return View.DROPS;
 					case "Slayer":
 						return View.SLAYER;
-					case "Combat":
-						return View.STATS;
-					case "Kills":
+					case "Hiscores":
 					default:
-						return View.KILLS;
+						return View.SHEET;
 				}
-			case SKILLING:
-				return View.HISTORY;
 			case LOG:
 				return View.LOG;
+			case TRACKERS:
+				return View.STATS;
 			case RECORD:
 			default:
 				switch (sub())
@@ -493,13 +497,12 @@ class ChroniclePanel extends PluginPanel
 			case DROPS:
 			case SLAYER:
 			case KILLS:
-				return Tab.PVM;
+			case SHEET:
+			case HISTORY:
+				return Tab.HISCORES;
 			case LOG:
 				return Tab.LOG;
-			case HISTORY:
-				return Tab.SKILLING;
 			case JOURNAL:
-			case STATS:
 			case HOME:
 			default:
 				return Tab.RECORD;
@@ -511,7 +514,9 @@ class ChroniclePanel extends PluginPanel
 		switch (v)
 		{
 			case KILLS:
-				return "Kills";
+			case SHEET:
+			case HISTORY:
+				return "Hiscores";
 			case DROPS:
 				return "Loot";
 			case SLAYER:
@@ -520,8 +525,6 @@ class ChroniclePanel extends PluginPanel
 				return "Ledger";
 			case JOURNAL:
 				return "Journal";
-			case HISTORY:
-				return "Skills";
 			case HOME:
 			default:
 				return "Now";
@@ -553,17 +556,15 @@ class ChroniclePanel extends PluginPanel
 		// deriving `view` every time would ignore anything that set it directly,
 		// which is how the preview harness reaches a board.
 		view = viewOf();
-		if (tab == Tab.SKILLING)
+		if (tab == Tab.HISCORES && "Hiscores".equals(sub()))
 		{
-			histFacet = "Activities".equals(sub()) ? "Activities" : "Skills";
+			// The sheet draws the skills grid itself; the facet is what its
+			// Activities band reads.
+			histFacet = "Skills";
 		}
-		else if (tab == Tab.PVM && "Kills".equals(sub()))
+		else if (tab == Tab.TRACKERS)
 		{
-			histFacet = "PvM";
-		}
-		else if (tab == Tab.PVM && "Combat".equals(sub()))
-		{
-			statsFamily = "Combat";
+			statsFamily = StatRegistry.FAMILIES[0];
 		}
 		else if (tab == Tab.RECORD && "Ledger".equals(sub())
 			&& !"Ledger & Roads".equals(statsFamily) && !"Living".equals(statsFamily))
@@ -1162,6 +1163,38 @@ class ChroniclePanel extends PluginPanel
 	 * <p>Opening one drops a card in under its own ROW rather than at the foot of
 	 * seventy, so what it says is beside what was clicked.
 	 */
+	/**
+	 * One sheet, in the order the game's own hiscores panel puts it: the skills
+	 * grid, the combat and total levels, the activities, then the bosses.
+	 *
+	 * <p>Nothing here is new. The two grids were already built from one widget
+	 * and were the panel's sharpest inconsistency, because a boss cell opened a
+	 * card under its own grid row while a skill cell of the same design took over
+	 * the screen. Stacked in the layout a player already knows, they are one board
+	 * with one verb, and the reader stops having to learn which grid they are on.
+	 */
+	private JPanel buildSheet()
+	{
+		JPanel p = column();
+		sheetBandDrawn = false;
+		String was = histFacet;
+		try
+		{
+			histFacet = "Skills";
+			p.add(buildHistory());
+			sheetBandDrawn = true;
+			histFacet = "Activities";
+			p.add(buildHistory());
+		}
+		finally
+		{
+			histFacet = was;
+			sheetBandDrawn = false;
+		}
+		p.add(buildKills());
+		return p;
+	}
+
 	private JPanel buildKills()
 	{
 		JPanel p = column();
@@ -1582,6 +1615,9 @@ class ChroniclePanel extends PluginPanel
 		{
 			switch (view)
 			{
+				case SHEET:
+					body = buildSheet();
+					break;
 				case KILLS:
 					body = buildKills();
 					break;
@@ -3738,8 +3774,8 @@ class ChroniclePanel extends PluginPanel
 	 */
 	void openLootKind(String kind, boolean onTask)
 	{
-		tab = Tab.PVM;
-		subByTab.put(Tab.PVM, "Loot");
+		tab = Tab.HISCORES;
+		subByTab.put(Tab.HISCORES, "Loot");
 		applyCommon();
 		// applyCommon clears where the reader was standing, the way opening a
 		// tab does, so the kind and the lens are set AFTER it. applyCommon ends
@@ -5976,8 +6012,12 @@ class ChroniclePanel extends PluginPanel
 		// the cell opens, nothing is orphaned, and a test holds the invariant that
 		// makes it safe -- every craft the registry can file under is a skill the
 		// grid draws, so every Skilling counter has a way in.
-		String[] families = tab == Tab.PVM ? new String[]{"Combat"}
-			: tab == Tab.RECORD ? new String[]{"Ledger & Roads", "Living"}
+		// Record's Ledger keeps the two families that are what a life COSTS. The
+		// Trackers tab holds every family there is, Combat included: it used to
+		// hang off PvM's fourth board, which put damage dealt and deaths one tab
+		// away from every other tally with nothing saying why.
+		String[] families = tab == Tab.RECORD
+			? new String[]{"Ledger & Roads", "Living"}
 			: StatRegistry.FAMILIES;
 		// Which family is SELECTED is navigation's business, not a builder's:
 		// applyCommon already sets it when a tab is opened, and resetting it here
@@ -8042,6 +8082,9 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 	private String histFacet = "Skills";
+	// True while the sheet is drawing its SECOND band, so the head card that
+	// stands over the whole sheet is not drawn again underneath it.
+	private boolean sheetBandDrawn;
 
 	private final Map<Integer, java.awt.image.BufferedImage> facetIcons = new LinkedHashMap<>();
 	private final java.util.Set<Integer> facetAsked = new java.util.HashSet<>();
@@ -8664,13 +8707,16 @@ class ChroniclePanel extends PluginPanel
 			// window: the nearest earlier baseline sitting well before it (a month
 			// of xp would read as one week's gain), or the earliest line on
 			// record when nothing predates the window at all.
-			if (before == null)
+			// Said once over the sheet, like the head card: both of its bands are
+			// measured from the same baseline, so the second would only repeat it.
+			if (before == null && !sheetBandDrawn)
 			{
 				p.add(note("Measured since " + from.getKey().format(FULL_DAY)
 					+ ", the earliest baseline on record."));
 				p.add(vgap(4));
 			}
-			else if (before.getKey().isBefore(pStart.minusDays(1)))
+			else if (before != null && !sheetBandDrawn
+				&& before.getKey().isBefore(pStart.minusDays(1)))
 			{
 				p.add(note("Measured since " + before.getKey().format(FULL_DAY)
 					+ ", the nearest earlier baseline."));
@@ -8903,8 +8949,14 @@ class ChroniclePanel extends PluginPanel
 				null, whole ? new java.util.HashMap<>() : retro, leftDated || whole);
 			SkillStand stand = skillStand(closing, live);
 			HistoryLog.Levels opened = HistoryLog.levels(opening, stand.keys);
-			p.add(headline(progress, gains, stand, opened, played));
-			p.add(vgap(5));
+			// The sheet stacks the skills band and the activities band, and one
+			// head card stands over both. Suppressed on the second pass rather
+			// than duplicated.
+			if (!sheetBandDrawn)
+			{
+				p.add(headline(progress, gains, stand, opened, played));
+				p.add(vgap(5));
+			}
 			// What the loot rows actually reach back to. The sittings are the
 			// only dated account of a take, so where they do not reach back to
 			// the period's start no loot figure was drawn at all, and the note

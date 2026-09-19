@@ -4076,14 +4076,18 @@ public class HistoryProgressCardTest
 			}
 		}
 		assertEquals("tabs: " + tips, 4, tips.size());
-		for (String want : new String[]{"Record", "PvM", "Skilling", "Collection log"})
+		for (String want : new String[]{"Record", "Hiscores", "Collection log", "Trackers"})
 		{
 			assertTrue("tabs: " + tips, tips.contains(want));
 		}
 		assertFalse("tabs: " + tips, tips.contains("History"));
-		assertFalse("the Stats tab is folded in: " + tips, tips.contains("Stats"));
 		assertFalse("Progression is no longer a destination: " + tips,
 			tips.contains("Progression"));
+		// PvM and Skilling were two tabs built from one widget whose cells behaved
+		// in opposite ways on a click. They are one sheet now, in the order the
+		// game's own hiscores panel puts it.
+		assertFalse("PvM and Skilling are one sheet: " + tips, tips.contains("PvM"));
+		assertFalse("PvM and Skilling are one sheet: " + tips, tips.contains("Skilling"));
 	}
 
 	@Test
