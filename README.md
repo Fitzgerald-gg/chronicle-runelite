@@ -15,29 +15,29 @@ whole record at once.
 ### Record
 
 <p align="left">
-  <img src="docs/img/record-now.png" width="242" alt="Record: Now">
-  <img src="docs/img/record-journal.png" width="242" alt="Record: Journal">
-  <img src="docs/img/record-ledger.png" width="242" alt="Record: Ledger">
+  <img src="docs/img/record-now.png" alt="Record: Now">
+  <img src="docs/img/record-journal.png" alt="Record: Journal">
+  <img src="docs/img/record-ledger.png" alt="Record: Ledger">
 </p>
 
-**Now** is the sitting you are in, under your current slayer task: xp gained, damage dealt, what
-you drank and ate, what your drops were worth, and what you left on the ground. Only the cards
-your play has actually earned are drawn, so the board stays as short as the session was. The
-most recent drops sit along the bottom.
+**Now** is your current gameplay session: the xp you gained, the drops you received and what
+they were worth, and whatever else the session actually produced. Only what you have triggered
+is shown, so a quiet session will be short and it will fill out over a longer grind. Your
+current slayer task sits at the top when you are on one, and the most recent drops along the
+bottom.
 
-**Journal** is the dated feed. Levels and 99s, pets, collection log slots, quests, diaries,
-combat achievements, deaths and what killed you, and the sessions themselves, filed under day
-headings and filterable to one lens at a time. Above it sits a title plate for the account.
+**Journal** is the dated feed. Every session, level, pet, collection log slot, quest, diary
+entry, combat achievement, death and what killed you, filed under day headings and filterable
+to one lens at a time.
 
-**Ledger** is the running count of everything that is neither a kill nor a skill. The purse
-(alchemy, gathered, dropped, spent), distance run and walked, teleports by destination, prayers
-activated, pickpockets, clue scrolls completed, and what your upkeep cost you.
+**Ledger** is a count of the trackers that are neither kills nor skills: the purse, the roads,
+teleports, and a long tail of odds and ends.
 
 ### PvM
 
 <p align="left">
-  <img src="docs/img/pvm-loot.png" width="242" alt="PvM: Loot">
-  <img src="docs/img/pvm-slayer.png" width="242" alt="PvM: Slayer">
+  <img src="docs/img/pvm-loot.png" alt="PvM: Loot">
+  <img src="docs/img/pvm-slayer.png" alt="PvM: Slayer">
 </p>
 
 **Kills** is the boss roster with your kill count against each.
@@ -56,8 +56,8 @@ drops the tasks produced.
 ### Skilling
 
 <p align="left">
-  <img src="docs/img/skilling-skills.png" width="242" alt="Skilling: Skills">
-  <img src="docs/img/skilling-drill.png" width="242" alt="Skilling: a skill opened">
+  <img src="docs/img/skilling-skills.png" alt="Skilling: Skills">
+  <img src="docs/img/skilling-drill.png" alt="Skilling: a skill opened">
 </p>
 
 **Skills** is the grid: the level and the experience each skill moved over the period, above a
@@ -69,7 +69,7 @@ that skill's own counters, such as logs chopped by tree or essence crafted by ru
 ### Collection log
 
 <p align="left">
-  <img src="docs/img/collection-log.png" width="242" alt="The collection log">
+  <img src="docs/img/collection-log.png" alt="The collection log">
 </p>
 
 The whole log under a completion figure, split across the game's own five tabs, a row per page
@@ -80,7 +80,7 @@ items still missing.
 ### Search
 
 <p align="left">
-  <img src="docs/img/search.png" width="242" alt="Searching the record">
+  <img src="docs/img/search.png" alt="Searching the record">
 </p>
 
 The box searches the record as you type: drops, collection log slots, journal lines, counters
