@@ -73,10 +73,8 @@ that skill's own counters, such as logs chopped by tree or essence crafted by ru
   <img src="docs/img/collection-log.png" alt="The collection log">
 </p>
 
-The whole log under a completion figure, split across the game's own five tabs, a row per page
-with the slots you hold and the kill count behind them. Opening the log in game records every
-page at once rather than only the tab you clicked, and opening a page here shows the odds on the
-items still missing.
+In the collection log tab you can see the whole log split across the five tabs the in-game one
+presents. Each line can be clicked on to show the drops inside.
 
 ### Search
 
