@@ -114,8 +114,10 @@ public class LootByKindTest
 		{
 			set(p, "histGranularity", period);
 			List<String> said = board(p);
-			assertTrue("the grouping control vanished at " + period, says(said, "By kind"));
-			assertTrue("the grouping control vanished at " + period, says(said, "By source"));
+			// One toggle carrying the reading it is on, so only one of the two
+			// labels is ever drawn. The rule is that the axis is OFFERED here.
+			assertTrue("the grouping control vanished at " + period,
+				says(said, "By kind") || says(said, "By source"));
 		}
 	}
 

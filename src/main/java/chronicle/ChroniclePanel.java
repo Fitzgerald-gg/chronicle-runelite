@@ -2344,49 +2344,52 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildDrops()
 	{
 		JPanel p = column();
-		JPanel lens = new JPanel(new GridLayout(1, 2, 3, 3));
-		lens.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		for (String l : new String[]{"Received", "Left behind"})
+		// Three modifiers, three buttons. There used to be six.
+		//
+		// Each of these is a binary, and each was drawn as a PAIR: one pill lit
+		// for where you are and one dark for where you are not. Three pairs in
+		// three rows is six buttons spent on three answers, and half of them are
+		// telling the reader what they are not looking at. A toggle carries its
+		// own state, so one pill an axis says the same thing in half the room.
+		//
+		// The rules that decide WHICH axes exist are unchanged, and they are the
+		// reason this is a row and not a sentence: left-behind is a list of items
+		// already and has nothing to regroup, and a task carries one items map
+		// across all of its monsters, so by source there is no on-task figure to
+		// show. An axis that cannot answer is not drawn at all.
+		java.util.List<JPanel> axes = new ArrayList<>();
+		axes.add(toggle(dropsLeftBehind ? "Left behind" : "Received", () ->
 		{
-			boolean on = l.equals("Left behind") == dropsLeftBehind;
-			JLabel pill = new JLabel(l, JLabel.CENTER);
-			pill.setOpaque(true);
-			pill.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-			pill.setFont(FontManager.getRunescapeSmallFont());
-			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-			pill.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
-			pill.addMouseListener(clicker(() ->
-			{
-				dropsLeftBehind = l.equals("Left behind");
-				rebuildInPlace();
-			}));
-			lens.add(pill);
-		}
-		p.add(lens);
-		p.add(vgap(6));
-		// The whole ledger, read the other way round: by what the thing IS
-		// rather than by what dropped it. "Every rune I have ever had" is a
-		// question about the record and had no board that could answer it.
-		//
-		// Offered on every period. It used to be drawn below the window branch,
-		// so choosing anything but Lifetime took the control off the board
-		// entirely -- and the roll dates its items as well as its sources, so
-		// there was never a reason it could not answer a window.
-		//
-		// Not offered on "Left behind", which is a list of items already: there
-		// is nothing there to group the other way.
+			dropsLeftBehind = !dropsLeftBehind;
+			lootKind = null;
+			rebuildInPlace();
+		}));
 		if (!dropsLeftBehind)
 		{
-			p.add(groupingPicker());
+			axes.add(toggle(dropsByKind ? "By kind" : "By source", () ->
+			{
+				dropsByKind = !dropsByKind;
+				lootKind = null;
+				rebuildInPlace();
+			}));
 		}
-		// Only over the kinds, and only where the period holds a task at all. By
-		// SOURCE it cannot be offered: a task carries one items map over all its
-		// monsters, so there is no on-task figure for one of them.
 		final boolean canAskOnTask = !dropsLeftBehind && dropsByKind && everOnTask();
 		if (canAskOnTask)
 		{
-			p.add(onTaskPicker());
+			axes.add(toggle(onTaskOnly ? "On task" : "All", () ->
+			{
+				onTaskOnly = !onTaskOnly;
+				rebuildInPlace();
+			}));
 		}
+		JPanel lens = new JPanel(new GridLayout(1, axes.size(), 3, 3));
+		lens.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		for (JPanel a : axes)
+		{
+			lens.add(a);
+		}
+		p.add(lens);
+		p.add(vgap(6));
 		// Taken BEFORE the period branch, because the tasks are not the roll. The
 		// roll is dated day by day and only begins where it begins; a task
 		// carries the stamp of its own close, so the on-task reading answers a
@@ -9896,6 +9899,27 @@ class ChroniclePanel extends PluginPanel
 	// too: a row that goes somewhere answers the cursor, and nothing is drawn for
 	// it at rest. The hand cursor alone was a one-pixel tell on a dark panel and
 	// readers were not finding the drills.
+	/**
+	 * One axis of a board, showing the reading it is on. Clicking flips it.
+	 *
+	 * <p>The pair of pills this replaces spent its dark half naming the reading
+	 * the reader had not chosen, which is the one thing on a 225px board nobody
+	 * needs to be told.
+	 */
+	private JPanel toggle(String reading, Runnable flip)
+	{
+		JPanel cell = new JPanel(new BorderLayout());
+		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		cell.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+		JLabel l = new JLabel(reading, JLabel.CENTER);
+		l.setFont(FontManager.getRunescapeSmallFont());
+		l.setForeground(accent());
+		cell.add(l, BorderLayout.CENTER);
+		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		cell.addMouseListener(clicker(flip));
+		return cell;
+	}
+
 	private static MouseAdapter clicker(Runnable r)
 	{
 		return new MouseAdapter()

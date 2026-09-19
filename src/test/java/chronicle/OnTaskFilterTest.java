@@ -247,11 +247,15 @@ public class OnTaskFilterTest
 	public void theLootBoardOffersItOverKindsOnly() throws Exception
 	{
 		ChroniclePanel p = panel();
+		// The axis is one toggle reading "On task" or "All", so the rule is
+		// tested on the axis being drawn at all, not on one of its two labels.
 		set(p, "dropsByKind", false);
+		List<String> bySource = say(p, "buildDrops");
 		assertFalse("By source cannot answer it and must not offer it",
-			has(say(p, "buildDrops"), "On task"));
+			has(bySource, "On task") || has(bySource, "All"));
 		set(p, "dropsByKind", true);
-		assertTrue(has(say(p, "buildDrops"), "On task"));
+		List<String> byKind = say(p, "buildDrops");
+		assertTrue(has(byKind, "On task") || has(byKind, "All"));
 	}
 
 	/** On task, the board reads the tasks rather than the ledger. */
