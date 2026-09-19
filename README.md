@@ -98,6 +98,13 @@ specific loot received.
 **Loot Tracker** enables the inheritance of your loot log for searching, so a late install starts
 with the drops already on your disk rather than empty.
 
+## Sync
+
+There is a sync option under the Advanced settings. It is off by default; turned on, it sends a
+copy of your full journal to a server of your choice as you play. For those technically minded
+of you, you can use this for hosting the data on your own server and use it in whatever way you
+wish. One example could be a Discord bot to query the data.
+
 ## Licence
 
 BSD 2-Clause, see [LICENSE](LICENSE). Not affiliated with Jagex or RuneLite.
