@@ -61,8 +61,8 @@ highest hit.
   <img src="docs/img/skilling-drill.png" alt="Skilling: a skill opened">
 </p>
 
-**Skills** is the grid: the level and the experience each skill moved over the period, above a
-summary of time played, sessions, experience and 99s reached. Opening a skill's cell drills into
+**Skills** shows the level and the experience each skill moved over the period as well as a
+summary of time played, sessions, experience and 99s reached. Opening a skill's cell will show
 that skill's own counters, such as logs chopped by tree or essence crafted by rune.
 
 **Activities** is the same reading for minigames and the skilling bosses.
