@@ -4083,7 +4083,7 @@ public class HistoryProgressCardTest
 			}
 		}
 		assertEquals("tabs: " + tips, 4, tips.size());
-		for (String want : new String[]{"Record", "Hiscores", "Collection log", "Trackers"})
+		for (String want : new String[]{"Record", "Hiscores", "Loot", "Trackers"})
 		{
 			assertTrue("tabs: " + tips, tips.contains(want));
 		}
@@ -4095,6 +4095,11 @@ public class HistoryProgressCardTest
 		// game's own hiscores panel puts it.
 		assertFalse("PvM and Skilling are one sheet: " + tips, tips.contains("PvM"));
 		assertFalse("PvM and Skilling are one sheet: " + tips, tips.contains("Skilling"));
+		// And the collection log stopped being a tab when the sheet's activity
+		// tiles became the way into it, which is what gave the loot a tab of its
+		// own instead of a sub-tab under the sheet.
+		assertFalse("the log is reached from the sheet now: " + tips,
+			tips.contains("Collection log"));
 	}
 
 	@Test

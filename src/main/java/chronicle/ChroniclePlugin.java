@@ -952,6 +952,20 @@ public class ChroniclePlugin extends Plugin
 	}
 
 	// The combat level as the journal last saw it, or 0.
+	/**
+	 * Quests, diaries and combat achievements as the journal holds them.
+	 *
+	 * <p>Kept current on the character-sheet beat and already read by the chase
+	 * book; the panel had no way to reach it at all until the sheet's activity
+	 * tiles needed it.
+	 */
+	JsonObject achievements()
+	{
+		// The preview harness builds a panel with no store behind it, and the sheet
+		// asks for this on every build.
+		return localStore == null ? new JsonObject() : localStore.achievements();
+	}
+
 	int combatLevel()
 	{
 		return localStore.combatLevel();

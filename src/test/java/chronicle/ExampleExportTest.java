@@ -103,7 +103,7 @@ public class ExampleExportTest
 		"tab", "subByTab", "view",
 		"histFacet", "histGranularity", "histCursor", "histFrom", "histTo",
 		"detailSource", "detailItem", "detailSkill", "detailTask",
-		"allTrackers", "showInfo", "bossOpen", "slayerLens",
+		"allTrackers", "showInfo", "sheetPage", "bossOpen", "slayerLens",
 		"clogPageSel", "journalLens", "dropsLeftBehind",
 		"dropsByKind", "lootKind", "lootTask", "onTaskOnly",
 		"statsFamily", "leftBehindSource", "leftBehindItem", "clogTab",
@@ -137,7 +137,7 @@ public class ExampleExportTest
 			"spanAsked", "historySpine", "historyFeed", "historyJourney",
 			"historyDay", "historyFeedTs", "historyEpoch", "skilled",
 			"itemsByName", "periodFrom", "periodTo", "searchJump",
-			"taskItemsEver", "taskKillsEverCache", "sheetBandDrawn", "periodTip", "measuredSince"})
+			"taskItemsEver", "taskKillsEverCache", "sheetBandDrawn", "periodTip", "measuredSince", "buildAchievements"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
 		}

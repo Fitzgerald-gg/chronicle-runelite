@@ -103,7 +103,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private enum Tab
 	{
-		RECORD, HISCORES, LOG, TRACKERS
+		RECORD, HISCORES, LOOT, TRACKERS
 	}
 
 	private static final Map<Tab, String[]> SUBS = new java.util.EnumMap<>(Tab.class);
@@ -120,8 +120,11 @@ class ChroniclePanel extends PluginPanel
 		// order the game's own hiscores panel puts them, which is the layout a
 		// player already knows: the skills, the combat and total levels, the
 		// activities, then the bosses.
-		SUBS.put(Tab.HISCORES, new String[]{"Hiscores", "Loot", "Slayer"});
-		SUBS.put(Tab.LOG, new String[0]);
+		// No sub-tabs: the sheet is one board. Its activity tiles are the way into
+		// the collection log, the diaries, the combat achievements and the quests,
+		// which is what freed a whole tab for the loot.
+		SUBS.put(Tab.HISCORES, new String[0]);
+		SUBS.put(Tab.LOOT, new String[]{"Loot", "Slayer"});
 		// Every counter in one place. Combat's used to hang off PvM's fourth
 		// board, which put damage dealt and deaths a tab away from every other
 		// tally for no reason a reader could have guessed.
@@ -320,7 +323,7 @@ class ChroniclePanel extends PluginPanel
 		// or a watch, so an all-sprite strip could not have had one.
 		addTab("tab_history.png", "Record", Tab.RECORD);
 		addTab("tab_pvm.png", "Hiscores", Tab.HISCORES);
-		addTab("tab_log.png", "Collection log", Tab.LOG);
+		addTab("tab_log.png", "Loot", Tab.LOOT);
 		addTab("tab_stats.png", "Trackers", Tab.TRACKERS);
 		north.add(tabGroup);
 		north.add(vgap(7));
@@ -465,18 +468,9 @@ class ChroniclePanel extends PluginPanel
 		switch (tab)
 		{
 			case HISCORES:
-				switch (sub())
-				{
-					case "Loot":
-						return View.DROPS;
-					case "Slayer":
-						return View.SLAYER;
-					case "Hiscores":
-					default:
-						return View.SHEET;
-				}
-			case LOG:
-				return View.LOG;
+				return View.SHEET;
+			case LOOT:
+				return "Slayer".equals(sub()) ? View.SLAYER : View.DROPS;
 			case TRACKERS:
 				return View.STATS;
 			case RECORD:
@@ -501,12 +495,12 @@ class ChroniclePanel extends PluginPanel
 		{
 			case DROPS:
 			case SLAYER:
+				return Tab.LOOT;
 			case KILLS:
 			case SHEET:
 			case HISTORY:
-				return Tab.HISCORES;
 			case LOG:
-				return Tab.LOG;
+				return Tab.HISCORES;
 			case JOURNAL:
 			case HOME:
 			default:
@@ -521,7 +515,8 @@ class ChroniclePanel extends PluginPanel
 			case KILLS:
 			case SHEET:
 			case HISTORY:
-				return "Hiscores";
+			case LOG:
+				return "";
 			case DROPS:
 				return "Loot";
 			case SLAYER:
@@ -561,10 +556,9 @@ class ChroniclePanel extends PluginPanel
 		// deriving `view` every time would ignore anything that set it directly,
 		// which is how the preview harness reaches a board.
 		view = viewOf();
-		if (tab == Tab.HISCORES && "Hiscores".equals(sub()))
+		sheetPage = null;
+		if (tab == Tab.HISCORES)
 		{
-			// The sheet draws the skills grid itself; the facet is what its
-			// Activities band reads.
 			histFacet = "Skills";
 		}
 		else if (tab == Tab.TRACKERS)
@@ -1198,13 +1192,22 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	/** The activities Chronicle can actually answer for, in the hiscores' shape. */
+	/**
+	 * The activities band, which is also the way into everything the sheet does
+	 * not draw itself.
+	 *
+	 * <p>label, the source it reads, and the page a click opens or "" for a tile
+	 * that is only a figure. Four of these carry a destination, and between them
+	 * they are why the collection log stopped needing a tab of its own.
+	 */
 	private static final String[][] ACTIVITIES = {
-		// label, and the clog page or ledger source it reads
-		{"Clues", ""},
-		{"Rifts closed", "Guardians of the Rift"},
-		{"Soul Wars", "Soul Wars"},
-		{"Collections", ""},
+		{"Clues", "", ""},
+		{"Rifts closed", "Guardians of the Rift", ""},
+		{"Soul Wars", "Soul Wars", ""},
+		{"Collections", "", "log"},
+		{"Quests", "", "quests"},
+		{"Diaries", "", "diaries"},
+		{"Combat", "", "combat"},
 	};
 
 	private static final String[] CLUE_TIERS = {
@@ -1234,14 +1237,14 @@ class ChroniclePanel extends PluginPanel
 		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
 		for (String[] a : ACTIVITIES)
 		{
-			grid.add(activityCell(a[0], a[1]));
+			grid.add(activityCell(a[0], a[1], a[2]));
 		}
 		p.add(grid);
 		p.add(vgap(6));
 		return p;
 	}
 
-	private JPanel activityCell(String label, String source)
+	private JPanel activityCell(String label, String source, String page)
 	{
 		JPanel cell = new JPanel(new BorderLayout(3, 0));
 		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -1286,9 +1289,55 @@ class ChroniclePanel extends PluginPanel
 		else if ("Collections".equals(label))
 		{
 			figure = plugin.clogFinished();
+			int avail = plugin.clogAvailable();
 			hover = tip("Collection log",
-				new String[]{"Obtained", "Available"},
-				new String[]{fmt(plugin.clogFinished()), fmt(plugin.clogAvailable())});
+				new String[]{"Obtained", "Available", "Share"},
+				new String[]{fmt(figure), fmt(avail),
+					avail > 0 ? Math.round(figure * 1000.0 / avail) / 10.0 + "%" : "-"});
+			mountKindIcon(icon, label);
+		}
+		else if ("Quests".equals(label))
+		{
+			JsonObject q = achievements().has("quests")
+				&& achievements().get("quests").isJsonObject()
+				? achievements().getAsJsonObject("quests") : new JsonObject();
+			long done = 0;
+			long started = 0;
+			for (String k : q.keySet())
+			{
+				String state = q.get(k).getAsString();
+				if ("FINISHED".equals(state))
+				{
+					done++;
+				}
+				else if ("IN_PROGRESS".equals(state))
+				{
+					started++;
+				}
+			}
+			figure = done;
+			hover = tip("Quests",
+				new String[]{"Complete", "In progress", "Known"},
+				new String[]{fmt(done), fmt(started), fmt(q.size())});
+			mountKindIcon(icon, label);
+		}
+		else if ("Diaries".equals(label))
+		{
+			long[] d = diaryStanding();
+			figure = d[0];
+			hover = tip("Achievement diaries",
+				new String[]{"Tiers done", "Regions finished", "Regions"},
+				new String[]{d[0] + " / " + d[1], fmt(d[2]), fmt(d[3])});
+			mountKindIcon(icon, label);
+		}
+		else if ("Combat".equals(label))
+		{
+			long[] c = combatStanding();
+			figure = c[0];
+			hover = tip("Combat achievements",
+				new String[]{"Points", "Tiers unlocked", "Seen by name"},
+				new String[]{c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]),
+					fmt(c[2]) + " / 6", fmt(c[3])});
 			mountKindIcon(icon, label);
 		}
 		else
@@ -1298,6 +1347,16 @@ class ChroniclePanel extends PluginPanel
 			mountKindIcon(icon, source);
 		}
 		cell.setToolTipText(hover);
+		if (!page.isEmpty())
+		{
+			cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			final String to = page;
+			cell.addMouseListener(clicker(() ->
+			{
+				sheetPage = to;
+				rebuild();
+			}));
+		}
 		cell.add(icon, BorderLayout.WEST);
 		JLabel fig = new JLabel(figure > 0 ? fmt(figure) : "-", JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
@@ -1638,6 +1697,7 @@ class ChroniclePanel extends PluginPanel
 		spanAsked = false;
 		taskKillsEverCache = null;
 		taskItemsEver = null;
+		buildAchievements = null;
 		// The labels of the build just discarded are nobody's business now. Left to
 		// pile up, an icon that never lands would hold every label the panel ever
 		// drew, which is the same unbounded queue that made the trackers page lag.
@@ -1723,6 +1783,10 @@ class ChroniclePanel extends PluginPanel
 		else if (leftBehindSource != null || leftBehindItem != null)
 		{
 			body = buildLeftBehindDetail();
+		}
+		else if (sheetPage != null)
+		{
+			body = buildSheetPage();
 		}
 		else
 		{
@@ -3891,8 +3955,8 @@ class ChroniclePanel extends PluginPanel
 	 */
 	void openLootKind(String kind, boolean onTask)
 	{
-		tab = Tab.HISCORES;
-		subByTab.put(Tab.HISCORES, "Loot");
+		tab = Tab.LOOT;
+		subByTab.put(Tab.LOOT, "Loot");
 		applyCommon();
 		// applyCommon clears where the reader was standing, the way opening a
 		// tab does, so the kind and the lens are set AFTER it. applyCommon ends
@@ -4019,6 +4083,12 @@ class ChroniclePanel extends PluginPanel
 		if (showInfo)
 		{
 			showInfo = false;
+			rebuild();
+			return;
+		}
+		if (sheetPage != null)
+		{
+			sheetPage = null;
 			rebuild();
 			return;
 		}
@@ -8122,6 +8192,346 @@ class ChroniclePanel extends PluginPanel
 		return cell;
 	}
 
+	private JsonObject buildAchievements;
+
+	/** Read once a build: three tiles and up to three boards all ask for it. */
+	private JsonObject achievements()
+	{
+		if (buildAchievements == null)
+		{
+			buildAchievements = plugin.achievements();
+		}
+		return buildAchievements;
+	}
+
+	/** tiers done, tiers there are, regions finished, regions. */
+	private long[] diaryStanding()
+	{
+		JsonObject d = achievements().has("diaries")
+			&& achievements().get("diaries").isJsonObject()
+			? achievements().getAsJsonObject("diaries") : new JsonObject();
+		long done = 0;
+		long all = 0;
+		long whole = 0;
+		for (String region : d.keySet())
+		{
+			JsonObject tiers = d.getAsJsonObject(region);
+			long here = 0;
+			for (String tier : tiers.keySet())
+			{
+				all++;
+				if (tiers.get(tier).getAsBoolean())
+				{
+					done++;
+					here++;
+				}
+			}
+			if (here > 0 && here == tiers.size())
+			{
+				whole++;
+			}
+		}
+		return new long[]{done, all, whole, d.size()};
+	}
+
+	/**
+	 * points, points there are, tiers unlocked, completions seen by name.
+	 *
+	 * <p>The total comes from the GAME where the journal has witnessed a combat
+	 * achievement, because the game states its own total on every one of them and
+	 * tasks are added between releases: a recent event says 2,624 where the
+	 * bundled table says 2,697. The table is the fallback, not the authority.
+	 */
+	private long[] combatStanding()
+	{
+		JsonObject c = achievements().has("combat")
+			&& achievements().get("combat").isJsonObject()
+			? achievements().getAsJsonObject("combat") : new JsonObject();
+		long points = c.has("points") ? c.get("points").getAsLong() : 0;
+		long tiers = 0;
+		if (c.has("tiers") && c.get("tiers").isJsonObject())
+		{
+			for (String k : c.getAsJsonObject("tiers").keySet())
+			{
+				if (c.getAsJsonObject("tiers").get(k).getAsLong() > 0)
+				{
+					tiers++;
+				}
+			}
+		}
+		long possible = 0;
+		long seen = 0;
+		for (JsonObject e : plugin.feedNewest(4000))
+		{
+			if (!"COMBAT_ACHIEVEMENT".equals(str(e, "type", "")))
+			{
+				continue;
+			}
+			seen++;
+			JsonObject data = e.has("data") && e.get("data").isJsonObject()
+				? e.getAsJsonObject("data") : null;
+			if (possible == 0 && data != null && data.has("totalPossiblePoints"))
+			{
+				possible = data.get("totalPossiblePoints").getAsLong();
+			}
+		}
+		if (possible == 0)
+		{
+			possible = 0;   // no witnessed event: say the points and not a fraction
+		}
+		return new long[]{points, possible, tiers, seen};
+	}
+
+	/**
+	 * The four pages the sheet's activity tiles open. Each starts with a back row,
+	 * because a reader was sent here rather than having drilled in.
+	 */
+	private JPanel buildSheetPage()
+	{
+		if ("log".equals(sheetPage))
+		{
+			JPanel p = column();
+			p.add(backRow());
+			p.add(vgap(4));
+			p.add(buildLog());
+			return p;
+		}
+		JPanel p = column();
+		p.add(backRow());
+		p.add(vgap(4));
+		if ("quests".equals(sheetPage))
+		{
+			buildQuests(p);
+		}
+		else if ("diaries".equals(sheetPage))
+		{
+			buildDiaries(p);
+		}
+		else
+		{
+			buildCombatAchievements(p);
+		}
+		return p;
+	}
+
+	private static JsonObject bundledDiaries;
+	private static JsonObject bundledCombat;
+
+	private static JsonObject bundle(String name, JsonObject cached)
+	{
+		if (cached != null)
+		{
+			return cached;
+		}
+		try (java.io.InputStreamReader r = new java.io.InputStreamReader(
+			ChroniclePanel.class.getResourceAsStream("/chronicle/" + name),
+			java.nio.charset.StandardCharsets.UTF_8))
+		{
+			return new com.google.gson.Gson().fromJson(r, JsonObject.class);
+		}
+		catch (Exception e)
+		{
+			return new JsonObject();
+		}
+	}
+
+	private void buildQuests(JPanel p)
+	{
+		JsonObject q = achievements().has("quests")
+			&& achievements().get("quests").isJsonObject()
+			? achievements().getAsJsonObject("quests") : new JsonObject();
+		if (q.size() == 0)
+		{
+			p.add(note("The quest list arrives when you next log in."));
+			return;
+		}
+		List<String> done = new ArrayList<>();
+		List<String> going = new ArrayList<>();
+		List<String> not = new ArrayList<>();
+		for (String name : q.keySet())
+		{
+			String state = q.get(name).getAsString();
+			("FINISHED".equals(state) ? done : "IN_PROGRESS".equals(state) ? going : not)
+				.add(name);
+		}
+		JPanel head = card("Quests");
+		head.add(row("Complete", fmt(done.size()) + " / " + fmt(q.size()), accent()));
+		head.add(row("In progress", fmt(going.size()), null));
+		head.add(row("Not started", fmt(not.size()), null));
+		p.add(head);
+		p.add(vgap(6));
+		addNames(p, "IN PROGRESS", going);
+		addNames(p, "NOT STARTED", not);
+		addNames(p, "COMPLETE", done);
+	}
+
+	private void addNames(JPanel p, String heading, List<String> names)
+	{
+		if (names.isEmpty())
+		{
+			return;
+		}
+		java.util.Collections.sort(names);
+		p.add(group(heading + " (" + fmt(names.size()) + ")"));
+		for (String n : names)
+		{
+			p.add(row(n, "", null));
+		}
+		p.add(vgap(4));
+	}
+
+	private void buildDiaries(JPanel p)
+	{
+		bundledDiaries = bundle("osrs_achievement_diaries.json", bundledDiaries);
+		JsonObject tasks = bundledDiaries.has("diaries")
+			? bundledDiaries.getAsJsonObject("diaries") : new JsonObject();
+		JsonObject mine = achievements().has("diaries")
+			&& achievements().get("diaries").isJsonObject()
+			? achievements().getAsJsonObject("diaries") : new JsonObject();
+		long[] d = diaryStanding();
+		JPanel head = card("Achievement diaries");
+		head.add(row("Tiers done", d[0] + " / " + d[1], accent()));
+		head.add(row("Regions finished", fmt(d[2]) + " / " + fmt(d[3]), null));
+		p.add(head);
+		p.add(vgap(6));
+		// The game states which TIERS are done and never which tasks, so a tier is
+		// ticked or it is not, and the tasks under it are what it asks for rather
+		// than a checklist of what is left.
+		for (String region : tasks.keySet())
+		{
+			JsonObject tiers = tasks.getAsJsonObject(region);
+			String key = region.toLowerCase(Locale.ROOT);
+			JsonObject held = null;
+			for (String k : mine.keySet())
+			{
+				if (k.equalsIgnoreCase(key) || key.startsWith(k.toLowerCase(Locale.ROOT)))
+				{
+					held = mine.getAsJsonObject(k);
+					break;
+				}
+			}
+			p.add(group(region.toUpperCase(Locale.ROOT)));
+			for (String tier : new String[]{"easy", "medium", "hard", "elite"})
+			{
+				if (!tiers.has(tier))
+				{
+					continue;
+				}
+				int n = tiers.getAsJsonArray(tier).size();
+				boolean got = held != null && held.has(tier) && held.get(tier).getAsBoolean();
+				JPanel line = row(tier.substring(0, 1).toUpperCase(Locale.ROOT)
+						+ tier.substring(1),
+					got ? "done" : fmt(n) + " tasks", got ? accent() : null);
+				final String reg = region;
+				final String tr = tier;
+				line.setCursor(java.awt.Cursor.getPredefinedCursor(
+					java.awt.Cursor.HAND_CURSOR));
+				line.setToolTipText(taskTip(region + " " + tier,
+					tiers.getAsJsonArray(tr)));
+				p.add(line);
+			}
+			p.add(vgap(4));
+		}
+	}
+
+	/** A tier's tasks, as the markup a tooltip takes. Capped so it stays readable. */
+	private static String taskTip(String title, com.google.gson.JsonArray tasks)
+	{
+		StringBuilder sb = new StringBuilder("<html><body style='padding:2px'>");
+		sb.append("<div style='color:#8f8f8f'>").append(title).append("</div>");
+		for (int i = 0; i < tasks.size() && i < 14; i++)
+		{
+			JsonObject t = tasks.get(i).getAsJsonObject();
+			String task = t.get("task").getAsString();
+			sb.append("<div>").append(task.length() > 78 ? task.substring(0, 78) + "..." : task)
+				.append("</div>");
+		}
+		if (tasks.size() > 14)
+		{
+			sb.append("<div style='color:#8f8f8f'>and ").append(tasks.size() - 14)
+				.append(" more</div>");
+		}
+		return sb.append("</body></html>").toString();
+	}
+
+	private void buildCombatAchievements(JPanel p)
+	{
+		bundledCombat = bundle("osrs_combat_achievements.json", bundledCombat);
+		JsonObject all = bundledCombat.has("tasks")
+			? bundledCombat.getAsJsonObject("tasks") : new JsonObject();
+		long[] c = combatStanding();
+		JPanel head = card("Combat achievements");
+		head.add(row("Points", c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]),
+			accent()));
+		head.add(row("Tiers unlocked", fmt(c[2]) + " / 6", null));
+		p.add(head);
+		p.add(vgap(6));
+		// The game hands over points and which tiers are unlocked, never the list of
+		// tasks behind them. Only the ones this journal watched land can be named, so
+		// the rest are what the tier ASKS for rather than what is left to do, and the
+		// board says which is which instead of implying a checklist it cannot fill.
+		java.util.Set<String> witnessed = new java.util.LinkedHashSet<>();
+		for (JsonObject e : plugin.feedNewest(4000))
+		{
+			if ("COMBAT_ACHIEVEMENT".equals(str(e, "type", "")) && e.has("data")
+				&& e.get("data").isJsonObject()
+				&& e.getAsJsonObject("data").has("task"))
+			{
+				witnessed.add(e.getAsJsonObject("data").get("task").getAsString());
+			}
+		}
+		if (!witnessed.isEmpty())
+		{
+			p.add(group("SEEN LAND (" + fmt(witnessed.size()) + ")"));
+			for (String w : witnessed)
+			{
+				p.add(row(w, "", accent()));
+			}
+			p.add(vgap(4));
+			p.add(note("The game never lists which tasks are done, so these are the "
+				+ "ones this journal watched land. The tiers below are what they ask "
+				+ "for."));
+			p.add(vgap(4));
+		}
+		java.util.Map<String, java.util.List<JsonObject>> byTier = new LinkedHashMap<>();
+		for (String tier : new String[]{"easy", "medium", "hard", "elite", "master",
+			"grandmaster"})
+		{
+			byTier.put(tier, new ArrayList<>());
+		}
+		for (String id : all.keySet())
+		{
+			JsonObject task = all.getAsJsonObject(id);
+			java.util.List<JsonObject> into = byTier.get(task.get("tier").getAsString());
+			if (into != null)
+			{
+				into.add(task);
+			}
+		}
+		for (Map.Entry<String, java.util.List<JsonObject>> e : byTier.entrySet())
+		{
+			if (e.getValue().isEmpty())
+			{
+				continue;
+			}
+			p.add(group(e.getKey().toUpperCase(Locale.ROOT)
+				+ " (" + fmt(e.getValue().size()) + ")"));
+			for (JsonObject task : e.getValue())
+			{
+				JPanel line = row(task.get("name").getAsString(),
+					task.get("monster").getAsString(),
+					witnessed.contains(task.get("name").getAsString()) ? accent() : null);
+				line.setToolTipText(tip(task.get("name").getAsString(),
+					new String[]{"Tier", "Where", "Task"},
+					new String[]{task.get("tier").getAsString(),
+						task.get("monster").getAsString(),
+						task.get("task").getAsString()}));
+				p.add(line);
+			}
+			p.add(vgap(4));
+		}
+	}
+
 	/** The head card's four figures, as the markup a tooltip takes. */
 	private String periodTip(long[] played, List<Map.Entry<String, Long>> gains)
 	{
@@ -8278,6 +8688,11 @@ class ChroniclePanel extends PluginPanel
 	// What the total level tile says on hover while the sheet is drawing, in the
 	// markup RuneLite's own hiscores panel uses for exactly this.
 	private String periodTip;
+	// A page the sheet's activity tiles send the reader to: "log", "quests",
+	// "diaries" or "combat". Like showInfo and allTrackers it is somewhere the
+	// reader was SENT rather than somewhere they drilled, so it leaves by its own
+	// branch of backDetail rather than by popping the stack.
+	private String sheetPage;
 	// What the period's figures are measured FROM, when that is not simply the eve
 	// of the window. Hangs on the period control rather than on the board.
 	private String measuredSince;

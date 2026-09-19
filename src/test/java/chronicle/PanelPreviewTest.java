@@ -128,6 +128,13 @@ public class PanelPreviewTest
 		shoot(panel, out, prefix + "-kills", "KILLS");
 		// and the whole sheet it now sits at the bottom of
 		shoot(panel, out, prefix + "-sheet", "SHEET");
+		// the four pages the sheet's activity tiles open
+		for (String page : new String[]{"quests", "diaries", "combat"})
+		{
+			set(panel, "sheetPage", page);
+			shoot(panel, out, prefix + "-page-" + page, "SHEET");
+		}
+		set(panel, "sheetPage", null);
 		shoot(panel, out, prefix + "-drops", "DROPS");
 		// the log narrowed: what the journal dates as landing inside the window
 		set(panel, "histGranularity", "Month");
@@ -1579,6 +1586,12 @@ public class PanelPreviewTest
 		{
 			return new GrindBook(new Gson()).petChases(clog, sources, lifetime,
 				skillSheet(), store != null ? store.achievements() : achievements, pets);
+		}
+
+		@Override
+		com.google.gson.JsonObject achievements()
+		{
+			return store != null ? store.achievements() : new com.google.gson.JsonObject();
 		}
 
 		@Override
