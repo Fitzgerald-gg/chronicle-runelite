@@ -356,6 +356,11 @@ class ChroniclePanel extends PluginPanel
 			}
 		});
 		homeTicker.start();
+		// Swing waits 750ms before showing a tooltip, which on a board whose tiles
+		// carry their names in one is most of a second of nothing every time the
+		// cursor moves. Shortened here, and given long enough on screen to read.
+		javax.swing.ToolTipManager.sharedInstance().setInitialDelay(220);
+		javax.swing.ToolTipManager.sharedInstance().setDismissDelay(20_000);
 
 		JPanel manageRow = new JPanel();
 		manageRow.setLayout(new BoxLayout(manageRow, BoxLayout.X_AXIS));
@@ -7964,8 +7969,77 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(grid);
 		p.add(vgap(3));
-		p.add(totalLevelTile(stand, opened));
+		// Combat beside Total, the way the game's own panel puts them, and each
+		// carrying the reading that belongs to it: the period on the total, the
+		// combat counters on the combat level.
+		JPanel levels2 = new JPanel(new GridLayout(1, 2, 2, 2));
+		levels2.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		levels2.setAlignmentX(Component.LEFT_ALIGNMENT);
+		levels2.add(combatLevelTile());
+		levels2.add(totalLevelTile(stand, opened));
+		p.add(levels2);
 		p.add(vgap(6));
+	}
+
+	/** The combat level, wearing a handful of the combat counters on hover. */
+	private JPanel combatLevelTile()
+	{
+		JPanel cell = new JPanel(new BorderLayout(3, 0));
+		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		cell.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+		cell.setAlignmentX(Component.LEFT_ALIGNMENT);
+		cell.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+		JLabel name = new JLabel("Combat");
+		name.setFont(FontManager.getRunescapeSmallFont());
+		name.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+		cell.add(name, BorderLayout.WEST);
+		int cb = plugin.combatLevel();
+		JLabel fig = new JLabel(cb > 0 ? fmt(cb) : "-", JLabel.RIGHT);
+		fig.setFont(FontManager.getRunescapeSmallFont());
+		fig.setForeground(cb > 0 ? ColorScheme.LIGHT_GRAY_COLOR
+			: ColorScheme.LIGHT_GRAY_COLOR.darker());
+		cell.add(fig, BorderLayout.EAST);
+		Map<String, Long> c = counters();
+		cell.setToolTipText(tip("Combat",
+			new String[]{"Damage dealt", "Highest hit", "Deaths", "Hits blocked"},
+			new String[]{
+				fmt(c.getOrDefault(chronicle.counters.StatKeys.DAMAGE_DEALT, 0L)),
+				fmt(c.getOrDefault(chronicle.counters.StatKeys.HIGHEST_HIT, 0L)),
+				fmt(c.getOrDefault(chronicle.counters.StatKeys.DEATHS, 0L)),
+				fmt(c.getOrDefault(chronicle.counters.StatKeys.HITS_BLOCKED, 0L))}));
+		return cell;
+	}
+
+	/** The head card's four figures, as the markup a tooltip takes. */
+	private String periodTip(long[] played, List<Map.Entry<String, Long>> gains)
+	{
+		long xp = 0;
+		for (Map.Entry<String, Long> g : gains)
+		{
+			xp += g.getValue();
+		}
+		return tip("The period",
+			new String[]{"Time played", "Sessions", "Experience"},
+			new String[]{hoursMinutes(played[0]), fmt(played[1]), "+" + gp(xp)});
+	}
+
+	/**
+	 * A hover card in the shape RuneLite's own hiscores panel draws: a titled
+	 * block of label and figure rows. That panel builds its with setToolTipText
+	 * and HTML, which is the idiom a player has already met, and it costs a board
+	 * nothing at rest because the popup overflows the panel rather than reserving
+	 * room inside it.
+	 */
+	private static String tip(String title, String[] labels, String[] figures)
+	{
+		StringBuilder sb = new StringBuilder("<html><body style='padding:2px'>");
+		sb.append("<div style='color:#8f8f8f'>").append(title).append("</div>");
+		for (int i = 0; i < labels.length && i < figures.length; i++)
+		{
+			sb.append("<div>").append(labels[i]).append(": <span style='color:#c8a25a'>")
+				.append(figures[i]).append("</span></div>");
+		}
+		return sb.append("</body></html>").toString();
 	}
 
 	/**
@@ -8001,6 +8075,10 @@ class ChroniclePanel extends PluginPanel
 		name.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
 		cell.add(name, BorderLayout.WEST);
 
+		if (periodTip != null)
+		{
+			cell.setToolTipText(periodTip);
+		}
 		JLabel fig = new JLabel(figure, JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
 		fig.setForeground(levels > 0 ? accent() : Color.WHITE);
@@ -8085,6 +8163,9 @@ class ChroniclePanel extends PluginPanel
 	// True while the sheet is drawing its SECOND band, so the head card that
 	// stands over the whole sheet is not drawn again underneath it.
 	private boolean sheetBandDrawn;
+	// What the total level tile says on hover while the sheet is drawing, in the
+	// markup RuneLite's own hiscores panel uses for exactly this.
+	private String periodTip;
 
 	private final Map<Integer, java.awt.image.BufferedImage> facetIcons = new LinkedHashMap<>();
 	private final java.util.Set<Integer> facetAsked = new java.util.HashSet<>();
@@ -8949,10 +9030,15 @@ class ChroniclePanel extends PluginPanel
 				null, whole ? new java.util.HashMap<>() : retro, leftDated || whole);
 			SkillStand stand = skillStand(closing, live);
 			HistoryLog.Levels opened = HistoryLog.levels(opening, stand.keys);
-			// The sheet stacks the skills band and the activities band, and one
-			// head card stands over both. Suppressed on the second pass rather
-			// than duplicated.
-			if (!sheetBandDrawn)
+			// On the sheet the head card is not drawn at all: its four figures are
+			// what the total level tile says when the cursor is on it, which costs
+			// no room on a 225px board and puts the reading beside the number it
+			// describes. Everywhere else it is still a card.
+			if (view == View.SHEET)
+			{
+				periodTip = periodTip(played, gains);
+			}
+			else if (!sheetBandDrawn)
 			{
 				p.add(headline(progress, gains, stand, opened, played));
 				p.add(vgap(5));
