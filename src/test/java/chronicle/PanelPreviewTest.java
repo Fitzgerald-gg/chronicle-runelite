@@ -146,6 +146,9 @@ public class PanelPreviewTest
 		// a skill under the glass, which the grid cell now opens on
 		set(panel, "detailSkill", "Woodcutting");
 		shoot(panel, out, prefix + "-skill-detail", "HISTORY");
+		// a skill whose ground the ledger has loot for, which Woodcutting's has not
+		set(panel, "detailSkill", "Fishing");
+		shoot(panel, out, prefix + "-skill-ground", "HISTORY");
 		set(panel, "detailSkill", null);
 
 		// drilled: a source, then an item inside one

@@ -8678,6 +8678,46 @@ class ChroniclePanel extends PluginPanel
 	 * then the counters filed under it. The cell this opens from renders a level
 	 * over an xp gain, so xp is the question it asked and xp is answered first.
 	 */
+	/**
+	 * The loot sources that are one skill's own ground, under the skill.
+	 *
+	 * <p>A Fishing Trawler casket, a Guardians of the Rift pouch and a Giants'
+	 * Foundry reward were filed as "activities", which made them a category of
+	 * their own on the sheet and nowhere near the skill they belong to. They are
+	 * loot, they already sit on the Loot board by source, and the mapping from a
+	 * page to its skill was already here for the icons. So the skill carries them.
+	 */
+	private List<LocalStore.SourceRow> skillGround(String craft)
+	{
+		java.util.Set<String> ownTile = new java.util.HashSet<>();
+		for (String[] a : ACTIVITIES)
+		{
+			if (!a[1].isEmpty())
+			{
+				ownTile.add(a[1].toLowerCase(Locale.ROOT));
+			}
+		}
+		List<LocalStore.SourceRow> out = new ArrayList<>();
+		for (LocalStore.SourceRow r : sources())
+		{
+			// A source with its own node on the sheet is not also a skill's
+			// ground: Guardians of the Rift is Runecraft's, but the hiscores give
+			// it a node of its own and so do we, and one thing counted in two
+			// places on one board is a board that disagrees with itself.
+			if (ownTile.contains(r.name.toLowerCase(Locale.ROOT)))
+			{
+				continue;
+			}
+			net.runelite.api.Skill sk = skillOf(r.name);
+			if (sk != null && sk.name().equalsIgnoreCase(craft) && r.value > 0)
+			{
+				out.add(r);
+			}
+		}
+		out.sort((x, y) -> Long.compare(y.value, x.value));
+		return out;
+	}
+
 	private JPanel buildSkillDetail(String craft)
 	{
 		JPanel p = column();
@@ -8723,7 +8763,8 @@ class ChroniclePanel extends PluginPanel
 			}
 			rows.add(e);
 		}
-		if (rows.isEmpty())
+		List<LocalStore.SourceRow> ground = skillGround(craft);
+		if (rows.isEmpty() && ground.isEmpty())
 		{
 			// Seven of the grid's skills file no counters at all: Attack, Strength,
 			// Defence, Hitpoints, Ranged, Magic and Slayer. A skill that tracks
@@ -8737,6 +8778,19 @@ class ChroniclePanel extends PluginPanel
 		for (Map.Entry<String, Long> e : rows)
 		{
 			p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e), null));
+		}
+		if (!ground.isEmpty())
+		{
+			p.add(vgap(6));
+			p.add(group("WHAT IT PAID"));
+			for (LocalStore.SourceRow r : ground)
+			{
+				JPanel line = row(r.name, gp(r.value) + " gp", accent());
+				line.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				final String open = r.name;
+				line.addMouseListener(clicker(() -> openSource(open)));
+				p.add(line);
+			}
 		}
 		return p;
 	}
