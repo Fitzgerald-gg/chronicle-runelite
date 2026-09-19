@@ -124,6 +124,18 @@ public class SpineExtrasTest
 		assertEquals(622 + 1310 + 156, sum);
 		// the summary's Kills line and the per-source list read one base
 		assertEquals(Long.valueOf(sum), store.spineExtras().get("kills"));
+		// and the FIGURE is the reconciliation's, not the ledger fold's. Soul Wars
+		// is a page the ledger never saw loot from: the Kills list files it under
+		// Activities rather than beside the bosses, so it must not reach this line
+		// even though reconciledKills knows about it.
+		assertEquals("a page with no ledger row is not a fight this line counts",
+			Long.valueOf(sum),
+			store.spineExtras().get("kills"));
+		java.util.Map<String, Long> reconciled = LocalStore.reconciledKills(
+			store.clogSnapshot(), store.dropSources(),
+			new java.util.HashMap<>(), new java.util.HashMap<>());
+		assertEquals("reconciledKills does hold it; the membership rule excludes it",
+			Long.valueOf(346), reconciled.get("Soul Wars"));
 	}
 
 	@Test

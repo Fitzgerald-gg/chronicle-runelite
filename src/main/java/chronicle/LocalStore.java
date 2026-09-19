@@ -3739,10 +3739,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * from the untaken ledger, the same tally the Left behind lens shows),
 	 * lootLeftKills (the kills that left at least one stack, from the same ledger,
 	 * the figure "Drops taken" subtracts from dropsReceived in one unit), kills
-	 * (every source's kills summed, the per-source figure {@link #sourceKills}
-	 * gives the History tab's Kills list, so the summary line and the list share
-	 * one base; a collection log page the ledger never saw loot from is not
-	 * counted, most of those are minigame rounds), slayerTasksCompleted,
+	 * (each fight's count as {@link #reconciledKills} gives it, which is the figure
+	 * the History tab's Kills list draws, summed over the sources the ledger has
+	 * actually seen loot from; a collection log page it never saw is not counted,
+	 * most of those being minigame rounds, which the list files elsewhere too),
+	 * slayerTasksCompleted,
 	 * clogSlotsObtained (the log's own obtained count when the journal holds one,
 	 * else the distinct names the stored pages list).
 	 * {@link #spineCounters} merges them into a copy of the trackers for each line;
@@ -3758,10 +3759,26 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			loots += r.loots;
 			value += r.value;
 		}
+		// The same reconciliation the Kills list under this headline draws, not the
+		// ledger fold alone: the list reads killCounts, which applies the Kill Log,
+		// the chat line and the anchors on top of the page counters, so a headline
+		// summed from sourceKills was adding a different base than the rows it sat
+		// over and the two could disagree by thousands.
+		// The reconciled FIGURE for each fight, over the ledger's own MEMBERSHIP.
+		//
+		// Two different questions, and the old fold answered both with sourceKills.
+		// Which fights count is the ledger's: a collection log page the ledger never
+		// saw loot from is mostly a minigame round, and the Kills list buckets those
+		// under Activities rather than showing them here. But what each one COUNTS
+		// is the reconciliation's, which applies the Kill Log, the chat line and the
+		// anchors over the page counters, and that is the figure the list draws.
+		JsonObject cl = clogSnapshot();
+		java.util.Map<String, Long> reconciled =
+			reconciledKills(cl, sources, chatKillCounts(), anchoredKills());
 		long kills = 0;
-		for (long k : sourceKills(clogSnapshot(), sources).values())
+		for (String name : sourceKills(cl, sources).keySet())
 		{
-			kills += k;
+			kills += reconciled.getOrDefault(name, 0L);
 		}
 		long left = 0;
 		long leftValue = 0;

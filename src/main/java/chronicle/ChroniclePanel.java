@@ -701,6 +701,18 @@ class ChroniclePanel extends PluginPanel
 		JsonObject cl = clogNow();
 		long best = Math.max(0, lookup(cl, "slayer_kcs", name));
 		String kind = LocalStore.kindOf(name);
+		// The chat line, which the reconciliation treats as first-class and this
+		// board did not read at all. It arrives on the kill with nothing opened,
+		// where the Kill Log above only moves when a player goes and looks; a
+		// board consulting the log alone could fall past both and land on the
+		// page counter its own comment below calls a lie.
+		for (Map.Entry<String, Long> e : plugin.killCounts().entrySet())
+		{
+			if (LocalStore.chatKind(e.getKey()).equals(kind))
+			{
+				best = Math.max(best, e.getValue());
+			}
+		}
 		for (LocalStore.SourceRow r : sources())
 		{
 			if (LocalStore.kindOf(r.name).equals(kind))
