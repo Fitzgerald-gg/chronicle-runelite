@@ -189,6 +189,51 @@ public class LocalStorePersistenceTest
 		return m;
 	}
 
+	/**
+	 * A journal from a NEWER build is mounted nowhere and written over never.
+	 *
+	 * <p>This is the only thing standing between a plugin downgrade and a blanked
+	 * record. It rests on one assignment: currentRsn goes null, which is what makes
+	 * flush() return at its own guard instead of stamping a skeleton over the real
+	 * file. Nothing in the suite exercised it, and every journal fixture is written
+	 * "schema":1, so the guard could rot without a single test noticing.
+	 */
+	@Test
+	public void aNewerJournalIsNeitherMountedNorOverwritten() throws Exception
+	{
+		String newer = "{\"schema\":2,\"rsn\":\"" + RSN + "\","
+			+ "\"drops\":{\"Vorkath\":{\"kc\":156,\"loots\":143,\"value\":900}},"
+			+ "\"somethingThisBuildHasNeverHeardOf\":[1,2,3]}";
+		write(FILE, newer);
+
+		LocalStore store = newStore();
+		store.load(dir, RSN);
+
+		assertFalse("a journal this build cannot read must not be mounted",
+			store.isReadyFor(RSN));
+		assertTrue("and the reader has to be told why",
+			store.journalWarning() != null
+				&& store.journalWarning().contains("newer version"));
+
+		// The dangerous half: a flush now must be a no-op, not a rewrite.
+		store.flush(dir);
+		String after = new String(Files.readAllBytes(new File(dir, FILE).toPath()),
+			StandardCharsets.UTF_8);
+		assertEquals("the file on disk is byte for byte what was there", newer, after);
+	}
+
+	/** And the same file opens normally once the build catches up. */
+	@Test
+	public void theSameJournalMountsWhenTheSchemaIsReadable() throws Exception
+	{
+		write(FILE, "{\"schema\":1,\"rsn\":\"" + RSN + "\","
+			+ "\"drops\":{\"Vorkath\":{\"kc\":156,\"loots\":143,\"value\":900}}}");
+		LocalStore store = newStore();
+		store.load(dir, RSN);
+		assertTrue(store.isReadyFor(RSN));
+		assertEquals(null, store.journalWarning());
+	}
+
 	private void write(String name, String content) throws Exception
 	{
 		Files.write(new File(dir, name).toPath(), content.getBytes(StandardCharsets.UTF_8));
