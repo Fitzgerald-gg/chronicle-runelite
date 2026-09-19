@@ -45,7 +45,9 @@ public class CombatStatTracker implements StatTracker
 {
 	// Every hitsplat colour that is real HP loss on the player, plain and max-hit forms of
 	// each. Poison and venom are counted separately; the rest aren't HP.
-	private static final Set<Integer> DAMAGE_TO_SELF = Set.of(
+	// Every hitsplat that is damage, plain and max, in all five colours. A max hit
+	// wears a hitsplat of its own, so anything matching only DAMAGE_ME misses it.
+	private static final Set<Integer> DAMAGE_SPLATS = Set.of(
 		HitsplatID.DAMAGE_ME, HitsplatID.DAMAGE_ME_CYAN, HitsplatID.DAMAGE_ME_ORANGE,
 		HitsplatID.DAMAGE_ME_YELLOW, HitsplatID.DAMAGE_ME_WHITE,
 		HitsplatID.DAMAGE_MAX_ME, HitsplatID.DAMAGE_MAX_ME_CYAN, HitsplatID.DAMAGE_MAX_ME_ORANGE,
@@ -97,6 +99,13 @@ public class CombatStatTracker implements StatTracker
 		{
 			recordDamageToSelf(type, amount);
 		}
+		else
+		{
+			// The peak takes every damage splat. The switch below matches DAMAGE_ME
+			// alone, so until now a max hit never reached the dealt side at all and
+			// "Highest hit" could not, by construction, ever hold one.
+			recordPeak(event.getActor(), type, amount);
+		}
 
 		switch (type)
 		{
@@ -133,7 +142,7 @@ public class CombatStatTracker implements StatTracker
 		{
 			store.incrementStatBy(VENOM_DAMAGE_TAKEN, amount);
 		}
-		if (DAMAGE_TO_SELF.contains(type) && amount > store.getStat(HIGHEST_HIT_TAKEN))
+		if (DAMAGE_SPLATS.contains(type) && amount > store.getStat(HIGHEST_HIT_TAKEN))
 		{
 			store.setStat(HIGHEST_HIT_TAKEN, amount);
 		}
@@ -183,6 +192,22 @@ public class CombatStatTracker implements StatTracker
 		}
 	}
 
+	// The peak, from any damage splat. Kept apart from the sums below because the
+	// two want different inputs: a maximum is only correct if it sees every hit,
+	// while DAMAGE_DEALT and the per-style split stay DAMAGE_ME-only for the same
+	// reason DAMAGE_TAKEN does, so their running totals still line up with the
+	// history they have already written.
+	private void recordPeak(Actor target, int type, int amount)
+	{
+		// combat level 0 skips raid puzzle props. Het's Seal in ToA credits
+		// multi-thousand hitsplats and they are not hits.
+		if (DAMAGE_SPLATS.contains(type) && amount > store.getStat(HIGHEST_HIT)
+			&& target != null && target.getCombatLevel() > 0)
+		{
+			store.setStat(HIGHEST_HIT, amount);
+		}
+	}
+
 	private void recordDamageDealt(Actor target, int amount)
 	{
 		store.incrementStatBy(DAMAGE_DEALT, amount);
@@ -191,12 +216,6 @@ public class CombatStatTracker implements StatTracker
 		if (lastStyleKey != null && client.getTickCount() - lastStyleTick <= 2)
 		{
 			store.incrementStatBy(lastStyleKey, amount);
-		}
-		// combat level 0 skips raid puzzle props. Het's Seal in ToA credits multi-thousand
-		// hitsplats and they are not hits.
-		if (amount > store.getStat(HIGHEST_HIT) && target != null && target.getCombatLevel() > 0)
-		{
-			store.setStat(HIGHEST_HIT, amount);
 		}
 	}
 
