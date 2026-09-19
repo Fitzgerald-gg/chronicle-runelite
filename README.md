@@ -51,7 +51,8 @@ just that.
 what each one paid and how many kills gave nothing, the game's own count per monster, and the
 drops the tasks produced.
 
-**Combat** is damage dealt broken out by style, deaths, and your highest hit.
+**Combat** is a count of the trackers relating to combat: damage dealt, deaths, and your
+highest hit.
 
 ### Skilling
 
