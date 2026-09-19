@@ -132,10 +132,12 @@ public class ChroniclePlugin extends Plugin
 
 	private ScheduledFuture<?> pushTask;
 	// Armed at login, spent on the first tick the player's name has populated.
-	private boolean pendingLoginSetup;
+	// Volatile because a settings toggle arms it on the EDT and onGameTick reads it
+	// on the client thread, with nothing between them to publish the write.
+	private volatile boolean pendingLoginSetup;
 	// True from the moment an account is in-game until its session is torn down. It
 	// can't key off the prior state: a dropped connection arrives via CONNECTION_LOST.
-	private boolean wasLoggedIn;
+	private volatile boolean wasLoggedIn;
 
 	// Kept from the last harvest so a logout push still works once the RSProfile is gone.
 	private volatile String cachedToken;
@@ -258,17 +260,20 @@ public class ChroniclePlugin extends Plugin
 		}
 		panel = null;
 		pendingLoginSetup = false;
-		// Bank the session on the way out. A plugin toggle, or a client exit that shuts
-		// plugins down, would otherwise drop everything counted since the last fold.
+		// Bank the session on the way out, which here means a plugin toggle and not
+		// much else: closing the client does NOT reach this method. ClientUI's own
+		// shutdown posts ClientShutdown, waits for its consumers and calls
+		// System.exit without stopping a single plugin, and nothing registers a JVM
+		// shutdown hook. So a player who closes the client loses whatever the last
+		// fold missed, bounded by the write interval rather than by nothing.
 		if (localName != null && localStore.isReadyFor(localName))
 		{
-			// As at logout, and for the same reason: closing the client is the more
-			// common way to end a session than walking back to the login screen.
 			localStore.setCharacter(localName, null, 0, clogCapture.snapshot(), null);
 			localStore.setTrackers(sessionView(), localName);
 			localStore.rebase(localName);
-			// A settings toggle stops the plugin on the EDT and the flush is an fsync plus
-			// a move; the executor outlives a toggle, the client-exit path does not.
+			// The toggle path is the EDT one, where the flush (an fsync and a move)
+			// has to leave the thread. The other arm is defence against a caller that
+			// does not exist today rather than one that does.
 			if (javax.swing.SwingUtilities.isEventDispatchThread())
 			{
 				executor.submit(() -> localStore.flush(localDir()));

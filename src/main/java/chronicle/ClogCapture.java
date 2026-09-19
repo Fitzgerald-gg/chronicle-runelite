@@ -90,8 +90,11 @@ public class ClogCapture
 	// Species -> lifetime kills. The kill log is one scrollable list; one open
 	// yields every monster.
 	private final Map<String, Integer> slayerKcs = new HashMap<>();
-	private int finished;
-	private int available;
+	// The panel reads these on the EDT (clogFinished/clogAvailable) while the client
+	// thread writes them, so they carry the barrier. `dirty` below does not need one:
+	// it is written and read on the client thread alone.
+	private volatile int finished;
+	private volatile int available;
 
 	// Enabled mid-session: no LOGGED_IN transition is coming. Read the varps now.
 	void primeFromVarps(net.runelite.api.Client c)
@@ -119,7 +122,7 @@ public class ClogCapture
 	{
 		return available;
 	}
-	private volatile boolean dirty;
+	private boolean dirty;
 	// Ticks since the kill log opened; -1 = idle. Row widgets can be built a tick
 	// or two after WidgetLoaded, so the scrape retries briefly once it's open.
 	private int killLogTicks = -1;

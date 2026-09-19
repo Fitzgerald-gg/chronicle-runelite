@@ -28,7 +28,8 @@ import net.runelite.client.game.ItemManager;
  * the record the side panel reads, and it never leaves this computer.
  *
  * <p>Threading: {@link #record} and {@link #setCharacter} run on the client thread
- * ({@link #record} prices through {@link ItemManager}); {@link #load} and
+ * ({@link #record} prices through {@link ItemManager}), and {@link #setCharacter} and
+ * {@link #setTrackers} once more on the EDT, from the plugin's shutDown; {@link #load} and
  * {@link #flush} run on a background executor. The in-memory model is guarded by
  * {@link #lock}, and the file-writing methods hold it only long enough to
  * serialise a string, so the client thread never blocks on I/O.
@@ -621,8 +622,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** Refresh the character sheet. Runs on the client thread; {@code collectionLog}
-	 *  is the capture's raw map, converted to a tree here. */
+	/** Refresh the character sheet. Runs on the client thread, and once on the EDT
+	 *  from the plugin's shutDown, which banks the session on a settings toggle; the
+	 *  lock covers both. {@code collectionLog} is the capture's raw map, converted to
+	 *  a tree here. */
 	void setCharacter(String rsn, JsonObject skills, int combatLevel,
 		java.util.Map<String, Object> collectionLog, JsonObject achievements)
 	{
@@ -695,7 +698,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	/**
 	 * Refresh the lifetime tracker counters from this session's live totals. Runs on
-	 * the client thread. {@code session} is the from-zero session snapshot; lifetime
+	 * the client thread, and once on the EDT from the plugin's shutDown; the lock
+	 * covers both. {@code session} is the from-zero session snapshot; lifetime
 	 * is base + session (max for the peak counters), so repeat calls never double up.
 	 */
 	void setTrackers(java.util.Map<String, Integer> session, String rsn)
