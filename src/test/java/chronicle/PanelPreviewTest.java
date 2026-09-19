@@ -129,7 +129,7 @@ public class PanelPreviewTest
 		// and the whole sheet it now sits at the bottom of
 		shoot(panel, out, prefix + "-sheet", "SHEET");
 		// the four pages the sheet's activity tiles open
-		for (String page : new String[]{"quests", "diaries", "combat"})
+		for (String page : new String[]{"clues", "quests", "diaries", "combat"})
 		{
 			set(panel, "sheetPage", page);
 			shoot(panel, out, prefix + "-page-" + page, "SHEET");

@@ -642,6 +642,35 @@ class ChroniclePanel extends PluginPanel
 			return bossRoster;
 		}
 		List<Boss> out = new ArrayList<>();
+		// RUNELITE'S OWN LIST FIRST.
+		//
+		// HiscoreSkill is the enum the official hiscores panel draws from, and it
+		// carries the name, the type and the sprite id: everything the bundled file
+		// held. Reading it means a boss Jagex adds appears the week RuneLite ships
+		// the constant, instead of waiting on a plugin update and a Hub review, and
+		// the sprite arrives with it.
+		//
+		// The bundle stays as the fallback, for a client whose enum has moved.
+		try
+		{
+			for (net.runelite.client.hiscore.HiscoreSkill s
+				: net.runelite.client.hiscore.HiscoreSkill.values())
+			{
+				if (s.getType() == net.runelite.client.hiscore.HiscoreSkillType.BOSS)
+				{
+					out.add(new Boss(s.getName(), s.getSpriteId()));
+				}
+			}
+		}
+		catch (RuntimeException | LinkageError ex)
+		{
+			out.clear();
+		}
+		if (!out.isEmpty())
+		{
+			bossRoster = out;
+			return out;
+		}
 		try (java.io.InputStream in = ChroniclePanel.class.getResourceAsStream("osrs_bosses.json"))
 		{
 			if (in != null)
@@ -1201,7 +1230,7 @@ class ChroniclePanel extends PluginPanel
 	 * they are why the collection log stopped needing a tab of its own.
 	 */
 	private static final String[][] ACTIVITIES = {
-		{"Clues", "", ""},
+		{"Clues", "", "clues"},
 		{"Rifts closed", "Guardians of the Rift", ""},
 		{"Soul Wars", "Soul Wars", ""},
 		{"Collections", "", "log"},
@@ -8299,7 +8328,11 @@ class ChroniclePanel extends PluginPanel
 		JPanel p = column();
 		p.add(backRow());
 		p.add(vgap(4));
-		if ("quests".equals(sheetPage))
+		if ("clues".equals(sheetPage))
+		{
+			buildClues(p);
+		}
+		else if ("quests".equals(sheetPage))
 		{
 			buildQuests(p);
 		}
@@ -8332,6 +8365,72 @@ class ChroniclePanel extends PluginPanel
 		catch (Exception e)
 		{
 			return new JsonObject();
+		}
+	}
+
+	/**
+	 * The clue tiers and what each one paid.
+	 *
+	 * <p>Chronicle has no clue COMPLETION count: it knows the caskets it watched
+	 * open, because a casket is a loot source like any other. So a tier's figure is
+	 * caskets opened and their worth, and each one opens its own source page with
+	 * the items inside.
+	 */
+	private void buildClues(JPanel p)
+	{
+		long all = 0;
+		long allWorth = 0;
+		List<LocalStore.SourceRow> mine = new ArrayList<>();
+		for (String tier : CLUE_TIERS)
+		{
+			for (LocalStore.SourceRow r : sources())
+			{
+				if (r.name.equalsIgnoreCase("Clue Scroll (" + tier + ")"))
+				{
+					mine.add(r);
+					all += Math.max(r.kc, r.loots);
+					allWorth += r.value;
+				}
+			}
+		}
+		JPanel head = card("Clues");
+		head.add(row("Caskets opened", fmt(all), accent()));
+		head.add(row("Worth", gp(allWorth) + " gp", accent()));
+		head.add(row("Tiers seen", fmt(mine.size()) + " / " + CLUE_TIERS.length, null));
+		p.add(head);
+		p.add(vgap(6));
+		if (mine.isEmpty())
+		{
+			p.add(note("No clue casket has been opened while Chronicle was watching."));
+			return;
+		}
+		p.add(group("BY TIER"));
+		for (String tier : CLUE_TIERS)
+		{
+			LocalStore.SourceRow r = null;
+			for (LocalStore.SourceRow s : mine)
+			{
+				if (s.name.equalsIgnoreCase("Clue Scroll (" + tier + ")"))
+				{
+					r = s;
+					break;
+				}
+			}
+			if (r == null)
+			{
+				p.add(row(tier, "-", null));
+				continue;
+			}
+			long n = Math.max(r.kc, r.loots);
+			JPanel line = row(tier, fmt(n) + " \u00b7 " + gp(r.value) + " gp", accent());
+			line.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			final String open = r.name;
+			line.addMouseListener(clicker(() -> openSource(open)));
+			line.setToolTipText(tip(tier + " clues",
+				new String[]{"Caskets", "Worth", "Each"},
+				new String[]{fmt(n), gp(r.value) + " gp",
+					n > 0 ? gp(r.value / n) + " gp" : "-"}));
+			p.add(line);
 		}
 	}
 
