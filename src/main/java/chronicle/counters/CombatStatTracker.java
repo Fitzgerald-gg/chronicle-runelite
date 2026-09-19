@@ -99,12 +99,12 @@ public class CombatStatTracker implements StatTracker
 		{
 			recordDamageToSelf(type, amount);
 		}
-		else
+		else if (DAMAGE_SPLATS.contains(type))
 		{
-			// The peak takes every damage splat. The switch below matches DAMAGE_ME
-			// alone, so until now a max hit never reached the dealt side at all and
-			// "Highest hit" could not, by construction, ever hold one.
-			recordPeak(event.getActor(), type, amount);
+			// Every damage splat, plain and max. The switch below matches DAMAGE_ME
+			// alone, so a max hit used to reach none of this: not the peak, not the
+			// total, not the style it was dealt with.
+			recordDamageDealt(event.getActor(), amount);
 		}
 
 		switch (type)
@@ -113,10 +113,6 @@ public class CombatStatTracker implements StatTracker
 				if (landedOnSelf)
 				{
 					store.incrementStatBy(DAMAGE_TAKEN, amount);
-				}
-				else
-				{
-					recordDamageDealt(event.getActor(), amount);
 				}
 				break;
 
@@ -192,22 +188,16 @@ public class CombatStatTracker implements StatTracker
 		}
 	}
 
-	// The peak, from any damage splat. Kept apart from the sums below because the
-	// two want different inputs: a maximum is only correct if it sees every hit,
-	// while DAMAGE_DEALT and the per-style split stay DAMAGE_ME-only for the same
-	// reason DAMAGE_TAKEN does, so their running totals still line up with the
-	// history they have already written.
-	private void recordPeak(Actor target, int type, int amount)
-	{
-		// combat level 0 skips raid puzzle props. Het's Seal in ToA credits
-		// multi-thousand hitsplats and they are not hits.
-		if (DAMAGE_SPLATS.contains(type) && amount > store.getStat(HIGHEST_HIT)
-			&& target != null && target.getCombatLevel() > 0)
-		{
-			store.setStat(HIGHEST_HIT, amount);
-		}
-	}
-
+	/**
+	 * Everything a hit we dealt contributes to: the total, the style it was dealt
+	 * with, and the peak.
+	 *
+	 * <p>Reached by every damage splat, max included. That makes the running
+	 * totals step up from the day it shipped, because every max hit before it was
+	 * dropped on the floor: the figures are right from here and short by all of
+	 * those behind. DAMAGE_TAKEN is left on the plain splat, where the comment
+	 * beside it explains its own reason.
+	 */
 	private void recordDamageDealt(Actor target, int amount)
 	{
 		store.incrementStatBy(DAMAGE_DEALT, amount);
@@ -216,6 +206,13 @@ public class CombatStatTracker implements StatTracker
 		if (lastStyleKey != null && client.getTickCount() - lastStyleTick <= 2)
 		{
 			store.incrementStatBy(lastStyleKey, amount);
+		}
+		// combat level 0 skips raid puzzle props. Het's Seal in ToA credits
+		// multi-thousand hitsplats and they are not hits.
+		if (amount > store.getStat(HIGHEST_HIT) && target != null
+			&& target.getCombatLevel() > 0)
+		{
+			store.setStat(HIGHEST_HIT, amount);
 		}
 	}
 

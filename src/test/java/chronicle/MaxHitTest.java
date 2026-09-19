@@ -79,20 +79,43 @@ public class MaxHitTest
 	}
 
 	/**
-	 * The sums are deliberately NOT widened: DAMAGE_DEALT and the per-style split
-	 * stay DAMAGE_ME-only so their running totals still line up with the history
-	 * already written, exactly as DAMAGE_TAKEN does. Pinned so widening them has to
-	 * be a decision rather than an accident.
+	 * And it joins the total, which it also never used to. Damage dealt was short
+	 * by every max hit an account had ever landed.
 	 */
 	@Test
-	public void aMaxHitDoesNotJoinTheRunningTotal()
+	public void aMaxHitJoinsTheRunningTotal()
 	{
 		StatStore store = new StatStore();
 		Actor on = target();
 		CombatStatTracker t = tracker(store, on);
 		hit(t, on, HitsplatID.DAMAGE_ME, 30);
 		hit(t, on, HitsplatID.DAMAGE_MAX_ME, 71);
-		assertEquals("the sum stays on the plain splat, as DAMAGE_TAKEN does",
-			30, store.getStat(StatKeys.DAMAGE_DEALT));
+		assertEquals("every hit we dealt is damage we dealt",
+			101, store.getStat(StatKeys.DAMAGE_DEALT));
+	}
+
+	/**
+	 * Damage TAKEN stays on the plain splat. It is a different decision with its
+	 * own reason, recorded beside it, and widening the dealt side must not quietly
+	 * take it along.
+	 */
+	@Test
+	public void damageTakenIsUnchanged()
+	{
+		StatStore store = new StatStore();
+		Client client = Mockito.mock(Client.class);
+		Actor me = Mockito.mock(NPC.class);
+		Mockito.when(client.getLocalPlayer()).thenReturn(null);
+		CombatStatTracker t = new CombatStatTracker(store, client);
+		// a splat on us, of the max family
+		Hitsplat splat = Mockito.mock(Hitsplat.class);
+		Mockito.when(splat.getHitsplatType()).thenReturn(HitsplatID.DAMAGE_MAX_ME);
+		Mockito.when(splat.getAmount()).thenReturn(40);
+		HitsplatApplied e = new HitsplatApplied();
+		e.setActor(null);            // null actor is the local player here
+		e.setHitsplat(splat);
+		t.onHitsplatApplied(e);
+		assertEquals("the taken total is still DAMAGE_ME only",
+			0, store.getStat(StatKeys.DAMAGE_TAKEN));
 	}
 }
