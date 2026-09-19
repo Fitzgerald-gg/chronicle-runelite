@@ -100,7 +100,7 @@ public class CombatAchievementsTest
 	@Test
 	public void everyCharacterCanActuallyBePainted() throws Exception
 	{
-		Font f = font();
+		Font f = panelFont();
 		for (String id : tasks().keySet())
 		{
 			JsonObject t = tasks().getAsJsonObject(id);
@@ -217,7 +217,7 @@ public class CombatAchievementsTest
 		return null;
 	}
 
-	private static Font font() throws Exception
+	static Font panelFont() throws Exception
 	{
 		File ttf = new File(System.getProperty("java.io.tmpdir"), "chronicle-rs-small.ttf");
 		if (!ttf.exists())

@@ -9,8 +9,26 @@ TIERS = ["Easy", "Medium", "Hard", "Elite", "Master", "Grandmaster"]
 API = ("https://oldschool.runescape.wiki/api.php?action=parse&page=Combat%20Achievements/"
        "{tier}&prop=text&format=json&formatversion=2")
 
+# The panel paints in the RuneScape pixel font, which has no glyph for a bullet,
+# an en dash, a curly quote or an arrow: each would paint .notdef, a hollow box,
+# in the middle of a requirement. Mapped to the nearest character the font DOES
+# carry. This changes how a line looks, never what it says.
+PAINTABLE = {
+    "\u2022": "\u00b7",   # bullet -> middot
+    "\u2013": "-",        # en dash
+    "\u2014": "-",        # em dash, which the font has but the house style bans
+    "\u2018": "'", "\u2019": "'",
+    "\u201c": '"', "\u201d": '"',
+    "\u2192": "->",
+}
+
+def paintable(s):
+    for bad, good in PAINTABLE.items():
+        s = s.replace(bad, good)
+    return s
+
 def strip(c):
-    return html.unescape(re.sub(r'<[^>]+>', '', c)).strip()
+    return paintable(html.unescape(re.sub(r'<[^>]+>', '', c)).strip())
 
 out, dupes = {}, []
 for tier in TIERS:
@@ -37,7 +55,16 @@ doc = {
         "schema": 1,
         "note": ("Keyed by the game's own combat achievement task id, which the wiki "
                  "carries as data-ca-task-id and which survives a task being renamed. "
-                 "`task` is what the player must DO and is the line the panel shows."),
+                 "`task` is what the player must DO and is the line the panel shows. "
+                 "The totals are the wiki's own tier table, kept here so the bundle can "
+                 "be checked against the count it claims rather than against itself."),
+        # The wiki's Combat Achievements page states these in a table this script
+        # does not read, which is what makes them an outside check rather than a
+        # restatement of what was scraped.
+        "points": {"easy": 1, "medium": 2, "hard": 3, "elite": 4, "master": 5,
+                   "grandmaster": 6},
+        "totals": {"easy": 41, "medium": 64, "hard": 89, "elite": 166, "master": 173,
+                   "grandmaster": 122, "tasks": 655, "points": 2697},
     },
     "tasks": dict(sorted(out.items(), key=lambda kv: int(kv[0]))),
 }
