@@ -3840,12 +3840,24 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		// kills at all: Wintertodt's page counts rewards claimed and says 1,078
 		// where 448 were killed, and the larger of those two is the lie.
 		placeByKind(out, stated, false);
+		// The page's own LABELLED line is a statement too, and the step above just
+		// overwrote it. clogKillCounts lets that line replace the raw counter
+		// precisely because a named line is not a guess; handing the result to a
+		// Kill Log that has not been opened since would undo the correction and
+		// pull a page back down to a staler reading. Both only count up, so the
+		// later of the two is the larger.
+		placeByKind(out, pageKillLines(clog), true);
 		// The ledger is then a floor over that. A bare statement was true when
 		// somebody last opened an interface and knows nothing of what has
 		// happened since, so it may not pull down a count the ledger has
 		// actually watched: Abyssal demons read 1,798 from a stale Kill Log
 		// beside 2,346 seen.
-		placeByKind(out, sourceKills(clog, sources), true);
+		//
+		// The LEDGER's own figure, not the one sourceKills raises to the page
+		// counter: the counters were step one and have already been weighed
+		// against the statements. Letting them back in here re-admits the reading
+		// those statements exist to overrule.
+		placeByKind(out, ledgerKills(clog, sources), true);
 		// And an anchored count is a statement carrying its own observations
 		// forward. It knows what has happened since, so it IS the count.
 		placeByKind(out, anchored, false);
@@ -3854,6 +3866,27 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	static java.util.Map<String, Long> sourceKills(JsonObject clog,
 		java.util.List<SourceRow> sources)
+	{
+		return sourceKills(clog, sources, true);
+	}
+
+	/**
+	 * What the ledger alone has watched of each source, under the log's spelling.
+	 *
+	 * <p>The same fold as {@link #sourceKills}, without raising a source to the
+	 * page's counter. {@link #reconciledKills} wants this one: it has already
+	 * weighed the counters against the game's own statements, and a floor that
+	 * carries the counter back in would re-admit exactly what those statements
+	 * were applied to overrule.
+	 */
+	static java.util.Map<String, Long> ledgerKills(JsonObject clog,
+		java.util.List<SourceRow> sources)
+	{
+		return sourceKills(clog, sources, false);
+	}
+
+	private static java.util.Map<String, Long> sourceKills(JsonObject clog,
+		java.util.List<SourceRow> sources, boolean raiseToPage)
 	{
 		java.util.Map<String, Long> paged = clogKillCounts(clog);
 		java.util.Map<String, String> byKind = new java.util.HashMap<>();
@@ -3889,7 +3922,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			String known = byKind.get(kindOf(r.name));
 			if (known != null)
 			{
-				kills = Math.max(kills, paged.get(known));
+				// The page's spelling either way: that is naming, not counting.
+				if (raiseToPage)
+				{
+					kills = Math.max(kills, paged.get(known));
+				}
 				name = known;
 			}
 			if (kills > 0)

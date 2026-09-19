@@ -6124,14 +6124,14 @@ class ChroniclePanel extends PluginPanel
 					{
 						p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e), null));
 					}
-					if (ghost > 0)
-					{
-						p.add(ghostRow(sec.equals("Teleports") ? "Other means" : "Other",
-							fmt(ghost)));
-					}
 					// A section with no typed rows opens to its floors, one row
 					// each: bones buried and bones offered are separate verbs and
 					// can't share a row.
+					//
+					// Taken BEFORE the ghost, and it cancels it. With no typed rows
+					// the unresolved remainder IS the floor, so drawing both put the
+					// same figure on the board twice: once as a floor row under its
+					// own name and once as "Other means" underneath it.
 					if (rows.isEmpty() && floor > 0)
 					{
 						List<Map.Entry<String, Long>> floors = new ArrayList<>();
@@ -6148,6 +6148,15 @@ class ChroniclePanel extends PluginPanel
 						{
 							p.add(row(StatRegistry.label(fe.getKey()), fmt(fe.getValue()), null));
 						}
+						if (!floors.isEmpty())
+						{
+							ghost = 0;
+						}
+					}
+					if (ghost > 0)
+					{
+						p.add(ghostRow(sec.equals("Teleports") ? "Other means" : "Other",
+							fmt(ghost)));
 					}
 				}
 				if (sec.equals("Teleports") && destRows != null && !destRows.isEmpty())
