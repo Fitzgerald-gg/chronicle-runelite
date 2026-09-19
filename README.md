@@ -1,109 +1,101 @@
 # Chronicle
 
-A RuneLite side panel that keeps a journal of your Old School RuneScape account on your own
-computer: loot, levels, kill counts, the collection log, clues, quests, diaries, combat
-achievements, slayer tasks, pets, deaths, and a few hundred lifetime counters.
+This plugin creates a comprehensive log of your own account's progress.
 
-The journal is plain JSON under `.runelite/chronicle/`. Every view in the panel is computed on
-your machine, and the plugin ships the reference tables it needs, so with the network unplugged
-you get the same plugin.
+Everything is kept on your own computer, as plain JSON under `.runelite/chronicle/`, and every
+figure the panel prints is worked out there from that file and the reference tables the plugin
+ships with.
 
-## What it records
+## Using Chronicle
 
-**Events.** Loot drops with per-source item bags, personal-best kill times, and loot left on the
-ground. Level-ups, deaths and what killed you, quests, diaries, combat achievements, clue
-caskets, kill counts, pets, and slayer kills tagged on-task. Milestones land in a dated feed, and
-each session closes with a line of its own.
+Chronicle is a side panel with four tabs. The row above them sets the period that every board
+reads, from the sitting you are in out to lifetime, and the search box underneath searches the
+whole record at once.
 
-**Lifetime counters.** From tiles walked to per-wood logs chopped, per-NPC pickpockets, potion
-doses and what they cost, teleports by destination. Per-resource identity is worked out on your
-client from the XP drop plus the item gained, object clicked, item consumed or target
-interacted with, so it survives filtered chat. A few zero-XP outcomes read the game and spam chat
-instead: failed pickpockets, burnt food, seeds planted, agility laps.
+### Record
 
-**History.** A daily baseline of skills, counters and kill counts, so any two dates can be
-compared. Dry streaks are computed against a bundled drop-rate table, and the slayer journey is
-rebuilt from your own on-task kills.
+<p align="left">
+  <img src="docs/img/record-now.png" width="242" alt="Record: Now">
+  <img src="docs/img/record-journal.png" width="242" alt="Record: Journal">
+  <img src="docs/img/record-ledger.png" width="242" alt="Record: Ledger">
+</p>
 
-On first run it also reads RuneLite's core Loot Tracker archive, which is already on your disk,
-so the record starts years back rather than empty.
+**Now** is the sitting you are in, under your current slayer task: xp gained, damage dealt, what
+you drank and ate, what your drops were worth, and what you left on the ground. Only the cards
+your play has actually earned are drawn, so the board stays as short as the session was. The
+most recent drops sit along the bottom.
 
-## How the collection log is read
+**Journal** is the dated feed. Levels and 99s, pets, collection log slots, quests, diaries,
+combat achievements, deaths and what killed you, and the sessions themselves, filed under day
+headings and filterable to one lens at a time. Above it sits a title plate for the account.
 
-Two ways, both driven by you. Logging in gives the completion fraction from varps. Opening the
-log yourself gives the pages you look at, and, on that same open, Chronicle fires the log's own
-Search operation so the server transmits every page at once, which is how one open records the
-whole log instead of only the tab you happened to click.
+**Ledger** is the running count of everything that is neither a kill nor a skill. The purse
+(alchemy, gathered, dropped, spent), distance run and walked, teleports by destination, prayers
+activated, pickpockets, clue scrolls completed, and what your upkeep cost you.
 
-WikiSync and TempleOSRS reach the same data with the same interface operation. They ask for it
-differently: WikiSync adds a button to the log and syncs when you press it, and TempleOSRS has
-an automatic mode you switch on yourself. Chronicle does it on your own log open, without asking
-and without a line of chat.
+### PvM
 
-It never opens the log for you, and it does nothing while you are viewing someone else's log
-through a POH adventure log. No log, no read.
+<p align="left">
+  <img src="docs/img/pvm-loot.png" width="242" alt="PvM: Loot">
+  <img src="docs/img/pvm-slayer.png" width="242" alt="PvM: Slayer">
+</p>
 
-## Import
+**Kills** is the boss roster with your kill count against each.
 
-The Journal tab can merge another copy of the same account's record: a backup, another computer,
-or one kept for you elsewhere. Every store merges as a floor (per-key maximum, earliest
-first-sighting, best personal best), so importing twice changes nothing and an older file can
-never lower what you already hold. A `<name>.history.jsonl` sitting beside the journal comes
-across too.
+**Loot** is every source and every item. Read it as received or as left behind, by source or by
+kind of item, with what each is worth and what it averages per drop. Personal bests sit on the
+sources that have one, and where a source paid out on slayer tasks the board can be narrowed to
+just that.
 
-There is nothing to export: the record is already a JSON file you own, sitting in
-`.runelite/chronicle/` where you can copy, back up or move it like any other file.
+**Slayer** keeps the current task on screen over three boards: the task-by-task journey with
+what each one paid and how many kills gave nothing, the game's own count per monster, and the
+drops the tasks produced.
 
-**Upgrading from Fitzgerald.gg.** This plugin was called Fitzgerald.gg and kept its journal in
-`.runelite/fitzgerald`. Chronicle reads `.runelite/chronicle` and stores its settings under a new
-key, so an older record is not picked up on its own and the server URL and token need entering
-again. Nothing was deleted: point Import at `.runelite/fitzgerald/<name>.json` and the whole
-record merges in, history spine included.
+**Combat** is damage dealt broken out by style, deaths, and your highest hit.
 
-## Optional cloud sync
+### Skilling
 
-Off by default, with the server field blank. Point it at a Chronicle-compatible server and it
-additionally sends a copy of the journal upward on the write interval and at logout.
+<p align="left">
+  <img src="docs/img/skilling-skills.png" width="242" alt="Skilling: Skills">
+  <img src="docs/img/skilling-drill.png" width="242" alt="Skilling: a skill opened">
+</p>
 
-- One-way. Nothing is ever read back, and every feature works the same with it off.
-- Your own account only. Another player's stats, drops or activity are never submitted.
-- What travels: your display name, your account type, and your RuneLite account hash, alongside
-  event data (raw item ids and quantities), counter totals, per-skill XP, collection-log and
-  achievement snapshots, and, on a group ironman, shared-storage movements. The account hash is
-  what lets a server follow an in-game rename without re-keying an alt that shares a token.
-- No images. Chronicle takes no screenshots, so nothing it sends can carry another player's name
-  or a line of chat.
+**Skills** is the grid: the level and the experience each skill moved over the period, above a
+summary of time played, sessions, experience and 99s reached. Opening a skill's cell drills into
+that skill's own counters, such as logs chopped by tree or essence crafted by rune.
 
-> With cloud sync enabled the plugin transmits your player data, and your IP address, to the
-> server you configure, a third-party server not controlled or verified by the RuneLite
-> developers. With it off, Chronicle never touches the network.
+**Activities** is the same reading for minigames and the skilling bosses.
 
-## The panel
+### Collection log
 
-Seven tabs. **Home** shows the current session, with only the cards your play has earned.
-**Drops** is the ledger of sources and items, received and left behind. **Slayer** holds the current
-task, the task-by-task journey and the kill log. **Log** is the collection log. **Stats** is every
-counter. **History** compares any two periods. **Journal** is the dated feed.
+<p align="left">
+  <img src="docs/img/collection-log.png" width="242" alt="The collection log">
+</p>
 
-Type any item or source into the search box and press Enter to pivot between the item's view and
-the source's view from anywhere.
+The whole log under a completion figure, split across the game's own five tabs, a row per page
+with the slots you hold and the kill count behind them. Opening the log in game records every
+page at once rather than only the tab you clicked, and opening a page here shows the odds on the
+items still missing.
+
+### Search
+
+<p align="left">
+  <img src="docs/img/search.png" width="242" alt="Searching the record">
+</p>
+
+The box searches the record as you type: drops, collection log slots, journal lines, counters
+and kinds of item. Enter opens the best match.
 
 ## Dependencies
 
-Two of RuneLite's built-in plugins, declared with `@PluginDependency`: **Slayer**, so kills can be
-tagged on-task, and **Loot Tracker**, whose event carries chest, casket and pickpocket loot and whose stored
-archive a late install inherits. Disable either and only that slice stops: on-task tagging
-without Slayer, chest, casket and pickpocket loot without Loot Tracker, while everything else keeps
-working. The panel does not flag it, so RuneLite's own plugin list is where to check. No
-third-party plugins are needed.
+Some functionality is gated behind two of RuneLite's built-in plugins, Slayer and Loot Tracker.
+Chronicle declares both, so RuneLite enables them alongside it.
 
-## Build
+**Slayer** enables the on-task tagging of kills, so that you can see your tasks and the slayer
+specific loot received.
 
-```sh
-gradle run          # dev-mode RuneLite with the plugin side-loaded
-gradle shadowJar    # fat jar for manual side-loading
-gradle test         # includes PanelPreviewTest, which renders every panel surface to build/panel-preview/
-```
+**Loot Tracker** enables the inheritance of your loot log for searching, so a late install starts
+with the drops already on your disk rather than empty.
 
 ## Licence
 
