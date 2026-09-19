@@ -1572,6 +1572,7 @@ class ChroniclePanel extends PluginPanel
 		// on the one it cannot govern it says so rather than leaving. A control
 		// that vanishes on one tab moves every tab under it, and the strip jumping
 		// as you move between them reads as the panel misbehaving.
+		measuredSince = null;
 		periodHolder.removeAll();
 		periodHolder.add(periodRow(), BorderLayout.CENTER);
 		periodHolder.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 16, 22));
@@ -1651,6 +1652,10 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		// Row heights are width-independent. The bar can't oscillate.
+		// The body is what discovers where the period is measured from, and the
+		// control was hung before it. Applied here, once, so the row carries its
+		// own caveat instead of the board carrying two lines of it.
+		periodHolder.setToolTipText(measuredSince);
 		JScrollPane scroll = new JScrollPane(wrapTop(body),
 			ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
 			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
@@ -8166,6 +8171,9 @@ class ChroniclePanel extends PluginPanel
 	// What the total level tile says on hover while the sheet is drawing, in the
 	// markup RuneLite's own hiscores panel uses for exactly this.
 	private String periodTip;
+	// What the period's figures are measured FROM, when that is not simply the eve
+	// of the window. Hangs on the period control rather than on the board.
+	private String measuredSince;
 
 	private final Map<Integer, java.awt.image.BufferedImage> facetIcons = new LinkedHashMap<>();
 	private final java.util.Set<Integer> facetAsked = new java.util.HashSet<>();
@@ -8788,20 +8796,18 @@ class ChroniclePanel extends PluginPanel
 			// window: the nearest earlier baseline sitting well before it (a month
 			// of xp would read as one week's gain), or the earliest line on
 			// record when nothing predates the window at all.
-			// Said once over the sheet, like the head card: both of its bands are
-			// measured from the same baseline, so the second would only repeat it.
-			if (before == null && !sheetBandDrawn)
+			// This is a caveat about the period, not a row of the board, so it
+			// hangs on the period control itself and takes no room until asked
+			// for. It used to be two lines of prose at the top of every board.
+			if (before == null)
 			{
-				p.add(note("Measured since " + from.getKey().format(FULL_DAY)
-					+ ", the earliest baseline on record."));
-				p.add(vgap(4));
+				measuredSince = "Measured since " + from.getKey().format(FULL_DAY)
+					+ ", the earliest baseline on record.";
 			}
-			else if (before != null && !sheetBandDrawn
-				&& before.getKey().isBefore(pStart.minusDays(1)))
+			else if (before.getKey().isBefore(pStart.minusDays(1)))
 			{
-				p.add(note("Measured since " + before.getKey().format(FULL_DAY)
-					+ ", the nearest earlier baseline."));
-				p.add(vgap(4));
+				measuredSince = "Measured since " + before.getKey().format(FULL_DAY)
+					+ ", the nearest earlier baseline.";
 			}
 			// A key the start line does not carry measures from its earliest
 			// recorded value, never from zero: imported baselines predate newer

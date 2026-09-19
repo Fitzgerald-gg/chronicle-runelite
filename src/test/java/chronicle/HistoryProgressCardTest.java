@@ -2068,7 +2068,14 @@ public class HistoryProgressCardTest
 		set(p, "histTo", LocalDate.parse("2022-12-31"));
 		JPanel view = history(p);
 		List<String> all = labels(view);
-		assertNotNull(all.toString(), noteHolding(view, "earliest baseline on record"));
+		// The caveat is not a row of the board any more: it hangs on the period
+		// control, which is what it qualifies, and costs the board nothing until
+		// a reader asks for it.
+		assertNull("the board should not spend two lines saying this",
+			noteHolding(view, "earliest baseline on record"));
+		assertTrue("the period still has to say what it measures from: "
+				+ get(p, "measuredSince"),
+			String.valueOf(get(p, "measuredSince")).contains("earliest baseline on record"));
 		long opening = 10L + skillCount() - 1;
 		long closing = 99L + 75L + skillCount() - 2;
 		assertEquals(all.toString(),
