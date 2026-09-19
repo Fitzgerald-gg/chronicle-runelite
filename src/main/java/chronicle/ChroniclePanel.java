@@ -1610,6 +1610,7 @@ class ChroniclePanel extends PluginPanel
 			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		scroll.setBorder(null);
 		scroll.getVerticalScrollBar().setUnitIncrement(14);
+		overlayBar(scroll);
 		display.add(scroll, BorderLayout.CENTER);
 		// The sub-tabs hang outside the scroll pane, because navigation must not
 		// scroll away from the board it moves between. The period is not here: it
@@ -5136,14 +5137,159 @@ class ChroniclePanel extends PluginPanel
 		return MEASURE.getFontMetrics(FontManager.getRunescapeFont());
 	}
 
-	// What the look and feel actually draws a vertical scrollbar at. RuneLite's
-	// SCROLLBAR_WIDTH is the sidebar's allowance for one, not the width of one;
-	// under the client's own LAF the bar is far slimmer, and eight pixels is a
-	// whole letter here.
+	// What a board gives up to the bar. The bar itself is laid over the board
+	// rather than beside it (overlayBar), so this is not the look and feel's
+	// width any more: it is the gutter the content is held out of so the thumb
+	// never crosses a figure.
 	private static int scrollbarWidth()
 	{
-		return Math.max(1, new javax.swing.JScrollBar(
-			javax.swing.JScrollBar.VERTICAL).getPreferredSize().width);
+		return OVERLAY_BAR_W;
+	}
+
+	/** The gutter the floating thumb lives in, and the width it is drawn at. */
+	private static final int OVERLAY_BAR_W = 5;
+
+	// The bar shows only while the reader is moving, in a gutter half the width
+	// the look and feel wanted. A sidebar is 225px wide, and a track painted down
+	// the whole height was the one piece of chrome always on screen that never
+	// said anything.
+	private static void overlayBar(JScrollPane scroll)
+	{
+		javax.swing.JScrollBar bar = scroll.getVerticalScrollBar();
+		bar.setUI(new OverlayScrollBarUI());
+		bar.setOpaque(false);
+		// Half what the look and feel asked for, and the figure scrollbarWidth()
+		// answers with, so the two cannot drift apart.
+		bar.setPreferredSize(new Dimension(OVERLAY_BAR_W, 0));
+		// The gutter IS the reservation: the layout holds the content out of these
+		// five pixels while the bar is up and hands them back when it is not, so a
+		// board that fits keeps its whole width. Nothing else is needed here, and
+		// an earlier viewport inset took the gutter off boards that never scroll.
+	}
+
+	/**
+	 * A scrollbar with no track and no buttons, drawn over the board rather than
+	 * beside it, and faded out once the reader stops moving. The thumb is the only
+	 * thing it ever paints.
+	 */
+	private static final class OverlayScrollBarUI
+		extends javax.swing.plaf.basic.BasicScrollBarUI
+	{
+		private static final int IDLE_MS = 700;
+		private static final int STEP_MS = 40;
+		private static final float STEP = 0.12f;
+		private static final Color THUMB = new Color(0xB0, 0xB0, 0xB0);
+
+		private float alpha;
+		private long lastMove;
+		private Timer fader;
+
+		@Override
+		protected JButton createDecreaseButton(int orientation)
+		{
+			return nothing();
+		}
+
+		@Override
+		protected JButton createIncreaseButton(int orientation)
+		{
+			return nothing();
+		}
+
+		private static JButton nothing()
+		{
+			JButton b = new JButton();
+			Dimension none = new Dimension(0, 0);
+			b.setPreferredSize(none);
+			b.setMinimumSize(none);
+			b.setMaximumSize(none);
+			b.setFocusable(false);
+			return b;
+		}
+
+		@Override
+		protected void installListeners()
+		{
+			super.installListeners();
+			scrollbar.addAdjustmentListener(e -> wake());
+		}
+
+		@Override
+		protected void paintTrack(java.awt.Graphics g, javax.swing.JComponent c,
+			java.awt.Rectangle bounds)
+		{
+			// The board is the track.
+		}
+
+		@Override
+		protected void paintThumb(java.awt.Graphics g, javax.swing.JComponent c,
+			java.awt.Rectangle t)
+		{
+			if (alpha <= 0.02f || t.isEmpty())
+			{
+				return;
+			}
+			java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+			g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+				java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+			g2.setComposite(java.awt.AlphaComposite.getInstance(
+				java.awt.AlphaComposite.SRC_OVER, Math.min(1f, alpha)));
+			g2.setColor(THUMB);
+			int h = Math.max(OVERLAY_BAR_W * 2, t.height - 4);
+			g2.fillRoundRect(t.x, t.y + 2, OVERLAY_BAR_W, h,
+				OVERLAY_BAR_W, OVERLAY_BAR_W);
+			g2.dispose();
+		}
+
+		/** Show the thumb, and start the clock that takes it away again. */
+		private void wake()
+		{
+			lastMove = System.currentTimeMillis();
+			alpha = 1f;
+			scrollbar.repaint();
+			if (fader == null)
+			{
+				fader = new Timer(STEP_MS, e -> tick());
+			}
+			if (!fader.isRunning())
+			{
+				fader.start();
+			}
+		}
+
+		// The timer stops itself once the thumb is gone, and again the moment its
+		// bar leaves the screen, so a scroll pane a rebuild threw away does not
+		// leave one running behind it.
+		private void tick()
+		{
+			if (scrollbar == null || !scrollbar.isShowing())
+			{
+				alpha = 0f;
+				fader.stop();
+				return;
+			}
+			if (System.currentTimeMillis() - lastMove < IDLE_MS)
+			{
+				return;
+			}
+			alpha -= STEP;
+			if (alpha <= 0f)
+			{
+				alpha = 0f;
+				fader.stop();
+			}
+			scrollbar.repaint();
+		}
+
+		@Override
+		public void uninstallUI(javax.swing.JComponent c)
+		{
+			if (fader != null)
+			{
+				fader.stop();
+			}
+			super.uninstallUI(c);
+		}
 	}
 
 	// The pixels a chase row's name has, worked out from the layout rather than
@@ -5155,8 +5301,7 @@ class ChroniclePanel extends PluginPanel
 	//                                         panel is unwrapped (super(false)),
 	//                                         so it is the whole 242 itself
 	//   -  16   this panel's border, PANEL_INSET a side (the constructor)
-	//   -   9   the bar rebuild()'s own scroll pane raises, which a pets page is
-	//           always long enough to need, measured off the LAF above
+	//   -   5   the gutter the floating bar is held in, OVERLAY_BAR_W above
 	//   -  16   the drill card's border, CARD_INSET a side (cardPlain)
 	//   -   4   the row's border, ROW_INSET a side (row)
 	//   -   8   ROW_GAP, between the name and the share
@@ -9726,14 +9871,79 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
+	// Rows are transparent (see row()), so a lift has to take the colour of the
+	// card behind them, paint it, and hand the transparency back on the way out.
+	private static final int HOVER_LIFT = 15;
+
+	/** The colour actually painted behind a component, which a row never paints itself. */
+	private static Color behind(Component c)
+	{
+		for (Component p = c.getParent(); p != null; p = p.getParent())
+		{
+			if (p.isOpaque() && p.getBackground() != null)
+			{
+				return p.getBackground();
+			}
+		}
+		return ColorScheme.DARKER_GRAY_COLOR;
+	}
+
+	private static Color lifted(Color c)
+	{
+		return new Color(
+			Math.min(255, c.getRed() + HOVER_LIFT),
+			Math.min(255, c.getGreen() + HOVER_LIFT),
+			Math.min(255, c.getBlue() + HOVER_LIFT));
+	}
+
+	// Everything clickable in the panel is wired through here, so the hover is
+	// too: a row that goes somewhere answers the cursor, and nothing is drawn for
+	// it at rest. The hand cursor alone was a one-pixel tell on a dark panel and
+	// readers were not finding the drills.
 	private static MouseAdapter clicker(Runnable r)
 	{
 		return new MouseAdapter()
 		{
+			private boolean lit;
+			private boolean wasOpaque;
+			private Color wasBackground;
+
 			@Override
 			public void mousePressed(MouseEvent e)
 			{
 				r.run();
+			}
+
+			@Override
+			public void mouseEntered(MouseEvent e)
+			{
+				if (lit || !(e.getComponent() instanceof javax.swing.JComponent))
+				{
+					return;
+				}
+				javax.swing.JComponent c = (javax.swing.JComponent) e.getComponent();
+				wasOpaque = c.isOpaque();
+				wasBackground = c.getBackground();
+				c.setBackground(lifted(behind(c)));
+				c.setOpaque(true);
+				c.repaint();
+				lit = true;
+			}
+
+			@Override
+			public void mouseExited(MouseEvent e)
+			{
+				// Crossing onto a child fires an exit on the parent while the
+				// pointer is still inside it, and the row must stay lit.
+				if (!lit || e.getComponent().contains(e.getPoint()))
+				{
+					return;
+				}
+				javax.swing.JComponent c = (javax.swing.JComponent) e.getComponent();
+				c.setOpaque(wasOpaque);
+				c.setBackground(wasBackground);
+				c.repaint();
+				lit = false;
 			}
 		};
 	}
