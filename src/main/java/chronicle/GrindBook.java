@@ -40,7 +40,7 @@ class GrindBook
 		this.gson = gson;
 	}
 
-	// boss display name → {item name → rate denominator}, loaded on first use.
+	// boss display name -> {item name -> rate denominator}, loaded on first use.
 	private volatile Map<String, Map<String, Integer>> drops;
 
 	private Map<String, Map<String, Integer>> book()
@@ -332,7 +332,7 @@ class GrindBook
 		Map<String, Long> kcByNorm = killCounts(clog, dropSources);
 		Set<String> obtained = allObtained(clog);
 		obtained.addAll(looted(dropSources));
-		// pet name (lower-cased) → every boss whose table holds it. A pet with two
+		// pet name (lower-cased) -> every boss whose table holds it. A pet with two
 		// sources (Callisto and Artio, Chaos Elemental and Chaos Fanatic) is one
 		// chase fed from both, never the better-looking half of the pair.
 		Map<String, List<PetSource>> bySource = new HashMap<>();

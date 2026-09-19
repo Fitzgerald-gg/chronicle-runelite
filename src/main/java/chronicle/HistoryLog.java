@@ -17,7 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * The journal's calendar spine: one JSON line per day per account, appended to
- * {@code <slug>.history.jsonl} beside the journal and never rewritten. A line is
+ * {@code <slug>.history.jsonl} beside the journal. A line is
  * that day's closing baseline ({@code {"date","skills","counters","kcs"}}). A
  * period's gain is one baseline minus another. Login, rollover and logout all
  * append, and the later one replaces the day's earlier line rather than stacking

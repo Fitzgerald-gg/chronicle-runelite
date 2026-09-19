@@ -105,8 +105,11 @@ public class PanelRebuildCostTest
 		assertTrue("the panel does not know it owes the reader a board",
 			field("staleWhileHidden").getBoolean(p));
 
-		// coming back: the hierarchy listener cannot fire headless, so the
-		// return is played by hand exactly as it plays it
+		// Coming back: the hierarchy listener cannot fire headless, so the return is
+		// played by hand. Not exactly as it plays: the real listener sets everShown
+		// TRUE, and this sets it false, which is what makes the guard below
+		// short-circuit before it ever asks isShowing(). So this covers the
+		// staleWhileHidden bookkeeping and NOT the visibility test beside it.
 		field("staleWhileHidden").setBoolean(p, false);
 		field("everShown").setBoolean(p, false);
 		p.update();

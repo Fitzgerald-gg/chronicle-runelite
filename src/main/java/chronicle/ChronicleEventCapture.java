@@ -1030,7 +1030,7 @@ public class ChronicleEventCapture
 		lastKillTimeTick = -1;
 	}
 
-	// "1:26.40" / "36:04" / "1:01:53.40" → seconds. The regex guarantees the digits.
+	// "1:26.40" / "36:04" / "1:01:53.40" -> seconds. The regex guarantees the digits.
 	static double parseDuration(String text)
 	{
 		double sec = 0;
@@ -1087,7 +1087,7 @@ public class ChronicleEventCapture
 		groupStorageCurrent = counts;
 	}
 
-	// diff baseline → final, one event carrying deposits and withdrawals.
+	// diff baseline -> final, one event carrying deposits and withdrawals.
 	private void flushGroupStorage()
 	{
 		Map<Integer, Integer> base = groupStorageBaseline;
@@ -1125,7 +1125,7 @@ public class ChronicleEventCapture
 		emit("GROUP_STORAGE", data);
 	}
 
-	// id → total quantity, stacks merged, empty slots skipped.
+	// id -> total quantity, stacks merged, empty slots skipped.
 	private static Map<Integer, Integer> containerCounts(ItemContainer container)
 	{
 		Map<Integer, Integer> counts = new HashMap<>();

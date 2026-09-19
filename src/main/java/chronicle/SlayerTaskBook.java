@@ -51,9 +51,9 @@ final class SlayerTaskBook
 
 	private static volatile SlayerTaskBook instance;
 
-	// npc id → task name as the table spells it
+	// npc id -> task name as the table spells it
 	private final Map<Integer, String> npcToTask;
-	// lowercased task name → variant names, lowercased
+	// lowercased task name -> variant names, lowercased
 	private final Map<String, List<String>> variants;
 
 	private SlayerTaskBook(Map<Integer, String> npcToTask, Map<String, List<String>> variants)

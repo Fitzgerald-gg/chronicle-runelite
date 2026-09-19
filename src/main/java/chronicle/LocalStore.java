@@ -803,7 +803,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return el != null && el.isJsonObject() ? el.getAsJsonObject() : new JsonObject();
 	}
 
-	/** Make sure a loaded record has every container the ingest paths expect. */
+	/**
+	 * Make sure a loaded record has the containers created here, which are the ones
+	 * the character sheet, the drops table and the feed are written into.
+	 *
+	 * <p>NOT every container the ingest paths expect: the later stores (untaken and
+	 * its two indexes, the slayer spine, loot_days, consumable_values) create their
+	 * own on first write and are guarded at their own call sites. An ingest path
+	 * added on the strength of the old promise, reading straight through
+	 * getAsJsonObject the way recordLoot does, would find nothing there.
+	 */
 	private void normalise(JsonObject o, String rsn)
 	{
 		o.addProperty("schema", SCHEMA);

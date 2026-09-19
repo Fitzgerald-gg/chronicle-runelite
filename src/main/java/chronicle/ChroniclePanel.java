@@ -2293,15 +2293,6 @@ class ChroniclePanel extends PluginPanel
 		return plugin.onTaskLoot(w[0], w[1], null);
 	}
 
-	/**
-	 * Whether this account has ANY on-task loot, ever.
-	 *
-	 * <p>The control is offered on that, not on the period: an account that has
-	 * never been given a task is never shown a filter that would do nothing,
-	 * and an account that has, keeps the control in a week it happened not to
-	 * close one. A pill that disappears because you changed the period, leaving
-	 * the reading it set still in force, is a control the reader cannot undo.
-	 */
 	/** Whether any of what the tasks paid is of this kind. */
 	private boolean hasKindOnTask(String kind)
 	{
@@ -2316,6 +2307,15 @@ class ChroniclePanel extends PluginPanel
 		return false;
 	}
 
+	/**
+	 * Whether this account has ANY on-task loot, ever.
+	 *
+	 * <p>The control is offered on that, not on the period: an account that has
+	 * never been given a task is never shown a filter that would do nothing,
+	 * and an account that has, keeps the control in a week it happened not to
+	 * close one. A pill that disappears because you changed the period, leaving
+	 * the reading it set still in force, is a control the reader cannot undo.
+	 */
 	private boolean everOnTask()
 	{
 		return !taskItemsEver().isEmpty();
@@ -3738,10 +3738,6 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	/**
-	 * The on-task loot board, narrowed to one kind of thing. What the search
-	 * offers when a reader types the name of a kind.
-	 */
 	/**
 	 * A kind of thing, opened on the loot tracker.
 	 *
