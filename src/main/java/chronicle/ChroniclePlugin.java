@@ -456,7 +456,7 @@ public class ChroniclePlugin extends Plugin
 		// A new account for this session: mount its journal. Nothing here touches the network.
 		localName = name;
 		sessionStartMs = System.currentTimeMillis();
-		loadPlaytimeRate();
+		loadPlaytime();
 		if (!cloudActive())
 		{
 		}
@@ -861,110 +861,112 @@ public class ChroniclePlugin extends Plugin
 	// ------------------------------------------------------------------
 
 	/**
-	 * The counter the account summary counts playtime with.
+	 * What the game says this account has played, in minutes.
 	 *
-	 * <p>It sits in the middle of that panel's own block of trackers - bosses
-	 * killed, coins gained, deaths, food eaten, monsters killed, players killed,
-	 * then this, then special attacks used - which is the order the panel lists
-	 * them in. RuneLite names it for leagues and reads it nowhere, so nothing in
-	 * the client confirms what it holds or what unit it holds it in.
+	 * <p>Not a varp. The account summary panel is built by clientscript 3310,
+	 * which reads VarClientInt 526 for its "Time Played:" row and hands it to
+	 * clientscript 494 to phrase; 494 divides by 60 for hours and by 24 again
+	 * for days, so the unit is the minute. The only writer anywhere in the cache
+	 * is clientscript 3970, which the server invokes.
+	 *
+	 * <p>This replaced varp 4523, which RuneLite names TRACKING_PLAYTIME_LEAGUES
+	 * and which NOTHING in the game reads: the tracker panel beside it reads
+	 * 4510 through 4527 for bosses killed, coins gained, fish caught and the
+	 * rest, and for its playtime row it emits a literal dash and defers to the
+	 * hide/reveal toggle. 4523 is a dead id, so it read zero forever and the
+	 * panel quietly fell back to the time Chronicle had watched, which is a
+	 * different and much smaller number.
 	 */
-	private static final int VARP_PLAYTIME = 4523;
+	private static final String KEY_PLAYTIME = "gamePlaytime";
+	private static final String KEY_PLAYTIME_AT = "gamePlaytimeAt";
 
-	/** How many of its units make a minute, once that has been established. */
-	private static final String KEY_PLAYTIME_RATE = "playtimeRate";
-
-	private volatile long playtimeRaw;
-	private volatile double playtimePerMinute;
-	private long calibratedFrom;
-	private long calibratedAt;
+	private volatile long playtimeMinutes;
+	private volatile long playtimeAt;
 	private boolean playtimeLogged;
 
 	/**
-	 * What the game says this account has played, in minutes, or 0 until that is
-	 * known.
+	 * The game's own figure, carried forward to now.
 	 *
-	 * <p>Nothing here guesses the unit. The counter has to EARN its reading: it
-	 * is watched across a couple of minutes of play, and the rate it advances at
-	 * against the wall clock says whether it counts minutes, seconds or ticks. A
-	 * counter that turns out not to advance in step with time at all is not a
-	 * playtime and is refused, which is the same answer a wrong id would get.
+	 * <p>What the client holds is a SNAPSHOT: the server pushes it when it builds
+	 * the account summary, and it does not tick. Left as it landed it would be
+	 * right when the panel was opened and progressively behind Hans afterwards,
+	 * so the time played since the snapshot is added to it. Only time actually
+	 * spent logged in counts, which is why it is measured against the sitting
+	 * and not against the wall clock.
 	 */
 	long gamePlaytimeMinutes()
 	{
-		double per = playtimePerMinute;
-		return per > 0 ? Math.round(playtimeRaw / per) : 0;
+		return carriedForward(playtimeMinutes, playtimeAt, System.currentTimeMillis(),
+			sessionStartMs, sessionElapsedMinutes());
+	}
+
+	/**
+	 * The rule on its own, so it can be held to without a client to ask.
+	 *
+	 * <p>A snapshot taken during THIS sitting is carried forward by the wall
+	 * clock since it was taken, all of which was spent logged in. A snapshot
+	 * from an earlier sitting is carried forward by the whole of this one: the
+	 * hours between two sittings are not playtime and adding them would put the
+	 * figure ahead of Hans by however long the client was shut.
+	 */
+	static long carriedForward(long had, long at, long now, long sessionStart,
+		long sessionElapsed)
+	{
+		if (had <= 0)
+		{
+			return 0;
+		}
+		long since = at > 0 && at >= sessionStart
+			? Math.max(0, (now - at) / 60_000L)
+			: Math.max(0, sessionElapsed);
+		return had + since;
 	}
 
 	// Client thread, once a tick.
 	private void watchPlaytime()
 	{
-		long raw = client.getVarpValue(VARP_PLAYTIME);
-		if (raw <= 0)
+		long raw = client.getVarcIntValue(
+			net.runelite.api.gameval.VarClientID.ACCOUNT_SUMMARY_PLAYTIME);
+		// Zero is not an answer. The varc is empty until the server has pushed
+		// it, which it does when the account summary is built, so on most logins
+		// it stays empty until the player opens that panel. Taking the zero would
+		// throw away the figure already on disk from the last time they did.
+		if (raw <= 0 || raw == playtimeMinutes)
 		{
 			return;
 		}
-		playtimeRaw = raw;
+		playtimeMinutes = raw;
+		playtimeAt = System.currentTimeMillis();
+		configManager.setRSProfileConfiguration(GROUP, KEY_PLAYTIME, String.valueOf(raw));
+		configManager.setRSProfileConfiguration(GROUP, KEY_PLAYTIME_AT,
+			String.valueOf(playtimeAt));
 		if (!playtimeLogged)
 		{
 			playtimeLogged = true;
-			log.debug("playtime counter {} reads {}", VARP_PLAYTIME, raw);
+			log.debug("the game says this account has played {} minutes", raw);
 		}
-		if (playtimePerMinute > 0)
-		{
-			return;
-		}
-		long now = System.currentTimeMillis();
-		if (calibratedFrom <= 0)
-		{
-			calibratedFrom = raw;
-			calibratedAt = now;
-			return;
-		}
-		double minutes = (now - calibratedAt) / 60_000.0;
-		if (minutes < 2.0)
-		{
-			return;
-		}
-		double rate = (raw - calibratedFrom) / minutes;
-		for (double candidate : new double[]{1, 60, 100})
-		{
-			// within a fifth of a known cadence: one a minute, one a second, or
-			// one a tick, a tick being six tenths of a second
-			if (Math.abs(rate - candidate) <= candidate * 0.2)
-			{
-				playtimePerMinute = candidate;
-				configManager.setRSProfileConfiguration(GROUP, KEY_PLAYTIME_RATE,
-					String.valueOf(candidate));
-				log.debug("playtime counter advances {} per minute; reading {} as {}"
-					+ " minutes", candidate, raw, gamePlaytimeMinutes());
-				return;
-			}
-		}
-		// Not a clock. Start again rather than trusting a number that does not
-		// keep time, in case the first reading straddled a login.
-		calibratedFrom = raw;
-		calibratedAt = now;
 	}
 
-	private void loadPlaytimeRate()
+	private void loadPlaytime()
 	{
-		String was = configManager.getRSProfileConfiguration(GROUP, KEY_PLAYTIME_RATE);
+		playtimeMinutes = readLong(KEY_PLAYTIME);
+		playtimeAt = readLong(KEY_PLAYTIME_AT);
+	}
+
+	private long readLong(String key)
+	{
+		String was = configManager.getRSProfileConfiguration(GROUP, key);
 		if (was == null || was.isEmpty())
 		{
-			return;
+			return 0;
 		}
 		try
 		{
-			double per = Double.parseDouble(was);
-			if (per > 0)
-			{
-				playtimePerMinute = per;
-			}
+			return Long.parseLong(was);
 		}
 		catch (NumberFormatException ignored)
 		{
-			// a rate that cannot be read is a rate to establish again
+			return 0;   // a figure that cannot be read is one to be told again
 		}
 	}
 
