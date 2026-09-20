@@ -888,7 +888,13 @@ class ChroniclePanel extends PluginPanel
 			// one of them arrived at once. gained() keeps the earliest recorded
 			// base and DROPS a key that has no base at all, which is the honest
 			// answer -- the record cannot say what it does not hold.
-			movedKcs = HistoryLog.gained(s.opening.kcs, s.earliest.kcs, s.closing.kcs);
+			// A period reaching today closes on the counts as they stand, not on
+			// the spine's newest line. The spine is written once a day, so a boss
+			// killed this afternoon was not in this week's figure until tomorrow.
+			// Merged upward: these only ever grow, so the larger of the two is
+			// the later of the two.
+			movedKcs = HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
+				closingNow(s.closing.kcs, plugin.killCounts()));
 		}
 		Long moved = movedKcs.get(name);
 		if (moved == null)
@@ -10123,6 +10129,43 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
+	 * A period's closing figures, brought up to the moment where the period
+	 * reaches it.
+	 *
+	 * <p>The history spine is written once a day. Everything measured against its
+	 * newest line therefore stopped at the last time it was written, which for a
+	 * period ending today is some hours ago: a board saying what this week has
+	 * done was missing everything done since midnight and caught up overnight.
+	 *
+	 * <p>Merged upward rather than replaced. These figures only ever grow, so the
+	 * larger of the two is the later of the two, and a key the live side has
+	 * never heard of keeps whatever the spine holds for it.
+	 */
+	private Map<String, Long> closingNow(Map<String, Long> closing, Map<String, Long> live)
+	{
+		if (closing == null || live == null || live.isEmpty() || !periodReachesToday())
+		{
+			return closing;
+		}
+		Map<String, Long> out = new java.util.HashMap<>(closing);
+		for (Map.Entry<String, Long> e : live.entrySet())
+		{
+			if (e.getValue() != null)
+			{
+				out.merge(e.getKey(), e.getValue(), Math::max);
+			}
+		}
+		return out;
+	}
+
+	/** Whether the period on show runs up to today, rather than ending before it. */
+	private boolean periodReachesToday()
+	{
+		Window w = window();
+		return w != null && !w.end.isBefore(java.time.LocalDate.now());
+	}
+
+	/**
 	 * The counters a board should read. A lifetime is the totals themselves: a
 	 * delta measured from the first line the record holds reports nothing for
 	 * every total that joined the spine later. Any narrower window is what it
@@ -10151,8 +10194,12 @@ class ChroniclePanel extends PluginPanel
 			return out;
 		}
 		Span s = span();
+		// The same for every counter: a period reaching today closes on the live
+		// totals. Without it the trackers board reported a week that stopped at
+		// midnight and caught up overnight.
 		return s == null ? null
-			: HistoryLog.gained(s.opening.counters, s.earliest.counters, s.closing.counters);
+			: HistoryLog.gained(s.opening.counters, s.earliest.counters,
+				closingNow(s.closing.counters, counters()));
 	}
 
 	/**
