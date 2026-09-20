@@ -940,6 +940,100 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/** The page's lines that are this fight's, as the page wrote them. */
+	/**
+	 * The kill count to print beside each collection log page, keyed lowercase.
+	 *
+	 * <p>Where the page's own header lines were captured they are the authority,
+	 * and LocalStore already knows which of them is a kill count rather than a
+	 * best time or a tally of rewards. Where they were not, the unlabelled figure
+	 * beside them is all there is, and it is right on a page whose header carried
+	 * a single number, which is most of them.
+	 *
+	 * <p>The two never overlap, which is what makes this safe: a page can only
+	 * disagree with itself when its header carries several numbers, and such a
+	 * page always has lines. Both of the owner's own disagreements are of that
+	 * kind. Wintertodt's bare figure is 1,078 rewards claimed against 447 killed,
+	 * and Tempoross's is 46, a personal best, which is a TIME printed as a number
+	 * of kills.
+	 *
+	 * <p>A page whose lines are real but name no kills gets no figure at all.
+	 * Barbarian Assault counted high level gambles; that is not a kill count, and
+	 * there is no honest way to print it as one.
+	 */
+	private static Map<String, Long> pageCounts(JsonObject cl)
+	{
+		Map<String, Long> out = new LinkedHashMap<>();
+		if (cl == null)
+		{
+			return out;
+		}
+		java.util.Set<String> lined = new java.util.HashSet<>();
+		if (cl.has("kc_lines") && cl.get("kc_lines").isJsonObject())
+		{
+			for (String pageName : cl.getAsJsonObject("kc_lines").keySet())
+			{
+				lined.add(pageName.toLowerCase(Locale.ROOT));
+			}
+		}
+		if (cl.has("kcs") && cl.get("kcs").isJsonObject())
+		{
+			for (Map.Entry<String, com.google.gson.JsonElement> e
+				: cl.getAsJsonObject("kcs").entrySet())
+			{
+				String key = e.getKey().toLowerCase(Locale.ROOT);
+				if (!lined.contains(key))
+				{
+					out.merge(key, safeLong(e.getValue()), Math::max);
+				}
+			}
+		}
+		for (Map.Entry<String, Long> e : LocalStore.pageKillLines(cl).entrySet())
+		{
+			out.put(e.getKey().toLowerCase(Locale.ROOT), e.getValue());
+		}
+		return out;
+	}
+
+	/**
+	 * Every counter line a collection log page's header carried, verbatim.
+	 *
+	 * <p>The row beside it can print only one number, and only when that number is
+	 * honestly a kill count. The rest of what the page said is real and is worth
+	 * keeping: which is a best time, which is rewards claimed, which is a
+	 * completion count. It goes here rather than into the row, where it would be
+	 * a wall of text in a 242 pixel column.
+	 */
+	private static String pageHeaderTip(JsonObject cl, String page)
+	{
+		if (cl == null || !cl.has("kc_lines") || !cl.get("kc_lines").isJsonObject())
+		{
+			return null;
+		}
+		JsonObject pages = cl.getAsJsonObject("kc_lines");
+		com.google.gson.JsonElement found = null;
+		for (Map.Entry<String, com.google.gson.JsonElement> e : pages.entrySet())
+		{
+			if (e.getKey().equalsIgnoreCase(page))
+			{
+				found = e.getValue();
+				break;
+			}
+		}
+		if (found == null || !found.isJsonObject() || found.getAsJsonObject().size() == 0)
+		{
+			return null;
+		}
+		List<String> labels = new ArrayList<>();
+		List<String> figures = new ArrayList<>();
+		for (Map.Entry<String, com.google.gson.JsonElement> ln
+			: found.getAsJsonObject().entrySet())
+		{
+			labels.add(ln.getKey());
+			figures.add(fmt(safeLong(ln.getValue())));
+		}
+		return tip(page, labels.toArray(new String[0]), figures.toArray(new String[0]));
+	}
+
 	private List<Map.Entry<String, Long>> pageLines(String boss)
 	{
 		List<Map.Entry<String, Long>> out = new ArrayList<>();
@@ -4134,15 +4228,32 @@ class ChroniclePanel extends PluginPanel
 			rebuild();
 			return;
 		}
-		if (sheetPage != null)
+		// Unwound in the order rebuild() draws them, outermost drill first. It
+		// ranks a drilled item or source above a skill, above the all-trackers
+		// board, above a sheet page; a back row that clears them in any other
+		// order clears something still covered by something else, so the page
+		// redraws unchanged and the press reads as dead. Taking the sheet page
+		// first did exactly that: Back off a clue tier's source redrew the source,
+		// and the second press went to the sheet root rather than to the Clues
+		// page the reader came from.
+		if (detailItem != null || detailSource != null)
 		{
-			sheetPage = null;
-			rebuild();
-			return;
-		}
-		if (allTrackers)
-		{
-			allTrackers = false;
+			String[] prev = detailStack.poll();
+			if (prev == null)
+			{
+				detailItem = null;
+				detailSource = null;
+			}
+			else if ("i".equals(prev[0]))
+			{
+				detailItem = prev[1];
+				detailSource = null;
+			}
+			else
+			{
+				detailSource = prev[1];
+				detailItem = null;
+			}
 			rebuild();
 			return;
 		}
@@ -4152,21 +4263,17 @@ class ChroniclePanel extends PluginPanel
 			rebuild();
 			return;
 		}
-		String[] prev = detailStack.poll();
-		if (prev == null)
+		if (allTrackers)
 		{
-			detailItem = null;
-			detailSource = null;
+			allTrackers = false;
+			rebuild();
+			return;
 		}
-		else if ("i".equals(prev[0]))
+		if (sheetPage != null)
 		{
-			detailItem = prev[1];
-			detailSource = null;
-		}
-		else
-		{
-			detailSource = prev[1];
-			detailItem = null;
+			sheetPage = null;
+			rebuild();
+			return;
 		}
 		rebuild();
 	}
@@ -5236,15 +5343,14 @@ class ChroniclePanel extends PluginPanel
 
 		JsonObject cl = clogNow();
 		Obtained ob = obtained(cl);
-		Map<String, Long> kcs = new LinkedHashMap<>();
-		if (cl.has("kcs") && cl.get("kcs").isJsonObject())
-		{
-			for (Map.Entry<String, com.google.gson.JsonElement> e
-				: cl.getAsJsonObject("kcs").entrySet())
-			{
-				kcs.merge(e.getKey().toLowerCase(Locale.ROOT), safeLong(e.getValue()), Math::max);
-			}
-		}
+		// The page's own kill line, not the unlabelled figure beside it. That
+		// figure is whatever the page happened to put first, and on the pages that
+		// carry more than one line it is not a kill count at all: Wintertodt's is
+		// rewards claimed, 1,078 against 447 killed, and Tempoross's is a personal
+		// best, 46, which is a TIME being printed as a number of kills. LocalStore
+		// already knows the rule, and a page whose only lines are rewards or a best
+		// time honestly has no kill count to show.
+		Map<String, Long> kcs = pageCounts(cl);
 
 		Map<String, List<String>> pages = tax.getOrDefault(clogTab, new LinkedHashMap<>());
 		for (Map.Entry<String, List<String>> pg : pages.entrySet())
@@ -5263,6 +5369,13 @@ class ChroniclePanel extends PluginPanel
 			JPanel rowP = row(page, got + "/" + slots.size()
 				+ (kc != null && kc > 0 ? " · " + fmt(kc) + " kc" : ""),
 				complete ? ACCENT_SESSION : null, complete);
+			// Everything the page's header said, in the game's own words, since
+			// the row itself can only carry the one figure that is a kill count.
+			String lines = pageHeaderTip(cl, page);
+			if (lines != null)
+			{
+				rowP.setToolTipText(lines);
+			}
 			rowP.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 			rowP.addMouseListener(clicker(() ->
 			{
