@@ -9355,63 +9355,61 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * The handful of counters that say how a craft is going, as a hover card.
+	 * The handful of top-level counters that say how a craft is going, as a
+	 * hover card.
 	 *
-	 * <p>The card used to carry the level and the gain, which are the two things
-	 * the cell already draws without being hovered. These are what the cell
-	 * cannot say: logs chopped, fish caught, food cooked and food burned. The
-	 * whole list is a click away, which the last line says.
+	 * <p>Not the level and not the experience: the cell under the pointer draws
+	 * both, and a hover that repeats what it is over is a hover that says
+	 * nothing. Not the typed rows either - "Guard: 2" and "Maple: 47" are the
+	 * drill-in's business - so a card of five or six totals reads as an overview
+	 * and not as the first page of the list it sits above.
+	 *
+	 * <p>Floors first in the table's own order, since Prayer's bones buried,
+	 * ashes scattered and heads reanimated are curated to read together; then
+	 * the named keys by size, since Fletching's fifteen are not, and a card that
+	 * took them alphabetically would carry darts and bolts over the nine hundred
+	 * thousand arrow shafts. For the period the strip is set to, so a week's
+	 * card is that week's. Where the period moved none of them the card carries
+	 * the craft's name alone, which is what the dimmed cell beneath it already
+	 * said.
 	 */
-	private String skillTip(String craft, long level, Long gained)
+	private String skillTip(String craft)
 	{
-		List<String> labels = new ArrayList<>();
-		List<String> figures = new ArrayList<>();
-		labels.add("Level");
-		figures.add(fmt(level));
-		if (gained != null)
-		{
-			labels.add(wholeRecord() ? "Experience" : "Gained");
-			figures.add((wholeRecord() ? "" : "+") + xpShort(gained));
-		}
 		Map<String, Long> now = periodCounters();
-		java.util.Set<String> took = new java.util.LinkedHashSet<>();
+		List<String> floors = new ArrayList<>();
+		List<Map.Entry<String, Long>> named = new ArrayList<>();
 		for (String key : StatRegistry.headlines(craft))
 		{
 			Long v = now.get(key);
-			if (v != null && v > 0)
-			{
-				took.add(key);
-			}
-		}
-		// The headline first, then whatever else the period actually moved, by
-		// size. A craft's headline is its TOTAL - creatures trapped, food cooked -
-		// and a week spent on one thing need not touch it: a week of Herbiboar
-		// moves herbiboarsHarvested and leaves creaturesTrapped alone, so the
-		// hover said nothing at all on the period a reader most wants it.
-		List<Map.Entry<String, Long>> rest = new ArrayList<>();
-		for (Map.Entry<String, Long> e : now.entrySet())
-		{
-			if (e.getValue() == null || e.getValue() <= 0 || took.contains(e.getKey())
-				|| !"Skilling".equals(StatRegistry.family(e.getKey()))
-				|| !craft.equalsIgnoreCase(StatRegistry.subgroup(e.getKey())))
+			if (v == null || v <= 0)
 			{
 				continue;
 			}
-			rest.add(e);
+			if (StatRegistry.isFloor(key))
+			{
+				floors.add(key);
+			}
+			else
+			{
+				named.add(new java.util.AbstractMap.SimpleEntry<>(key, v));
+			}
 		}
-		rest.sort(Map.Entry.<String, Long>comparingByValue().reversed());
-		for (Map.Entry<String, Long> e : rest)
+		named.sort(Map.Entry.<String, Long>comparingByValue().reversed());
+		List<String> labels = new ArrayList<>();
+		List<String> figures = new ArrayList<>();
+		for (String key : floors)
 		{
-			took.add(e.getKey());
+			labels.add(StatRegistry.rowLabel(key));
+			figures.add(fmt(now.get(key)));
 		}
-		for (String key : took)
+		for (Map.Entry<String, Long> e : named)
 		{
 			if (labels.size() >= 6)
 			{
 				break;
 			}
-			labels.add(StatRegistry.rowLabel(key));
-			figures.add(fmt(now.get(key)));
+			labels.add(StatRegistry.rowLabel(e.getKey()));
+			figures.add(fmt(e.getValue()));
 		}
 		return tip(craft, labels.toArray(new String[0]),
 			figures.toArray(new String[0]));
@@ -9421,7 +9419,7 @@ class ChroniclePanel extends PluginPanel
 	 * Slayer's card, which is not a list of counters: the skill has a whole board
 	 * of its own and this is the way in to it.
 	 */
-	private String slayerTip(long level, Long gained)
+	private String slayerTip()
 	{
 		long[] ms = windowMs();
 		long[] tally = plugin.onTaskTally(ms[0], ms[1], null, wholeRecord());
@@ -9432,13 +9430,6 @@ class ChroniclePanel extends PluginPanel
 		}
 		List<String> labels = new ArrayList<>();
 		List<String> figures = new ArrayList<>();
-		labels.add("Level");
-		figures.add(fmt(level));
-		if (gained != null)
-		{
-			labels.add(wholeRecord() ? "Experience" : "Gained");
-			figures.add((wholeRecord() ? "" : "+") + xpShort(gained));
-		}
 		labels.add("Tasks tracked");
 		figures.add(fmt(tally[2]));
 		labels.add("Kills on task");
@@ -10193,8 +10184,7 @@ class ChroniclePanel extends PluginPanel
 		// tile on the sheet answering in a sentence while the two grids under it
 		// answered in a titled block.
 		boolean slayer = net.runelite.api.Skill.SLAYER.equals(sk);
-		cell.setToolTipText(slayer ? slayerTip(level, gained)
-			: skillTip(craft, level, gained));
+		cell.setToolTipText(slayer ? slayerTip() : skillTip(craft));
 		// The cell has always carried a tooltip, which is a mouse listener; this
 		// is what makes the hand cursor honest. Its counters had no other way in.
 		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));

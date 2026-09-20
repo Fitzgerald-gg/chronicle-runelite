@@ -81,60 +81,117 @@ public class SkillHoverTest
 
 	private static String hover(String craft) throws Exception
 	{
-		Method m = ChroniclePanel.class.getDeclaredMethod("skillTip", String.class,
-			long.class, Long.class);
+		Method m = ChroniclePanel.class.getDeclaredMethod("skillTip", String.class);
 		m.setAccessible(true);
-		return ((String) m.invoke(panel, craft, 99L, null))
+		return ((String) m.invoke(panel, craft))
 			.replaceAll("<[^>]*>", " ").replaceAll("\\s+", " ").trim();
 	}
 
-	/**
-	 * TRAP: a hover with nothing in it but the level passes any test that only
-	 * asks whether it exists. So this finds a craft the record actually holds
-	 * counters for and fails loudly if there is none.
-	 */
-	@Test
-	public void aHoverSaysMoreThanTheCellAlreadyDoes() throws Exception
+	/** The labels on a hover card, in order, without the title. */
+	private static List<String> rows(String craft) throws Exception
 	{
-		period("Lifetime");
-		String found = null;
-		for (net.runelite.api.Skill sk : net.runelite.api.Skill.values())
+		Method m = ChroniclePanel.class.getDeclaredMethod("skillTip", String.class);
+		m.setAccessible(true);
+		String html = (String) m.invoke(panel, craft);
+		List<String> out = new ArrayList<>();
+		java.util.regex.Matcher r = java.util.regex.Pattern
+			.compile("<div>([^<:]+):").matcher(html);
+		while (r.find())
 		{
-			String craft = StatRegistry.prettify(sk.name().toLowerCase(java.util.Locale.ROOT));
-			String tip = hover(craft);
-			if (tip.replace("Level: 99", "").trim().length() > craft.length() + 2)
-			{
-				found = tip;
-				break;
-			}
+			out.add(r.group(1).trim());
 		}
-		assertTrue("no craft's hover carried a single counter, so this asserts "
-			+ "nothing about hovers at all", found != null);
-		assertFalse("the hover is still only the level, which the cell draws "
-			+ "without being hovered: " + found,
-			found.replace("Level:", "").matches(".*\\d.*99\\s*$"));
+		return out;
 	}
 
 	/**
-	 * TRAP: the headline of a craft is its TOTAL - creatures trapped, food
-	 * cooked - and a period spent on ONE thing need not touch it. A week of
-	 * Herbiboar moves herbiboarsHarvested and leaves creaturesTrapped alone, so
-	 * a hover that only ever read the headline said nothing on exactly the
-	 * period a reader most wants it.
+	 * TRAP: the cell under the pointer draws the level and the gain, so a hover
+	 * carrying either is a hover that repeats what it is over. Neither is on it.
 	 */
 	@Test
-	public void aHoverFallsThroughToWhateverThePeriodMoved() throws Exception
+	public void aHoverDoesNotRepeatTheCellItIsOver() throws Exception
 	{
-		String src = new String(java.nio.file.Files.readAllBytes(
-			java.nio.file.Paths.get("src/main/java/chronicle/ChroniclePanel.java")),
-			java.nio.charset.StandardCharsets.UTF_8);
-		int at = src.indexOf("private String skillTip(");
-		assertTrue("the hover builder is gone", at > 0);
-		String body = src.substring(at, src.indexOf("\n\t}", at));
-		assertTrue("the hover reads only the craft's headline, so a period that "
-			+ "moved something else shows an empty card",
-			body.contains("StatRegistry.subgroup("));
-		assertTrue("and it no longer ranks what it found", body.contains("reversed()"));
+		period("Lifetime");
+		for (net.runelite.api.Skill sk : net.runelite.api.Skill.values())
+		{
+			String craft = StatRegistry.prettify(sk.name().toLowerCase(java.util.Locale.ROOT));
+			List<String> r = rows(craft);
+			assertFalse(craft + " repeats the level the cell draws: " + r, r.contains("Level"));
+			assertFalse(craft + " repeats the experience the cell draws: " + r,
+				r.contains("Experience") || r.contains("Gained"));
+		}
+	}
+
+	/**
+	 * TRAP: a hover that fell through to "whatever moved" carried typed rows -
+	 * "Guard: 2", "Martin the master gardener: 2" - which are the drill-in's
+	 * business and not an overview's. Every row on a card has to be one of the
+	 * craft's top-level counters: a floor, or a key the table names beside it.
+	 */
+	@Test
+	public void everyRowIsATopLevelCounterOfItsCraft() throws Exception
+	{
+		period("Lifetime");
+		int rowsSeen = 0;
+		for (net.runelite.api.Skill sk : net.runelite.api.Skill.values())
+		{
+			String craft = StatRegistry.prettify(sk.name().toLowerCase(java.util.Locale.ROOT));
+			java.util.Set<String> allowed = new java.util.HashSet<>();
+			for (String key : StatRegistry.headlines(craft))
+			{
+				allowed.add(StatRegistry.rowLabel(key));
+			}
+			for (String label : rows(craft))
+			{
+				rowsSeen++;
+				assertTrue(craft + " carries a row that is not one of its top-level "
+					+ "counters, so it is a typed row leaking up: " + label,
+					allowed.contains(label));
+			}
+		}
+		assertTrue("no craft carried a single row, so this asserts nothing", rowsSeen > 0);
+	}
+
+	/** Prayer, as the owner spelled it: the five, in the table's order, and no typed row. */
+	@Test
+	public void prayerReadsAsTheOwnerSpelledIt() throws Exception
+	{
+		java.io.File dir = new java.io.File(System.getProperty("java.io.tmpdir"), "chronicle-prayer-hover");
+		//noinspection ResultOfMethodCallIgnored
+		dir.mkdirs();
+		try (java.io.FileWriter w = new java.io.FileWriter(new java.io.File(dir, "monk.json")))
+		{
+			w.write("{\"schema\":1,\"rsn\":\"Monk\",\"drops\":{},"
+				+ "\"collection_log\":{\"finished\":0,\"available\":1717},"
+				+ "\"trackers\":{\"bonesBuried\":23,\"ashesScattered\":4,"
+				+ "\"bonesSacrificed\":931,\"ashesSacrificed\":1093,"
+				+ "\"headsReanimated\":203,\"dragonBonesBuried\":4,"
+				+ "\"demonHeadsReanimated\":26},"
+				+ "\"skills\":{},\"feed\":[]}");
+		}
+		PanelPreviewTest.StubPlugin monk = PanelPreviewTest.journalStub(dir.getPath(), "Monk");
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(monk));
+		ChroniclePanel was = panel;
+		panel = hold[0];
+		try
+		{
+			period("Lifetime");
+			List<String> r = rows("Prayer");
+			for (String want : new String[]{"Bones buried", "Ashes scattered",
+				"Bones sacrificed", "Ashes sacrificed", "Heads reanimated"})
+			{
+				assertTrue("Prayer's card is missing " + want + ": " + r, r.contains(want));
+			}
+			for (String label : r)
+			{
+				assertFalse("a typed row is on Prayer's card: " + label,
+					label.startsWith("Dragon") || label.startsWith("Demon"));
+			}
+		}
+		finally
+		{
+			panel = was;
+		}
 	}
 
 	/** It answers for the period, which is the rule everything on the sheet follows. */

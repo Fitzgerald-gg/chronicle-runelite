@@ -392,15 +392,15 @@ public final class StatRegistry
 
 	// section within the family; "" means the family's flat top list
 	/**
-	 * The handful of counters that answer "how is this skill going" in one line
-	 * each: logs chopped, fish caught, food cooked and food burned, pickpockets
-	 * and stalls. These are the FLOORS a craft's typed rows reconcile to, which
-	 * is what makes them the right headline - a total rather than one of the
-	 * things summed into it.
+	 * A craft's TOP-LEVEL counters, in one line each: logs chopped, fish caught,
+	 * food cooked and food burned, pickpockets and stalls and the pickpockets
+	 * that failed. Never a typed row - "Maple logs chopped", "Guard" - which is
+	 * the drill-in's business and not a headline's.
 	 *
-	 * <p>Where a craft keeps no floor, its named keys stand in: Smithing counts
-	 * items smithed and cannonballs, Construction counts builds, and neither
-	 * has a broader figure over them.
+	 * <p>The floors first, in the order the table names them, since they are the
+	 * totals the typed rows reconcile to; then the named keys, which are the
+	 * counters a craft keeps beside its totals rather than under them. Both are
+	 * top level. The caller ranks and caps; this only says which keys qualify.
 	 */
 	public static List<String> headlines(String skill)
 	{
@@ -411,10 +411,7 @@ public final class StatRegistry
 				continue;
 			}
 			List<String> out = new ArrayList<>(Arrays.asList(s.floors));
-			if (out.isEmpty())
-			{
-				out.addAll(Arrays.asList(s.keys));
-			}
+			out.addAll(Arrays.asList(s.keys));
 			return out;
 		}
 		return java.util.Collections.emptyList();

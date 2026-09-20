@@ -108,10 +108,21 @@ public class SkillGroundLabelTest
 		{
 			List<String> said = drill(p, period);
 			// This journal carries no history spine, so the periods measured
-			// between two of its lines cannot draw at all and say so. Skipped
-			// rather than asserted over, and the count below keeps the skip from
-			// quietly swallowing the whole test.
-			if (said.contains("Reading your history..."))
+			// between two of its lines cannot draw at all and say so - in one
+			// sentence before the read lands and another after. Both are the
+			// no-period note, and it is that note this looks for: this journal
+			// has no experience either, so "no Experience row" would skip the
+			// lifetime as well and leave nothing asserted. The count below keeps
+			// the skip from quietly swallowing the whole test.
+			boolean noPeriod = false;
+			for (String line : said)
+			{
+				if (line.startsWith("Nothing closed inside") || line.startsWith("Reading your history"))
+				{
+					noPeriod = true;
+				}
+			}
+			if (noPeriod)
 			{
 				continue;
 			}
