@@ -142,7 +142,7 @@ public class CombatTaskBitsTest
 		Mockito.when(client.getVarpValue(w[1])).thenReturn(1 << 1);
 		Mockito.when(client.getVarpValue(w[13])).thenReturn(1 << 29);
 
-		JsonArray done = new AchievementSync(client).snapshot()
+		JsonArray done = new AchievementSync(client, new com.google.gson.Gson()).snapshot()
 			.getAsJsonObject("combat").getAsJsonArray("tasksDone");
 
 		Set<Integer> ids = new HashSet<>();
@@ -165,7 +165,7 @@ public class CombatTaskBitsTest
 		Mockito.when(client.getVarpValue(Mockito.anyInt())).thenReturn(0);
 
 		assertEquals("a player with no tasks done has no ids", 0,
-			new AchievementSync(client).snapshot()
+			new AchievementSync(client, new com.google.gson.Gson()).snapshot()
 				.getAsJsonObject("combat").getAsJsonArray("tasksDone").size());
 	}
 
@@ -180,7 +180,7 @@ public class CombatTaskBitsTest
 		Mockito.when(client.getVarpValue(words()[0])).thenReturn(-1);
 
 		Set<Integer> ids = new HashSet<>();
-		new AchievementSync(client).snapshot().getAsJsonObject("combat")
+		new AchievementSync(client, new com.google.gson.Gson()).snapshot().getAsJsonObject("combat")
 			.getAsJsonArray("tasksDone").forEach(e -> ids.add(e.getAsInt()));
 		assertEquals(32, ids.size());
 		assertTrue("bit 31 is the sign bit and is still a task", ids.contains(31));

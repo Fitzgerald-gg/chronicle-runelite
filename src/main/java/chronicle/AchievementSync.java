@@ -102,6 +102,8 @@ public class AchievementSync
 	};
 
 	private final Client client;
+	// RuneLite's own, injected: the Hub rejects a plugin that builds its own.
+	private final com.google.gson.Gson gson;
 
 	// JSON of the last snapshot the server acked. Fields are built in a fixed order,
 	// which is what makes plain string equality a sound change gate. Written on an
@@ -114,9 +116,59 @@ public class AchievementSync
 	private volatile int cachedTick = -1;
 
 	@Inject
-	public AchievementSync(Client client)
+	public AchievementSync(Client client, com.google.gson.Gson gson)
 	{
 		this.client = client;
+		this.gson = gson;
+	}
+
+	// The bundled diary table, read once. Only Karamja needs it, and only because
+	// its tiers are the ones the game will not answer for directly.
+	private JsonObject bundledDiaries;
+
+	/**
+	 * How many tasks a Karamja tier holds, per the bundled table.
+	 *
+	 * <p>Falls back to the figure that was hardcoded here, so a missing or
+	 * unreadable bundle leaves the behaviour exactly as it was rather than
+	 * reporting every tier finished at zero.
+	 */
+	private synchronized int tierSize(String tier, int fallback)
+	{
+		if (bundledDiaries == null)
+		{
+			try (java.io.InputStreamReader r = new java.io.InputStreamReader(
+				AchievementSync.class.getResourceAsStream(
+					"/chronicle/osrs_achievement_diaries.json"),
+				java.nio.charset.StandardCharsets.UTF_8))
+			{
+				bundledDiaries = gson.fromJson(r, JsonObject.class);
+			}
+			catch (Exception e)
+			{
+				bundledDiaries = new JsonObject();
+			}
+			if (bundledDiaries == null)
+			{
+				bundledDiaries = new JsonObject();
+			}
+		}
+		if (!bundledDiaries.has("diaries") || !bundledDiaries.get("diaries").isJsonObject())
+		{
+			return fallback;
+		}
+		JsonObject all = bundledDiaries.getAsJsonObject("diaries");
+		for (String region : all.keySet())
+		{
+			if (!"karamja".equalsIgnoreCase(region))
+			{
+				continue;
+			}
+			JsonObject tiers = all.getAsJsonObject(region);
+			return tiers.has(tier) && tiers.get(tier).isJsonArray()
+				? tiers.getAsJsonArray(tier).size() : fallback;
+		}
+		return fallback;
 	}
 
 	// Client thread only. Every caller in a tick gets the same object, read-only.
@@ -143,13 +195,19 @@ public class AchievementSync
 			}
 			diaries.add(DIARY_REGIONS[r], region);
 		}
-		// Karamja easy/medium/hard have no completion varbit. A tier is done once its
-		// task count hits the tier total (10 / 19 / 10, per diary_completion_info).
-		// Only elite got a real complete varbit.
+		// Karamja easy, medium and hard have no completion varbit; the game gives a
+		// count of tasks done and nothing else, so a tier is finished once that
+		// count reaches the number of tasks the tier holds. That number is in the
+		// bundled table, and repeating it here as a literal meant a regenerated
+		// table would move one copy and not the other: add a Karamja easy task and
+		// the tier would read finished at ten of eleven. Elite has a real varbit.
 		JsonObject karamja = new JsonObject();
-		karamja.addProperty("easy", client.getVarbitValue(VarbitID.KARAMJA_EASY_COUNT) >= 10);
-		karamja.addProperty("medium", client.getVarbitValue(VarbitID.KARAMJA_MED_COUNT) >= 19);
-		karamja.addProperty("hard", client.getVarbitValue(VarbitID.KARAMJA_HARD_COUNT) >= 10);
+		karamja.addProperty("easy",
+			client.getVarbitValue(VarbitID.KARAMJA_EASY_COUNT) >= tierSize("easy", 10));
+		karamja.addProperty("medium",
+			client.getVarbitValue(VarbitID.KARAMJA_MED_COUNT) >= tierSize("medium", 19));
+		karamja.addProperty("hard",
+			client.getVarbitValue(VarbitID.KARAMJA_HARD_COUNT) >= tierSize("hard", 10));
 		karamja.addProperty("elite", client.getVarbitValue(VarbitID.KARAMJA_DIARY_ELITE_COMPLETE) != 0);
 		diaries.add("karamja", karamja);
 

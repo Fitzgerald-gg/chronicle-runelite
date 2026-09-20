@@ -41,7 +41,7 @@ public class AchievementSyncTest
 		Mockito.when(client.getIntStack()).thenAnswer(inv -> questStack);
 		Mockito.when(client.getVarbitValue(Mockito.anyInt()))
 			.thenAnswer(inv -> varbits.getOrDefault((Integer) inv.getArgument(0), 0));
-		sync = new AchievementSync(client);
+		sync = new AchievementSync(client, new com.google.gson.Gson());
 	}
 
 	// a new tick drops the cache; this is how a test gets a fresh snapshot

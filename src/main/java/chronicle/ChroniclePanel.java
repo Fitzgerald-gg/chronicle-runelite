@@ -5470,6 +5470,50 @@ class ChroniclePanel extends PluginPanel
 				p.add(vgap(3));
 			}
 		}
+
+		// Pages the GAME has and this release's list does not. Jagex adds a
+		// collection log page and a plugin update takes as long as it takes, so
+		// without this the reader's own capture of that page is on their disk and
+		// nowhere on screen for a month. It cannot be filed under a tab, because
+		// the scrape records a page's title and not which tab it sat under, so it
+		// is shown once, on Other, where the game itself puts what does not fit.
+		if ("Other".equals(clogTab))
+		{
+			java.util.Set<String> known = new java.util.HashSet<>();
+			for (Map<String, List<String>> tabPages : tax.values())
+			{
+				for (String pageName : tabPages.keySet())
+				{
+					known.add(pageName.toLowerCase(Locale.ROOT));
+				}
+			}
+			List<String> strangers = new ArrayList<>();
+			for (String pageName : ob.byPage.keySet())
+			{
+				if (!known.contains(pageName))
+				{
+					strangers.add(pageName);
+				}
+			}
+			java.util.Collections.sort(strangers);
+			if (!strangers.isEmpty())
+			{
+				p.add(vgap(6));
+				p.add(group("NEW SINCE THIS RELEASE"));
+				for (String pageName : strangers)
+				{
+					Map<String, Long> held = ob.byPage.get(pageName);
+					Long kc = kcs.get(pageName);
+					p.add(row(prettyPage(pageName),
+						fmt(held == null ? 0 : held.size()) + " held"
+							+ (kc != null && kc > 0 ? " \u00b7 " + fmt(kc) + " kc" : ""),
+						null));
+				}
+				p.add(ghostRow("Chronicle has no slot list for "
+					+ (strangers.size() == 1 ? "this page" : "these pages")
+					+ " yet, so only what you hold is known.", ""));
+			}
+		}
 		return p;
 	}
 
@@ -5998,6 +6042,23 @@ class ChroniclePanel extends PluginPanel
 	{
 		final Map<String, Long> all = new LinkedHashMap<>();
 		final Map<String, Map<String, Long>> byPage = new LinkedHashMap<>();
+	}
+
+	/**
+	 * A captured page name put back into title case for display. by_cat is keyed
+	 * lowercase so the two sources can be matched; the game wrote it properly.
+	 */
+	private static String prettyPage(String key)
+	{
+		StringBuilder sb = new StringBuilder(key.length());
+		boolean head = true;
+		for (int i = 0; i < key.length(); i++)
+		{
+			char c = key.charAt(i);
+			sb.append(head ? Character.toUpperCase(c) : c);
+			head = c == ' ' || c == '(';
+		}
+		return sb.toString();
 	}
 
 	private static Obtained obtained(JsonObject cl)
