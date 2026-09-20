@@ -1628,9 +1628,10 @@ class ChroniclePanel extends PluginPanel
 			}));
 		}
 		cell.add(icon, BorderLayout.WEST);
+		boolean lit = figure > 0 && activityStirred(label, source);
 		JLabel fig = new JLabel(figure > 0 ? fmt(figure) : "-", JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
-		fig.setForeground(figure > 0 ? TILE_LIT : ColorScheme.LIGHT_GRAY_COLOR.darker());
+		fig.setForeground(lit ? TILE_LIT : ColorScheme.LIGHT_GRAY_COLOR.darker());
 		cell.add(fig, BorderLayout.EAST);
 		return cell;
 	}
@@ -1666,6 +1667,31 @@ class ChroniclePanel extends PluginPanel
 		{
 			p.add(noPeriod());
 			return p;
+		}
+		// A narrowed period shows what it HOLDS. The roster is seventy strong and
+		// nobody kills seventy things in a week, so every period but the lifetime
+		// drew a handful of counts in a field of dashes, and the dashes were the
+		// board. The lifetime keeps the whole roster: there it is a checklist of
+		// what the account has and has not met, which is a different question.
+		if (!wholeRecord())
+		{
+			List<Boss> had = new ArrayList<>();
+			for (Boss b : roster)
+			{
+				// the open one stays whatever it holds, or clicking a cell would
+				// close the card it just opened
+				if (bossKillsInWindow(b.name) > 0 || b.name.equals(bossOpen))
+				{
+					had.add(b);
+				}
+			}
+			if (had.isEmpty())
+			{
+				p.add(note("Nothing on the boss sheet was killed inside "
+					+ periodInSentence() + "."));
+				return p;
+			}
+			roster = had;
 		}
 		int at = -1;
 		for (int i = 0; i < roster.size(); i++)
@@ -2188,6 +2214,14 @@ class ChroniclePanel extends PluginPanel
 		kcByKind = null;
 		chatKcByKind = null;
 		killKinds = null;
+		movedTypes = null;
+		// These are cleared in buildKills too, and have to be: a test builds that
+		// board with no rebuild around it. But the activity tiles above the boss
+		// grid ask rolledKills as well, and they are drawn BEFORE buildKills gets
+		// to clear it, so on a period change they read the last window's memo.
+		movedKcs = null;
+		rolledKcs = null;
+		rollUsed = false;
 		// The labels of the build just discarded are nobody's business now. Left to
 		// pile up, an icon that never lands would hold every label the panel ever
 		// drew, which is the same unbounded queue that made the trackers page lag.
@@ -2832,7 +2866,7 @@ class ChroniclePanel extends PluginPanel
 			java.time.LocalDate began = java.time.Instant.ofEpochMilli(rollFrom)
 				.atZone(ZoneId.systemDefault()).toLocalDate();
 			p.add(note("The dated loot roll begins " + began.format(FULL_DAY)
-				+ ", which is inside " + win.label + ". Naming the part it can see "
+				+ ", which is inside " + periodInSentence() + ". Naming the part it can see "
 				+ "as the whole period would be worse than saying nothing."));
 			return p;
 		}
@@ -2845,7 +2879,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			if (w.items.isEmpty())
 			{
-				p.add(note("Nothing taken inside " + win.label + "."));
+				p.add(note("Nothing taken inside " + periodInSentence() + "."));
 				return p;
 			}
 			return kindLens(p, win.label, bagOf(w.items), "win:");
@@ -2859,7 +2893,7 @@ class ChroniclePanel extends PluginPanel
 		if (ranked.isEmpty())
 		{
 			p.add(note("Nothing " + (dropsLeftBehind ? "left behind" : "taken")
-				+ " inside " + win.label + "."));
+				+ " inside " + periodInSentence() + "."));
 			return p;
 		}
 		JPanel head = card(dropsLeftBehind ? "Left behind" : "Drops received");
@@ -3097,7 +3131,7 @@ class ChroniclePanel extends PluginPanel
 			List<LocalStore.BagItem> taskBag = onTaskBag();
 			if (taskBag.isEmpty())
 			{
-				p.add(note("No task closed inside " + window().label + "."));
+				p.add(note("No task closed inside " + periodInSentence() + "."));
 				return p;
 			}
 			return kindLens(p, wholeRecord() ? "On-task loot"
@@ -3593,10 +3627,10 @@ class ChroniclePanel extends PluginPanel
 		{
 			p.add(taskPicker());
 			p.add(note(lootTask != null
-				? "No loot logged on " + lootTask + " inside " + w.label + "."
+				? "No loot logged on " + lootTask + " inside " + periodInSentence() + "."
 				: wholeRecord()
 					? "No task loot in the journal yet. It collects as tasks close."
-					: "No task loot inside " + w.label + "."));
+					: "No task loot inside " + periodInSentence() + "."));
 			return p;
 		}
 		long count = 0;
@@ -5331,7 +5365,7 @@ class ChroniclePanel extends PluginPanel
 		List<Object[]> split = plugin.onTaskItemByTask(name, w[0], w[1]);
 		if (split.isEmpty())
 		{
-			p.add(note("No task paid this inside " + window().label + "."));
+			p.add(note("No task paid this inside " + periodInSentence() + "."));
 			return p;
 		}
 		p.add(group("By task"));
@@ -5712,7 +5746,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (got.isEmpty())
 		{
-			p.add(note("Nothing new was logged inside " + w.label + "."));
+			p.add(note("Nothing new was logged inside " + periodInSentence() + "."));
 			return p;
 		}
 		JPanel head = card("Collection log");
@@ -6926,7 +6960,7 @@ class ChroniclePanel extends PluginPanel
 		p.add(vgap(6));
 		if (kept == 0)
 		{
-			p.add(note("Nothing tracked inside " + window().label + "."));
+			p.add(note("Nothing tracked inside " + periodInSentence() + "."));
 			return p;
 		}
 		for (Map.Entry<String, Map<String, List<Map.Entry<String, Long>>>> fam : filed.entrySet())
@@ -9053,6 +9087,79 @@ class ChroniclePanel extends PluginPanel
 		return cell;
 	}
 
+	// Which kinds of feed line landed inside the window. Answered once a build:
+	// three tiles ask, and each ask is a walk of the feed.
+	private java.util.Set<String> movedTypes;
+
+	/** Whether the window holds a line of this kind. Lifetime holds everything. */
+	private boolean stirred(String type)
+	{
+		if (wholeRecord())
+		{
+			return true;
+		}
+		if (movedTypes == null)
+		{
+			movedTypes = new java.util.HashSet<>();
+			for (JsonObject e : plugin.feedNewest(4000))
+			{
+				if (insideWindow(safeLong(e.get("ts"))))
+				{
+					movedTypes.add(typeOf(e));
+				}
+			}
+		}
+		return movedTypes.contains(type);
+	}
+
+	/**
+	 * Whether the period moved what an activity tile counts.
+	 *
+	 * <p>The tiles carry a STANDING - every clue ever opened, the whole
+	 * collection log - because that is what they are the way in to. Standing
+	 * still under a heading that names a week reads as the week's work, so a
+	 * tile the period never touched is dimmed, the same way a skill that gained
+	 * nothing is. Lifetime moved everything, by construction.
+	 */
+	private boolean activityStirred(String label, String source)
+	{
+		if (wholeRecord())
+		{
+			return true;
+		}
+		if ("Collections".equals(label))
+		{
+			return stirred("COLLECTION");
+		}
+		if ("Quests".equals(label))
+		{
+			return stirred("QUEST");
+		}
+		if ("Diaries".equals(label))
+		{
+			return stirred("DIARY");
+		}
+		if ("Clues".equals(label))
+		{
+			// the caskets are loot sources, one per tier, so the roll knows
+			for (String tier : CLUE_TIERS)
+			{
+				Long n = rolledKills("Clue Scroll (" + tier + ")");
+				if (n != null && n > 0)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		if (!source.isEmpty())
+		{
+			Long n = rolledKills(source);
+			return n != null && n > 0;
+		}
+		return false;
+	}
+
 	private JsonObject buildAchievements;
 
 	/** Read once a build: three tiles and up to three boards all ask for it. */
@@ -10314,9 +10421,26 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * The window as epoch millis, for the boards whose records carry a stamp
-	 * rather than a daily baseline: the feed, and the slayer journey. A lifetime
-	 * admits everything, which is what it means.
+	 * The period's name as it reads INSIDE a sentence.
+	 *
+	 * <p>Every other label is a proper noun or a date - "Lifetime", "14 Sept -
+	 * 20 Sept" - and sits mid-sentence unchanged. The sitting's is a phrase, and
+	 * "Nothing taken inside This session." puts a capital in the middle of a
+	 * line. The strip above still says it with a capital, because there it opens
+	 * its own line.
+	 */
+	private String periodInSentence()
+	{
+		String label = window().label;
+		return label.startsWith("This ")
+			? Character.toLowerCase(label.charAt(0)) + label.substring(1) : label;
+	}
+
+	/**
+	 * Whether a stamped line belongs to the window, in epoch millis: the feed,
+	 * the collection log's new slots, and the slayer journey all date a line
+	 * this way rather than by a daily baseline. A lifetime admits everything,
+	 * which is what it means.
 	 */
 	private boolean insideWindow(long ts)
 	{
@@ -10340,7 +10464,7 @@ class ChroniclePanel extends PluginPanel
 	/** What a dated board says when the window simply held nothing. */
 	private JPanel nothingInWindow(String what)
 	{
-		return note("No " + what + " inside " + window().label + ".");
+		return note("No " + what + " inside " + periodInSentence() + ".");
 	}
 
 	/**
@@ -10471,7 +10595,7 @@ class ChroniclePanel extends PluginPanel
 			// Defence, Hitpoints, Ranged, Magic and Slayer. A skill that tracks
 			// nothing should say so rather than open on a blank.
 			p.add(note("Nothing is tracked under " + craft
-				+ (wholeRecord() ? "." : " in " + window().label + ".")));
+				+ (wholeRecord() ? "." : " in " + periodInSentence() + ".")));
 			return p;
 		}
 		rows.sort(StatRegistry::compareRows);
@@ -10505,7 +10629,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		return note(historySpine == null
 			? "Reading your history..."
-			: "Nothing closed inside " + window().label + ". A period is the distance "
+			: "Nothing closed inside " + periodInSentence() + ". A period is the distance "
 				+ "between two baselines, and this window holds fewer than two.");
 	}
 

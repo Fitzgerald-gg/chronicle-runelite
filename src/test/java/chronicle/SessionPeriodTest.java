@@ -567,4 +567,23 @@ public class SessionPeriodTest
 		});
 		return said;
 	}
+
+	/**
+	 * The strip says "This session" because there it opens its own line. Inside a
+	 * sentence it is a phrase like any other, and a capital in the middle of one
+	 * reads as a typo in the plugin.
+	 */
+	@Test
+	public void theSittingIsNamedInLowerCaseInsideASentence() throws Exception
+	{
+		period("Session");
+		assertEquals("the strip lost its capital", "This session", label());
+		Method m = ChroniclePanel.class.getDeclaredMethod("periodInSentence");
+		m.setAccessible(true);
+		assertEquals("a capital lands in the middle of every sentence naming it",
+			"this session", m.invoke(panel));
+		// and the periods whose names ARE proper nouns keep theirs
+		period("Lifetime");
+		assertEquals("Lifetime", m.invoke(panel));
+	}
 }
