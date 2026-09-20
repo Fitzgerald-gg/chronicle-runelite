@@ -56,8 +56,8 @@ import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.OSType;
 
 /**
- * The journal's face: a period row, four tabs (Record, PvM, Skilling and the
- * Collection log), a sub-tab strip under the first three, a search field, and a
+ * The journal's face: a period row, four tabs (Record, Hiscores, Loot and
+ * Trackers), a sub-tab strip under Record and Loot, a search field, and a
  * detail overlay over whichever board is open. Record's Now board reads the live
  * sitting; the period row above the tabs governs every other board. Lists mount
  * a bounded number of rows, and views rebuild on a tab or sub-tab switch, on a
@@ -95,8 +95,8 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * The four tabs the panel now carries, and the boards under each. The eight
-	 * views above did not go anywhere: a tab and its sub-tab choose one, so every
+	 * The four tabs the panel carries, and the boards under each. The views above
+	 * did not go anywhere: a tab and its sub-tab choose one, so every
 	 * board that was already built here is reached a different way rather than
 	 * rebuilt. What changes is the navigation, and that the period governs all of
 	 * it from one place above the strip.
@@ -1328,7 +1328,7 @@ class ChroniclePanel extends PluginPanel
 	 * not draw itself.
 	 *
 	 * <p>label, the source it reads, and the page a click opens or "" for a tile
-	 * that is only a figure. Four of these carry a destination, and between them
+	 * that is only a figure. Five of these carry a destination, and between them
 	 * they are why the collection log stopped needing a tab of its own.
 	 */
 	private static final String[][] ACTIVITIES = {
@@ -5653,7 +5653,7 @@ class ChroniclePanel extends PluginPanel
 	//   -  16   the drill card's border, CARD_INSET a side (cardPlain)
 	//   -   4   the row's border, ROW_INSET a side (row)
 	//   -   8   ROW_GAP, between the name and the share
-	//   = 189   less the share, which BorderLayout draws at its preferred width.
+	//   = 193   less the share, which BorderLayout draws at its preferred width.
 	static int chaseRoom(String share, FontMetrics fm)
 	{
 		return PluginPanel.PANEL_WIDTH + PluginPanel.SCROLLBAR_WIDTH
@@ -8397,6 +8397,29 @@ class ChroniclePanel extends PluginPanel
 	 * tasks are added between releases: a recent event says 2,624 where the
 	 * bundled table says 2,697. The table is the fallback, not the authority.
 	 */
+	/**
+	 * Every combat achievement point there is, per the bundled table.
+	 *
+	 * <p>Only ever the fallback. The game states its own total on each completion
+	 * and that total moves with each release, so where the journal has witnessed
+	 * one it is the authority and this is not consulted.
+	 */
+	private long bundledPoints()
+	{
+		bundledCombat = bundle(plugin.gson(), "osrs_combat_achievements.json", bundledCombat);
+		if (!bundledCombat.has("_meta") || !bundledCombat.get("_meta").isJsonObject())
+		{
+			return 0;
+		}
+		JsonObject meta = bundledCombat.getAsJsonObject("_meta");
+		if (!meta.has("totals") || !meta.get("totals").isJsonObject())
+		{
+			return 0;
+		}
+		JsonObject totals = meta.getAsJsonObject("totals");
+		return totals.has("points") ? safeLong(totals.get("points")) : 0;
+	}
+
 	private long[] combatStanding()
 	{
 		JsonObject c = achievements().has("combat")
@@ -8432,13 +8455,20 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (possible == 0)
 		{
-			possible = 0;   // no witnessed event: say the points and not a fraction
+			// The fallback the javadoc above has always promised, which until now
+			// was a self-assignment: an account that has never had a combat
+			// achievement land while Chronicle was watching had no denominator at
+			// all and read as a bare number of points. The table's total is a
+			// release behind the game's own, which is why the game wins where it
+			// has spoken, but a figure one release out is a better answer than no
+			// figure.
+			possible = bundledPoints();
 		}
 		return new long[]{points, possible, tiers, seen};
 	}
 
 	/**
-	 * The four pages the sheet's activity tiles open. Each starts with a back row,
+	 * The five pages the sheet's activity tiles open. Each starts with a back row,
 	 * because a reader was sent here rather than having drilled in.
 	 */
 	private JPanel buildSheetPage()
@@ -9007,10 +9037,11 @@ class ChroniclePanel extends PluginPanel
 	// What the total level tile says on hover while the sheet is drawing, in the
 	// markup RuneLite's own hiscores panel uses for exactly this.
 	private String periodTip;
-	// A page the sheet's activity tiles send the reader to: "log", "quests",
-	// "diaries" or "combat". Like showInfo and allTrackers it is somewhere the
-	// reader was SENT rather than somewhere they drilled, so it leaves by its own
-	// branch of backDetail rather than by popping the stack.
+	// A page the sheet's activity tiles send the reader to: "clues", "log",
+	// "quests", "diaries" or "combat". Like showInfo and allTrackers it is
+	// somewhere the reader was SENT rather than somewhere they drilled, so it
+	// leaves by its own branch of backDetail rather than by popping the stack -
+	// last, after everything drilled on top of it has been unwound.
 	private String sheetPage;
 	// What the period's figures are measured FROM, when that is not simply the eve
 	// of the window. Hangs on the period control rather than on the board.
@@ -10317,8 +10348,10 @@ class ChroniclePanel extends PluginPanel
 	/**
 	 * Combat achievements and diary entries, from the bundled tables rather than
 	 * from the record: these are the two things the reader can ask about before
-	 * having done them. Short queries are left out by the caller, or a two letter
-	 * prefix answers with a hundred and fifty diary entries.
+	 * having done them. Short queries are left out by the caller: both halves stop
+	 * at two hits, so a two letter prefix cannot flood the panel, but it can put
+	 * four arbitrary achievements above the drops and journal lines the reader was
+	 * actually typing towards.
 	 */
 	private int searchAchievements(JPanel p, String ql)
 	{

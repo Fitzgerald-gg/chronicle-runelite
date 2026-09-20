@@ -128,7 +128,7 @@ public class PanelPreviewTest
 		shoot(panel, out, prefix + "-kills", "KILLS");
 		// and the whole sheet it now sits at the bottom of
 		shoot(panel, out, prefix + "-sheet", "SHEET");
-		// the four pages the sheet's activity tiles open
+		// the sheet's activity pages (the log has its own shot, above)
 		for (String page : new String[]{"clues", "quests", "diaries", "combat"})
 		{
 			set(panel, "sheetPage", page);

@@ -59,16 +59,29 @@ public class CombatTaskBitsTest
 	 * a combat achievement ticked at random.
 	 */
 	@Test
-	public void theVarpsAreNamedBecauseTheyAreNotSequential()
+	public void theVarpsAreNamedBecauseTheyAreNotSequential() throws Exception
 	{
-		int[] head = {VarPlayerID.CA_TASK_COMPLETED_0, VarPlayerID.CA_TASK_COMPLETED_1,
-			VarPlayerID.CA_TASK_COMPLETED_2};
-		assertEquals(head[0] + 1, head[1]);
-		assertEquals(head[1] + 1, head[2]);
-		// and then they stop being sequential, which is the whole point
-		assertNotEquals("if these ever become contiguous the comment is stale, not the"
-				+ " code",
-			VarPlayerID.CA_TASK_COMPLETED_17 + 1, VarPlayerID.CA_TASK_COMPLETED_18);
+		int[] w = words();
+		// The run really is a run, for exactly thirteen words...
+		for (int i = 1; i <= 12; i++)
+		{
+			assertEquals("the contiguous head is shorter than the comment says",
+				w[i - 1] + 1, w[i]);
+		}
+		// ...and then it stops, which is the whole point. A loop over a base would
+		// walk off the end here into varps belonging to something else.
+		assertNotEquals("if these ever become contiguous the comment is stale, not"
+			+ " the code", w[12] + 1, w[13]);
+		int breaks = 0;
+		for (int i = 1; i < w.length; i++)
+		{
+			if (w[i] != w[i - 1] + 1)
+			{
+				breaks++;
+			}
+		}
+		assertEquals("the comment names the breaks one by one, so it goes stale if"
+			+ " their number changes", 7, breaks);
 	}
 
 	/** Every task the table knows has a bit to live in. */
@@ -171,5 +184,40 @@ public class CombatTaskBitsTest
 			.getAsJsonArray("tasksDone").forEach(e -> ids.add(e.getAsInt()));
 		assertEquals(32, ids.size());
 		assertTrue("bit 31 is the sign bit and is still a task", ids.contains(31));
+	}
+
+	/**
+	 * The denominator on the head card, when the journal has never watched a
+	 * combat achievement land.
+	 *
+	 * <p>The game states its own total on every completion and that total moves
+	 * with each release, so it wins where it has spoken. Where it has not, the
+	 * javadoc has always said the table is the fallback; the code said
+	 * `if (possible == 0) { possible = 0; }`, so a new account read as a bare
+	 * number of points over nothing at all.
+	 */
+	@Test
+	public void withNoWitnessedCompletionTheTableSuppliesTheTotal() throws Exception
+	{
+		JsonObject meta = new Gson().fromJson(
+			new InputStreamReader(ChroniclePanel.class.getResourceAsStream(
+				"/chronicle/osrs_combat_achievements.json"), StandardCharsets.UTF_8),
+			JsonObject.class).getAsJsonObject("_meta").getAsJsonObject("totals");
+		assertTrue("the bundled table has no points total to fall back to",
+			meta.has("points") && meta.get("points").getAsLong() > 0);
+
+		// and it has to be the sum of the tiers, or the fallback is a made up number
+		JsonObject points = new Gson().fromJson(
+			new InputStreamReader(ChroniclePanel.class.getResourceAsStream(
+				"/chronicle/osrs_combat_achievements.json"), StandardCharsets.UTF_8),
+			JsonObject.class).getAsJsonObject("_meta").getAsJsonObject("points");
+		long sum = 0;
+		JsonObject all = tasks();
+		for (String id : all.keySet())
+		{
+			sum += points.get(all.getAsJsonObject(id).get("tier").getAsString()).getAsLong();
+		}
+		assertEquals("the total does not match the tasks it is a total of",
+			meta.get("points").getAsLong(), sum);
 	}
 }

@@ -139,4 +139,31 @@ public class HoverAndScrollbarTest
 			assertEquals(0, d.height);
 		}
 	}
+
+	/**
+	 * The comment above chaseRoom itemises the arithmetic term by term and then
+	 * totals it. The total was four pixels out: every term was right and the sum
+	 * line said 189 where they come to 193. A worked example in a comment is worth
+	 * having precisely because it can be checked, so it is checked here.
+	 */
+	@Test
+	public void theWorkedExampleAboveChaseRoomAddsUp() throws Exception
+	{
+		java.lang.reflect.Method m = ChroniclePanel.class
+			.getDeclaredMethod("chaseRoom", String.class, java.awt.FontMetrics.class);
+		m.setAccessible(true);
+		java.awt.FontMetrics zero = new java.awt.FontMetrics(
+			javax.swing.UIManager.getFont("Label.font") != null
+				? javax.swing.UIManager.getFont("Label.font")
+				: new java.awt.Font("Dialog", java.awt.Font.PLAIN, 12))
+		{
+			@Override
+			public int stringWidth(String s)
+			{
+				return 0;
+			}
+		};
+		assertEquals("the itemised terms in the comment above chaseRoom come to 193",
+			193, ((Integer) m.invoke(null, "", zero)).intValue());
+	}
 }

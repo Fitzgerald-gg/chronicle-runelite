@@ -74,9 +74,12 @@ public class AchievementSync
 	 * bit N%32 of CA_TASK_COMPLETED_(N/32), and the bundled table is keyed by that
 	 * same id, so the two line up without a lookup table between them.
 	 *
-	 * <p>Read by name rather than by arithmetic on the first id: they are not
-	 * contiguous (3116 upward, then 4496, 4721, 5673 as tasks were added), so a
-	 * loop over a base would read varps belonging to something else entirely.
+	 * <p>Read by name rather than by arithmetic on the first id. Only the first
+	 * thirteen are contiguous, 3116 to 3128; the remaining eight were allotted as
+	 * tasks were added over the years and land at 3387, 3718, 3773, 3774, 4204,
+	 * 4496, 4721 and 5673. A loop over a base would walk straight off the end of
+	 * the run and read varps belonging to something else entirely, and every bit
+	 * it found there would tick a combat achievement at random.
 	 */
 	private static final int[] CA_TASK_COMPLETED = {
 		VarPlayerID.CA_TASK_COMPLETED_0, VarPlayerID.CA_TASK_COMPLETED_1,
