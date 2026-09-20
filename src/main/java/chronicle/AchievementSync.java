@@ -13,6 +13,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Client;
 import net.runelite.api.Quest;
+import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 
 /**
@@ -64,6 +65,33 @@ public class AchievementSync
 	private static final String[] CA_TIERS = {
 		"easy", "medium", "hard", "elite", "master", "grandmaster",
 	};
+	/**
+	 * One bit per combat achievement task, in the game's own task-id order.
+	 *
+	 * <p>The game states points and which tiers are unlocked, and nothing about
+	 * WHICH tasks are done, so the journal could only name the ones it happened to
+	 * watch land: seventeen of a hundred. These varps carry the lot. Task id N is
+	 * bit N%32 of CA_TASK_COMPLETED_(N/32), and the bundled table is keyed by that
+	 * same id, so the two line up without a lookup table between them.
+	 *
+	 * <p>Read by name rather than by arithmetic on the first id: they are not
+	 * contiguous (3116 upward, then 4496, 4721, 5673 as tasks were added), so a
+	 * loop over a base would read varps belonging to something else entirely.
+	 */
+	private static final int[] CA_TASK_COMPLETED = {
+		VarPlayerID.CA_TASK_COMPLETED_0, VarPlayerID.CA_TASK_COMPLETED_1,
+		VarPlayerID.CA_TASK_COMPLETED_2, VarPlayerID.CA_TASK_COMPLETED_3,
+		VarPlayerID.CA_TASK_COMPLETED_4, VarPlayerID.CA_TASK_COMPLETED_5,
+		VarPlayerID.CA_TASK_COMPLETED_6, VarPlayerID.CA_TASK_COMPLETED_7,
+		VarPlayerID.CA_TASK_COMPLETED_8, VarPlayerID.CA_TASK_COMPLETED_9,
+		VarPlayerID.CA_TASK_COMPLETED_10, VarPlayerID.CA_TASK_COMPLETED_11,
+		VarPlayerID.CA_TASK_COMPLETED_12, VarPlayerID.CA_TASK_COMPLETED_13,
+		VarPlayerID.CA_TASK_COMPLETED_14, VarPlayerID.CA_TASK_COMPLETED_15,
+		VarPlayerID.CA_TASK_COMPLETED_16, VarPlayerID.CA_TASK_COMPLETED_17,
+		VarPlayerID.CA_TASK_COMPLETED_18, VarPlayerID.CA_TASK_COMPLETED_19,
+		VarPlayerID.CA_TASK_COMPLETED_20,
+	};
+
 	private static final int[] CA_TIER_STATUS = {
 		VarbitID.CA_TIER_STATUS_EASY, VarbitID.CA_TIER_STATUS_MEDIUM,
 		VarbitID.CA_TIER_STATUS_HARD, VarbitID.CA_TIER_STATUS_ELITE,
@@ -130,6 +158,25 @@ public class AchievementSync
 			tiers.addProperty(CA_TIERS[i], client.getVarbitValue(CA_TIER_STATUS[i]));
 		}
 		combat.add("tiers", tiers);
+		// The words the panel reads come from the bundled table; these are just the
+		// ids, so the journal carries the smallest thing that can answer "which".
+		com.google.gson.JsonArray done = new com.google.gson.JsonArray();
+		for (int word = 0; word < CA_TASK_COMPLETED.length; word++)
+		{
+			int bits = client.getVarpValue(CA_TASK_COMPLETED[word]);
+			if (bits == 0)
+			{
+				continue;
+			}
+			for (int bit = 0; bit < 32; bit++)
+			{
+				if ((bits & (1 << bit)) != 0)
+				{
+					done.add(word * 32 + bit);
+				}
+			}
+		}
+		combat.add("tasksDone", done);
 
 		JsonObject root = new JsonObject();
 		root.add("quests", quests);

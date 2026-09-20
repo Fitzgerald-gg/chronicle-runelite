@@ -8434,6 +8434,38 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
+	/**
+	 * The combat achievement task ids the game says are done.
+	 *
+	 * <p>Captured as a plain list of ids rather than as words, so the journal
+	 * carries the smallest thing that can answer "which" and the bundled table
+	 * supplies the rest. Empty for a journal written before this was captured,
+	 * which the board has to handle rather than read as "nothing done".
+	 */
+	private java.util.Set<Integer> caDone()
+	{
+		java.util.Set<Integer> out = new java.util.HashSet<>();
+		JsonObject c = achievements().has("combat")
+			&& achievements().get("combat").isJsonObject()
+			? achievements().getAsJsonObject("combat") : null;
+		if (c == null || !c.has("tasksDone") || !c.get("tasksDone").isJsonArray())
+		{
+			return out;
+		}
+		for (com.google.gson.JsonElement e : c.getAsJsonArray("tasksDone"))
+		{
+			try
+			{
+				out.add(e.getAsInt());
+			}
+			catch (RuntimeException ignored)
+			{
+				// a non-numeric id is not an id
+			}
+		}
+		return out;
+	}
+
 	private void buildQuests(JPanel p)
 	{
 		JsonObject q = achievements().has("quests")
@@ -8563,35 +8595,20 @@ class ChroniclePanel extends PluginPanel
 		head.add(row("Points", c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]),
 			accent()));
 		head.add(row("Tiers unlocked", fmt(c[2]) + " / 6", null));
+		java.util.Set<Integer> headDone = caDone();
+		if (!headDone.isEmpty())
+		{
+			head.add(row("Tasks done", fmt(headDone.size()) + " / " + fmt(all.size()),
+				accent()));
+		}
 		p.add(head);
 		p.add(vgap(6));
-		// The game hands over points and which tiers are unlocked, never the list of
-		// tasks behind them. Only the ones this journal watched land can be named, so
-		// the rest are what the tier ASKS for rather than what is left to do, and the
-		// board says which is which instead of implying a checklist it cannot fill.
-		java.util.Set<String> witnessed = new java.util.LinkedHashSet<>();
-		for (JsonObject e : plugin.feedNewest(4000))
-		{
-			if ("COMBAT_ACHIEVEMENT".equals(str(e, "type", "")) && e.has("data")
-				&& e.get("data").isJsonObject()
-				&& e.getAsJsonObject("data").has("task"))
-			{
-				witnessed.add(e.getAsJsonObject("data").get("task").getAsString());
-			}
-		}
-		if (!witnessed.isEmpty())
-		{
-			p.add(group("SEEN LAND (" + fmt(witnessed.size()) + ")"));
-			for (String w : witnessed)
-			{
-				p.add(row(w, "", accent()));
-			}
-			p.add(vgap(4));
-			p.add(note("The game never lists which tasks are done, so these are the "
-				+ "ones this journal watched land. The tiers below are what they ask "
-				+ "for."));
-			p.add(vgap(4));
-		}
+		// Which tasks are DONE, from the game's own per-task bits rather than from
+		// the handful this journal happened to watch land. Empty on a journal
+		// written before those bits were captured, and the board then says what each
+		// tier asks for rather than pretending nothing is done.
+		java.util.Set<Integer> done = caDone();
+		boolean known = !done.isEmpty();
 		java.util.Map<String, java.util.List<JsonObject>> byTier = new LinkedHashMap<>();
 		for (String tier : new String[]{"easy", "medium", "hard", "elite", "master",
 			"grandmaster"})
@@ -8600,7 +8617,9 @@ class ChroniclePanel extends PluginPanel
 		}
 		for (String id : all.keySet())
 		{
-			JsonObject task = all.getAsJsonObject(id);
+			JsonObject task = all.getAsJsonObject(id).deepCopy();
+			// the table is KEYED by the game's task id and the rows do not carry it
+			task.addProperty("id", Integer.parseInt(id));
 			java.util.List<JsonObject> into = byTier.get(task.get("tier").getAsString());
 			if (into != null)
 			{
@@ -8613,13 +8632,28 @@ class ChroniclePanel extends PluginPanel
 			{
 				continue;
 			}
-			p.add(group(e.getKey().toUpperCase(Locale.ROOT)
-				+ " (" + fmt(e.getValue().size()) + ")"));
+			long got = 0;
 			for (JsonObject task : e.getValue())
 			{
+				if (done.contains(task.get("id").getAsInt()))
+				{
+					got++;
+				}
+			}
+			p.add(group(e.getKey().toUpperCase(Locale.ROOT) + (known
+				? " (" + fmt(got) + " / " + fmt(e.getValue().size()) + ")"
+				: " (" + fmt(e.getValue().size()) + ")")));
+			for (JsonObject task : e.getValue())
+			{
+				boolean has = known && done.contains(task.get("id").getAsInt());
+				// Brightness carries it, the way a held collection log slot reads
+				// bright and an absent one reads dim. A "done" in the right hand
+				// column would say it 97 times over and cost the board the one
+				// thing that column is for, which is where the task is done.
 				JPanel line = row(task.get("name").getAsString(),
 					task.get("monster").getAsString(),
-					witnessed.contains(task.get("name").getAsString()) ? accent() : null);
+					known && !has ? ColorScheme.LIGHT_GRAY_COLOR.darker() : null,
+					known && !has);
 				line.setToolTipText(tip(task.get("name").getAsString(),
 					new String[]{"Tier", "Where", "Task"},
 					new String[]{task.get("tier").getAsString(),

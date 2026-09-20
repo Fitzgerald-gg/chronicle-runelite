@@ -1092,7 +1092,13 @@ public class PanelPreviewTest
 	// there is one
 	private StubPlugin realJournalPlugin()
 	{
-		File dir = new File(System.getProperty("user.home"), ".runelite/chronicle");
+		// -Dchronicle.realJournal=1 reads this machine's own journal; given a
+		// directory instead, it reads that one, which is how a doctored copy gets
+		// rendered without touching the real file.
+		String at = System.getProperty("chronicle.realJournal");
+		File dir = at != null && new File(at).isDirectory()
+			? new File(at)
+			: new File(System.getProperty("user.home"), ".runelite/chronicle");
 		File journal = newestJournal(dir);
 		if (journal == null)
 		{
