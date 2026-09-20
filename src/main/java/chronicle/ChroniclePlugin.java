@@ -818,6 +818,12 @@ public class ChroniclePlugin extends Plugin
 		return sessionView();
 	}
 
+	/** When this sitting began, or 0 before a login. */
+	long sessionStart()
+	{
+		return sessionStartMs;
+	}
+
 	// This session's xp split by skill, biggest first, each with its own rate. Held in
 	// memory by the experience tracker alone: it never enters the journal or the push.
 	java.util.List<chronicle.counters.ExperienceStatTracker.SkillGain> sessionSkillXp()

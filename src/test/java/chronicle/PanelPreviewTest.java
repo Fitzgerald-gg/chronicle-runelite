@@ -424,6 +424,12 @@ public class PanelPreviewTest
 
 		shoot(panel, out, prefix + "-journal", "JOURNAL");
 
+		// the sitting, which is a period of its own rather than a date range
+		set(panel, "histGranularity", "Session");
+		shoot(panel, out, prefix + "-session-sheet", "SHEET");
+		shoot(panel, out, prefix + "-session-stats", "STATS");
+		set(panel, "histGranularity", "Lifetime");
+
 		setSearch(panel, "dragon");
 		shoot(panel, out, prefix + "-search", "HOME");
 		// a query the bundled tables answer and the record cannot

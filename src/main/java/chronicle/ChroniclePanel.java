@@ -854,6 +854,19 @@ class ChroniclePanel extends PluginPanel
 		{
 			return bossKills(name);
 		}
+		// The sitting has no closing baseline to measure against, so it is read
+		// from what the kills DROPPED, which is dated to the day and is the same
+		// fallback a period the spine cannot answer for already uses.
+		if (sessionPeriod())
+		{
+			Long rolledNow = rolledKills(name);
+			if (rolledNow != null)
+			{
+				rollUsed = true;
+				return rolledNow;
+			}
+			return -1;
+		}
 		Span s = span();
 		if (s == null)
 		{
@@ -9400,8 +9413,24 @@ class ChroniclePanel extends PluginPanel
 		return "Lifetime".equals(histGranularity) && histFrom == null;
 	}
 
-	/** The periods the tab offers, widest first, as the list reads them. */
-	static final String[] PERIODS = {"Lifetime", "Year", "Month", "Week", "Day"};
+	/**
+	 * The periods the tab offers, widest first, as the list reads them.
+	 *
+	 * <p>Session is last because it is narrowest, and it is not a date range like
+	 * the rest: it is this sitting, which the counters hold exactly. Every other
+	 * period is measured between two of the spine's closed baselines, and the
+	 * sitting has no closing baseline because it has not closed.
+	 */
+	static final String[] PERIODS = {"Lifetime", "Year", "Month", "Week", "Day",
+		"Session"};
+
+	/** The sitting: what has happened since this client logged in. */
+	static final String SESSION = "Session";
+
+	private boolean sessionPeriod()
+	{
+		return SESSION.equals(histGranularity) && histFrom == null;
+	}
 
 	// the visible period's own two ends, kept for the menu
 	private java.time.LocalDate periodFrom;
@@ -9551,6 +9580,17 @@ class ChroniclePanel extends PluginPanel
 		{
 			switch (histGranularity)
 			{
+				case SESSION:
+				{
+					long began = plugin.sessionStart();
+					start = began > 0
+						? java.time.Instant.ofEpochMilli(began)
+							.atZone(ZoneId.systemDefault()).toLocalDate()
+						: java.time.LocalDate.now();
+					end = java.time.LocalDate.now();
+					label = "This session";
+					break;
+				}
 				case "Lifetime":
 					// everything the record holds, from its first line to today. A
 					// period with no earlier line to measure against reads as the
@@ -9663,6 +9703,22 @@ class ChroniclePanel extends PluginPanel
 		if (wholeRecord())
 		{
 			return counters();
+		}
+		// The sitting is counted, not measured. Every other period is the distance
+		// between two of the spine's closed baselines; this one has no closing
+		// baseline because it has not closed, and it needs none - the counters ARE
+		// the session, exactly, with nothing subtracted from anything.
+		if (sessionPeriod())
+		{
+			Map<String, Long> out = new LinkedHashMap<>();
+			for (Map.Entry<String, Integer> e : plugin.sessionCounters().entrySet())
+			{
+				if (e.getValue() != null && e.getValue() != 0)
+				{
+					out.put(e.getKey(), e.getValue().longValue());
+				}
+			}
+			return out;
 		}
 		Span s = span();
 		return s == null ? null
@@ -9850,7 +9906,9 @@ class ChroniclePanel extends PluginPanel
 			r.add(fixed, BorderLayout.CENTER);
 			return r;
 		}
-		if (!"Lifetime".equals(histGranularity) || histFrom != null)
+		// No arrows on the sitting: there is one, and it is this one. Stepping the
+		// cursor off it would name a day and go on calling it "This session".
+		if ((!"Lifetime".equals(histGranularity) && !sessionPeriod()) || histFrom != null)
 		{
 			JLabel back = new JLabel("<");
 			JLabel fwd = new JLabel(">");

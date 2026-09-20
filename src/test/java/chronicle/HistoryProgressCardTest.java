@@ -3129,8 +3129,8 @@ public class HistoryProgressCardTest
 				offered.add(((javax.swing.JMenuItem) k).getText());
 			}
 		}
-		assertEquals(Arrays.asList("Lifetime", "Year", "Month", "Week", "Day", "Exact dates"),
-			offered);
+		assertEquals(Arrays.asList("Lifetime", "Year", "Month", "Week", "Day",
+			"Session", "Exact dates"), offered);
 	}
 
 	@Test
