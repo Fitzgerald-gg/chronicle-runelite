@@ -4725,6 +4725,22 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
+	/** What the roll says of one item inside the window, as {qty, worth}. */
+	private long[] itemInWindow(String name)
+	{
+		Window w = window();
+		LocalStore.LootWindow win = sessionPeriod() ? plugin.sessionLootWindow()
+			: plugin.lootBetween(w.start, w.end);
+		for (String[] r : win.items)
+		{
+			if (r[0].equalsIgnoreCase(name))
+			{
+				return new long[]{safeParse(r[1]), safeParse(r[2])};
+			}
+		}
+		return new long[]{0, 0};
+	}
+
 	/**
 	 * What the roll says one source paid inside the window, as {count, worth}.
 	 *
@@ -5410,8 +5426,15 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		srcs.sort((a, b) -> Long.compare((long) b[1], (long) a[1]));
-		final long qty = got;
-		final long value = worth;
+		// What THIS period's roll says of the item, where the period is not the
+		// whole record. The roll keeps a day's items beside its sources and the
+		// sitting keeps its own, so the head can answer a week or a sitting
+		// exactly; the list of sources beneath cannot - the roll does not keep
+		// which source dropped which item - and says so rather than quietly
+		// showing everything.
+		final long[] inWindow = wholeRecord() ? null : itemInWindow(name);
+		final long qty = inWindow != null ? inWindow[0] : got;
+		final long value = inWindow != null ? inWindow[1] : worth;
 		final int itemId = found;
 		// read before the row is built: the copy hands back every source, not the
 		// forty the page mounts
@@ -5456,6 +5479,14 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		p.add(head);
+		if (inWindow != null)
+		{
+			p.add(vgap(4));
+			p.add(note("The figures above are " + periodInSentence() + "'s. The "
+				+ "sources below are everything that has ever dropped this: the dated "
+				+ "roll keeps a day's items together rather than under the thing that "
+				+ "dropped them."));
+		}
 		p.add(vgap(6));
 		if (hasTask)
 		{

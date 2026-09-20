@@ -591,4 +591,50 @@ public class SessionPeriodTest
 		period("Lifetime");
 		assertEquals("Lifetime", m.invoke(panel));
 	}
+
+	/**
+	 * The item page reads the period, the way the source page was taught to.
+	 * Its head used to be the ledger's lifetime totals under any heading, and
+	 * the list beneath - which no window can split, since the roll does not keep
+	 * which source dropped which item - now says it is the lifetime rather than
+	 * quietly being it.
+	 */
+	@Test
+	public void theItemPageReadsThePeriod() throws Exception
+	{
+		period("Session");
+		began(30 * 60_000L);
+		java.util.List<String> sitting = itemPage("Rune bar");
+		int at = sitting.indexOf("Obtained");
+		assertTrue("the sitting's page drew no Obtained row: " + sitting, at >= 0);
+		assertEquals("the sitting's page did not read the sitting's own entry: "
+			+ sitting, "\u00d712", sitting.get(at + 1));
+		assertTrue("the page did not say its source list is the lifetime: " + sitting,
+			String.join(" ", sitting).contains("sources below are everything"));
+
+		period("Lifetime");
+		java.util.List<String> whole = itemPage("Rune bar");
+		assertFalse("the lifetime page carried the period caveat",
+			String.join(" ", whole).contains("sources below are everything"));
+	}
+
+	private static java.util.List<String> itemPage(String item) throws Exception
+	{
+		final java.util.List<String> said = new java.util.ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = ChroniclePanel.class
+					.getDeclaredMethod("buildItemDetail", String.class);
+				m.setAccessible(true);
+				collect((javax.swing.JPanel) m.invoke(panel, item), said);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		return said;
+	}
 }
