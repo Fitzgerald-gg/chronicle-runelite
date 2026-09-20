@@ -1742,6 +1742,10 @@ class ChroniclePanel extends PluginPanel
 		taskKillsEverCache = null;
 		taskItemsEver = null;
 		buildAchievements = null;
+		// Set only by buildStats, but read by the all-trackers board too. Left
+		// standing it carried one period's dropped figure onto another period's
+		// gathered row, and stepping the period never moved it.
+		resourcesDropped = 0;
 		// The labels of the build just discarded are nobody's business now. Left to
 		// pile up, an icon that never lands would hold every label the panel ever
 		// drew, which is the same unbounded queue that made the trackers page lag.
@@ -6151,7 +6155,11 @@ class ChroniclePanel extends PluginPanel
 		{
 			return base + " · " + gp(resourcesDropped) + " dropped";
 		}
-		Long cv = consumVals.get(e.getKey());
+		// Lifetime only. What a consumable COST is accumulated forever and is not
+		// in the history spine, so there is no windowed version of it to print:
+		// under a narrowed period this would put a career's gp beside a week's
+		// count and invite the reader to divide one by the other.
+		Long cv = wholeRecord() ? consumVals.get(e.getKey()) : null;
 		return cv != null && cv > 0 ? base + " · " + gp(cv) + " gp" : base;
 	}
 
@@ -6176,6 +6184,11 @@ class ChroniclePanel extends PluginPanel
 			p.add(noPeriod());
 			return p;
 		}
+		// Out of THIS board's period, the way buildStats reads it out of its own.
+		// Read off a field the other board happened to leave behind, the margin on
+		// the gathered row was either missing, on a panel that had never drawn
+		// Stats, or from whatever period Stats was last looked at.
+		resourcesDropped = counters.getOrDefault("resourcesDroppedValue", 0L);
 		Map<String, Map<String, List<Map.Entry<String, Long>>>> filed = new LinkedHashMap<>();
 		for (String fam : StatRegistry.FAMILIES)
 		{
@@ -6381,16 +6394,20 @@ class ChroniclePanel extends PluginPanel
 			String stateKey = statsFamily + ":" + sec;
 			boolean open = foldOpen(stateKey);
 			long secGp = 0;
-			for (Map.Entry<String, Long> e : rows)
+			if (wholeRecord())
 			{
-				Long cv = consumVals.get(e.getKey());
-				if (cv != null)
+				for (Map.Entry<String, Long> e : rows)
 				{
-					secGp += cv;
+					Long cv = consumVals.get(e.getKey());
+					if (cv != null)
+					{
+						secGp += cv;
+					}
 				}
 			}
-			// the section total is a real figure in one unit, so it stands in
-			// both states; only a count of hidden rows would go
+			// The count stands in both states. The gp beside it is lifetime and so
+			// only stands on Lifetime: a collapsed section otherwise paired a
+			// week's count with a career's spend, which reads as one arithmetic.
 			p.add(quietHead(sec, fmt(total) + (secGp > 0 ? " · " + gp(secGp) + " gp" : ""),
 				stateKey));
 			if (open)

@@ -473,7 +473,7 @@ public class PanelPreviewTest
 		s.lifetime.put("resourcesGatheredValue", 4_233_800L);
 		s.lifetime.put("resourcesDroppedValue", 1_142_600L);
 		s.lifetime.put("consumedValue", 3_204_112L);
-		s.lifetime.put("sharksEaten", 2_113L);
+		s.lifetime.put("sharkEaten", 2_113L);
 		s.lifetime.put("potionDoses", 8_442L);
 		s.lifetime.put("vialsShattered", 1_204L);
 		s.lifetime.put("bonesBuried", 3_112L);
@@ -544,7 +544,7 @@ public class PanelPreviewTest
 		s.session.put("damageDealt", 24_113);
 		s.session.put("tilesRan", 8_442);
 		s.session.put("consumedValue", 112_400);
-		s.session.put("sharksEaten", 42);
+		s.session.put("sharkEaten", 42);
 		s.session.put("teleportsTotal", 12);
 		// the fold header is a pinned row, so it needs the total to exist at all;
 		// this is the sum of the four skills below it
@@ -676,7 +676,7 @@ public class PanelPreviewTest
 			System.currentTimeMillis() / 1000.0 - 900_000, 2_012_113L, false));
 		s.journey = new ChronicleApiClient.SlayerJourney(214, 48_231, 61_204_113L,
 			8_204_113L, tasks);
-		s.consumVals.put("sharksEaten", 1_985_000L);
+		s.consumVals.put("sharkEaten", 1_985_000L);
 		s.consumVals.put("potionDoses", 3_204_000L);
 		// One pet the journal holds, so a pets page has a provenance line to fold
 		// away beside the chases: the log already lights this one.
@@ -1915,7 +1915,7 @@ public class PanelPreviewTest
 	// does, and wait for the read to land: the shots after it draw what the
 	// plugin holds now. The read the panel primed when it was built is waited
 	// for first, so it cannot land over the new one.
-	private static void regatherHistory(ChroniclePanel panel) throws Exception
+	static void regatherHistory(ChroniclePanel panel) throws Exception
 	{
 		awaitHistory(panel);
 		edt(() ->
@@ -1929,7 +1929,7 @@ public class PanelPreviewTest
 
 	// the read is flagged in flight on the EDT when it starts and cleared
 	// there when its worker is done
-	private static void awaitHistory(ChroniclePanel panel) throws Exception
+	static void awaitHistory(ChroniclePanel panel) throws Exception
 	{
 		long deadline = System.currentTimeMillis() + 10_000;
 		while (true)
