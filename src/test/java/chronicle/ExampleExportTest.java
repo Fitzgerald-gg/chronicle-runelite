@@ -384,6 +384,13 @@ public class ExampleExportTest
 			edt(() -> apply.invoke(panel, target));
 		}
 
+		/** The newest assignment the fixture journal holds, or null for none. */
+		private String firstTaskName()
+		{
+			java.util.List<String> names = plugin.taskNames();
+			return names.isEmpty() ? null : names.get(0);
+		}
+
 		/**
 		 * Every board, reached the way the panel reaches it.
 		 *
@@ -395,13 +402,6 @@ public class ExampleExportTest
 		 * by the panel and still recorded whole -- it is the difference between
 		 * coverage that is decided and coverage that is hoped for.
 		 */
-		/** The newest assignment the fixture journal holds, or null for none. */
-		private String firstTaskName()
-		{
-			java.util.List<String> names = plugin.taskNames();
-			return names.isEmpty() ? null : names.get(0);
-		}
-
 		private void seedBoards() throws Exception
 		{
 			Map<String, Object> home = snapshot();

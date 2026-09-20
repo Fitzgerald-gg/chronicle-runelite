@@ -79,6 +79,17 @@ class ChroniclePanel extends PluginPanel
 	private static final Color ACCENT_LIFETIME = ColorScheme.BRAND_ORANGE;
 	private static final Color ACCENT_SESSION = new Color(85, 163, 90);
 	private static final Color ACCENT_RED = new Color(196, 84, 74);
+
+	/**
+	 * What a tile's figure reads when the account HAS the thing: the same value a
+	 * row's own name reads at, so a grid and a list on one screen agree.
+	 *
+	 * <p>The sheet used to draw this three ways at once. The activity and combat
+	 * tiles were 165, the boss tiles were pure white at 255, and the rows beside
+	 * them were the label default at 198 - three brightnesses for one meaning, on
+	 * one screen, all of them meaning "you have this".
+	 */
+	private static final Color TILE_LIT = new Color(198, 198, 198);
 	// Rows mounted per list before a "Show more" button.
 	private static final int ROW_CAP = 30;
 	// Every inset between the sidebar's own width and a row's label, named where it
@@ -990,6 +1001,34 @@ class ChroniclePanel extends PluginPanel
 
 	/** The page's lines that are this fight's, as the page wrote them. */
 	/**
+	 * How much of one collection log tab the game says is held.
+	 *
+	 * <p>Read off cat_counts, which the capture takes from a pair of varps per
+	 * tab and syncs at login. It is the game's own arithmetic over the whole tab,
+	 * which is not the same as adding up the page fractions this board draws:
+	 * those count slots, and one item can sit on several pages.
+	 */
+	private String tabStanding(JsonObject cl, String tab)
+	{
+		if (cl == null || !cl.has("cat_counts") || !cl.get("cat_counts").isJsonObject())
+		{
+			return null;
+		}
+		JsonObject counts = cl.getAsJsonObject("cat_counts");
+		String key = tab.toLowerCase(Locale.ROOT);
+		long total = counts.has(key + "_total") ? safeLong(counts.get(key + "_total")) : 0;
+		if (total <= 0)
+		{
+			return null;
+		}
+		long got = counts.has(key + "_obtained")
+			? safeLong(counts.get(key + "_obtained")) : 0;
+		return tip(tab, new String[]{"Obtained", "Available", "Share"},
+			new String[]{fmt(got), fmt(total),
+				Math.round(got * 1000.0 / total) / 10.0 + "%"});
+	}
+
+	/**
 	 * The kill count to print beside each collection log page, keyed lowercase.
 	 *
 	 * <p>Where the page's own header lines were captured they are the authority,
@@ -1334,15 +1373,6 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * The bosses as a sheet, the way the skills are: the roster three across, each
-	 * wearing the game's own icon with its count beside it. A boss never fought
-	 * shows a dash rather than a zero, because a dash reads as none and a sheet of
-	 * forty zeros reads as noise.
-	 *
-	 * <p>Opening one drops a card in under its own ROW rather than at the foot of
-	 * seventy, so what it says is beside what was clicked.
-	 */
-	/**
 	 * One sheet, in the order the game's own hiscores panel puts it: the skills
 	 * grid, the combat and total levels, the activities, then the bosses.
 	 *
@@ -1543,12 +1573,20 @@ class ChroniclePanel extends PluginPanel
 		cell.add(icon, BorderLayout.WEST);
 		JLabel fig = new JLabel(figure > 0 ? fmt(figure) : "-", JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
-		fig.setForeground(figure > 0 ? ColorScheme.LIGHT_GRAY_COLOR
-			: ColorScheme.LIGHT_GRAY_COLOR.darker());
+		fig.setForeground(figure > 0 ? TILE_LIT : ColorScheme.LIGHT_GRAY_COLOR.darker());
 		cell.add(fig, BorderLayout.EAST);
 		return cell;
 	}
 
+	/**
+	 * The bosses as a sheet, the way the skills are: the roster three across, each
+	 * wearing the game's own icon with its count beside it. A boss never fought
+	 * shows a dash rather than a zero, because a dash reads as none and a sheet of
+	 * forty zeros reads as noise.
+	 *
+	 * <p>Opening one drops a card in under its own ROW rather than at the foot of
+	 * seventy, so what it says is beside what was clicked.
+	 */
 	private JPanel buildKills()
 	{
 		JPanel p = column();
@@ -1638,9 +1676,14 @@ class ChroniclePanel extends PluginPanel
 		// has to answer at all: Callisto and Artio share a sprite, as do Vet'ion
 		// and Calvar'ion and the three Dagannoth kings, so for some of these tiles
 		// the hover is the only thing that says which boss it is.
+		// Three states, not two. A count of zero is none killed; a count below
+		// zero is the record declining to answer for this window, which is what
+		// the dash beside it says. Folding the two together made the hover assert
+		// "none yet" over a tile that was saying it did not know.
 		cell.setToolTipText(tip(b.name,
 			new String[]{wholeRecord() ? "Kills" : "Kills in " + window().label},
-			new String[]{kc > 0 ? fmt(kc) : "none yet"}));
+			new String[]{kc > 0 ? fmt(kc)
+				: (kc == 0 ? "none yet" : "not dated this far back")}));
 		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 
 		JLabel icon = new JLabel();
@@ -1655,7 +1698,7 @@ class ChroniclePanel extends PluginPanel
 		JLabel fig = new JLabel(kc > 0 ? fmt(kc) : "-", JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
 		fig.setForeground(lit ? accent()
-			: (kc > 0 ? Color.WHITE : ColorScheme.LIGHT_GRAY_COLOR.darker()));
+			: (kc > 0 ? TILE_LIT : ColorScheme.LIGHT_GRAY_COLOR.darker()));
 		cell.add(fig, BorderLayout.EAST);
 		cell.addMouseListener(clicker(() ->
 		{
@@ -2904,6 +2947,31 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
+	 * A bag's kinds as rows, each opening its own.
+	 *
+	 * <p>These fourteen lines were written twice, byte for byte, once on the Loot
+	 * board and once on the Slayer board's Drops lens. Two copies of a control is
+	 * one copy that will be changed and one that will not.
+	 */
+	private void addKindRows(JPanel p, List<LocalStore.BagItem> bag)
+	{
+		for (Kind k : kindsOf(bag))
+		{
+			JPanel r = row(k.name, fmt(k.qty) + " \u00b7 " + gp(k.value) + " gp", accent());
+			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			r.setToolTipText(fmt(k.distinct)
+				+ (k.distinct == 1 ? " distinct item" : " distinct items"));
+			final String pick = k.name;
+			r.addMouseListener(clicker(() ->
+			{
+				lootKind = pick;
+				rebuildInPlace();
+			}));
+			p.add(r);
+		}
+	}
+
+	/**
 	 * A bag read by what its items ARE: the kinds it folds into, or one of them
 	 * opened out.
 	 *
@@ -2935,20 +3003,7 @@ class ChroniclePanel extends PluginPanel
 		ways.put("These kinds", () -> copyPicture(ledgerKindsPicture(title, bag, sum)));
 		ways.put("Every item", () -> copyPicture(lootPicture(title, bag, sum), true));
 		p.add(copyHeader("Drops", ways));
-		for (Kind k : kindsOf(bag))
-		{
-			JPanel r = row(k.name, fmt(k.qty) + " \u00b7 " + gp(k.value) + " gp", accent());
-			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-			r.setToolTipText(fmt(k.distinct)
-				+ (k.distinct == 1 ? " distinct item" : " distinct items"));
-			final String pick = k.name;
-			r.addMouseListener(clicker(() ->
-			{
-				lootKind = pick;
-				rebuildInPlace();
-			}));
-			p.add(r);
-		}
+		addKindRows(p, bag);
 		return p;
 	}
 
@@ -3326,20 +3381,7 @@ class ChroniclePanel extends PluginPanel
 			lootPicture(lootTask == null ? "On-task loot" : lootTask, bag,
 				new long[]{qty, value}), true));
 		p.add(copyHeader("Drops", ways));
-		for (Kind k : kindsOf(bag))
-		{
-			JPanel r = row(k.name, fmt(k.qty) + " \u00b7 " + gp(k.value) + " gp", accent());
-			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-			r.setToolTipText(fmt(k.distinct)
-				+ (k.distinct == 1 ? " distinct item" : " distinct items"));
-			final String pick = k.name;
-			r.addMouseListener(clicker(() ->
-			{
-				lootKind = pick;
-				rebuildInPlace();
-			}));
-			p.add(r);
-		}
+		addKindRows(p, bag);
 		return p;
 	}
 
@@ -3394,13 +3436,6 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * The one shape every capped list uses to say it is capped.
-	 *
-	 * <p>A cap with no way past it is worse than no cap: the reader cannot tell
-	 * a short list from a truncated one. This says how many are held back and
-	 * opens another page of them.
-	 */
-	/**
 	 * The one way this panel says a list goes on, and the one way it opens.
 	 *
 	 * <p>There were three. A Swing JButton on some boards, which is the only
@@ -3440,6 +3475,13 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
+	/**
+	 * The one shape every capped list uses to say it is capped.
+	 *
+	 * <p>A cap with no way past it is worse than no cap: the reader cannot tell
+	 * a short list from a truncated one. This says how many are held back and
+	 * opens another page of them.
+	 */
 	private JPanel expander(String key, int cap, int of)
 	{
 		return moreRow(of - cap, () ->
@@ -5324,6 +5366,14 @@ class ChroniclePanel extends PluginPanel
 				slot.setPreferredSize(new Dimension(36, 32));
 				slot.setHorizontalAlignment(JLabel.CENTER);
 				slot.setToolTipText(b.name + (b.qty > 1 ? " ×" + fmt(b.qty) : ""));
+				// Opens the item, as the identical grid on Now does. It was the
+				// one sprite grid in the panel a reader could not click: same
+				// five setup lines, same tooltip naming the item, and then
+				// nothing behind it.
+				slot.setCursor(java.awt.Cursor.getPredefinedCursor(
+					java.awt.Cursor.HAND_CURSOR));
+				final String spriteItem = b.name;
+				slot.addMouseListener(clicker(() -> openItem(spriteItem)));
 				AsyncBufferedImage img = plugin.items().getImage(b.itemId,
 					(int) Math.min(Integer.MAX_VALUE, b.qty), b.qty > 1);
 				img.addTo(slot);
@@ -5454,6 +5504,16 @@ class ChroniclePanel extends PluginPanel
 			pill.setFont(FontManager.getRunescapeSmallFont());
 			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 			pill.setForeground(tab.equals(clogTab) ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+			// The game's own count for this tab, which the capture has always
+			// taken and shipped and the panel has never shown. It goes on the
+			// hover rather than on the pill: five pills across a 242 pixel column
+			// have no room for a fraction, and "16 / 611" beside "Clues" would
+			// cost the word itself.
+			String tabTip = tabStanding(clogNow(), tab);
+			if (tabTip != null)
+			{
+				pill.setToolTipText(tabTip);
+			}
 			pill.setCursor(java.awt.Cursor.getPredefinedCursor(
 				java.awt.Cursor.HAND_CURSOR));
 			pill.addMouseListener(clicker(() ->
@@ -7228,7 +7288,7 @@ class ChroniclePanel extends PluginPanel
 	private static final String GAINS_LIST = "history:xp";
 
 	// One of a group's figures. Where the journal can name what the figure
-	// counts, the row is a fold: its value takes the accent while it is open
+	// counts, the row is a fold
 	// and the names sit under it, each with the day it happened. An entry the
 	// journal counted but cannot name closes the list as a ghost, the way a
 	// section closes with its "Other": the head's figure is then accounted for
@@ -8625,8 +8685,7 @@ class ChroniclePanel extends PluginPanel
 		int cb = plugin.combatLevel();
 		JLabel fig = new JLabel(cb > 0 ? fmt(cb) : "-", JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
-		fig.setForeground(cb > 0 ? ColorScheme.LIGHT_GRAY_COLOR
-			: ColorScheme.LIGHT_GRAY_COLOR.darker());
+		fig.setForeground(cb > 0 ? TILE_LIT : ColorScheme.LIGHT_GRAY_COLOR.darker());
 		cell.add(fig, BorderLayout.EAST);
 		Map<String, Long> c = counters();
 		cell.setToolTipText(tip("Combat",
@@ -8682,14 +8741,6 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * points, points there are, tiers unlocked, completions seen by name.
-	 *
-	 * <p>The total comes from the GAME where the journal has witnessed a combat
-	 * achievement, because the game states its own total on every one of them and
-	 * tasks are added between releases: a recent event says 2,624 where the
-	 * bundled table says 2,697. The table is the fallback, not the authority.
-	 */
-	/**
 	 * Every combat achievement point there is, per the bundled table.
 	 *
 	 * <p>Only ever the fallback. The game states its own total on each completion
@@ -8712,6 +8763,14 @@ class ChroniclePanel extends PluginPanel
 		return totals.has("points") ? safeLong(totals.get("points")) : 0;
 	}
 
+	/**
+	 * points, points there are, tiers unlocked, completions seen by name.
+	 *
+	 * <p>The total comes from the GAME where the journal has witnessed a combat
+	 * achievement, because the game states its own total on every one of them and
+	 * tasks are added between releases: a recent event says 2,624 where the
+	 * bundled table says 2,697. The table is the fallback, not the authority.
+	 */
 	private long[] combatStanding()
 	{
 		JsonObject c = achievements().has("combat")
@@ -9822,11 +9881,6 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * One skill under the glass: where it stands, what the window moved it, and
-	 * then the counters filed under it. The cell this opens from renders a level
-	 * over an xp gain, so xp is the question it asked and xp is answered first.
-	 */
-	/**
 	 * The loot sources that are one skill's own ground, under the skill.
 	 *
 	 * <p>A Fishing Trawler casket, a Guardians of the Rift pouch and a Giants'
@@ -9866,6 +9920,11 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
+	/**
+	 * One skill under the glass: where it stands, what the window moved it, and
+	 * then the counters filed under it. The cell this opens from renders a level
+	 * over an xp gain, so xp is the question it asked and xp is answered first.
+	 */
 	private JPanel buildSkillDetail(String craft)
 	{
 		JPanel p = column();
@@ -11025,8 +11084,14 @@ class ChroniclePanel extends PluginPanel
 			for (Map.Entry<String, String> hit : slotFirstPage.entrySet())
 			{
 				boolean got = Boolean.TRUE.equals(slotGot.get(hit.getKey()));
-				p.add(row(hit.getKey(), got ? "obtained" : hit.getValue(),
-					got ? ACCENT_SESSION : null));
+				// The page stays in the right hand column, which is what that
+				// column means on every other search row. Held or not is said the
+				// way the log itself says it, in green and red, rather than by
+				// replacing the address with the word "obtained" - which threw
+				// away the page this loop had just worked out, and only for the
+				// slots the reader HAS.
+				p.add(row(hit.getKey(), hit.getValue(),
+					got ? ACCENT_SESSION : ACCENT_RED, true));
 				total++;
 			}
 		}
