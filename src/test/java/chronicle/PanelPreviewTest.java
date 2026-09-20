@@ -1560,6 +1560,24 @@ public class PanelPreviewTest
 			return feed.subList(0, Math.min(n, feed.size()));
 		}
 
+		/** A sitting in progress, where a test wants one. */
+		JsonObject liveSitting;
+
+		@Override
+		java.util.List<JsonObject> feedWithSitting(int n)
+		{
+			// No client, so no sitting in progress unless a test supplies one:
+			// the real plugin puts the running sitting at the head.
+			if (liveSitting == null)
+			{
+				return feedNewest(n);
+			}
+			java.util.List<JsonObject> out = new java.util.ArrayList<>();
+			out.add(liveSitting);
+			out.addAll(feedNewest(n));
+			return out;
+		}
+
 		@Override
 		JsonObject clogSnapshot()
 		{

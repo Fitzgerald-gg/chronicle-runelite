@@ -2092,6 +2092,10 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 
+	// Whether the time played on show is the game's own total rather than the
+	// hours Chronicle has watched. Cleared at the top of every build.
+	private boolean playedIsTheGames;
+
 	// True while a rebuild is a redraw of the view the reader is already in, and
 	// rebuild() puts the scroll bar back where it was: the home ticker, a push
 	// landing under them, a fold or a "show more". Navigation, a tab or a search
@@ -2173,6 +2177,7 @@ class ChroniclePanel extends PluginPanel
 		// standing it carried one period's dropped figure onto another period's
 		// gathered row, and stepping the period never moved it.
 		resourcesDropped = 0;
+		playedIsTheGames = false;
 		kcByKind = null;
 		chatKcByKind = null;
 		killKinds = null;
@@ -9557,8 +9562,9 @@ class ChroniclePanel extends PluginPanel
 		{
 			xp += g.getValue();
 		}
-		return tip("The period",
-			new String[]{"Time played", "Sessions", "Experience"},
+		return tip(wholeRecord() ? "Lifetime" : "The period",
+			new String[]{playedIsTheGames ? "Time played (the game's own)"
+				: "Time played", "Sessions", "Experience"},
 			new String[]{hoursMinutes(played[0]), fmt(played[1]), "+" + gp(xp)});
 	}
 
@@ -10722,6 +10728,22 @@ class ChroniclePanel extends PluginPanel
 					played[1]++;
 				}
 			}
+			// Over the whole record, the GAME's own figure where it has one. What
+			// Chronicle can measure is the time it watched, which is a different
+			// thing and a smaller one: it begins the day the plugin was installed
+			// and knows nothing of the years before it. The account summary and
+			// Hans both quote the game's, and that is the number a player has.
+			// A period cannot use it - the game keeps one running total and no
+			// account of when any of it was spent - so it is lifetime only.
+			if (wholeRecord())
+			{
+				long theirs = plugin.gamePlaytimeMinutes();
+				if (theirs > played[0])
+				{
+					played[0] = theirs;
+					playedIsTheGames = true;
+				}
+			}
 
 			// What the period tracked: the headline figures first, then the
 			// lens detail, then every other figure in its group. The per-source
@@ -10972,8 +10994,11 @@ class ChroniclePanel extends PluginPanel
 				wanted.addAll(java.util.Arrays.asList(lens).subList(1, lens.length));
 			}
 		}
-		// Read deep: a lens over the newest fifty finds nothing rare.
-		List<JsonObject> all = plugin.feedNewest(4000);
+		// Read deep: a lens over the newest fifty finds nothing rare. And with the
+		// sitting in progress at the head of it: everything else reaches the feed
+		// as it happens, and the sitting was the one thing a reader could watch
+		// go by and not see written down until they logged out.
+		List<JsonObject> all = plugin.feedWithSitting(4000);
 		List<JsonObject> feed = new ArrayList<>();
 		for (JsonObject e : all)
 		{

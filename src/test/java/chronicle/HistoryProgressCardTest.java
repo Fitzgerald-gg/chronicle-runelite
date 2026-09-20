@@ -2673,13 +2673,25 @@ public class HistoryProgressCardTest
 			return;
 		}
 		String text = new String(Files.readAllBytes(src.toPath()), StandardCharsets.UTF_8);
-		int at = text.indexOf("localStore.record(\"SESSION\"");
-		assertTrue("the session summary must be recorded", at > 0);
-		String body = text.substring(Math.max(0, at - 1200), at);
+		assertTrue("the session summary must be recorded",
+			text.contains("localStore.record(\"SESSION\""));
+		// Read the builder rather than the characters before the call: the two
+		// were next to each other until the sitting in progress needed the same
+		// figures without writing them down, and a test that scanned backwards
+		// from the call failed for the shape of the file rather than for its
+		// meaning.
+		int at = text.indexOf("private JsonObject sessionData(");
+		assertTrue("the figures a sitting is summed into must be built in one"
+			+ " place, or the live line and the written one diverge", at > 0);
+		String body = text.substring(at, Math.min(text.length(), at + 1200));
+		assertTrue("a session says how long it ran", body.contains("\"minutes\""));
 		assertTrue("a session says what it received", body.contains("\"drops\""));
 		assertTrue("and what it left on the floor", body.contains("\"left\""));
 		assertTrue("and what that was worth", body.contains("\"leftGp\""));
 		assertTrue("and the kills that left it", body.contains("\"leftKills\""));
+		// and the sitting in progress is built from that same method
+		assertTrue("the live sitting must be the same line it will become",
+			text.contains("line.add(\"data\", sessionData("));
 	}
 
 	@Test

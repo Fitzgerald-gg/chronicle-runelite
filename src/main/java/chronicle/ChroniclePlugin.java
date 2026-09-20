@@ -388,6 +388,7 @@ public class ChroniclePlugin extends Plugin
 		if (client.getGameState() == GameState.LOGGED_IN)
 		{
 			takeLiveSkills();
+			watchPlaytime();
 		}
 		// WHICH store moved, not merely that one did. A board is redrawn when the
 		// thing it shows has changed and left alone otherwise: an hour of
@@ -455,6 +456,7 @@ public class ChroniclePlugin extends Plugin
 		// A new account for this session: mount its journal. Nothing here touches the network.
 		localName = name;
 		sessionStartMs = System.currentTimeMillis();
+		loadPlaytimeRate();
 		if (!cloudActive())
 		{
 		}
@@ -854,6 +856,118 @@ public class ChroniclePlugin extends Plugin
 		return sessionView();
 	}
 
+	// ------------------------------------------------------------------
+	// The game's own playtime
+	// ------------------------------------------------------------------
+
+	/**
+	 * The counter the account summary counts playtime with.
+	 *
+	 * <p>It sits in the middle of that panel's own block of trackers - bosses
+	 * killed, coins gained, deaths, food eaten, monsters killed, players killed,
+	 * then this, then special attacks used - which is the order the panel lists
+	 * them in. RuneLite names it for leagues and reads it nowhere, so nothing in
+	 * the client confirms what it holds or what unit it holds it in.
+	 */
+	private static final int VARP_PLAYTIME = 4523;
+
+	/** How many of its units make a minute, once that has been established. */
+	private static final String KEY_PLAYTIME_RATE = "playtimeRate";
+
+	private volatile long playtimeRaw;
+	private volatile double playtimePerMinute;
+	private long calibratedFrom;
+	private long calibratedAt;
+	private boolean playtimeLogged;
+
+	/**
+	 * What the game says this account has played, in minutes, or 0 until that is
+	 * known.
+	 *
+	 * <p>Nothing here guesses the unit. The counter has to EARN its reading: it
+	 * is watched across a couple of minutes of play, and the rate it advances at
+	 * against the wall clock says whether it counts minutes, seconds or ticks. A
+	 * counter that turns out not to advance in step with time at all is not a
+	 * playtime and is refused, which is the same answer a wrong id would get.
+	 */
+	long gamePlaytimeMinutes()
+	{
+		double per = playtimePerMinute;
+		return per > 0 ? Math.round(playtimeRaw / per) : 0;
+	}
+
+	// Client thread, once a tick.
+	private void watchPlaytime()
+	{
+		long raw = client.getVarpValue(VARP_PLAYTIME);
+		if (raw <= 0)
+		{
+			return;
+		}
+		playtimeRaw = raw;
+		if (!playtimeLogged)
+		{
+			playtimeLogged = true;
+			log.debug("playtime counter {} reads {}", VARP_PLAYTIME, raw);
+		}
+		if (playtimePerMinute > 0)
+		{
+			return;
+		}
+		long now = System.currentTimeMillis();
+		if (calibratedFrom <= 0)
+		{
+			calibratedFrom = raw;
+			calibratedAt = now;
+			return;
+		}
+		double minutes = (now - calibratedAt) / 60_000.0;
+		if (minutes < 2.0)
+		{
+			return;
+		}
+		double rate = (raw - calibratedFrom) / minutes;
+		for (double candidate : new double[]{1, 60, 100})
+		{
+			// within a fifth of a known cadence: one a minute, one a second, or
+			// one a tick, a tick being six tenths of a second
+			if (Math.abs(rate - candidate) <= candidate * 0.2)
+			{
+				playtimePerMinute = candidate;
+				configManager.setRSProfileConfiguration(GROUP, KEY_PLAYTIME_RATE,
+					String.valueOf(candidate));
+				log.debug("playtime counter advances {} per minute; reading {} as {}"
+					+ " minutes", candidate, raw, gamePlaytimeMinutes());
+				return;
+			}
+		}
+		// Not a clock. Start again rather than trusting a number that does not
+		// keep time, in case the first reading straddled a login.
+		calibratedFrom = raw;
+		calibratedAt = now;
+	}
+
+	private void loadPlaytimeRate()
+	{
+		String was = configManager.getRSProfileConfiguration(GROUP, KEY_PLAYTIME_RATE);
+		if (was == null || was.isEmpty())
+		{
+			return;
+		}
+		try
+		{
+			double per = Double.parseDouble(was);
+			if (per > 0)
+			{
+				playtimePerMinute = per;
+			}
+		}
+		catch (NumberFormatException ignored)
+		{
+			// a rate that cannot be read is a rate to establish again
+		}
+	}
+
 	/** When this sitting began, or 0 before a login. */
 	long sessionStart()
 	{
@@ -873,7 +987,8 @@ public class ChroniclePlugin extends Plugin
 	 */
 	long sessionElapsedMinutes()
 	{
-		if (sessionStartMs <= 0 || client.getGameState() != GameState.LOGGED_IN)
+		if (sessionStartMs <= 0 || client == null
+			|| client.getGameState() != GameState.LOGGED_IN)
 		{
 			return 0;
 		}
@@ -937,9 +1052,36 @@ public class ChroniclePlugin extends Plugin
 		return localStore.slayerJourney();
 	}
 
+	/** The feed as the journal holds it, newest first. */
 	java.util.List<JsonObject> feedNewest(int n)
 	{
 		return localStore.feedNewest(n);
+	}
+
+	/**
+	 * The feed with the sitting in progress at the head of it.
+	 *
+	 * <p>Everything else already reaches the feed as it happens - a level, a
+	 * pet, a log slot, a drop. The sitting was the one thing that did not, and
+	 * it is the line saying what the reader has been doing for the last hour.
+	 *
+	 * <p>Kept apart from feedNewest because the live line's stamp is the current
+	 * moment, and one caller uses the newest stamp to decide whether the feed has
+	 * grown: handed a line that is newer every time it looks, it would re-read
+	 * the whole history on every draw for ever.
+	 */
+	java.util.List<JsonObject> feedWithSitting(int n)
+	{
+		java.util.List<JsonObject> kept = localStore.feedNewest(n);
+		JsonObject live = liveSessionLine();
+		if (live == null)
+		{
+			return kept;
+		}
+		java.util.List<JsonObject> out = new java.util.ArrayList<>(kept.size() + 1);
+		out.add(live);
+		out.addAll(kept);
+		return out;
 	}
 
 	int sessionLoots()
@@ -1320,10 +1462,19 @@ public class ChroniclePlugin extends Plugin
 		{
 			return;
 		}
-		// What the sitting left behind rides beside what it took, so the three
-		// figures of a take, received, kept and left, come from one dated
-		// record. The journal keeps only lifetime totals for the floor, and a
-		// period cannot be told from those.
+		localStore.record("SESSION", sessionData(mins, xp, drops, dropsGp), localName);
+	}
+
+	/**
+	 * What a sitting amounted to, in the shape the feed keeps it.
+	 *
+	 * <p>What the sitting left behind rides beside what it took, so the three
+	 * figures of a take - received, kept and left - come from one dated record.
+	 * The journal keeps only lifetime totals for the floor, and a period cannot
+	 * be told from those.
+	 */
+	private JsonObject sessionData(long mins, long xp, int drops, long dropsGp)
+	{
 		long[] left = localStore.sessionUntakenTally();
 		JsonObject data = new JsonObject();
 		data.addProperty("minutes", mins);
@@ -1333,7 +1484,45 @@ public class ChroniclePlugin extends Plugin
 		data.addProperty("left", left[0]);
 		data.addProperty("leftGp", left[1]);
 		data.addProperty("leftKills", localStore.sessionUntakenKills());
-		localStore.record("SESSION", data, localName);
+		return data;
+	}
+
+	/**
+	 * The sitting in progress, as the feed line it will become.
+	 *
+	 * <p>A sitting reaches the journal as one dated line when it CLOSES. Until
+	 * then the journal showed every sitting the reader had ever had except the
+	 * one they were in the middle of, which is the one they can see happening.
+	 * This is that line, built from the same figures and not written down: it
+	 * changes as the sitting does, and the moment the sitting closes the real
+	 * line takes its place. Null while logged out, which is exactly when the
+	 * real line exists, so the two are never both in the list.
+	 */
+	JsonObject liveSessionLine()
+	{
+		if (client == null || localStore == null)
+		{
+			return null;
+		}
+		long mins = sessionElapsedMinutes();
+		if (sessionStartMs <= 0 || client.getGameState() != GameState.LOGGED_IN
+			|| localName == null || !localStore.isReadyFor(localName))
+		{
+			return null;
+		}
+		Map<String, Integer> sess = sessionView();
+		long xp = sess.getOrDefault("totalXpGained", 0);
+		int drops = localStore.sessionLoots();
+		if (mins == 0 && xp == 0 && drops == 0)
+		{
+			return null;
+		}
+		JsonObject line = new JsonObject();
+		line.addProperty("type", "SESSION");
+		line.addProperty("ts", System.currentTimeMillis());
+		line.addProperty("live", true);
+		line.add("data", sessionData(mins, xp, drops, localStore.sessionLootValue()));
+		return line;
 	}
 
 	long[] sessionUntakenTally()
