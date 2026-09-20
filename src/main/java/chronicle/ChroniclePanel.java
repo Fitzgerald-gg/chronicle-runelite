@@ -10346,6 +10346,27 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
+	/** What the client says a skill stands at now, or null where it has not said. */
+	private Long liveXp(String key)
+	{
+		long[] cur = plugin.skillSheet().get(key);
+		return cur != null && cur.length > 1 && cur[1] > 0 ? cur[1] : null;
+	}
+
+	/** What THIS sitting earned in one skill. Zero is a real answer. */
+	private long sessionXp(String key)
+	{
+		for (ExperienceStatTracker.SkillGain g : plugin.sessionSkillXp())
+		{
+			if (g.skill != null && g.xp > 0
+				&& key.equalsIgnoreCase(g.skill.name()))
+			{
+				return g.xp;
+			}
+		}
+		return 0;
+	}
+
 	/**
 	 * One skill under the glass: where it stands, what the window moved it, and
 	 * then the counters filed under it. The cell this opens from renders a level
@@ -10361,8 +10382,18 @@ class ChroniclePanel extends PluginPanel
 
 		JPanel head = card(craft);
 		Span s = span();
-		Long now = s == null ? null : s.closing.skills.get(key);
-		Long was = s == null ? null : s.opening.skills.get(key);
+		// The same two corrections the sheet grid had. The spine is written once a
+		// day, so a drill reading its closing line stood still through an hour of
+		// training; and the sitting is not measurable between two of the spine's
+		// lines at all, since both of them are today's.
+		Long now = liveXp(key);
+		if (now == null)
+		{
+			now = s == null ? null : s.closing.skills.get(key);
+		}
+		Long was = sessionPeriod()
+			? (now == null ? null : Math.max(0, now - sessionXp(key)))
+			: (s == null ? null : s.opening.skills.get(key));
 		if (now != null && now > 0)
 		{
 			head.add(row("Level", String.valueOf(PaceBook.levelAt(now)), accent()));

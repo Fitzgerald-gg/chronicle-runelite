@@ -403,4 +403,77 @@ public class SessionPeriodTest
 			}
 		}
 	}
+
+	/** Every word one skill's drill says. */
+	private static java.util.List<String> drill(String craft) throws Exception
+	{
+		final java.util.List<String> said = new java.util.ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = ChroniclePanel.class
+					.getDeclaredMethod("buildSkillDetail", String.class);
+				m.setAccessible(true);
+				collect((java.awt.Component) m.invoke(panel, craft), said);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		return said;
+	}
+
+	/**
+	 * TRAP: the skill drill had BOTH of the flaws the sheet grid above it was
+	 * fixed for, and neither was visible from the grid.
+	 *
+	 * <p>It read its standing off the spine, which is written once a day, so it
+	 * stood still through an hour of training. And it measured its gain between
+	 * two of the spine's lines, which under the sitting are both today's, so it
+	 * reported the whole day. The fixture's sitting holds four skills' gains and
+	 * Runecraft is the largest of them.
+	 */
+	@Test
+	public void theSkillDrillMeasuresTheSittingAndNotTheDay() throws Exception
+	{
+		period("Session");
+		began(45 * 60_000L);
+		java.util.List<String> said = drill("Runecraft");
+		int at = said.indexOf("Gained");
+		assertTrue("the drill named no gain at all under the sitting: " + said, at >= 0);
+		assertEquals("the drill reported something other than what this sitting"
+			+ " earned in Runecraft: " + said, "+400k", said.get(at + 1));
+	}
+
+	/**
+	 * The drill's other half, and the one the grid above it was fixed for first:
+	 * where the skill STANDS is what the client says now, not what the spine's
+	 * newest line said whenever it was last written.
+	 *
+	 * <p>Held on a skill the sitting has moved, so the two answers differ: the
+	 * spine's copy of Runecraft is the fixture's journal, and the live sheet is
+	 * the client's, four hundred thousand ahead of it.
+	 */
+	@Test
+	public void theDrillStandsWhereTheClientSaysAndNotWhereTheSpineDoes() throws Exception
+	{
+		period("Session");
+		began(45 * 60_000L);
+		Field pf = ChroniclePanel.class.getDeclaredField("plugin");
+		pf.setAccessible(true);
+		long[] live = ((ChroniclePlugin) pf.get(panel)).skillSheet().get("runecraft");
+		assertTrue("the fixture's client says nothing about Runecraft, so this"
+			+ " asserts nothing", live != null && live.length > 1 && live[1] > 0);
+
+		java.util.List<String> said = drill("Runecraft");
+		int at = said.indexOf("Experience");
+		assertTrue("the drill named no standing figure: " + said, at >= 0);
+		Method gp = ChroniclePanel.class.getDeclaredMethod("gp", long.class);
+		gp.setAccessible(true);
+		assertEquals("the drill reported the spine's stale copy rather than what"
+			+ " the client says the skill stands at: " + said,
+			gp.invoke(null, live[1]), said.get(at + 1));
+	}
 }
