@@ -150,7 +150,15 @@ public class ClickAffordanceTest
 		return sb.toString();
 	}
 
-	/** Puts back the navigation state a previous walk left behind. */
+	/**
+	 * Puts back the navigation state a previous walk left behind, and cuts every
+	 * capped list down to one row.
+	 *
+	 * <p>The cut is what makes the "this list goes on" control appear at all. The
+	 * fixture's lists are shorter than the panel's own caps, so without it none of
+	 * them truncates and the rule about how a truncated list is drawn is asserted
+	 * over a set of boards containing no such control.
+	 */
 	private static void clearNav() throws Exception
 	{
 		for (String f : new String[]{"sheetPage", "bossOpen"})
@@ -158,6 +166,12 @@ public class ClickAffordanceTest
 			Field nf = ChroniclePanel.class.getDeclaredField(f);
 			nf.setAccessible(true);
 			nf.set(panel, null);
+		}
+		for (String f : new String[]{"dropsShown", "slayerShown", "journalShown"})
+		{
+			Field nf = ChroniclePanel.class.getDeclaredField(f);
+			nf.setAccessible(true);
+			nf.setInt(panel, 1);
 		}
 	}
 
@@ -355,6 +369,22 @@ public class ClickAffordanceTest
 		assertTrue("the Slayer task picker was never drawn, so the lens walk is not"
 			+ " reaching its board: " + tips.size() + " tooltips seen",
 			tips.contains("Narrow this board to one task"));
+
+		// and a truncated list, or noBoardDrawsASwingButton is asserting over a
+		// set of surfaces that contains no "this list goes on" control at all
+		boolean sawMore = false;
+		for (Component c : all)
+		{
+			if (c instanceof JLabel && ((JLabel) c).getText() != null
+				&& ((JLabel) c).getText().startsWith("Show ")
+				&& ((JLabel) c).getText().endsWith(" more"))
+			{
+				sawMore = true;
+				break;
+			}
+		}
+		assertTrue("no list in the walk was long enough to be truncated, so the"
+			+ " button rule is not actually being exercised", sawMore);
 	}
 
 	/**
@@ -380,6 +410,54 @@ public class ClickAffordanceTest
 			}
 		}
 		assertTrue("these listen for a click but do not answer the cursor:\n  "
+			+ String.join("\n  ", bad), bad.isEmpty());
+	}
+
+	/**
+	 * One language for "this list goes on".
+	 *
+	 * <p>There were three: a Swing JButton on some boards, a dim clickable row on
+	 * others, and on one a dim row that was not clickable at all. The JButton is
+	 * the only heavy chrome in a panel built entirely of rows, and it reads as a
+	 * dialog control that wandered in. Every one of them is a row now.
+	 *
+	 * <p>The scrollbar's own increase and decrease buttons are exempt: they are
+	 * required by BasicScrollBarUI and are stubbed to zero size precisely so they
+	 * never draw.
+	 */
+	@Test
+	public void noBoardDrawsASwingButton() throws Exception
+	{
+		Set<String> bad = new LinkedHashSet<>();
+		for (Component c : everySurface())
+		{
+			if (!(c instanceof javax.swing.JButton))
+			{
+				continue;
+			}
+			// Buttons inside a component the CLIENT supplies are its own
+			// machinery: the scroll bar's increase and decrease stubs, and the
+			// clear button RuneLite puts inside its search field.
+			boolean theirs = false;
+			for (Component at = c.getParent(); at != null; at = at.getParent())
+			{
+				if (at instanceof javax.swing.JScrollBar
+					|| at instanceof net.runelite.client.ui.components.IconTextField)
+				{
+					theirs = true;
+					break;
+				}
+			}
+			java.awt.Dimension d = c.getPreferredSize();
+			if (!theirs && (d.width > 0 || d.height > 0))
+			{
+				{
+				bad.add(describe(c) + "  " + d.width + "x" + d.height);
+			}
+			}
+		}
+		assertTrue("a Swing button in a panel made of rows; use moreRow() for a"
+			+ " list that goes on, or actionRow() for something that acts:\n  "
 			+ String.join("\n  ", bad), bad.isEmpty());
 	}
 }

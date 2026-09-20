@@ -2806,14 +2806,12 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (sources.size() > dropsShown)
 		{
-			JButton more = new JButton("Show " + Math.min(ROW_CAP, sources.size() - dropsShown)
-				+ " more of " + fmt(sources.size()) + " sources");
-			more.addActionListener(e ->
+			final int every = sources.size();
+			p.add(moreRow(every - dropsShown, () ->
 			{
-				dropsShown += ROW_CAP;
+				dropsShown = every;
 				rebuildInPlace();
-			});
-			p.add(more);
+			}));
 		}
 		return p;
 	}
@@ -3313,16 +3311,53 @@ class ChroniclePanel extends PluginPanel
 	 * a short list from a truncated one. This says how many are held back and
 	 * opens another page of them.
 	 */
-	private JButton expander(String key, int cap, int of)
+	/**
+	 * The one way this panel says a list goes on, and the one way it opens.
+	 *
+	 * <p>There were three. A Swing JButton on some boards, which is the only
+	 * heavy chrome in a panel made of rows and reads as a dialog control; a dim
+	 * clickable row on others; and on one board a dim row that was not clickable
+	 * at all, so it announced that there was more and offered no way to it.
+	 *
+	 * <p>It opens the whole list rather than another capful. The lists here run to
+	 * a couple of hundred rows at the outside, and the panel already mounts more
+	 * than that on the trackers board, so paging them is a cost with no benefit:
+	 * a list of ninety should not be fifteen clicks that each say six.
+	 */
+	private JPanel moreRow(long remaining, Runnable reveal)
 	{
-		JButton more = new JButton("Show " + Math.min(ROW_CAP, of - cap)
-			+ " more of " + fmt(of));
-		more.addActionListener(e ->
+		return moreRow("Show " + fmt(remaining) + " more", reveal);
+	}
+
+	/** The same control, where the tail of a list is not a countable remainder. */
+	private JPanel moreRow(String label, Runnable reveal)
+	{
+		JPanel more = ghostRow(label, "");
+		more.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		more.addMouseListener(clicker(reveal));
+		return more;
+	}
+
+	/**
+	 * A row that DOES something rather than revealing more of what is already
+	 * there. Drawn in the same shape as the rest of the panel, in accent, because
+	 * a Swing button in a column of rows reads as a dialog that wandered in.
+	 */
+	private JPanel actionRow(String label, Runnable go)
+	{
+		JPanel r = row(label, "", accent(), true);
+		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		r.addMouseListener(clicker(go));
+		return r;
+	}
+
+	private JPanel expander(String key, int cap, int of)
+	{
+		return moreRow(of - cap, () ->
 		{
-			drillShown.put(key, cap + ROW_CAP);
+			drillShown.put(key, of);
 			rebuildInPlace();
 		});
-		return more;
 	}
 
 	/** What everything of one kind came to, for one row of the summary. */
@@ -3495,6 +3530,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (shown.size() < bag.size())
 		{
+			// A label, not the panel's "Show N more" control, and deliberately so:
+			// this board is drawn to be copied as a PICTURE, and nothing in a
+			// picture can be clicked. It says the picture is short, which is all
+			// it can honestly offer.
 			p.add(ghostRow("+ " + fmt(bag.size() - shown.size()) + " more", ""));
 		}
 		return p;
@@ -3725,16 +3764,12 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		p.add(vgap(8));
-		JButton all = new JButton("All kills of " + t.task);
-		all.setAlignmentX(Component.LEFT_ALIGNMENT);
-		all.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
 		final String taskName = t.task;
-		all.addActionListener(e ->
+		p.add(actionRow("All kills of " + t.task, () ->
 		{
 			detailTask = -1;
 			openSourceLoose(taskName);
-		});
-		p.add(all);
+		}));
 		return p;
 	}
 
@@ -3930,14 +3965,12 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (j.tasks.size() > slayerShown)
 		{
-			JButton more = new JButton("Show " + Math.min(ROW_CAP, j.tasks.size() - slayerShown)
-				+ " more of " + fmt(j.tasks.size()) + " tasks");
-			more.addActionListener(e ->
+			final int every = j.tasks.size();
+			p.add(moreRow(every - slayerShown, () ->
 			{
-				slayerShown += ROW_CAP;
+				slayerShown = every;
 				rebuildInPlace();
-			});
-			p.add(more);
+			}));
 			p.add(vgap(4));
 		}
 	}
@@ -5216,17 +5249,14 @@ class ChroniclePanel extends PluginPanel
 			}
 			if (bag.size() > cap)
 			{
-				JButton more = new JButton("Show " + Math.min(30, bag.size() - cap)
-					+ " more of " + fmt(bag.size()) + " items");
 				final String key = name;
-				final int newCap = cap + 30;
-				more.addActionListener(e ->
-				{
-					drillShown.put(key, newCap);
-					rebuildInPlace();
-				});
+				final int every = bag.size();
 				p.add(vgap(3));
-				p.add(more);
+				p.add(moreRow(every - cap, () ->
+				{
+					drillShown.put(key, every);
+					rebuildInPlace();
+				}));
 			}
 			return p;
 		}
@@ -10333,15 +10363,15 @@ class ChroniclePanel extends PluginPanel
 		if (feed.size() > journalShown)
 		{
 			p.add(vgap(6));
-			JButton more = new JButton("Read further back");
-			more.setAlignmentX(Component.LEFT_ALIGNMENT);
-			more.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
-			more.addActionListener(ev ->
+			// The one list here that PAGES rather than opening whole. Every other
+			// is a couple of hundred rows at the outside; the feed is every event
+			// the account has ever had, and mounting all of it would be tens of
+			// thousands of rows for a reader who wanted the next few days.
+			p.add(moreRow("Read further back", () ->
 			{
 				journalShown += 60;
 				rebuildInPlace();
-			});
-			p.add(more);
+			}));
 		}
 		return p;
 	}
