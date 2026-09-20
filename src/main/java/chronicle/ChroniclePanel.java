@@ -2565,6 +2565,11 @@ class ChroniclePanel extends PluginPanel
 			}
 			return kindLens(p, win.label, bagOf(w.items), "win:");
 		}
+		// By item, on the left-behind reading, is the same axis the Received
+		// reading calls by kind: one list at a time, chosen by the same control.
+		// The roll keeps what a window left behind as ITEMS and not by source, so
+		// on a narrowed period that reading has one axis and the strip above does
+		// not offer a second. An axis that cannot answer is not drawn.
 		List<String[]> ranked = dropsLeftBehind ? w.leftItems : w.sources;
 		if (ranked.isEmpty())
 		{
@@ -2575,7 +2580,7 @@ class ChroniclePanel extends PluginPanel
 		JPanel head = card(dropsLeftBehind ? "Left behind" : "Drops received");
 		if (dropsLeftBehind)
 		{
-			head.add(row("Items", fmt(w.left), accent()));
+			head.add(row("Items", fmt(w.left), ACCENT_RED));
 			head.add(row("Worth", gp(w.leftValue) + " gp", null));
 			head.add(row("Kills that left one", fmt(w.leftKills), null));
 		}
@@ -2742,9 +2747,19 @@ class ChroniclePanel extends PluginPanel
 			lootKind = null;
 			rebuildInPlace();
 		}));
-		if (!dropsLeftBehind)
+		// Offered on both readings, which it was not. Left behind used to stack
+		// its two lists one under the other, which is the scroll-to-discover this
+		// panel does not do anywhere else, and it left Received carrying an axis
+		// the other half of the same coin did not have. The second axis is items
+		// on one side and kinds on the other because that is what each side
+		// holds; the control is the same control.
+		//
+		// Except over a window, where the roll keeps what was left behind as
+		// items alone: there the reading has one axis, so none is offered.
+		if (!dropsLeftBehind || wholeRecord())
 		{
-			axes.add(toggle(dropsByKind ? "By kind" : "By source", () ->
+			axes.add(toggle(dropsByKind
+				? (dropsLeftBehind ? "By item" : "By kind") : "By source", () ->
 			{
 				dropsByKind = !dropsByKind;
 				lootKind = null;
@@ -2812,6 +2827,22 @@ class ChroniclePanel extends PluginPanel
 			p.add(note("Drops appear here as you play: every kill, priced as it lands."));
 			return p;
 		}
+		// The head this reading drew over a window and not over the whole record,
+		// which left the same board with two shapes depending on the period, and
+		// left the other half of the coin carrying a head it did not.
+		long everyDrop = 0;
+		long everyValue = 0;
+		for (LocalStore.SourceRow r : sources)
+		{
+			everyDrop += r.loots;
+			everyValue += r.value;
+		}
+		JPanel lifeHead = card("Drops received");
+		lifeHead.add(row("Drops", fmt(everyDrop), accent()));
+		lifeHead.add(row("Worth", gp(everyValue) + " gp", null));
+		lifeHead.add(row("Sources", fmt(sources.size()), null));
+		p.add(lifeHead);
+		p.add(vgap(6));
 		int shown = 0;
 		for (LocalStore.SourceRow r : sources)
 		{
@@ -2990,11 +3021,54 @@ class ChroniclePanel extends PluginPanel
 				+ "moment you declined it."));
 			return p;
 		}
-		JPanel head = card("Walked past, lifetime");
-		head.add(row(fmt(totalQty) + " items", gp(totalVal) + " gp", ACCENT_RED));
+		// The same head the Received reading draws, because this is the other half
+		// of one board. Red belongs to the head as the board's single gesture: a
+		// colour on every row of a list says nothing the list does not already
+		// say, and it made one lens read in two palettes a click apart, since the
+		// windowed path never used it at all.
+		List<LocalStore.UntakenRow> items = plugin.untakenItems();
+		items.sort(Comparator.comparingLong((LocalStore.UntakenRow r) -> r.value).reversed());
+		JPanel head = card("Left behind");
+		head.add(row("Items", fmt(totalQty), ACCENT_RED));
+		head.add(row("Worth", gp(totalVal) + " gp", null));
+		head.add(row(dropsByKind ? "Distinct items" : "Sources",
+			fmt(dropsByKind ? items.size() : rows.size()), null));
 		p.add(head);
 		p.add(vgap(6));
-		p.add(group("By source"));
+		if (dropsByKind)
+		{
+			if (items.isEmpty())
+			{
+				p.add(note("Nothing walked past has been priced yet."));
+				return p;
+			}
+			final int itemCap = drillShown.getOrDefault("left:item", ROW_CAP);
+			int mounted = 0;
+			for (LocalStore.UntakenRow r : items)
+			{
+				if (mounted++ >= itemCap)
+				{
+					p.add(expander("left:item", itemCap, items.size()));
+					break;
+				}
+				JPanel card = cardPlain();
+				card.setCursor(java.awt.Cursor.getPredefinedCursor(
+					java.awt.Cursor.HAND_CURSOR));
+				card.add(row(r.name, gp(r.value) + " gp", ACCENT_RED));
+				card.add(row("\u00d7" + fmt(r.qty), r.qty > 0
+					? gp(r.value / Math.max(1, r.qty)) + " gp each" : "", null));
+				final String itm = r.name;
+				card.addMouseListener(clicker(() ->
+				{
+					leftBehindItem = itm;
+					leftBehindSource = null;
+					rebuild();
+				}));
+				p.add(card);
+				p.add(vgap(4));
+			}
+			return p;
+		}
 		final int srcCap = drillShown.getOrDefault("left:source", ROW_CAP);
 		int shown = 0;
 		for (LocalStore.UntakenRow r : rows)
@@ -3006,42 +3080,23 @@ class ChroniclePanel extends PluginPanel
 				p.add(expander("left:source", srcCap, rows.size()));
 				break;
 			}
-			JPanel sr = row(r.name, fmt(r.qty) + " · " + gp(r.value) + " gp", ACCENT_RED);
-			sr.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			// The same two-line card the Received reading draws for a source: the
+			// name and what it came to on top, the count and the rate under it.
+			// This is the half of the coin that reads as the other half.
+			JPanel card = cardPlain();
+			card.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			card.add(row(r.name, gp(r.value) + " gp", ACCENT_RED));
+			card.add(row(fmt(r.qty) + " left", r.qty > 0
+				? gp(r.value / Math.max(1, r.qty)) + " gp each" : "", null));
 			final String src = r.name;
-			sr.addMouseListener(clicker(() ->
+			card.addMouseListener(clicker(() ->
 			{
 				leftBehindSource = src;
 				leftBehindItem = null;
 				rebuild();
 			}));
-			p.add(sr);
-		}
-		List<LocalStore.UntakenRow> items = plugin.untakenItems();
-		if (!items.isEmpty())
-		{
-			items.sort(Comparator.comparingLong((LocalStore.UntakenRow r) -> r.value).reversed());
-			p.add(group("By item"));
-			final int itemCap = drillShown.getOrDefault("left:item", ROW_CAP);
-			int mounted = 0;
-			for (LocalStore.UntakenRow r : items)
-			{
-				if (mounted++ >= itemCap)
-				{
-					p.add(expander("left:item", itemCap, items.size()));
-					break;
-				}
-				JPanel ir = row(r.name, "×" + fmt(r.qty) + " · " + gp(r.value) + " gp", ACCENT_RED);
-				ir.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-				final String itm = r.name;
-				ir.addMouseListener(clicker(() ->
-				{
-					leftBehindItem = itm;
-					leftBehindSource = null;
-					rebuild();
-				}));
-				p.add(ir);
-			}
+			p.add(card);
+			p.add(vgap(4));
 		}
 		return p;
 	}
