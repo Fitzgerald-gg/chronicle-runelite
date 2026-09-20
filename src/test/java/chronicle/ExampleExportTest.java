@@ -147,7 +147,7 @@ public class ExampleExportTest
 			m.put(n, "DERIVED: whether a read is in flight, which the crawl never waits on");
 		}
 		for (String n : new String[]{"everShown", "staleWhileHidden", "keepScroll",
-			"buildsRun"})
+			"buildsRun", "lastPointer"})
 		{
 			m.put(n, "PLUMBING: about drawing, not about where the reader is");
 		}

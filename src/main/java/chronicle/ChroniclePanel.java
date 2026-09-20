@@ -1870,7 +1870,7 @@ class ChroniclePanel extends PluginPanel
 			// scroll pane away and hangs a fresh one, so a redraw landing mid-drag
 			// takes the thumb out from under the mouse. Both are owed and paid by
 			// the timer, which is what that timer is now mostly for.
-			if (popupShowing() || scrollHeld())
+			if (popupShowing() || scrollHeld() || beingRead())
 			{
 				staleWhileHidden = true;
 				return;
@@ -1890,6 +1890,53 @@ class ChroniclePanel extends PluginPanel
 				keepScroll = false;
 			}
 		});
+	}
+
+	// Where the pointer was when this panel last thought about redrawing itself.
+	private java.awt.Point lastPointer;
+
+	/**
+	 * Whether the reader is reading rather than playing.
+	 *
+	 * <p>Every board redraws when the record moves, which during a grind is most
+	 * ticks. A redraw hangs a fresh component tree, and a tooltip belongs to the
+	 * component it was raised from: replace that component and the tooltip goes.
+	 * Since a good deal of this panel's detail is deliberately behind a hover -
+	 * what a diary tier asks for, what a log page's header said, which boss a
+	 * shared sprite is - a redraw every six hundred milliseconds would make those
+	 * unreadable exactly when somebody was trying to read them.
+	 *
+	 * <p>A pointer resting inside the panel, in the same place it was at the last
+	 * ask, is somebody reading. A pointer that has moved is somebody on their way
+	 * somewhere, and nothing is open to disturb. Outside the panel, they are
+	 * playing the game and the panel is theirs to redraw.
+	 */
+	private boolean beingRead()
+	{
+		java.awt.Point was = lastPointer;
+		java.awt.Point now = null;
+		try
+		{
+			java.awt.PointerInfo at = java.awt.MouseInfo.getPointerInfo();
+			if (at != null)
+			{
+				now = at.getLocation();
+				java.awt.Point origin = getWrappedPanel().getLocationOnScreen();
+				java.awt.Rectangle over = new java.awt.Rectangle(origin,
+					getWrappedPanel().getSize());
+				if (!over.contains(now))
+				{
+					now = null;
+				}
+			}
+		}
+		catch (RuntimeException e)
+		{
+			// headless, or the panel is not on screen: not being read either way
+			now = null;
+		}
+		lastPointer = now;
+		return now != null && now.equals(was);
 	}
 
 	/** Whether the reader has hold of the scroll bar this instant. */
