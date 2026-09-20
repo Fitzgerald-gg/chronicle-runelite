@@ -1168,31 +1168,41 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private boolean isKillSource(String name)
 	{
-		String kind = LocalStore.kindOf(name);
+		// And anything a slayer task was fought against. The Kill Log lists the
+		// assignment rather than the thing, so it has no line for a superior:
+		// Choke devil read "Times looted 13" while the journal held thirteen task
+		// kills of it. A monster in a task's own monsters map is a thing this
+		// account killed, which is the whole question being asked.
+		return killKinds().contains(LocalStore.kindOf(name))
+			|| taskKillsEver().containsKey(name);
+	}
+
+	// Per build: every kind the record knows to be killed rather than searched,
+	// gathered or opened. Built once instead of walking the roster and the Kill
+	// Log again for every row of a board.
+	private java.util.Set<String> killKinds;
+
+	private java.util.Set<String> killKinds()
+	{
+		if (killKinds != null)
+		{
+			return killKinds;
+		}
+		java.util.Set<String> out = new java.util.HashSet<>();
 		for (Boss b : bossRoster(plugin.gson()))
 		{
-			if (LocalStore.kindOf(b.name).equals(kind))
-			{
-				return true;
-			}
+			out.add(LocalStore.kindOf(b.name));
 		}
 		JsonObject cl = clogNow();
 		if (cl != null && cl.has("slayer_kcs") && cl.get("slayer_kcs").isJsonObject())
 		{
 			for (String said : cl.getAsJsonObject("slayer_kcs").keySet())
 			{
-				if (LocalStore.kindOf(said).equals(kind))
-				{
-					return true;
-				}
+				out.add(LocalStore.kindOf(said));
 			}
 		}
-		// And anything a slayer task was fought against. The Kill Log lists the
-		// assignment rather than the thing, so it has no line for a superior:
-		// Choke devil read "Times looted 13" while the journal held thirteen
-		// task kills of it. A monster in a task's own monsters map is a thing
-		// this account killed, which is the whole question being asked.
-		return taskKillsEver().containsKey(name);
+		killKinds = out;
+		return out;
 	}
 
 	/** One source's takings, openable. */
@@ -1953,6 +1963,8 @@ class ChroniclePanel extends PluginPanel
 		// gathered row, and stepping the period never moved it.
 		resourcesDropped = 0;
 		kcByKind = null;
+		chatKcByKind = null;
+		killKinds = null;
 		// The labels of the build just discarded are nobody's business now. Left to
 		// pile up, an icon that never lands would hold every label the panel ever
 		// drew, which is the same unbounded queue that made the trackers page lag.
@@ -5106,15 +5118,29 @@ class ChroniclePanel extends PluginPanel
 	private long standingKills(LocalStore.SourceRow sr)
 	{
 		long own = sr.kc > 0 ? sr.kc : sr.loots;
-		String want = LocalStore.chatKind(sr.name);
-		for (Map.Entry<String, Long> e : plugin.killCounts().entrySet())
+		// Indexed once per build rather than walked per row. It used to return on
+		// the FIRST chat key that normalised to this kind, which on a map with no
+		// order is whichever one came out first; the best of them is both a
+		// better answer and the same answer every time.
+		Long said = chatKcByKind().get(LocalStore.chatKind(sr.name));
+		return said == null ? own : Math.max(own, said);
+	}
+
+	// Per build: the best chat-reported kill count per kind.
+	private Map<String, Long> chatKcByKind;
+
+	private Map<String, Long> chatKcByKind()
+	{
+		if (chatKcByKind == null)
 		{
-			if (LocalStore.chatKind(e.getKey()).equals(want))
+			Map<String, Long> out = new LinkedHashMap<>();
+			for (Map.Entry<String, Long> e : plugin.killCounts().entrySet())
 			{
-				return Math.max(own, e.getValue());
+				out.merge(LocalStore.chatKind(e.getKey()), e.getValue(), Math::max);
 			}
+			chatKcByKind = out;
 		}
-		return own;
+		return chatKcByKind;
 	}
 
 	/**
