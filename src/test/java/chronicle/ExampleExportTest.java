@@ -675,7 +675,13 @@ public class ExampleExportTest
 			Method obtained = ChroniclePanel.class.getDeclaredMethod("obtained",
 				com.google.gson.JsonObject.class);
 			Method slotHeld = ChroniclePanel.class.getDeclaredMethod("slotHeld", String.class,
-				String.class, List.class, Class.forName("chronicle.ChroniclePanel$Obtained"));
+				String.class, List.class, Class.forName("chronicle.ChroniclePanel$Obtained"),
+				java.util.Set.class);
+			Method sharedNames = ChroniclePanel.class.getDeclaredMethod(
+				"sharedSlotNames", Gson.class);
+			sharedNames.setAccessible(true);
+			java.util.Set<String> shared =
+				(java.util.Set<String>) sharedNames.invoke(null, plugin.gson());
 			Method taxonomy = ChroniclePanel.class.getDeclaredMethod("taxonomy", Gson.class);
 			obtained.setAccessible(true);
 			slotHeld.setAccessible(true);
@@ -694,7 +700,7 @@ public class ExampleExportTest
 						if (seenSlot.add(slot))
 						{
 							boolean got = (Boolean) slotHeld.invoke(null, slot, page.getKey(),
-								page.getValue(), ob);
+								page.getValue(), ob, shared);
 							slots.add(java.util.Arrays.asList(slot, page.getKey(), got ? 1 : 0));
 						}
 					}

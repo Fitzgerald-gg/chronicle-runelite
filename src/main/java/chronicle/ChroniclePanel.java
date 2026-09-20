@@ -5343,7 +5343,8 @@ class ChroniclePanel extends PluginPanel
 		{
 			String page = pg.getKey();
 			List<String> slots = pg.getValue();
-			boolean[] lit = lightSlots(slots, ob.byPage.get(page.toLowerCase(Locale.ROOT)), ob.all);
+			boolean[] lit = lightSlots(slots, ob.byPage.get(page.toLowerCase(Locale.ROOT)), ob.all,
+				sharedSlotNames(plugin.gson()));
 			int got = 0;
 			for (boolean b : lit)
 			{
@@ -6008,7 +6009,7 @@ class ChroniclePanel extends PluginPanel
 	 * the first k, as the game does.
 	 */
 	private static boolean[] lightSlots(List<String> slots, Map<String, Long> pageItems,
-		Map<String, Long> owned)
+		Map<String, Long> owned, java.util.Set<String> sharedNames)
 	{
 		boolean[] lit = new boolean[slots.size()];
 		Map<String, Integer> dupes = new LinkedHashMap<>();
@@ -6020,8 +6021,21 @@ class ChroniclePanel extends PluginPanel
 		for (int i = 0; i < slots.size(); i++)
 		{
 			String key = slots.get(i).toLowerCase(Locale.ROOT);
-			long have = Math.max(pageItems != null ? pageItems.getOrDefault(key, 0L) : 0L,
-				owned.getOrDefault(key, 0L));
+			long onPage = pageItems != null ? pageItems.getOrDefault(key, 0L) : 0L;
+			// The whole-log set says an item is held; it does not say WHERE from,
+			// and the game tracks that per page. An abyssal whip from the Sire
+			// leaves by_cat["abyssal sire"] holding four of them and
+			// by_cat["slayer"] holding none, so reading the log-wide set onto the
+			// Slayer page lights a slot the game says is empty.
+			//
+			// So the log-wide set only speaks for a name that lives on ONE page,
+			// where there is nothing to confuse it with, or for a page that has
+			// never been read, where it is the only thing there is. A shared name
+			// on a page that HAS been read waits for that page to be read again,
+			// which happens on the next opening of the log.
+			boolean globalMaySpeak = pageItems == null || !sharedNames.contains(key);
+			long global = globalMaySpeak ? owned.getOrDefault(key, 0L) : 0L;
+			long have = Math.max(onPage, global);
 			if (dupes.get(key) > 1)
 			{
 				int idx = seen.merge(key, 1, Integer::sum) - 1;
@@ -6031,17 +6045,58 @@ class ChroniclePanel extends PluginPanel
 			{
 				lit[i] = have > 0
 					|| (pageItems != null && pageItems.containsKey(key))
-					|| owned.containsKey(key);
+					|| (globalMaySpeak && owned.containsKey(key));
 			}
 		}
 		return lit;
 	}
 
+	// Slot names that more than one collection log page lists. Static: the
+	// taxonomy is a bundled file and does not change while the client is up.
+	private static java.util.Set<String> sharedSlotNames;
+
+	private static synchronized java.util.Set<String> sharedSlotNames(
+		com.google.gson.Gson gson)
+	{
+		if (sharedSlotNames != null)
+		{
+			return sharedSlotNames;
+		}
+		Map<String, Integer> homes = new LinkedHashMap<>();
+		for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy(gson).entrySet())
+		{
+			for (Map.Entry<String, List<String>> pg : tab.getValue().entrySet())
+			{
+				java.util.Set<String> onThisPage = new java.util.HashSet<>();
+				for (String slot : pg.getValue())
+				{
+					onThisPage.add(slot.toLowerCase(Locale.ROOT));
+				}
+				for (String slot : onThisPage)
+				{
+					homes.merge(slot, 1, Integer::sum);
+				}
+			}
+		}
+		java.util.Set<String> shared = new java.util.HashSet<>();
+		for (Map.Entry<String, Integer> e : homes.entrySet())
+		{
+			if (e.getValue() > 1)
+			{
+				shared.add(e.getKey());
+			}
+		}
+		sharedSlotNames = shared;
+		return shared;
+	}
+
 	// One named slot on one page, by the same rule the Log tab lights it with. A
 	// duplicate-named slot counts as held when any of its copies is lit.
-	private static boolean slotHeld(String slot, String page, List<String> pageSlots, Obtained ob)
+	private static boolean slotHeld(String slot, String page, List<String> pageSlots,
+		Obtained ob, java.util.Set<String> sharedNames)
 	{
-		boolean[] lit = lightSlots(pageSlots, ob.byPage.get(page.toLowerCase(Locale.ROOT)), ob.all);
+		boolean[] lit = lightSlots(pageSlots, ob.byPage.get(page.toLowerCase(Locale.ROOT)),
+			ob.all, sharedNames);
 		for (int i = 0; i < pageSlots.size(); i++)
 		{
 			if (lit[i] && pageSlots.get(i).equalsIgnoreCase(slot))
@@ -10654,7 +10709,8 @@ class ChroniclePanel extends PluginPanel
 						{
 							// Same rule as the Log tab, or a slot known only from a
 							// page scrape reads as obtained there and missing here.
-							slotGot.put(slot, slotHeld(slot, pg.getKey(), pg.getValue(), ob));
+							slotGot.put(slot, slotHeld(slot, pg.getKey(), pg.getValue(), ob,
+								sharedSlotNames(plugin.gson())));
 						}
 						if (slotFirstPage.size() >= 4)
 						{

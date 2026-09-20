@@ -69,6 +69,12 @@ public class ClogCaptureTest
 		itemNames.put(DRACONIC_VISAGE, "Draconic visage");
 		itemNames.put(VORKATHS_HEAD, "Vorkath's head");
 		itemNames.put(JAR_OF_DECAY, "Jar of decay");
+		// Four different items wearing one name, as My Notes carries twenty six
+		// Ancient pages. Different ids, identical names.
+		for (int i = 0; i < 4; i++)
+		{
+			itemNames.put(ANCIENT_PAGE + i, "Ancient page");
+		}
 		capture = new ClogCapture(client, im);
 	}
 
@@ -78,6 +84,28 @@ public class ClogCaptureTest
 	{
 		Mockito.when(client.getVarbitValue(VarbitID.COLLECTION_POH_HOST_BOOK_OPEN))
 			.thenReturn(open ? 1 : 0);
+	}
+
+	private static final int ANCIENT_PAGE = 11341;
+
+	/** A page that lists one name in several slots, some held and some not. */
+	private void stubMyNotesPage(int held)
+	{
+		Widget[] head = {textWidget("My Notes"), textWidget("Obtained: " + held + "/4")};
+		Widget[] kids = new Widget[4];
+		for (int i = 0; i < 4; i++)
+		{
+			// opacity 0 is held, 100 is faded
+			kids[i] = itemWidget(ANCIENT_PAGE + i, 1, i < held ? 0 : 100);
+		}
+		Widget header = Mockito.mock(Widget.class);
+		Mockito.when(header.getDynamicChildren()).thenReturn(head);
+		Widget items = Mockito.mock(Widget.class);
+		Mockito.when(items.getDynamicChildren()).thenReturn(kids);
+		Mockito.when(client.getWidget(ComponentID.COLLECTION_LOG_ENTRY_HEADER))
+			.thenReturn(header);
+		Mockito.when(client.getWidget(ComponentID.COLLECTION_LOG_ENTRY_ITEMS))
+			.thenReturn(items);
 	}
 
 	// the player's own open: the client fires SETUP at us.
@@ -518,5 +546,51 @@ public class ClogCaptureTest
 		assertEquals(1920, capture.availableCount());
 		assertEquals(Integer.valueOf(250), catCounts().get("bosses_obtained"));
 		assertFalse(capture.isDirty());
+	}
+
+	/**
+	 * TRAP: a page listing one name in many slots. My Notes is twenty six Ancient
+	 * pages: different items, one name. The scrape used to overwrite the name each
+	 * time it saw it, so the page recorded 1 however many were held and the board
+	 * could never read above "1/26".
+	 */
+	@Test
+	public void repeatedNamesOnAPageAreCountedNotOverwritten()
+	{
+		stubMyNotesPage(3);
+		logOpened();
+		pageDrawn();
+		tickTo(110);
+
+		assertEquals("three held pages must record as three",
+			Integer.valueOf(3), byCat().get("My Notes").get("Ancient page"));
+	}
+
+	/** And reading the same page twice does not count it twice. */
+	@Test
+	public void readingAPageAgainReplacesRatherThanAddsToIt()
+	{
+		stubMyNotesPage(3);
+		logOpened();
+		pageDrawn();
+		tickTo(110);
+		pageDrawn();
+		tickTo(220);
+
+		assertEquals("a second read doubled the page",
+			Integer.valueOf(3), byCat().get("My Notes").get("Ancient page"));
+	}
+
+	/** A faded slot is one the player does not have, and is not counted. */
+	@Test
+	public void fadedSlotsAreNotCounted()
+	{
+		stubMyNotesPage(0);
+		logOpened();
+		pageDrawn();
+		tickTo(110);
+
+		assertFalse("nothing held, so the name should not be recorded at all",
+			byCat().get("My Notes").containsKey("Ancient page"));
 	}
 }

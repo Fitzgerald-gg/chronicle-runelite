@@ -485,10 +485,16 @@ public class ClogCapture
 				pbLines.put(page, times);
 			}
 			// opacity 0 = obtained, anything greyed isn't.
+			// An empty entry still means something: the page was read and nothing
+			// on it is held, which is not the same as never having read it.
 			Map<String, Integer> pageItems = byCat.computeIfAbsent(page, k -> new HashMap<>());
 			Widget[] kids = items.getDynamicChildren();
 			if (kids != null)
 			{
+				// A scrape reads the WHOLE page, so it replaces what a previous one
+				// left rather than adding to it. Without this, summing below would
+				// count a page twice the second time it was opened.
+				pageItems.clear();
 				for (Widget it : kids)
 				{
 					if (it == null || it.getItemId() <= 0 || it.getOpacity() != 0)
@@ -498,7 +504,16 @@ public class ClogCapture
 					String name = itemName(it.getItemId());
 					if (name != null)
 					{
-						pageItems.put(name, Math.max(1, it.getItemQuantity()));
+						// SUMMED, not overwritten. A page can list the same name in
+						// several slots, and those slots are different items wearing
+						// one name: My Notes is twenty six Ancient pages. Overwriting
+						// collapsed all of them onto the last one's quantity, so the
+						// page could never read above 1 of 26 however many were held.
+						// Every slot here is one the player HAS, since the unobtained
+						// ones are faded and skipped above, so the sum of a repeated
+						// name is the number of them held.
+						pageItems.merge(name, Math.max(1, it.getItemQuantity()),
+							Integer::sum);
 					}
 				}
 			}
