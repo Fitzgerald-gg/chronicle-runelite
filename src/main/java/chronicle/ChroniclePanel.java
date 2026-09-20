@@ -861,14 +861,15 @@ class ChroniclePanel extends PluginPanel
 		{
 			return bossKills(name);
 		}
-		// The sitting cannot be answered here and does not pretend to be. Kills
-		// are dated to the DAY - the loot roll keeps one entry a day - so a
-		// sitting that began this afternoon would be handed this morning's kills
-		// as well, under a heading saying "This session". A dash is the true
-		// answer and the hover says why.
+		// The sitting is answered off its own roll entry and not off the spine,
+		// whose two ends are both today's. Zero rather than a dash where the
+		// entry names no kill of this thing: the entry covers the whole sitting,
+		// so "none yet" is an answer it can actually give.
 		if (sessionPeriod())
 		{
-			return -1;
+			rollUsed = true;
+			Long rolled = rolledKills(name);
+			return rolled == null ? 0 : rolled;
 		}
 		Span s = span();
 		if (s == null)
@@ -940,7 +941,11 @@ class ChroniclePanel extends PluginPanel
 		{
 			Window w = window();
 			rolledKcs = new LinkedHashMap<>();
-			for (String[] r : plugin.lootBetween(w.start, w.end).sources)
+			// The sitting keeps its own entry in this same shape, so it is
+			// counted the same way rather than declining to answer.
+			LocalStore.LootWindow win = sessionPeriod()
+				? plugin.sessionLootWindow() : plugin.lootBetween(w.start, w.end);
+			for (String[] r : win.sources)
 			{
 				long n = safeParse(r[1]);
 				if (n > 0)
@@ -1655,20 +1660,11 @@ class ChroniclePanel extends PluginPanel
 			p.add(note("The boss roster did not load."));
 			return p;
 		}
-		if (!wholeRecord() && span() == null)
+		// The sitting is counted off its own roll entry, so it needs no pair of
+		// spine lines to be measured between.
+		if (!wholeRecord() && !sessionPeriod() && span() == null)
 		{
 			p.add(noPeriod());
-			return p;
-		}
-		// The loot roll dates a kill to the DAY, so no cell on this board can
-		// answer for a sitting and every one of them would draw a dash. Seventy
-		// dashes is a wall that says one thing seventy times; the sentence says
-		// it once, and the lifetime counts are a click away on the period strip.
-		if (sessionPeriod())
-		{
-			p.add(note("Kills are dated by day and not by sitting, so this board "
-				+ "has nothing to say about the one you are in. Any longer period "
-				+ "answers it, and the sitting's own kills are on the Record tab."));
 			return p;
 		}
 		int at = -1;
@@ -1746,9 +1742,7 @@ class ChroniclePanel extends PluginPanel
 		cell.setToolTipText(tip(b.name,
 			new String[]{wholeRecord() ? "Kills" : "Kills in " + window().label},
 			new String[]{kc > 0 ? fmt(kc)
-				: (kc == 0 ? "none yet"
-					: sessionPeriod() ? "kills are dated by day, not by sitting"
-						: "not dated this far back")}));
+				: (kc == 0 ? "none yet" : "not dated this far back")}));
 		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 
 		JLabel icon = new JLabel();
@@ -2807,44 +2801,6 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * The sitting's loot, which the dated roll cannot be asked for.
-	 *
-	 * <p>The roll keeps ONE entry a day, by design: it is what lets a year of
-	 * drops be summed without holding a year of drops. A sitting is a few hours
-	 * inside one of those entries, so narrowing the roll to it is not something
-	 * that can be done a little less accurately - it hands back the whole day
-	 * under a heading saying "This session", which is the flaw this board had.
-	 *
-	 * <p>What the sitting DOES know exactly is its own tally, counted as the
-	 * drops land: how many, what they were worth, and the same three figures on
-	 * the left-behind side. So the head card is exact and the ranked list says
-	 * plainly why it is not there, rather than a ranked list of the wrong day.
-	 */
-	private JPanel sittingsLoot(JPanel p)
-	{
-		JPanel head = card(dropsLeftBehind ? "Left behind" : "Drops received");
-		if (dropsLeftBehind)
-		{
-			long[] left = plugin.sessionUntakenTally();
-			head.add(row("Items", fmt(left[0]), ACCENT_RED));
-			head.add(row("Worth", gp(left[1]) + " gp", null));
-			head.add(row("Kills that left one", fmt(plugin.sessionUntakenKills()), null));
-		}
-		else
-		{
-			head.add(row("Drops", fmt(plugin.sessionLoots()), accent()));
-			head.add(row("Worth", gp(plugin.sessionLootValue()) + " gp", null));
-		}
-		p.add(head);
-		p.add(vgap(6));
-		p.add(note("The figures above are this sitting's own, counted as the drops "
-			+ "landed. The dated roll keeps one entry a day, so it cannot break a "
-			+ "sitting down by source or by kind; any longer period it can, and "
-			+ "ranks it."));
-		return p;
-	}
-
-	/**
 	 * The loot a window actually holds, off the dated roll rather than off the
 	 * ledger's running totals. A range the roll has nothing for shows nothing:
 	 * that is the answer, not an empty board to be filled with a lifetime.
@@ -2855,24 +2811,23 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel dropsInWindow(JPanel p)
 	{
-		// Before the roll is consulted at all: whether the roll is empty, or
-		// begins mid-window, are both answers ABOUT the roll, and the sitting is
-		// not read from it.
-		if (sessionPeriod())
-		{
-			return sittingsLoot(p);
-		}
 		Window win = window();
+		// The sitting keeps its own entry in the roll's shape, written as the
+		// drops land, so it is read here like any other window and every board
+		// below this line works without knowing which it got. The roll's own
+		// coverage notes are skipped for it: they are answers ABOUT the dated
+		// roll, and the sitting is not read from it.
+		LocalStore.LootWindow sitting = sessionPeriod() ? plugin.sessionLootWindow() : null;
 		long rollFrom = plugin.lootRollFrom();
 		long fromMs = win.start.atStartOfDay(ZoneId.systemDefault())
 			.toInstant().toEpochMilli();
-		if (rollFrom <= 0)
+		if (sitting == null && rollFrom <= 0)
 		{
 			p.add(note("No loot has been dated yet. The roll keeps one entry a "
 				+ "day and starts with the next drop that lands."));
 			return p;
 		}
-		if (rollFrom > fromMs)
+		if (sitting == null && rollFrom > fromMs)
 		{
 			java.time.LocalDate began = java.time.Instant.ofEpochMilli(rollFrom)
 				.atZone(ZoneId.systemDefault()).toLocalDate();
@@ -2881,7 +2836,8 @@ class ChroniclePanel extends PluginPanel
 				+ "as the whole period would be worse than saying nothing."));
 			return p;
 		}
-		LocalStore.LootWindow w = plugin.lootBetween(win.start, win.end);
+		LocalStore.LootWindow w = sitting != null ? sitting
+			: plugin.lootBetween(win.start, win.end);
 		// The roll keeps the window's ITEMS beside its sources, so the kind lens
 		// answers a period with the same two screens it draws over the whole
 		// ledger: what the month paid in runes, rather than what every month did.
@@ -3100,11 +3056,7 @@ class ChroniclePanel extends PluginPanel
 		//
 		// Except over a window, where the roll keeps what was left behind as
 		// items alone: there the reading has one axis, so none is offered.
-		//
-		// And except over the sitting, where neither reading has an axis at all:
-		// the sitting counts its take rather than ranking it, so a control that
-		// swapped between two lists would swap between the same board twice.
-		if ((!dropsLeftBehind || wholeRecord()) && !sessionPeriod())
+		if (!dropsLeftBehind || wholeRecord())
 		{
 			axes.add(toggle(dropsByKind
 				? (dropsLeftBehind ? "By item" : "By kind") : "By source", () ->
@@ -8052,20 +8004,6 @@ class ChroniclePanel extends PluginPanel
 		Map<String, Long> nowKc, boolean live, java.time.LocalDate from,
 		java.time.LocalDate to, String first, String second)
 	{
-		if (sessionPeriod())
-		{
-			// Both halves of every row are the day. The count is a delta between
-			// two of the spine's lines, and the spine is written once a day, so
-			// under a sitting both ends are today's; the gp beside it comes off
-			// the dated roll, which keeps one entry a day. Neither can be cut
-			// down to a sitting, and a band of rows that each say the day twice
-			// under a heading reading "This session" is worse than no band.
-			p.add(note("What you killed is dated by day and not by sitting, so "
-				+ "this cannot be narrowed to the one you are in. Any longer "
-				+ "period answers it."));
-			p.add(vgap(5));
-			return;
-		}
 		boolean whole = wholeRecord();
 		// read once a build: the journal is asked for these whole, and a new
 		// target mints its counter mid-session
@@ -8073,8 +8011,27 @@ class ChroniclePanel extends PluginPanel
 		ledgerNames = null;
 		sourceKinds.clear();
 		Map<String, Long> standing = live ? plugin.killCounts() : nowKc;
-		Map<String, Long> gained = HistoryLog.gained(beforeKc, earliestKc, nowKc);
-		Map<String, Long> worth = periodWorth(from, to);
+		// Both halves off the sitting's own roll entry. The spine is written once
+		// a day, so a delta between two of its lines is the DAY under a sitting,
+		// and the roll's dated days are the day for the same reason; the entry
+		// the sitting keeps for itself is the only thing that knows.
+		Map<String, Long> gained;
+		Map<String, Long> worth;
+		if (sessionPeriod())
+		{
+			gained = new LinkedHashMap<>();
+			worth = new LinkedHashMap<>();
+			for (String[] r : plugin.sessionLootWindow().sources)
+			{
+				gained.put(r[0], safeParse(r[1]));
+				worth.put(r[0], safeParse(r[2]));
+			}
+		}
+		else
+		{
+			gained = HistoryLog.gained(beforeKc, earliestKc, nowKc);
+			worth = periodWorth(from, to);
+		}
 		Map<String, Long> loose = loosely(worth);
 		// Lifetime shows what a thing stands at; a period shows only what that
 		// period put on it, and a thing the period never touched is not in it.
@@ -10910,18 +10867,29 @@ class ChroniclePanel extends PluginPanel
 				if (sessionPeriod())
 				{
 					// The roll is dated by DAY, so asked for a sitting it answers
-					// with the day the sitting is in. The sitting counts its own
-					// take as the drops land, which is the exact figure; what it
-					// does not keep is the breakdown, so no named lists are put
-					// under these and the groups simply do not open.
-					long[] left = plugin.sessionUntakenTally();
+					// with the day the sitting is in. The sitting keeps its own
+					// entry in the roll's shape instead, written as the drops
+					// land, so it opens the same named lists as any other period.
+					LocalStore.LootWindow w = plugin.sessionLootWindow();
 					sessionsSpeak[0] = true;
 					sessionsHoldTheFloor[0] = true;
-					retro.put("dropsReceived", (long) plugin.sessionLoots());
-					retro.put("lootValue", plugin.sessionLootValue());
-					retro.put("lootLeftCount", left[0]);
-					retro.put("lootLeftValue", left[1]);
-					retro.put("lootLeftKills", (long) plugin.sessionUntakenKills());
+					retro.put("dropsReceived", w.loots);
+					retro.put("lootValue", w.value);
+					retro.put("lootLeftCount", w.left);
+					retro.put("lootLeftValue", w.leftValue);
+					retro.put("lootLeftKills", w.leftKills);
+					if (!w.items.isEmpty())
+					{
+						named.put("lootValue", itemLines(w.items));
+					}
+					if (!w.leftItems.isEmpty())
+					{
+						named.put("lootLeftCount", itemLines(w.leftItems));
+					}
+					if (!w.sources.isEmpty())
+					{
+						named.put("dropsReceived", sourceLines(w.sources));
+					}
 				}
 				else if (rollFrom > 0 && rollFrom <= fromMs)
 				{

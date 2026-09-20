@@ -588,6 +588,19 @@ public class PanelPreviewTest
 		s.sessionUntaken = new long[]{9, 44_120L};
 		// six of the 37 kills left a stack, so "Drops taken" reads 31
 		s.sessionUntakenKills = 6;
+		// The same sitting the bare tallies above describe, now broken down: the
+		// boards read this through the roll's own shape.
+		s.sessionWindow = new LocalStore.LootWindow();
+		s.sessionWindow.loots = 37;
+		s.sessionWindow.value = 1_204_113L;
+		s.sessionWindow.left = 9;
+		s.sessionWindow.leftValue = 44_120L;
+		s.sessionWindow.leftKills = 6;
+		s.sessionWindow.sources.add(new String[]{"Abyssal demons", "24", "812400"});
+		s.sessionWindow.sources.add(new String[]{"Nechryael", "13", "391713"});
+		s.sessionWindow.items.add(new String[]{"Abyssal whip", "1", "900000"});
+		s.sessionWindow.items.add(new String[]{"Rune bar", "12", "304113"});
+		s.sessionWindow.leftItems.add(new String[]{"Bones", "9", "44120"});
 
 		s.sources.add(new LocalStore.SourceRow("Abyssal demons", 4_112, 3_890, 61_204_113L, null, 0, 0));
 		s.sources.add(new LocalStore.SourceRow("Nechryael", 2_204, 2_090, 24_113_005L, null, 0, 0));
@@ -1320,6 +1333,7 @@ public class PanelPreviewTest
 		long sessionLootValue;
 		long[] sessionUntaken = {0, 0};
 		int sessionUntakenKills;
+		LocalStore.LootWindow sessionWindow;
 		List<LocalStore.SourceRow> sources = new ArrayList<>();
 		Map<String, List<LocalStore.BagItem>> bags = new LinkedHashMap<>();
 		List<LocalStore.UntakenRow> untaken = new ArrayList<>();
@@ -1508,6 +1522,16 @@ public class PanelPreviewTest
 		long sessionLootValue()
 		{
 			return sessionLootValue;
+		}
+
+		@Override
+		LocalStore.LootWindow sessionLootWindow()
+		{
+			if (sessionWindow != null)
+			{
+				return sessionWindow;
+			}
+			return store != null ? store.sessionLootWindow() : new LocalStore.LootWindow();
 		}
 
 		@Override

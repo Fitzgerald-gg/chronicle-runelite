@@ -1084,6 +1084,12 @@ public class ChroniclePlugin extends Plugin
 		return out;
 	}
 
+	/** What this sitting has taken and left, ranked, in the roll's own shape. */
+	LocalStore.LootWindow sessionLootWindow()
+	{
+		return localStore.sessionLootWindow();
+	}
+
 	int sessionLoots()
 	{
 		return localStore.sessionLoots();

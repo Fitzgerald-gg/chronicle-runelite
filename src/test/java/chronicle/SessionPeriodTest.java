@@ -349,46 +349,6 @@ public class SessionPeriodTest
 		assertTrue("a lifetime stopped admitting its undated lines", inside(0));
 	}
 
-	/**
-	 * The loot roll keeps ONE entry a day, by design, which is what lets a year
-	 * of drops be summed without holding a year of drops. Asked for a sitting it
-	 * can only answer with the day the sitting is in, so it is not asked: the
-	 * sitting counts its own take as the drops land, and the board says why the
-	 * breakdown is not under it.
-	 */
-	@Test
-	public void theLootBoardCountsTheSittingRatherThanRankingTheDay() throws Exception
-	{
-		period("Session");
-		began(30 * 60_000L);
-		final java.util.List<String> said = new java.util.ArrayList<>();
-		SwingUtilities.invokeAndWait(() ->
-		{
-			try
-			{
-				Method m = ChroniclePanel.class
-					.getDeclaredMethod("dropsInWindow", javax.swing.JPanel.class);
-				m.setAccessible(true);
-				javax.swing.JPanel into = (javax.swing.JPanel) m.invoke(panel,
-					new javax.swing.JPanel());
-				collect(into, said);
-			}
-			catch (Exception e)
-			{
-				throw new RuntimeException(e);
-			}
-		});
-		String all = String.join(" | ", said);
-		// not "one entry a day", which the roll's own empty message also says:
-		// this is the sentence that belongs to the sitting
-		assertTrue("the board did not say why the breakdown is missing: " + all,
-			all.contains("counted as the drops landed"));
-		assertTrue("the board drew no head card, so it says nothing at all about"
-			+ " what the sitting took: " + all, all.contains("Drops"));
-		assertTrue("and the head card must be the sitting's own figures, not a"
-			+ " board about the roll: " + all, !all.contains("has been dated yet"));
-	}
-
 	private static void collect(java.awt.Component c, java.util.List<String> out)
 	{
 		if (c instanceof javax.swing.JLabel && ((javax.swing.JLabel) c).getText() != null)
@@ -502,14 +462,56 @@ public class SessionPeriodTest
 	}
 
 	/**
-	 * The counted-things bands carry the day twice: the count is a delta between
-	 * two of the spine's lines, and the spine is written once a day, so under a
-	 * sitting both ends are today's; the gp beside it is off the roll, which
-	 * keeps one entry a day. A band of rows each saying the day twice under a
-	 * heading reading "This session" is worse than no band.
+	 * The sitting ranks its own take, and that is the whole point of it.
+	 *
+	 * <p>The dated roll keeps ONE entry a day, by design: it is what lets a year
+	 * of drops be summed without holding a year of drops. So it could never be
+	 * asked what a sitting took, and this board used to say so out loud. The
+	 * sitting now keeps its OWN entry in the roll's shape, written as the drops
+	 * land, and every board that reads a window reads it without knowing which
+	 * of the two it got.
 	 */
 	@Test
-	public void theCountedThingsBandSaysItCannotAnswerASitting() throws Exception
+	public void theLootBoardRanksTheSittingsOwnTake() throws Exception
+	{
+		period("Session");
+		began(30 * 60_000L);
+		String all = String.join(" | ", lootBoard());
+		assertTrue("the sitting's sources are not ranked: " + all,
+			all.contains("Abyssal demons"));
+		assertTrue("the head card lost the sitting's count: " + all,
+			all.contains("Drops"));
+		assertFalse("the board still says it cannot answer for a sitting: " + all,
+			all.contains("counted as the drops landed"));
+		assertFalse("the board answered ABOUT the dated roll, which the sitting is"
+			+ " not read from: " + all, all.contains("dated loot roll begins"));
+	}
+
+	/**
+	 * TRAP: the entry read must be the SITTING's and not the day's. The stub
+	 * answers those two with different figures on purpose, so a board that
+	 * quietly went back to lootBetween draws the day here and looks fine.
+	 */
+	@Test
+	public void andItIsTheSittingsEntryAndNotTheDays() throws Exception
+	{
+		period("Session");
+		began(30 * 60_000L);
+		String sitting = String.join(" | ", lootBoard());
+		period("Day");
+		String day = String.join(" | ", lootBoard());
+		assertFalse("the sitting and the day drew the same board, so one of them "
+			+ "is reading the other's entry: " + sitting, sitting.equals(day));
+	}
+
+	/**
+	 * The counted-things bands take BOTH halves off the sitting's own entry. The
+	 * count used to be a delta between two of the spine's lines, and the spine is
+	 * written once a day, so under a sitting both ends were today's; the gp
+	 * beside it came off the dated roll, which is the day for the same reason.
+	 */
+	@Test
+	public void theCountedThingsBandCountsTheSitting() throws Exception
 	{
 		period("Session");
 		began(20 * 60_000L);
@@ -525,11 +527,13 @@ public class SessionPeriodTest
 				m.setAccessible(true);
 				javax.swing.JPanel into = new javax.swing.JPanel();
 				into.setLayout(new javax.swing.BoxLayout(into, javax.swing.BoxLayout.Y_AXIS));
-				java.util.Map<String, Long> kc = new java.util.HashMap<>();
-				kc.put("vorkath", 40L);
-				m.invoke(panel, into, kc, kc, kc, false,
+				// a spine delta that is NOT the sitting: a band reading this
+				// instead of the sitting's entry shows Vorkath and no demons
+				java.util.Map<String, Long> spine = new java.util.HashMap<>();
+				spine.put("vorkath", 40L);
+				m.invoke(panel, into, spine, spine, spine, false,
 					java.time.LocalDate.now(), java.time.LocalDate.now(),
-					"boss", "monster");
+					ChroniclePanel.KIND_BOSS, ChroniclePanel.KIND_MONSTER);
 				collect(into, said);
 			}
 			catch (Exception e)
@@ -537,10 +541,30 @@ public class SessionPeriodTest
 				throw new RuntimeException(e);
 			}
 		});
-		// note() wraps its sentence across labels, so match inside one line
 		String all = String.join(" | ", said);
-		assertTrue("the band drew the day's figures under the sitting: " + all,
-			all.contains("dated by day and"));
-		assertFalse("and it drew the rows anyway: " + all, all.contains("Vorkath"));
+		assertFalse("the band read the spine, whose two ends are both today's: "
+			+ all, all.contains("Vorkath"));
+		assertTrue("the band did not count the sitting's own kills: " + all,
+			all.contains("Abyssal demons"));
+	}
+
+	private static java.util.List<String> lootBoard() throws Exception
+	{
+		final java.util.List<String> said = new java.util.ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = ChroniclePanel.class
+					.getDeclaredMethod("dropsInWindow", javax.swing.JPanel.class);
+				m.setAccessible(true);
+				collect((javax.swing.JPanel) m.invoke(panel, new javax.swing.JPanel()), said);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		return said;
 	}
 }

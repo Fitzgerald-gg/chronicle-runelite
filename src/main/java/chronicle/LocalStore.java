@@ -73,6 +73,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	// the kills that left at least one stack on the floor, the capture's own count
 	private int sessionUntakenKills;
 	private final java.util.ArrayDeque<RecentDrop> recentDrops = new java.util.ArrayDeque<>();
+	// This sitting's take, in the same shape as one of the dated roll's days, so
+	// a board can read it through the same fold. The roll keeps ONE entry a day
+	// and a sitting is hours inside one of those, so it could never be asked what
+	// this sitting took; this is written beside it as the drops land. In memory
+	// only, and gone at the account boundary like the tallies above it.
+	private JsonObject sessionRoll = new JsonObject();
 
 	// runaway guard; every log, ore, fish and gem in the game is a few hundred ids,
 	// and the journal is rewritten whole on every flush.
@@ -213,6 +219,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			sessionUntaken = 0;
 			sessionUntakenValue = 0;
 			sessionUntakenKills = 0;
+			sessionRoll = new JsonObject();
 			recentDrops.clear();
 			// Account-scoped. load() reads it back from the record.
 			gatheredItems.clear();
@@ -488,36 +495,43 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	// one kill's take, against today
 	private void rollTaken(String source, long value, JsonArray priced)
 	{
-		JsonObject day = dayRoll();
-		bump(day, "loots", 1);
-		bump(day, "value", value);
-		JsonObject bySource = sub(sub(day, "sources"), source);
-		bump(bySource, "loots", 1);
-		bump(bySource, "value", value);
-		JsonObject items = sub(day, "items");
-		for (JsonElement pe : priced)
+		// Today and this sitting, the same figures into the same shape. Written
+		// here rather than derived later: a drop knows which sitting it landed in
+		// only while that sitting is running.
+		for (JsonObject into : new JsonObject[]{dayRoll(), sessionRoll})
 		{
-			JsonObject p = pe.getAsJsonObject();
-			JsonObject it = sub(items, String.valueOf(p.get("id").getAsInt()));
-			it.addProperty("n", p.get("name").getAsString());
-			bump(it, "q", p.get("qty").getAsLong());
-			bump(it, "v", p.get("value").getAsLong());
+			bump(into, "loots", 1);
+			bump(into, "value", value);
+			JsonObject bySource = sub(sub(into, "sources"), source);
+			bump(bySource, "loots", 1);
+			bump(bySource, "value", value);
+			JsonObject items = sub(into, "items");
+			for (JsonElement pe : priced)
+			{
+				JsonObject p = pe.getAsJsonObject();
+				JsonObject it = sub(items, String.valueOf(p.get("id").getAsInt()));
+				it.addProperty("n", p.get("name").getAsString());
+				bump(it, "q", p.get("qty").getAsLong());
+				bump(it, "v", p.get("value").getAsLong());
+			}
 		}
 	}
 
 	// one kill's floor, against today
 	private void rollLeft(long qty, long value, int kills, java.util.List<BagItem> perItem)
 	{
-		JsonObject day = dayRoll();
-		bump(day, "left", qty);
-		bump(day, "leftValue", value);
-		bump(day, "leftKills", kills);
-		JsonObject items = sub(day, "leftItems");
-		for (BagItem b : perItem)
+		for (JsonObject into : new JsonObject[]{dayRoll(), sessionRoll})
 		{
-			JsonObject it = sub(items, b.name);
-			bump(it, "q", b.qty);
-			bump(it, "v", b.value);
+			bump(into, "left", qty);
+			bump(into, "leftValue", value);
+			bump(into, "leftKills", kills);
+			JsonObject items = sub(into, "leftItems");
+			for (BagItem b : perItem)
+			{
+				JsonObject it = sub(items, b.name);
+				bump(it, "q", b.qty);
+				bump(it, "v", b.value);
+			}
 		}
 	}
 
@@ -591,6 +605,39 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				gather(d, "sources", sources, false);
 				gather(d, "leftItems", left, true);
 			}
+		}
+		rank(items, w.items);
+		rank(sources, w.sources);
+		rank(left, w.leftItems);
+		return w;
+	}
+
+	/**
+	 * What THIS sitting has taken and left, ranked, in the same shape the dated
+	 * roll answers a window with.
+	 *
+	 * <p>One entry folded through the same gather and rank the roll uses, so the
+	 * boards that read a window read a sitting without knowing the difference.
+	 * A sitting that has seen no drops answers with every figure zero and every
+	 * list empty, which is the true answer and not an absence of one.
+	 */
+	LootWindow sessionLootWindow()
+	{
+		LootWindow w = new LootWindow();
+		java.util.Map<String, long[]> items = new java.util.LinkedHashMap<>();
+		java.util.Map<String, long[]> sources = new java.util.LinkedHashMap<>();
+		java.util.Map<String, long[]> left = new java.util.LinkedHashMap<>();
+		synchronized (lock)
+		{
+			JsonObject d = sessionRoll;
+			w.loots = asLong(d.get("loots"));
+			w.value = asLong(d.get("value"));
+			w.left = asLong(d.get("left"));
+			w.leftValue = asLong(d.get("leftValue"));
+			w.leftKills = asLong(d.get("leftKills"));
+			gather(d, "items", items, true);
+			gather(d, "sources", sources, false);
+			gather(d, "leftItems", left, true);
 		}
 		rank(items, w.items);
 		rank(sources, w.sources);
