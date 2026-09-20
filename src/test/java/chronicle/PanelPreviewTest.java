@@ -217,7 +217,7 @@ public class PanelPreviewTest
 					List.class, long.class, long.class, long[].class);
 				ot.setAccessible(true);
 				List<LocalStore.BagItem> task = stub.onTaskLoot(Long.MIN_VALUE / 2,
-					Long.MAX_VALUE / 2);
+					Long.MAX_VALUE / 2, true);
 				if (!task.isEmpty())
 				{
 					long q = 0;
@@ -228,7 +228,7 @@ public class PanelPreviewTest
 						v += b.value;
 					}
 					javax.swing.JPanel tp = (javax.swing.JPanel) ot.invoke(panel, task, q, v,
-						stub.onTaskTally(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2));
+						stub.onTaskTally(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, true));
 					Object timg = pi.invoke(null, tp);
 					if (timg != null)
 					{
@@ -1384,16 +1384,17 @@ public class PanelPreviewTest
 		}
 
 		@Override
-		java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs)
+		java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, boolean includeOpen)
 		{
-			return store != null ? store.onTaskLoot(fromMs, toMs)
+			return store != null ? store.onTaskLoot(fromMs, toMs, includeOpen)
 				: new java.util.ArrayList<>();
 		}
 
 		@Override
-		java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task)
+		java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task,
+			boolean includeOpen)
 		{
-			return store != null ? store.onTaskLoot(fromMs, toMs, task)
+			return store != null ? store.onTaskLoot(fromMs, toMs, task, includeOpen)
 				: new java.util.ArrayList<>();
 		}
 
@@ -1410,15 +1411,16 @@ public class PanelPreviewTest
 		}
 
 		@Override
-		long[] onTaskTally(long fromMs, long toMs)
+		long[] onTaskTally(long fromMs, long toMs, boolean includeOpen)
 		{
-			return store != null ? store.onTaskTally(fromMs, toMs) : new long[]{0, 0, 0};
+			return store != null ? store.onTaskTally(fromMs, toMs, includeOpen)
+				: new long[]{0, 0, 0};
 		}
 
 		@Override
-		long[] onTaskTally(long fromMs, long toMs, String onlyTask)
+		long[] onTaskTally(long fromMs, long toMs, String onlyTask, boolean includeOpen)
 		{
-			return store != null ? store.onTaskTally(fromMs, toMs, onlyTask)
+			return store != null ? store.onTaskTally(fromMs, toMs, onlyTask, includeOpen)
 				: new long[]{0, 0, 0};
 		}
 

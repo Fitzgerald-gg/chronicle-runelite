@@ -726,7 +726,7 @@ public class ExampleExportTest
 			// must not be offered where the tasks paid none of that kind.
 			java.util.Set<String> taskKinds = new java.util.LinkedHashSet<>();
 			for (LocalStore.BagItem b : plugin.onTaskLoot(
-				Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, null))
+				Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, null, true))
 			{
 				String k = ItemKinds.kindOf(b.name);
 				taskKinds.add(k == null ? "Everything else" : k);

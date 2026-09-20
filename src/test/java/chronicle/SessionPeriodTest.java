@@ -476,4 +476,71 @@ public class SessionPeriodTest
 			+ " the client says the skill stands at: " + said,
 			gp.invoke(null, live[1]), said.get(at + 1));
 	}
+
+	/**
+	 * TRAP: the cards above the button are the WINDOW's tasks, and the button
+	 * counted the whole journey. A sitting holding two tasks offered to show
+	 * three hundred and ten more, and clicking it mounted a lifetime of cards
+	 * under a heading reading "This session". True at every narrowed period, not
+	 * only this one.
+	 */
+	@Test
+	public void theMoreButtonCountsTheWindowsTasksAndNotTheJourneys() throws Exception
+	{
+		String src = new String(java.nio.file.Files.readAllBytes(
+			java.nio.file.Paths.get("src/main/java/chronicle/ChroniclePanel.java")),
+			java.nio.charset.StandardCharsets.UTF_8);
+		int at = src.indexOf("moreRow(every - slayerShown");
+		assertTrue("the journey board no longer offers to show more", at > 0);
+		String around = src.substring(Math.max(0, at - 320), at);
+		assertTrue("the button is sized off j.tasks, which is the whole journey "
+			+ "however the period is set: " + around,
+			around.contains("shown.size() > slayerShown")
+				&& around.contains("every = shown.size()"));
+		assertFalse("and the lifetime list is still what it reads",
+			around.contains("j.tasks.size() > slayerShown"));
+	}
+
+	/**
+	 * The counted-things bands carry the day twice: the count is a delta between
+	 * two of the spine's lines, and the spine is written once a day, so under a
+	 * sitting both ends are today's; the gp beside it is off the roll, which
+	 * keeps one entry a day. A band of rows each saying the day twice under a
+	 * heading reading "This session" is worse than no band.
+	 */
+	@Test
+	public void theCountedThingsBandSaysItCannotAnswerASitting() throws Exception
+	{
+		period("Session");
+		began(20 * 60_000L);
+		final java.util.List<String> said = new java.util.ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = ChroniclePanel.class.getDeclaredMethod("addKinds",
+					javax.swing.JPanel.class, Map.class, Map.class, Map.class,
+					boolean.class, java.time.LocalDate.class, java.time.LocalDate.class,
+					String.class, String.class);
+				m.setAccessible(true);
+				javax.swing.JPanel into = new javax.swing.JPanel();
+				into.setLayout(new javax.swing.BoxLayout(into, javax.swing.BoxLayout.Y_AXIS));
+				java.util.Map<String, Long> kc = new java.util.HashMap<>();
+				kc.put("vorkath", 40L);
+				m.invoke(panel, into, kc, kc, kc, false,
+					java.time.LocalDate.now(), java.time.LocalDate.now(),
+					"boss", "monster");
+				collect(into, said);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		// note() wraps its sentence across labels, so match inside one line
+		String all = String.join(" | ", said);
+		assertTrue("the band drew the day's figures under the sitting: " + all,
+			all.contains("dated by day and"));
+		assertFalse("and it drew the rows anyway: " + all, all.contains("Vorkath"));
+	}
 }

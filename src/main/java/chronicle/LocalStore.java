@@ -1831,10 +1831,17 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 *
 	 * <p>On-task only by construction. The ledger's per-source totals cannot tell a
 	 * task kill from a stray one; the journey only ever holds the former.
+	 *
+	 * <p>A segment is one bucket carrying one stamp, and its contents can span
+	 * days, so a bounded window can only honestly claim the segments that CLOSED
+	 * inside it. An open one is stamped with its most recent kill and is dragged
+	 * whole into any window that catches a single kill of it, which put a task
+	 * handed out on Tuesday under a heading reading "This session". Unbounded, an
+	 * open task is simply part of the record and counts.
 	 */
-	java.util.List<BagItem> onTaskLoot(long fromMs, long toMs)
+	java.util.List<BagItem> onTaskLoot(long fromMs, long toMs, boolean includeOpen)
 	{
-		return onTaskLoot(fromMs, toMs, null);
+		return onTaskLoot(fromMs, toMs, null, includeOpen);
 	}
 
 	/**
@@ -2175,7 +2182,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * <p>By NAME rather than by segment: a reader asking what Nechryael have
 	 * paid means all eleven of them, not the one that closed on Tuesday.
 	 */
-	java.util.List<BagItem> onTaskLoot(long fromMs, long toMs, String onlyTask)
+	java.util.List<BagItem> onTaskLoot(long fromMs, long toMs, String onlyTask,
+		boolean includeOpen)
 	{
 		java.util.Map<String, long[]> summed = new java.util.LinkedHashMap<>();
 		java.util.Map<String, Integer> ids = new java.util.LinkedHashMap<>();
@@ -2197,6 +2205,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					continue;
 				}
 				JsonObject t = e.getAsJsonObject();
+				if (!includeOpen && isOpen(t))
+				{
+					continue;
+				}
 				long ms = (long) (asDouble(t.get("ts")) * 1000);
 				if (ms > 0 && (ms < fromMs || ms > toMs))
 				{
@@ -2272,12 +2284,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * <p>Narrowed by task name where one is given, so the figures belong to the
 	 * same bag the board is showing rather than to every task in the window.
 	 */
-	long[] onTaskTally(long fromMs, long toMs)
+	long[] onTaskTally(long fromMs, long toMs, boolean includeOpen)
 	{
-		return onTaskTally(fromMs, toMs, null);
+		return onTaskTally(fromMs, toMs, null, includeOpen);
 	}
 
-	long[] onTaskTally(long fromMs, long toMs, String onlyTask)
+	long[] onTaskTally(long fromMs, long toMs, String onlyTask, boolean includeOpen)
 	{
 		long kills = 0;
 		long superiors = 0;
@@ -2300,6 +2312,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					continue;
 				}
 				JsonObject t = e.getAsJsonObject();
+				if (!includeOpen && isOpen(t))
+				{
+					continue;
+				}
 				long ms = (long) (asDouble(t.get("ts")) * 1000);
 				if (ms > 0 && (ms < fromMs || ms > toMs))
 				{

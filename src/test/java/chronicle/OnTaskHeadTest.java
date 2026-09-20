@@ -165,12 +165,12 @@ public class OnTaskHeadTest
 			try
 			{
 				Method tally = ChroniclePlugin.class.getDeclaredMethod(
-					"onTaskTally", long.class, long.class, String.class);
+					"onTaskTally", long.class, long.class, String.class, boolean.class);
 				tally.setAccessible(true);
 				Field pf = ChroniclePanel.class.getDeclaredField("plugin");
 				pf.setAccessible(true);
 				long[] t = (long[]) tally.invoke(pf.get(p),
-					Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, "Abyssal demons");
+					Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, "Abyssal demons", true);
 				Method m = ChroniclePanel.class.getDeclaredMethod("kindsPicture",
 					List.class, long.class, long.class, long[].class);
 				m.setAccessible(true);
@@ -178,7 +178,7 @@ public class OnTaskHeadTest
 				sf.setAccessible(true);
 				ChroniclePlugin plug = (ChroniclePlugin) sf.get(p);
 				List<LocalStore.BagItem> bag = plug.onTaskLoot(
-					Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, "Abyssal demons");
+					Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, "Abyssal demons", true);
 				List<Component> flat = new ArrayList<>();
 				flatten((Component) m.invoke(p, bag, 1L, 1500000L, t), flat);
 				for (Component c : flat)

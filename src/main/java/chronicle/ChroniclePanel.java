@@ -3017,7 +3017,7 @@ class ChroniclePanel extends PluginPanel
 	private List<LocalStore.BagItem> onTaskBag()
 	{
 		long[] w = windowMs();
-		return plugin.onTaskLoot(w[0], w[1], null);
+		return plugin.onTaskLoot(w[0], w[1], null, wholeRecord());
 	}
 
 	/** Whether any of what the tasks paid is of this kind. */
@@ -3635,7 +3635,8 @@ class ChroniclePanel extends PluginPanel
 		// windowMs, not a second copy of it: this had its own pair of midnights
 		// and so reported the whole day's task loot under the sitting.
 		long[] ms = windowMs();
-		final List<LocalStore.BagItem> bag = plugin.onTaskLoot(ms[0], ms[1], lootTask);
+		final List<LocalStore.BagItem> bag = plugin.onTaskLoot(ms[0], ms[1], lootTask,
+			wholeRecord());
 		if (bag.isEmpty())
 		{
 			p.add(taskPicker());
@@ -3668,7 +3669,7 @@ class ChroniclePanel extends PluginPanel
 		// superiors this bag actually came off. It used to be every task in the
 		// window, which is why the figures had to be dropped entirely the
 		// moment a reader picked one.
-		final long[] tally = plugin.onTaskTally(ms[0], ms[1], lootTask);
+		final long[] tally = plugin.onTaskTally(ms[0], ms[1], lootTask, wholeRecord());
 		p.add(onTaskHead(qty, value, tally));
 		p.add(vgap(6));
 		p.add(taskPicker());
@@ -4397,9 +4398,12 @@ class ChroniclePanel extends PluginPanel
 			p.add(card);
 			p.add(vgap(4));
 		}
-		if (j.tasks.size() > slayerShown)
+		// shown, not j.tasks: the cards above are the window's tasks and the count
+		// was the whole journey's, so a sitting with two tasks in it offered to
+		// show three hundred more and then mounted a lifetime.
+		if (shown.size() > slayerShown)
 		{
-			final int every = j.tasks.size();
+			final int every = shown.size();
 			p.add(moreRow(every - slayerShown, () ->
 			{
 				slayerShown = every;
@@ -8048,6 +8052,20 @@ class ChroniclePanel extends PluginPanel
 		Map<String, Long> nowKc, boolean live, java.time.LocalDate from,
 		java.time.LocalDate to, String first, String second)
 	{
+		if (sessionPeriod())
+		{
+			// Both halves of every row are the day. The count is a delta between
+			// two of the spine's lines, and the spine is written once a day, so
+			// under a sitting both ends are today's; the gp beside it comes off
+			// the dated roll, which keeps one entry a day. Neither can be cut
+			// down to a sitting, and a band of rows that each say the day twice
+			// under a heading reading "This session" is worse than no band.
+			p.add(note("What you killed is dated by day and not by sitting, so "
+				+ "this cannot be narrowed to the one you are in. Any longer "
+				+ "period answers it."));
+			p.add(vgap(5));
+			return;
+		}
 		boolean whole = wholeRecord();
 		// read once a build: the journal is asked for these whole, and a new
 		// target mints its counter mid-session
@@ -10508,7 +10526,11 @@ class ChroniclePanel extends PluginPanel
 		if (!ground.isEmpty())
 		{
 			p.add(vgap(6));
-			p.add(group("WHAT IT PAID"));
+			// Named for what it is. These are the ledger's running per-source
+			// totals, which no period touches: the block was byte for byte the
+			// same under Lifetime and under a sitting, sat directly beneath a
+			// "Gained" row that IS the period, and read as the period's.
+			p.add(group("WHAT IT HAS EVER PAID"));
 			for (LocalStore.SourceRow r : ground)
 			{
 				JPanel line = row(r.name, gp(r.value) + " gp", accent());

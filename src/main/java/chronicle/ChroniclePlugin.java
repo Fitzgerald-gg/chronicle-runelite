@@ -1279,14 +1279,15 @@ public class ChroniclePlugin extends Plugin
 	}
 
 	/** Every item the slayer journey logged inside a window, ranked by value. */
-	java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs)
+	java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, boolean includeOpen)
 	{
-		return localStore.onTaskLoot(fromMs, toMs);
+		return localStore.onTaskLoot(fromMs, toMs, includeOpen);
 	}
 
-	java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task)
+	java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task,
+		boolean includeOpen)
 	{
-		return localStore.onTaskLoot(fromMs, toMs, task);
+		return localStore.onTaskLoot(fromMs, toMs, task, includeOpen);
 	}
 
 	java.util.List<LocalStore.BagItem> allLoot()
@@ -1301,14 +1302,14 @@ public class ChroniclePlugin extends Plugin
 	}
 
 	/** The kills behind that loot, and how many of them were a superior. */
-	long[] onTaskTally(long fromMs, long toMs)
+	long[] onTaskTally(long fromMs, long toMs, boolean includeOpen)
 	{
-		return localStore.onTaskTally(fromMs, toMs);
+		return localStore.onTaskTally(fromMs, toMs, includeOpen);
 	}
 
-	long[] onTaskTally(long fromMs, long toMs, String onlyTask)
+	long[] onTaskTally(long fromMs, long toMs, String onlyTask, boolean includeOpen)
 	{
-		return localStore.onTaskTally(fromMs, toMs, onlyTask);
+		return localStore.onTaskTally(fromMs, toMs, onlyTask, includeOpen);
 	}
 
 	java.util.Map<String, Long> journalFacts()
