@@ -8549,9 +8549,9 @@ class ChroniclePanel extends PluginPanel
 			}
 			if (r == null)
 			{
-				// Dimmed, like an unheld log slot and an unfinished diary tier. The
-				// dash alone left a tier nobody has ever opened reading exactly as
-				// bright as one they have.
+				// Dimmed, like an unfinished diary tier and an undone combat task.
+				// The dash alone left a tier nobody has ever opened reading exactly
+				// as bright as one they have.
 				p.add(row(tier, "-", ColorScheme.LIGHT_GRAY_COLOR.darker(), true));
 				continue;
 			}
@@ -8625,12 +8625,23 @@ class ChroniclePanel extends PluginPanel
 		head.add(row("Not started", fmt(not.size()), null));
 		p.add(head);
 		p.add(vgap(6));
-		addNames(p, "IN PROGRESS", going);
-		addNames(p, "NOT STARTED", not);
-		addNames(p, "COMPLETE", done);
+		// Done first, then started, then the rest. The old order led with the
+		// longest list a player has NOT done, so the page opened on a wall of
+		// quests belonging to somebody else's account.
+		addNames(p, "COMPLETE", done, true);
+		addNames(p, "IN PROGRESS", going, true);
+		addNames(p, "NOT STARTED", not, false);
 	}
 
-	private void addNames(JPanel p, String heading, List<String> names)
+	/**
+	 * A named group of quests, marked the way every other board marks presence.
+	 *
+	 * <p>The heading used to be the only thing that said which state these were
+	 * in. There are over a hundred and fifty quests, with no cap and no fold, so
+	 * the heading scrolls off and leaves a wall of names that no longer say
+	 * anything about themselves.
+	 */
+	private void addNames(JPanel p, String heading, List<String> names, boolean held)
 	{
 		if (names.isEmpty())
 		{
@@ -8640,7 +8651,7 @@ class ChroniclePanel extends PluginPanel
 		p.add(group(heading + " (" + fmt(names.size()) + ")"));
 		for (String n : names)
 		{
-			p.add(row(n, "", null));
+			p.add(row(n, "", held ? null : ColorScheme.LIGHT_GRAY_COLOR.darker(), !held));
 		}
 		p.add(vgap(4));
 	}
@@ -8722,18 +8733,31 @@ class ChroniclePanel extends PluginPanel
 	/** A tier's tasks, as the markup a tooltip takes. Capped so it stays readable. */
 	private static String taskTip(String title, com.google.gson.JsonArray tasks)
 	{
+		// Each task now carries what it needs under it, so the same popup holds
+		// half as many of them before it runs off the panel.
+		final int CAP = 8;
 		StringBuilder sb = new StringBuilder("<html><body style='padding:2px'>");
 		sb.append("<div style='color:#8f8f8f'>").append(title).append("</div>");
-		for (int i = 0; i < tasks.size() && i < 14; i++)
+		for (int i = 0; i < tasks.size() && i < CAP; i++)
 		{
 			JsonObject t = tasks.get(i).getAsJsonObject();
 			String task = t.get("task").getAsString();
 			sb.append("<div>").append(task.length() > 78 ? task.substring(0, 78) + "..." : task)
 				.append("</div>");
+			// What the task NEEDS, which is the half a reader is actually weighing
+			// when they hover a tier they have not done. The bundle carries it for
+			// every one of the 492 tasks and the search row already shows it.
+			String needs = t.has("requirements") ? t.get("requirements").getAsString() : "";
+			if (!needs.isEmpty())
+			{
+				sb.append("<div style='color:#8f8f8f'>&nbsp;&nbsp;")
+					.append(needs.length() > 70 ? needs.substring(0, 70) + "..." : needs)
+					.append("</div>");
+			}
 		}
-		if (tasks.size() > 14)
+		if (tasks.size() > CAP)
 		{
-			sb.append("<div style='color:#8f8f8f'>and ").append(tasks.size() - 14)
+			sb.append("<div style='color:#8f8f8f'>and ").append(tasks.size() - CAP)
 				.append(" more</div>");
 		}
 		return sb.append("</body></html>").toString();
@@ -8800,10 +8824,12 @@ class ChroniclePanel extends PluginPanel
 			for (JsonObject task : e.getValue())
 			{
 				boolean has = known && done.contains(task.get("id").getAsInt());
-				// Brightness carries it, the way a held collection log slot reads
-				// bright and an absent one reads dim. A "done" in the right hand
-				// column would say it 97 times over and cost the board the one
-				// thing that column is for, which is where the task is done.
+				// Brightness carries it, as it does on the clue, diary and quest
+				// boards. A "done" in the right hand column would say it 97 times
+				// over and cost the board the one thing that column is for, which
+				// is where the task is done. (The collection log is the exception
+				// to the rule, not its origin: it paints a held slot green and an
+				// absent one red, after the log in the game.)
 				JPanel line = row(task.get("name").getAsString(),
 					task.get("monster").getAsString(),
 					known && !has ? ColorScheme.LIGHT_GRAY_COLOR.darker() : null,
@@ -8903,8 +8929,14 @@ class ChroniclePanel extends PluginPanel
 		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		cell.setBorder(BorderFactory.createEmptyBorder(3, 4, 3, 4));
 		final String craft = StatRegistry.prettify(sk.name().toLowerCase(Locale.ROOT));
-		cell.setToolTipText(craft
-			+ (gained != null ? ", +" + gp(gained) + " this period" : ""));
+		// The same hover card the boss and activity tiles draw. This was the last
+		// tile on the sheet answering in a sentence while the two grids under it
+		// answered in a titled block.
+		cell.setToolTipText(gained != null
+			? tip(craft, new String[]{"Level", wholeRecord() ? "Experience"
+				: "Gained in " + window().label},
+				new String[]{fmt(level), "+" + gp(gained)})
+			: tip(craft, new String[]{"Level"}, new String[]{fmt(level)}));
 		// The cell has always carried a tooltip, which is a mouse listener; this
 		// is what makes the hand cursor honest. Its counters had no other way in.
 		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));

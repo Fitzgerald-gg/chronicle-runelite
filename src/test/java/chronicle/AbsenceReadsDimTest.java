@@ -22,11 +22,15 @@ import static org.junit.Assert.assertNotEquals;
 /**
  * One rule across four boards: brightness says whether you have the thing.
  *
- * <p>A held collection log slot reads bright and an absent one reads dim, and
- * the combat, diary and clue boards were brought onto that rule rather than
- * each answering in a word of its own. The rule is invisible in a structural
- * test, since a dim row and a bright row have the same shape, so a board can
- * slide off it without anything failing. That is what these hold.
+ * <p>Held reads bright, absent reads dim, across the clue, diary, quest and
+ * combat boards. The rule is invisible in a structural test, since a dim row and
+ * a bright row have the same shape, so a board can slide off it without anything
+ * failing. That is what these hold.
+ *
+ * <p>The collection log is deliberately NOT on this rule and is not asserted
+ * here: it paints a held slot green and an absent one red, after the log in the
+ * game. This javadoc used to cite it as the rule's origin, which was simply
+ * untrue - it was the one board that had never been on it.
  */
 public class AbsenceReadsDimTest
 {
@@ -47,7 +51,10 @@ public class AbsenceReadsDimTest
 		+ "\"Clue Scroll (Hard)\":{\"kc\":3,\"loots\":3,\"value\":900,"
 		+ "\"items\":{\"1\":{\"id\":1,\"name\":\"Coins\",\"qty\":900,\"value\":900}}}},"
 		+ "\"collection_log\":{\"finished\":0,\"available\":1717},"
-		+ "\"achievements\":{\"diaries\":{\"ardougne\":{\"easy\":true,\"medium\":false,"
+		+ "\"achievements\":{"
+		+ "\"quests\":{\"Cook's Assistant\":\"FINISHED\","
+		+ "\"Dragon Slayer II\":\"NOT_STARTED\"},"
+		+ "\"diaries\":{\"ardougne\":{\"easy\":true,\"medium\":false,"
 		+ "\"hard\":false,\"elite\":false}},"
 		+ "\"combat\":{\"points\":10,\"tasksDone\":[0]}},"
 		+ "\"trackers\":{},\"skills\":{},\"feed\":[]}";
@@ -158,5 +165,20 @@ public class AbsenceReadsDimTest
 		// without the guard: no diaries block is not forty eight unfinished tiers.
 		assertNotEquals("an unknown diary board dimmed itself into a wrong answer",
 			DIM, nameColour(p, "buildDiaries", "Easy"));
+	}
+
+	/**
+	 * The quest board marked state only in its group heading. With over a hundred
+	 * and fifty quests, no cap and no fold, that heading scrolls off and leaves a
+	 * wall of names saying nothing about themselves.
+	 */
+	@Test
+	public void anUnstartedQuestReadsDimAndAFinishedOneDoesNot() throws Exception
+	{
+		ChroniclePanel p = panel(SOME, "chronicle-dim-quests");
+		assertNotEquals("the finished quest went dim with the rest",
+			DIM, nameColour(p, "buildQuests", "Cook's Assistant"));
+		assertEquals("an unstarted quest should be dim",
+			DIM, nameColour(p, "buildQuests", "Dragon Slayer II"));
 	}
 }
