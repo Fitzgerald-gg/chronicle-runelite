@@ -330,6 +330,38 @@ public class ChroniclePlugin extends Plugin
 		}
 	}
 
+	/**
+	 * Switch back on whichever of the two plugins we capture through is off.
+	 *
+	 * <p>The same pair of calls RuneLite's own plugin list makes when its toggle
+	 * is pressed; startPlugin arranges its own threading. Re-checked at once so
+	 * the band that offered the click comes down on the same rebuild.
+	 */
+	void turnOnMissingCapture()
+	{
+		for (Class<? extends Plugin> type : java.util.Arrays.asList(
+			SlayerPlugin.class, LootTrackerPlugin.class))
+		{
+			for (Plugin p : pluginManager.getPlugins())
+			{
+				if (!type.isInstance(p) || pluginManager.isPluginEnabled(p))
+				{
+					continue;
+				}
+				try
+				{
+					pluginManager.setPluginEnabled(p, true);
+					pluginManager.startPlugin(p);
+				}
+				catch (net.runelite.client.plugins.PluginInstantiationException e)
+				{
+					log.warn("could not start {}", type.getSimpleName(), e);
+				}
+			}
+		}
+		checkDependencies();
+	}
+
 	private boolean isOff(Class<? extends Plugin> type)
 	{
 		try
@@ -1898,6 +1930,18 @@ public class ChroniclePlugin extends Plugin
 		// stay as they are.
 		final Map<String, Long> counters = localStore.spineCounters();
 		final Map<String, Long> kcs = killCounts();
+		// Said in the log at the one moment a sitting can straddle a day. A
+		// sitting crossing midnight was reported to lose its gains on the sheet
+		// until the next logout, and nothing on this path or the panel's could
+		// be made to do it; if it happens again, this line and the next tick's
+		// sheet are the two things to read.
+		long sittingXp = 0;
+		for (chronicle.counters.ExperienceStatTracker.SkillGain g : sessionSkillXp())
+		{
+			sittingXp += g.xp;
+		}
+		log.debug("day rolled over: sitting began {} min ago, {} skills / {} xp counted so far",
+			sessionElapsedMinutes(), sessionSkillXp().size(), sittingXp);
 		executor.submit(() ->
 		{
 			historyLog.append(localDir(), rsn, skills, counters, kcs);

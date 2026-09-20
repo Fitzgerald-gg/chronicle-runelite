@@ -309,13 +309,18 @@ public class SessionPeriodTest
 		period("Session");
 		began(90 * 60_000L);
 		long[] ms = windowMs();
-		long midnight = java.time.LocalDate.now()
-			.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
 		long now = System.currentTimeMillis();
-		assertTrue("the sitting was rounded back to midnight, which is Day's answer"
-			+ " and not the sitting's", ms[0] > midnight || midnight == now);
+		// Not "after midnight": a suite run at half past midnight has a sitting
+		// that honestly began yesterday evening. The rounding this guards
+		// against would put the start on a day boundary, and a start ninety
+		// minutes ago is on one only by coincidence.
 		assertTrue("the sitting did not begin when the client did",
 			Math.abs(ms[0] - (now - 90 * 60_000L)) < 5_000L);
+		long dayStart = java.time.Instant.ofEpochMilli(ms[0])
+			.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+			.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+		assertTrue("the sitting was rounded back to a midnight, which is Day's answer"
+			+ " and not the sitting's", ms[0] != dayStart);
 		assertTrue("the sitting runs past now", ms[1] >= now - 5_000L);
 	}
 

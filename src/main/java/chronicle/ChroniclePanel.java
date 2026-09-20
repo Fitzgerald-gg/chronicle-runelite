@@ -194,7 +194,21 @@ class ChroniclePanel extends PluginPanel
 
 	// Whether the journal is reaching disk. Nothing else in the panel shows it:
 	// the views are served from memory and look the same either way.
-	private final JLabel heartbeat = new JLabel();
+	/**
+	 * The one row of the chrome that reports rather than acts, and that only
+	 * exists while it has something to report.
+	 *
+	 * <p>It used to be a green pip reading "logging", on every board, always,
+	 * and it carried no information: the plugin is always logging while the
+	 * panel is open, so the pip said "I exist". The only content it ever had was
+	 * the absence of gold or red - and absence is expressed by an absent row.
+	 * So it is hidden while nothing is wrong, and when something is it becomes
+	 * a band: a tinted full-width strip with the words on it, amber for a plugin
+	 * we capture through being switched off and red for the journal not saving.
+	 * The amber one fixes itself on click.
+	 */
+	private final JPanel band = new JPanel(new BorderLayout());
+	private final JLabel bandText = new JLabel();
 	// the tab opens on the whole record; a window is a narrowing of it
 	private String histGranularity = "Lifetime";
 	// The period's END date (inclusive); the stepper moves it by one granule.
@@ -415,19 +429,13 @@ class ChroniclePanel extends PluginPanel
 		javax.swing.ToolTipManager.sharedInstance().setInitialDelay(220);
 		javax.swing.ToolTipManager.sharedInstance().setDismissDelay(20_000);
 
-		JPanel manageRow = new JPanel();
-		manageRow.setLayout(new BoxLayout(manageRow, BoxLayout.X_AXIS));
-		manageRow.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		// Match the siblings, or BoxLayout centres this row and shunts it half a
-		// panel right.
-		manageRow.setAlignmentX(Component.CENTER_ALIGNMENT);
-		manageRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 16));
-		// Import and the manual push moved into the plugin settings; what is left
-		// of this row is the heartbeat, which is the one thing here that reports
-		// rather than acts.
-		manageRow.add(javax.swing.Box.createHorizontalGlue());
-		manageRow.add(heartbeat);
-		north.add(manageRow);
+		band.setAlignmentX(Component.CENTER_ALIGNMENT);
+		band.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
+		band.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
+		bandText.setFont(FontManager.getRunescapeSmallFont());
+		band.add(bandText, BorderLayout.CENTER);
+		band.setVisible(false);
+		north.add(band);
 
 		// Prime the History tab's reads off the EDT, before anyone opens it.
 		gatherHistory();
@@ -2310,18 +2318,8 @@ class ChroniclePanel extends PluginPanel
 		// and stops everything; a plugin we lean on being switched off is gold and
 		// loses one kind of capture, which the reader can fix in one click and
 		// previously had no way to learn about at all.
-		String stalled = plugin.journalWarning();
-		String capture = plugin.captureWarning();
-		Color pulse = stalled != null ? ColorScheme.PROGRESS_ERROR_COLOR
-			: capture != null ? accent() : ACCENT_SESSION;
-		heartbeat.setText(stalled != null ? "not saving"
-			: capture != null ? capture : "logging");
-		heartbeat.setToolTipText(stalled != null ? stalled
-			: capture != null ? plugin.captureWarningWhy() : null);
-		heartbeat.setIcon(dot(pulse));
-		heartbeat.setIconTextGap(4);
-		heartbeat.setForeground(pulse);
-		heartbeat.setFont(FontManager.getRunescapeSmallFont());
+		paintBand(plugin.journalWarning(), plugin.captureWarning(),
+			plugin.captureWarningWhy());
 		// NOT removeAll: the scroll pane is hung once and kept. Only the strip
 		// above it is rebuilt, which is why it is removed by name.
 		if (aboveBoard != null)
@@ -2495,34 +2493,68 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	// A small filled circle, used as the heartbeat pip.
-	private static javax.swing.Icon dot(Color c)
+	// Whether a press on the band can put the thing right. Only the amber
+	// state can: a plugin can be switched back on from here, a full disk cannot
+	// be emptied from here.
+	private boolean bandFixes;
+
+	/**
+	 * Show the band, or hide it, for what is wrong.
+	 *
+	 * <p>Worst first. A disk that will not take the journal is red and stops
+	 * everything; a plugin we capture through being switched off is amber and
+	 * loses one kind of capture, which the reader can fix with the same click
+	 * that tells them about it.
+	 */
+	private void paintBand(String stalled, String capture, String captureWhy)
 	{
-		return new javax.swing.Icon()
+		if (stalled == null && capture == null)
 		{
-			@Override
-			public void paintIcon(Component host, java.awt.Graphics g, int x, int y)
+			band.setVisible(false);
+			bandFixes = false;
+			return;
+		}
+		boolean red = stalled != null;
+		Color ink = red ? ColorScheme.PROGRESS_ERROR_COLOR : accent();
+		bandFixes = !red;
+		// The press is hung only while it can do something, and taken down when
+		// it cannot: a red band with a listener and no hand cursor is a control
+		// that lies about itself twice. Tooltip and click both on the band and
+		// neither on the label - a tooltip registers a mouse listener, and a
+		// label wearing one swallows the click meant for the row it sits in.
+		for (java.awt.event.MouseListener l : band.getMouseListeners())
+		{
+			band.removeMouseListener(l);
+		}
+		if (bandFixes)
+		{
+			band.addMouseListener(clicker(() ->
 			{
-				java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
-				g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
-					java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-				g2.setColor(c);
-				g2.fillOval(x, y, 6, 6);
-				g2.dispose();
-			}
+				plugin.turnOnMissingCapture();
+				update();
+			}));
+		}
+		bandText.setText(red ? "Not saving the journal"
+			: capture + "  \u00b7  click to turn it on");
+		bandText.setForeground(ink);
+		band.setBackground(wash(ink));
+		band.setOpaque(true);
+		band.setToolTipText(red ? stalled : captureWhy);
+		band.setCursor(bandFixes
+			? java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
+			: java.awt.Cursor.getDefaultCursor());
+		band.setVisible(true);
+	}
 
-			@Override
-			public int getIconWidth()
-			{
-				return 6;
-			}
-
-			@Override
-			public int getIconHeight()
-			{
-				return 6;
-			}
-		};
+	/** A colour laid thinly over the panel's ground: the band's tint. */
+	private static Color wash(Color c)
+	{
+		Color g = ColorScheme.DARK_GRAY_COLOR;
+		double a = 0.22;
+		return new Color(
+			(int) Math.round(g.getRed() + (c.getRed() - g.getRed()) * a),
+			(int) Math.round(g.getGreen() + (c.getGreen() - g.getGreen()) * a),
+			(int) Math.round(g.getBlue() + (c.getBlue() - g.getBlue()) * a));
 	}
 
 	// how much of this session's damage the three styles account for; nothing to

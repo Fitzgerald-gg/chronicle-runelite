@@ -729,7 +729,12 @@ public class PanelPreviewTest
 		// feed: a few days of milestones
 		long now = System.currentTimeMillis();
 		s.feed.add(feedEntry(now - 3_600_000L, "PET", "petName", "Abyssal orphan"));
-		s.feed.add(feedEntry(now - 7_200_000L, "COLLECTION", "itemName", "Abyssal head"));
+		// Two hours ago, but never before the day began: tests read this slot as
+		// "logged today", and a suite run after 02:00 in the morning would put it
+		// on yesterday and fail for the time on the clock.
+		s.feed.add(feedEntry(Math.max(now - 7_200_000L, java.time.LocalDate.now()
+			.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+			+ 60_000L), "COLLECTION", "itemName", "Abyssal head"));
 		s.feed.add(feedEntry(now - 90_000_000L, "QUEST", "questName", "Dragon Slayer II"));
 		s.feed.add(feedEntry(now - 95_000_000L, "DIARY", "area", "Karamja"));
 		s.feed.add(feedEntry(now - 180_000_000L, "COMBAT_ACHIEVEMENT", "task", "Perfect Zulrah"));
@@ -1334,6 +1339,10 @@ public class PanelPreviewTest
 		long[] sessionUntaken = {0, 0};
 		int sessionUntakenKills;
 		LocalStore.LootWindow sessionWindow;
+		String journalWarning;
+		String captureWarning;
+		String captureWarningWhy;
+		int fixesAsked;
 		List<LocalStore.SourceRow> sources = new ArrayList<>();
 		Map<String, List<LocalStore.BagItem>> bags = new LinkedHashMap<>();
 		List<LocalStore.UntakenRow> untaken = new ArrayList<>();
@@ -1522,6 +1531,26 @@ public class PanelPreviewTest
 		long sessionLootValue()
 		{
 			return sessionLootValue;
+		}
+
+		@Override
+		String captureWarning()
+		{
+			return captureWarning;
+		}
+
+		@Override
+		String captureWarningWhy()
+		{
+			return captureWarningWhy;
+		}
+
+		@Override
+		void turnOnMissingCapture()
+		{
+			fixesAsked++;
+			captureWarning = null;
+			captureWarningWhy = null;
 		}
 
 		@Override
@@ -1728,7 +1757,7 @@ public class PanelPreviewTest
 		@Override
 		String journalWarning()
 		{
-			return null;   // fixture data, so there's no file to warn about
+			return journalWarning;
 		}
 
 		@Override
