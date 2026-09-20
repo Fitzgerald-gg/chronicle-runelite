@@ -1865,7 +1865,12 @@ class ChroniclePanel extends PluginPanel
 			// Rebuilding replaces the component it was raised from, which closes
 			// it under the reader's cursor mid-choice. The record will still have
 			// moved when they have chosen, and choosing rebuilds anyway.
-			if (popupShowing())
+			//
+			// Or the reader has hold of the scroll bar. rebuild() throws the whole
+			// scroll pane away and hangs a fresh one, so a redraw landing mid-drag
+			// takes the thumb out from under the mouse. Both are owed and paid by
+			// the timer, which is what that timer is now mostly for.
+			if (popupShowing() || scrollHeld())
 			{
 				staleWhileHidden = true;
 				return;
@@ -1885,6 +1890,13 @@ class ChroniclePanel extends PluginPanel
 				keepScroll = false;
 			}
 		});
+	}
+
+	/** Whether the reader has hold of the scroll bar this instant. */
+	private boolean scrollHeld()
+	{
+		JScrollPane pane = paneIn(display);
+		return pane != null && pane.getVerticalScrollBar().getValueIsAdjusting();
 	}
 
 	/** Whether any popup menu this panel raised is on screen right now. */

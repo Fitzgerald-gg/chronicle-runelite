@@ -100,6 +100,7 @@ tasks.named('test') {
 		'chronicle.exampleStates',    // how many states the crawl walks
 		'chronicle.bench',            // RebuildBenchTest prints timings
 		'chronicle.benchExpanded',    // ... with every capped list opened
+		'chronicle.asName',           // ... under a name that is not the account's
 	].each { key ->
 		if (System.getProperty(key)) {
 			systemProperty key, System.getProperty(key)

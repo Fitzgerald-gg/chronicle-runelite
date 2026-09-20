@@ -6,7 +6,9 @@ Everything is kept on your own computer, as plain JSON under `.runelite/chronicl
 
 ## Using Chronicle
 
-Chronicle is a side panel with four tabs. The row above them sets the period every board but Now reads, from the sitting you are in out to lifetime, and the search box underneath searches the whole record at once.
+Chronicle is a side panel with four tabs: Record, Hiscores, Loot and Trackers. The row above them sets the period every board reads, from the sitting you are in out to lifetime, and the search box underneath searches the whole record at once.
+
+Every board is live. A drop, a level, a kill or a clue counts towards what is on screen the moment it happens, on whichever board you are looking at, without opening anything or switching away and back.
 
 ### Record
 
@@ -22,39 +24,23 @@ Chronicle is a side panel with four tabs. The row above them sets the period eve
 
 **Ledger** is a count of the trackers that are neither kills, skills nor combat, over two boards. Ledger & Roads is the purse, the roads, teleports and a long tail of odds and ends. Living is what you ate and drank, and what it cost.
 
-### PvM
+### Hiscores
 
-<p align="left">
-  <img src="docs/img/pvm-loot.png" alt="PvM: Loot">
-  <img src="docs/img/pvm-slayer.png" alt="PvM: Slayer">
-</p>
+One sheet, in the order the game's own hiscores panel puts it: your skills, then the activities, then the bosses. A skill's cell shows its level and what the period moved it, and opens that skill's own counters, such as logs chopped by tree or runes crafted by type. A boss cell shows your kill count and opens a card under its own row.
 
-**Kills** is the boss roster with your kill count against each.
+The activity tiles are the way in to the rest of the account. Clues opens the tiers and what each one paid. Quests, Achievement diaries and Combat achievements open their own boards, complete with what each task asks of you, so you can look up a diary entry or a combat achievement without leaving the game. Collections opens the whole collection log.
+
+The collection log is the one the game shows, split across the same five tabs, under your completion figure, with the slots held and the kill count where the log has given one. Each page can be clicked to show the drops inside. Opening the log in game records every page at once, not just the tab you clicked.
+
+### Loot
 
 **Loot** is every source and every item. Read it as received or as left behind, by source or by kind of item, with what each is worth and what it averages per drop. Personal bests sit on the sources that have one, and read by kind the whole board can be narrowed to what the slayer tasks paid.
 
 **Slayer** keeps the current task on screen over three boards: the task-by-task journey with what each one paid and how many kills gave nothing, the game's own count per monster, and the drops the tasks produced.
 
-**Combat** is a count of the trackers relating to combat: damage dealt, deaths, and your highest hit.
+### Trackers
 
-### Skilling
-
-<p align="left">
-  <img src="docs/img/skilling-skills.png" alt="Skilling: Skills">
-  <img src="docs/img/skilling-drill.png" alt="Skilling: a skill opened">
-</p>
-
-**Skills** shows the level and the experience each skill moved over the period as well as a summary of time played, sessions, experience and 99s reached. Opening a skill's cell will show that skill's own counters, such as logs chopped by tree or runes crafted by type.
-
-**Activities** is the same count for minigames, clue scrolls, and the skilling grounds and creatures the log counts. The skilling bosses are counted with the rest on Kills.
-
-### Collection log
-
-<p align="left">
-  <img src="docs/img/collection-log.png" alt="The collection log">
-</p>
-
-In the collection log tab you can see the whole log split across the five tabs the in-game one presents, under your completion figure, with the slots held and the kill count where the log has given you one. Each line can be clicked on to show the drops inside. Opening the log in game records every page at once, not just the tab you clicked.
+Every counter the record keeps, in one place, filed by family. Combat is damage dealt, deaths and your highest hit. Skilling is what each skill has actually done. Offerings and the ledger hold the rest.
 
 ### Search
 
@@ -62,7 +48,7 @@ In the collection log tab you can see the whole log split across the five tabs t
   <img src="docs/img/search.png" alt="Searching the record">
 </p>
 
-The box searches the record as you type: drops, collection log slots, journal lines, counters and kinds of item. Enter opens what the query names, or else the board the first results came from.
+The box searches the record as you type: drops, collection log slots, journal lines, counters, kinds of item, and the combat achievements and diary entries themselves, so you can find out what one asks for before you have done it. Enter opens what the query names, or else the board the first results came from.
 
 ## Dependencies
 

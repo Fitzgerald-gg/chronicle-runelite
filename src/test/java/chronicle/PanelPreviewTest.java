@@ -1129,13 +1129,19 @@ public class PanelPreviewTest
 			return null;
 		}
 		String rsn = journalRsn(journal);
+		// The name the panel PRINTS, which is not the name it loads by. Renders
+		// taken for the plugin's own documentation go out to the Plugin Hub, and
+		// the one line in this panel that carries an account name is the
+		// journal's front card. -Dchronicle.asName replaces it there and nowhere
+		// else, so the record shown is real and the name over it is not.
+		String shown = System.getProperty("chronicle.asName");
 		ItemManager im = mockItems();
 		LocalStore store = new LocalStore(im, new Gson());
 		store.load(dir, rsn);
 
 		StubPlugin s = new StubPlugin(im);
 		s.spriteManager = mockSprites();
-		s.rsn = rsn;
+		s.rsn = shown != null && !shown.isEmpty() ? shown : rsn;
 		s.sources = store.dropSources();
 		s.untaken = store.untakenSources();
 		s.untakenItems = store.untakenItems();
