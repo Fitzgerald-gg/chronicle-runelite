@@ -131,7 +131,7 @@ public class ExampleExportTest
 	private static Map<String, String> notState()
 	{
 		Map<String, String> m = new LinkedHashMap<>();
-		for (String n : new String[]{"movedKcs", "rolledKcs", "rollUsed",
+		for (String n : new String[]{"movedKcs", "rolledKcs", "rollUsed", "kcByKind",
 			"grindsCache", "journeyCache", "ledgerNames", "consumVals",
 			"resourcesDropped", "buildSources", "buildClog", "buildSpan",
 			"spanAsked", "historySpine", "historyFeed", "historyJourney",

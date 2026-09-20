@@ -352,6 +352,16 @@ class ChroniclePanel extends PluginPanel
 			// reads as the scroll itself lagging. Only the sitting refreshes, and
 			// showingSitting is the one place that knows what the sitting is; this
 			// used to keep its own copy of that list and fell behind it twice.
+			// A draw owed and never paid: the record moved while a menu was open
+			// over the board, and the menu closing is not an event anything here
+			// listens for. Paid on the next tick of this timer instead.
+			if (staleWhileHidden && everShown && getWrappedPanel().isShowing()
+				&& !popupShowing())
+			{
+				staleWhileHidden = false;
+				update();
+				return;
+			}
 			if (showingSitting())
 			{
 				// Same view, same content: the reader stays where they were reading.
@@ -740,6 +750,29 @@ class ChroniclePanel extends PluginPanel
 	 * Either can be the fresher, so the larger wins. The page counter answers
 	 * only where neither of them has anything to say.
 	 */
+	// Per build: the best kill count known for each KIND, from the chat lines and
+	// the ledger's own sources. Cleared with the other per-build memos.
+	private Map<String, Long> kcByKind;
+
+	private Map<String, Long> kcByKind()
+	{
+		if (kcByKind != null)
+		{
+			return kcByKind;
+		}
+		Map<String, Long> out = new LinkedHashMap<>();
+		for (Map.Entry<String, Long> e : plugin.killCounts().entrySet())
+		{
+			out.merge(LocalStore.chatKind(e.getKey()), e.getValue(), Math::max);
+		}
+		for (LocalStore.SourceRow r : sources())
+		{
+			out.merge(LocalStore.kindOf(r.name), (long) r.kc, Math::max);
+		}
+		kcByKind = out;
+		return out;
+	}
+
 	private long bossKills(String name)
 	{
 		JsonObject cl = clogNow();
@@ -750,19 +783,15 @@ class ChroniclePanel extends PluginPanel
 		// where the Kill Log above only moves when a player goes and looks; a
 		// board consulting the log alone could fall past both and land on the
 		// page counter its own comment below calls a lie.
-		for (Map.Entry<String, Long> e : plugin.killCounts().entrySet())
+		//
+		// Both sources are indexed by kind once per build rather than walked per
+		// boss. Walked, this was the roster times the ledger - seventy one bosses
+		// against a hundred and eighty sources, with a string normalised on every
+		// pair - and it was most of the thirty seven milliseconds this board took.
+		Long byKind = kcByKind().get(kind);
+		if (byKind != null)
 		{
-			if (LocalStore.chatKind(e.getKey()).equals(kind))
-			{
-				best = Math.max(best, e.getValue());
-			}
-		}
-		for (LocalStore.SourceRow r : sources())
-		{
-			if (LocalStore.kindOf(r.name).equals(kind))
-			{
-				best = Math.max(best, r.kc);
-			}
+			best = Math.max(best, byKind);
 		}
 		if (best > 0)
 		{
@@ -1766,6 +1795,15 @@ class ChroniclePanel extends PluginPanel
 				staleWhileHidden = true;
 				return;
 			}
+			// A menu is open over the board: the period picker, the task picker.
+			// Rebuilding replaces the component it was raised from, which closes
+			// it under the reader's cursor mid-choice. The record will still have
+			// moved when they have chosen, and choosing rebuilds anyway.
+			if (popupShowing())
+			{
+				staleWhileHidden = true;
+				return;
+			}
 			// The record changing under a reader who did not ask to go anywhere: a
 			// push landing, the status line moving, the history read arriving. Only
 			// navigation starts at the top; returning a reader to the first line of
@@ -1781,6 +1819,14 @@ class ChroniclePanel extends PluginPanel
 				keepScroll = false;
 			}
 		});
+	}
+
+	/** Whether any popup menu this panel raised is on screen right now. */
+	private static boolean popupShowing()
+	{
+		javax.swing.MenuElement[] path = javax.swing.MenuSelectionManager
+			.defaultManager().getSelectedPath();
+		return path != null && path.length > 0;
 	}
 
 	/**
@@ -1850,6 +1896,7 @@ class ChroniclePanel extends PluginPanel
 		// standing it carried one period's dropped figure onto another period's
 		// gathered row, and stepping the period never moved it.
 		resourcesDropped = 0;
+		kcByKind = null;
 		// The labels of the build just discarded are nobody's business now. Left to
 		// pile up, an icon that never lands would hold every label the panel ever
 		// drew, which is the same unbounded queue that made the trackers page lag.

@@ -98,6 +98,8 @@ tasks.named('test') {
 		'chronicle.exampleItemNames', // ... and the wiki's id -> name mapping
 		'chronicle.exampleSprites',   // ... and the game's own sprites, dumped from the cache
 		'chronicle.exampleStates',    // how many states the crawl walks
+		'chronicle.bench',            // RebuildBenchTest prints timings
+		'chronicle.benchExpanded',    // ... with every capped list opened
 	].each { key ->
 		if (System.getProperty(key)) {
 			systemProperty key, System.getProperty(key)

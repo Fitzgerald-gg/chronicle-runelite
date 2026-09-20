@@ -39,9 +39,22 @@ public class StatStore
 	{
 	}
 
+	/**
+	 * Bumped on every write. The panel is rebuilt when the record moves and left
+	 * alone when it does not, and this is how "moved" is known without comparing
+	 * two copies of a few hundred counters every tick.
+	 */
+	private volatile long revision;
+
+	public long revision()
+	{
+		return revision;
+	}
+
 	public void clear()
 	{
 		totals.clear();
+		revision++;
 	}
 
 	public int getStat(String key)
@@ -57,12 +70,14 @@ public class StatStore
 	public void incrementStatBy(String key, int amount)
 	{
 		totals.merge(key, amount, StatStore::saturatingSum);
+		revision++;
 	}
 
 	// overwrite, for the high-water-mark counters like highest hit
 	public void setStat(String key, int value)
 	{
 		totals.put(key, value);
+		revision++;
 	}
 
 	public Map<String, Integer> snapshotAll()

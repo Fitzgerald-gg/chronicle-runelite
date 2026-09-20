@@ -374,6 +374,23 @@ public class ChroniclePlugin extends Plugin
 	@Subscribe
 	public void onGameTick(GameTick tick)
 	{
+		// Every board reads live, so every board is redrawn the moment the record
+		// behind it moves. This is the whole of it: the panel already coalesces
+		// asks within a tick, declines to draw while it is off screen, owes the
+		// reader a draw when they come back, and puts the scroll bar back where
+		// it was, so all that was missing was somebody telling it that something
+		// had happened.
+		//
+		// Gated on a revision rather than a timer. Three stores count their own
+		// writes, and a tick where nothing was written costs one comparison of
+		// three longs; drawing regardless would redraw a still record fifty
+		// thousand times an hour for nothing.
+		long rev = localStore.revision() + statStore.revision() + clogCapture.revision();
+		if (rev != lastDrawnRevision)
+		{
+			lastDrawnRevision = rev;
+			refreshPanel();
+		}
 		if (!pendingLoginSetup)
 		{
 			return;
@@ -782,9 +799,17 @@ public class ChroniclePlugin extends Plugin
 	// ── Panel-facing reads ─────────────────────────────────────────────
 
 	// Lifetime counters as the journal knows them (base + session, floored).
+	/**
+	 * Live, not as last flushed. The journal's persisted trackers only move when
+	 * the journal is written, so a board reading them sat still through an hour
+	 * of play and then jumped on logout: the same arithmetic is done here against
+	 * the counters as they stand this instant.
+	 */
 	Map<String, Long> lifetimeCounters()
 	{
-		return localStore.trackersSnapshot();
+		return localStore.isReadyFor(localName)
+			? localStore.lifetimeOf(sessionView())
+			: localStore.trackersSnapshot();
 	}
 
 	// This session's own increments (max-type keys as absolutes).
@@ -1688,6 +1713,9 @@ public class ChroniclePlugin extends Plugin
 	// ------------------------------------------------------------------
 	// Helpers
 	// ------------------------------------------------------------------
+
+	// The summed revision of the three stores as of the last draw asked for.
+	private long lastDrawnRevision;
 
 	private void refreshPanel()
 	{

@@ -106,10 +106,12 @@ public class ClogCapture
 			finished = obtained;
 			available = total;
 			dirty = true;
+			revision++;
 		}
 		if (readCategoryCounts())
 		{
 			dirty = true;
+			revision++;
 		}
 	}
 
@@ -123,6 +125,15 @@ public class ClogCapture
 		return available;
 	}
 	private boolean dirty;
+
+	// Bumped alongside dirty, so the panel can tell the log moved without being
+	// told what moved. dirty is consumed by the push; this is not.
+	private volatile long revision;
+
+	long revision()
+	{
+		return revision;
+	}
 	// Ticks since the kill log opened; -1 = idle. Row widgets can be built a tick
 	// or two after WidgetLoaded, so the scrape retries briefly once it's open.
 	private int killLogTicks = -1;
@@ -159,10 +170,12 @@ public class ClogCapture
 				finished = obtained;
 				available = total;
 				dirty = true;
+				revision++;
 			}
 			if (readCategoryCounts())
 			{
 				dirty = true;
+				revision++;
 			}
 		}
 		else if (state == GameState.LOGIN_SCREEN)
@@ -299,6 +312,7 @@ public class ClogCapture
 		if (!clogItems.isEmpty())
 		{
 			dirty = true;
+			revision++;
 		}
 	}
 
@@ -335,6 +349,7 @@ public class ClogCapture
 					slayerKcs.put(mob, Integer.parseInt(digits));
 					captured++;
 					dirty = true;
+					revision++;
 				}
 				catch (NumberFormatException ignored)
 				{
@@ -518,6 +533,7 @@ public class ClogCapture
 				}
 			}
 			dirty = true;
+			revision++;
 		}
 		catch (RuntimeException ex)
 		{

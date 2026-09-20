@@ -228,6 +228,18 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	// Ingest (client thread)
 	// ------------------------------------------------------------------
 
+	/**
+	 * Bumped on every write to the model. The panel is rebuilt when the record
+	 * moves and left alone when it does not; this is how "moved" is known without
+	 * comparing two copies of the whole journal every tick.
+	 */
+	private volatile long revision;
+
+	long revision()
+	{
+		return revision;
+	}
+
 	/** Fold one captured event into the model. Runs on the client thread. */
 	void record(String type, JsonObject data, String rsn)
 	{
@@ -235,6 +247,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
+		revision++;
 		if ("LOOT".equals(type))
 		{
 			recordLoot(data);
@@ -633,6 +646,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
+		revision++;
 		synchronized (lock)
 		{
 			if (skills != null)
@@ -687,6 +701,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
+		revision++;
 		synchronized (lock)
 		{
 			if (root.has("trackers") && root.get("trackers").isJsonObject())
@@ -711,7 +726,32 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		synchronized (lock)
 		{
 			JsonObject tr = new JsonObject();
-			java.util.Set<String> keys = new java.util.HashSet<>(session.keySet());
+			for (java.util.Map.Entry<String, Long> e : lifetimeOf(session).entrySet())
+			{
+				tr.addProperty(e.getKey(), e.getValue());
+			}
+			root.add("trackers", tr);
+			root.addProperty("updated_at", nowSec());
+		}
+		revision++;
+	}
+
+	/**
+	 * Every counter's lifetime figure, from the frozen base and a session, worked
+	 * out without writing anything.
+	 *
+	 * <p>The same arithmetic setTrackers persists, lifted out so a reader can have
+	 * it at any moment. The panel used to read the PERSISTED copy, which only
+	 * moves when the journal is flushed, so a board showing what this account has
+	 * gathered sat still through an hour of gathering and then jumped on logout.
+	 */
+	java.util.Map<String, Long> lifetimeOf(java.util.Map<String, Integer> session)
+	{
+		java.util.Map<String, Long> out = new java.util.HashMap<>();
+		synchronized (lock)
+		{
+			java.util.Set<String> keys = new java.util.HashSet<>(
+				session == null ? java.util.Collections.emptySet() : session.keySet());
 			for (java.util.Map.Entry<String, JsonElement> e : trackersBase.entrySet())
 			{
 				keys.add(e.getKey());
@@ -720,16 +760,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				long base = trackersBase.has(k) && !trackersBase.get(k).isJsonNull()
 					? trackersBase.get(k).getAsLong() : 0;
-				long sess = session.get(k) != null ? session.get(k).longValue() : 0;
+				Integer s = session == null ? null : session.get(k);
+				long sess = s != null ? s.longValue() : 0;
 				long life = MAX_KEYS.contains(k) ? Math.max(base, sess) : base + sess;
 				if (life != 0)
 				{
-					tr.addProperty(k, life);
+					out.put(k, life);
 				}
 			}
-			root.add("trackers", tr);
-			root.addProperty("updated_at", nowSec());
 		}
+		return out;
 	}
 
 	// ------------------------------------------------------------------
@@ -1109,6 +1149,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
+		revision++;
 		synchronized (lock)
 		{
 			JsonObject drops = root.has("drops") && root.get("drops").isJsonObject()
@@ -1396,6 +1437,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
+		revision++;
 		synchronized (lock)
 		{
 			JsonObject store = root.has("consumable_values") && root.get("consumable_values").isJsonObject()
@@ -1418,6 +1460,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
+		revision++;
 		synchronized (lock)
 		{
 			if (root == null || currentRsn == null || !gatheredItems.add(itemId))
@@ -4144,6 +4187,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
+		revision++;
 		synchronized (lock)
 		{
 			if (root == null)
