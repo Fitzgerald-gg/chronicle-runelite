@@ -145,6 +145,21 @@ class ChroniclePanel extends PluginPanel
 	private final ChroniclePlugin plugin;
 
 	private final JPanel display = new JPanel(new BorderLayout());
+
+	/**
+	 * The one scroll pane, and the one view inside it, for the life of the panel.
+	 *
+	 * <p>Every rebuild used to hang a fresh JScrollPane: a new bar, a new UI with
+	 * its own faded-out state, and a scroll position to put back by hand in two
+	 * passes because a bar with no extent yet clamps to zero. The reader saw the
+	 * thumb flash on every push. Swapping what is INSIDE the view instead leaves
+	 * the viewport where it was, so there is nothing to restore and nothing to
+	 * flash, and a board redrawn under somebody reading it simply changes.
+	 */
+	private final ScrollColumn canvas = new ScrollColumn();
+	private final JScrollPane scrollPane = new JScrollPane(canvas,
+		ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+		ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 	// The group gets no display panel: it swaps in each tab's own content
 	// component, and ours are empty. rebuild() does the swapping.
 	private final MaterialTabGroup tabGroup = new MaterialTabGroup();
@@ -351,6 +366,16 @@ class ChroniclePanel extends PluginPanel
 
 		add(north, BorderLayout.NORTH);
 		add(display, BorderLayout.CENTER);
+
+		// Hung once. Every rebuild swaps what is inside the view, so the viewport
+		// keeps the reader's position by simply never being told to move, and the
+		// bar keeps its own faded-out state instead of being born again at full
+		// brightness on every push.
+		canvas.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		scrollPane.setBorder(null);
+		scrollPane.getVerticalScrollBar().setUnitIncrement(14);
+		overlayBar(scrollPane);
+		display.add(scrollPane, BorderLayout.CENTER);
 
 		// Home refreshes on a slow tick while it is the visible view. Nothing in
 		// the panel rebuilds per game tick.
@@ -2129,10 +2154,11 @@ class ChroniclePanel extends PluginPanel
 	// hours Chronicle has watched. Cleared at the top of every build.
 	private boolean playedIsTheGames;
 
-	// True while a rebuild is a redraw of the view the reader is already in, and
-	// rebuild() puts the scroll bar back where it was: the home ticker, a push
-	// landing under them, a fold or a "show more". Navigation, a tab or a search
-	// or an opened detail, leaves it false and lands at the top.
+	// True while a rebuild is a redraw of the view the reader is already in: the
+	// home ticker, a push landing under them, a fold or a "show more". The
+	// viewport holds their place through all of those on its own. False is
+	// navigation - a tab, a search, an opened detail - which is a different
+	// board, and the one case that takes them back to the top.
 	private boolean keepScroll;
 
 	// The period sits above the tab strip, because it governs every tab. Refilled
@@ -2229,16 +2255,6 @@ class ChroniclePanel extends PluginPanel
 		// boss sheet and the kind rows queued labels from every other.
 		facetWaiting.clear();
 		itemWaiting.clear();
-		// rebuild() throws the whole scroll pane away and hangs a fresh one, which
-		// starts at the top. Expanded, Home is longer than the panel.
-		int priorScroll = 0;
-		if (keepScroll)
-		{
-			// found, not assumed to be first: a view that fixes controls above the
-			// scroll hangs them in the same container
-			JScrollPane was = paneIn(display);
-			priorScroll = was == null ? 0 : was.getVerticalScrollBar().getValue();
-		}
 		// Three states, worst first. A disk that will not take the journal is red
 		// and stops everything; a plugin we lean on being switched off is gold and
 		// loses one kind of capture, which the reader can fix in one click and
@@ -2255,7 +2271,13 @@ class ChroniclePanel extends PluginPanel
 		heartbeat.setIconTextGap(4);
 		heartbeat.setForeground(pulse);
 		heartbeat.setFont(FontManager.getRunescapeSmallFont());
-		display.removeAll();
+		// NOT removeAll: the scroll pane is hung once and kept. Only the strip
+		// above it is rebuilt, which is why it is removed by name.
+		if (aboveBoard != null)
+		{
+			display.remove(aboveBoard);
+			aboveBoard = null;
+		}
 		// The period governs every board except the sitting, which is now and can
 		// be nothing else. Drawn above the tabs, so it is plainly over all of them
 		// rather than looking like one tab's control.
@@ -2351,13 +2373,8 @@ class ChroniclePanel extends PluginPanel
 		// control was hung before it. Applied here, once, so the row carries its
 		// own caveat instead of the board carrying two lines of it.
 		periodHolder.setToolTipText(measuredSince);
-		JScrollPane scroll = new JScrollPane(wrapTop(body),
-			ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-			ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-		scroll.setBorder(null);
-		scroll.getVerticalScrollBar().setUnitIncrement(14);
-		overlayBar(scroll);
-		display.add(scroll, BorderLayout.CENTER);
+		canvas.removeAll();
+		canvas.add(body, BorderLayout.NORTH);
 		// The sub-tabs hang outside the scroll pane, because navigation must not
 		// scroll away from the board it moves between. The period is not here: it
 		// hangs higher, in periodHolder above the tab strip, because it governs
@@ -2373,30 +2390,27 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (above.getComponentCount() > 0)
 		{
+			aboveBoard = above;
 			display.add(above, BorderLayout.NORTH);
 		}
+		canvas.revalidate();
+		canvas.repaint();
 		display.revalidate();
 		display.repaint();
-		if (priorScroll > 0)
+		// The viewport keeps the reader's place by itself now, which is right for
+		// a redraw and wrong for NAVIGATION: a tab, a search, an opened detail is
+		// a different board, and arriving halfway down one is arriving lost. So
+		// the only time anything moves the bar is when the reader asked to go
+		// somewhere, which is also the only time they expect it to move.
+		if (!keepScroll)
 		{
-			// A scrollbar with no extent yet clamps every value to zero, and the layout
-			// revalidate() asks for is queued behind us. Lay the new pane out now so the
-			// restore takes, rather than letting the reader see a frame at the top.
-			display.validate();
-			scroll.getVerticalScrollBar().setValue(priorScroll);
-			// And once more after the client's own layout pass: a pane that grew
-			// taller than it was has a bar whose range is still yesterday's, and
-			// the value we just set would have been clamped to it.
-			final int back = priorScroll;
-			javax.swing.SwingUtilities.invokeLater(() ->
-			{
-				if (scroll.getVerticalScrollBar().getValue() < back)
-				{
-					scroll.getVerticalScrollBar().setValue(back);
-				}
-			});
+			scrollPane.getVerticalScrollBar().setValue(0);
 		}
 	}
+
+	// The strip of sub-tabs above the board, held by name so it can be taken down
+	// without taking the scroll pane with it.
+	private JPanel aboveBoard;
 
 	private void onSearchChanged()
 	{
@@ -6063,7 +6077,13 @@ class ChroniclePanel extends PluginPanel
 	private static void overlayBar(JScrollPane scroll)
 	{
 		javax.swing.JScrollBar bar = scroll.getVerticalScrollBar();
-		bar.setUI(new OverlayScrollBarUI());
+		OverlayScrollBarUI ui = new OverlayScrollBarUI();
+		bar.setUI(ui);
+		// The thumb answers the READER, not the record. A wheel turn over the
+		// board and a drag of the thumb are the two ways a person moves this;
+		// everything else adjusting it is the board being redrawn underneath
+		// them, and a thumb that lights up for that flashes on every push.
+		scroll.addMouseWheelListener(e -> ui.wake());
 		bar.setOpaque(false);
 		// Half what the look and feel asked for, and the figure scrollbarWidth()
 		// answers with, so the two cannot drift apart.
@@ -6118,7 +6138,16 @@ class ChroniclePanel extends PluginPanel
 		protected void installListeners()
 		{
 			super.installListeners();
-			scrollbar.addAdjustmentListener(e -> wake());
+			// Only while the thumb is under the mouse. Every other adjustment is
+			// the content changing height beneath a reader who did not ask for
+			// anything, which is most ticks of a grind.
+			scrollbar.addAdjustmentListener(e ->
+			{
+				if (e.getValueIsAdjusting())
+				{
+					wake();
+				}
+			});
 		}
 
 		@Override
@@ -6149,7 +6178,7 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		/** Show the thumb, and start the clock that takes it away again. */
-		private void wake()
+		void wake()
 		{
 			lastMove = System.currentTimeMillis();
 			alpha = 1f;
@@ -6833,9 +6862,9 @@ class ChroniclePanel extends PluginPanel
 
 	/**
 	 * Redraw without moving the reader. Opening a fold or asking a list for the
-	 * rest of itself changes what is under the pointer, not where the reader is,
-	 * and rebuild() hangs a fresh scroll pane that starts at the top: on a long
-	 * view, every click would throw them back to the first line.
+	 * rest of itself changes what is under the pointer, not where the reader is.
+	 * A rebuild that is not marked as one takes them back to the first line, and
+	 * on a long view every click would do it.
 	 */
 	private void rebuildInPlace()
 	{

@@ -2745,7 +2745,7 @@ public class HistoryProgressCardTest
 		{
 			open.invoke(p);
 			javax.swing.JPanel display = (javax.swing.JPanel) d.get(p);
-			seen[0] = display.getComponent(0);
+			seen[0] = boardIn(display);
 			seen[2] = labels(display);
 			tick(p);
 		});
@@ -2754,7 +2754,7 @@ public class HistoryProgressCardTest
 		edt(() ->
 		{
 		});
-		edt(() -> seen[1] = ((javax.swing.JPanel) d.get(p)).getComponent(0));
+		edt(() -> seen[1] = boardIn((javax.swing.JPanel) d.get(p)));
 		@SuppressWarnings("unchecked")
 		List<String> said = (List<String>) seen[2];
 		assertTrue("this is not the trackers page: " + said, said.contains("TRACKERS"));
@@ -2780,15 +2780,39 @@ public class HistoryProgressCardTest
 		{
 			at.setLong(p, 0L);
 			javax.swing.JPanel display = (javax.swing.JPanel) d.get(p);
-			seen[0] = display.getComponent(0);
+			seen[0] = boardIn(display);
 			tick(p);
 		});
 		edt(() ->
 		{
 		});
-		edt(() -> seen[1] = ((javax.swing.JPanel) d.get(p)).getComponent(0));
+		edt(() -> seen[1] = boardIn((javax.swing.JPanel) d.get(p)));
 		assertNotSame("the sitting stopped refreshing on its own tick",
 			seen[0], seen[1]);
+	}
+
+	/**
+	 * The BOARD, which is what a rebuild replaces.
+	 *
+	 * <p>Not display.getComponent(0): the scroll pane is hung once and kept for
+	 * the life of the panel, precisely so the viewport holds the reader's place
+	 * and the overlay bar does not flash on every push. Its identity is stable by
+	 * design now, so probing it would make these tests pass whatever happened.
+	 */
+	private static java.awt.Component boardIn(javax.swing.JPanel display)
+	{
+		for (java.awt.Component c : display.getComponents())
+		{
+			if (c instanceof javax.swing.JScrollPane)
+			{
+				java.awt.Component view =
+					((javax.swing.JScrollPane) c).getViewport().getView();
+				return view instanceof java.awt.Container
+					&& ((java.awt.Container) view).getComponentCount() > 0
+					? ((java.awt.Container) view).getComponent(0) : view;
+			}
+		}
+		return null;
 	}
 
 	/** Fire the home ticker by hand, the way three seconds would. */
