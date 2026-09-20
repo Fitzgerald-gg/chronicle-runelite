@@ -2612,6 +2612,8 @@ class ChroniclePanel extends PluginPanel
 			pill.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
 			pill.setToolTipText("All".equals(g) ? "Everything the ledger holds"
 				: "Only what slayer tasks logged");
+			pill.setCursor(java.awt.Cursor.getPredefinedCursor(
+				java.awt.Cursor.HAND_CURSOR));
 			pill.addMouseListener(clicker(() ->
 			{
 				onTaskOnly = "On task".equals(g);
@@ -2812,33 +2814,6 @@ class ChroniclePanel extends PluginPanel
 	// Whether the loot board groups by what dropped a thing or by what it is.
 	private boolean dropsByKind;
 
-	/** Sources or kinds: the same ledger, read two ways. */
-	private JPanel groupingPicker()
-	{
-		JPanel strip = new JPanel(new GridLayout(1, 2, 3, 3));
-		strip.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		for (String g : new String[]{"By source", "By kind"})
-		{
-			boolean on = "By kind".equals(g) == dropsByKind;
-			JLabel pill = new JLabel(g, JLabel.CENTER);
-			pill.setOpaque(true);
-			pill.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-			pill.setFont(FontManager.getRunescapeSmallFont());
-			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-			pill.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
-			pill.addMouseListener(clicker(() ->
-			{
-				dropsByKind = "By kind".equals(g);
-				lootKind = null;
-				rebuildInPlace();
-			}));
-			strip.add(pill);
-		}
-		JPanel hold = column();
-		hold.add(strip);
-		hold.add(vgap(6));
-		return hold;
-	}
 
 	/**
 	 * The whole ledger folded into its kinds, and one kind opened out.
@@ -3131,6 +3106,8 @@ class ChroniclePanel extends PluginPanel
 			pill.setFont(FontManager.getRunescapeSmallFont());
 			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 			pill.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+			pill.setCursor(java.awt.Cursor.getPredefinedCursor(
+				java.awt.Cursor.HAND_CURSOR));
 			pill.addMouseListener(clicker(() ->
 			{
 				slayerLens = l;
@@ -5330,6 +5307,8 @@ class ChroniclePanel extends PluginPanel
 			pill.setFont(FontManager.getRunescapeSmallFont());
 			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 			pill.setForeground(tab.equals(clogTab) ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+			pill.setCursor(java.awt.Cursor.getPredefinedCursor(
+				java.awt.Cursor.HAND_CURSOR));
 			pill.addMouseListener(clicker(() ->
 			{
 				clogTab = tab;
@@ -6390,6 +6369,8 @@ class ChroniclePanel extends PluginPanel
 			boolean on = fam.equals(statsFamily);
 			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 			pill.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+			pill.setCursor(java.awt.Cursor.getPredefinedCursor(
+				java.awt.Cursor.HAND_CURSOR));
 			pill.addMouseListener(clicker(() ->
 			{
 				statsFamily = fam;
@@ -10125,6 +10106,8 @@ class ChroniclePanel extends PluginPanel
 			t.setFont(FontManager.getRunescapeSmallFont());
 			t.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 			t.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+			t.setCursor(java.awt.Cursor.getPredefinedCursor(
+				java.awt.Cursor.HAND_CURSOR));
 			t.addMouseListener(clicker(() ->
 			{
 				journalLens = lens[0];

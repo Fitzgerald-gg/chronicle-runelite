@@ -356,4 +356,30 @@ public class ClickAffordanceTest
 			+ " reaching its board: " + tips.size() + " tooltips seen",
 			tips.contains("Narrow this board to one task"));
 	}
+
+	/**
+	 * The other half of the rule. A control that listens must also answer the
+	 * cursor: this is the complaint an actual user made, that they did not know
+	 * the rows could be clicked.
+	 *
+	 * <p>Five pill strips carried a listener and no cursor while a sixth, built
+	 * identically, set one - so it was oversight rather than an exemption. They
+	 * were never silent, since clicker() also paints a hover lift, but the panel
+	 * states its own invariant as both tells and the strips were the only places
+	 * carrying one.
+	 */
+	@Test
+	public void everyControlAnswersTheCursor() throws Exception
+	{
+		Set<String> bad = new LinkedHashSet<>();
+		for (Component c : everySurface())
+		{
+			if (clickable(c) && !handUp(c))
+			{
+				bad.add(describe(c));
+			}
+		}
+		assertTrue("these listen for a click but do not answer the cursor:\n  "
+			+ String.join("\n  ", bad), bad.isEmpty());
+	}
 }
