@@ -1662,11 +1662,31 @@ class ChroniclePanel extends PluginPanel
 			cell.addMouseListener(clicker(() -> openSourceLoose(open)));
 		}
 		cell.add(icon, BorderLayout.WEST);
-		boolean lit = figure > 0 && activityStirred(label, source);
+		long moved = activityMoved(label, source);
+		boolean lit = figure > 0 && moved != 0;
 		JLabel fig = new JLabel(figure > 0 ? fmt(figure) : "-", JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
 		fig.setForeground(lit ? TILE_LIT : ColorScheme.LIGHT_GRAY_COLOR.darker());
-		cell.add(fig, BorderLayout.EAST);
+		// Standing over movement, which is the shape the skill cells beside it
+		// use. A tile going bright said only THAT the period moved it, and the
+		// reader had to hold two visits to the sheet in their head to work out by
+		// how much.
+		//
+		// Always CENTER, one row or two. BorderLayout gives WEST and EAST their
+		// preferred widths and lets them overlap on a narrow row; CENTER takes
+		// what the icon leaves. Putting the moved ones in one and the still ones
+		// in the other would have them sitting at different widths in one grid.
+		JPanel text = new JPanel(new GridLayout(moved > 0 ? 2 : 1, 1));
+		text.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		text.add(fig);
+		if (moved > 0)
+		{
+			JLabel by = new JLabel("+" + fmt(moved), JLabel.RIGHT);
+			by.setFont(FontManager.getRunescapeSmallFont());
+			by.setForeground(accent());
+			text.add(by);
+		}
+		cell.add(text, BorderLayout.CENTER);
 		return cell;
 	}
 
@@ -9204,27 +9224,24 @@ class ChroniclePanel extends PluginPanel
 
 	// Which kinds of feed line landed inside the window. Answered once a build:
 	// three tiles ask, and each ask is a walk of the feed.
-	private java.util.Set<String> movedTypes;
+	private Map<String, Long> movedTypes;
 
-	/** Whether the window holds a line of this kind. Lifetime holds everything. */
-	private boolean stirred(String type)
+	/** How many lines of this kind the window holds. */
+	private long stirred(String type)
 	{
-		if (wholeRecord())
-		{
-			return true;
-		}
 		if (movedTypes == null)
 		{
-			movedTypes = new java.util.HashSet<>();
+			movedTypes = new LinkedHashMap<>();
 			for (JsonObject e : plugin.feedNewest(4000))
 			{
 				if (insideWindow(safeLong(e.get("ts"))))
 				{
-					movedTypes.add(typeOf(e));
+					movedTypes.merge(typeOf(e), 1L, Long::sum);
 				}
 			}
 		}
-		return movedTypes.contains(type);
+		Long n = movedTypes.get(type);
+		return n == null ? 0 : n;
 	}
 
 	/**
@@ -9236,11 +9253,11 @@ class ChroniclePanel extends PluginPanel
 	 * tile the period never touched is dimmed, the same way a skill that gained
 	 * nothing is. Lifetime moved everything, by construction.
 	 */
-	private boolean activityStirred(String label, String source)
+	private long activityMoved(String label, String source)
 	{
 		if (wholeRecord())
 		{
-			return true;
+			return -1;   // everything, which is not a movement to state
 		}
 		if ("Collections".equals(label))
 		{
@@ -9257,22 +9274,20 @@ class ChroniclePanel extends PluginPanel
 		if ("Clues".equals(label))
 		{
 			// the caskets are loot sources, one per tier, so the roll knows
+			long all = 0;
 			for (String tier : CLUE_TIERS)
 			{
 				Long n = rolledKills("Clue Scroll (" + tier + ")");
-				if (n != null && n > 0)
-				{
-					return true;
-				}
+				all += n == null ? 0 : n;
 			}
-			return false;
+			return all;
 		}
 		if (!source.isEmpty())
 		{
 			Long n = rolledKills(source);
-			return n != null && n > 0;
+			return n == null ? 0 : n;
 		}
-		return false;
+		return 0;
 	}
 
 	// countersForPeriod walks the spine or the sitting; the skill grid asks it
@@ -9311,19 +9326,44 @@ class ChroniclePanel extends PluginPanel
 			figures.add((wholeRecord() ? "" : "+") + xpShort(gained));
 		}
 		Map<String, Long> now = periodCounters();
+		java.util.Set<String> took = new java.util.LinkedHashSet<>();
 		for (String key : StatRegistry.headlines(craft))
 		{
 			Long v = now.get(key);
-			if (v == null || v <= 0)
+			if (v != null && v > 0)
+			{
+				took.add(key);
+			}
+		}
+		// The headline first, then whatever else the period actually moved, by
+		// size. A craft's headline is its TOTAL - creatures trapped, food cooked -
+		// and a week spent on one thing need not touch it: a week of Herbiboar
+		// moves herbiboarsHarvested and leaves creaturesTrapped alone, so the
+		// hover said nothing at all on the period a reader most wants it.
+		List<Map.Entry<String, Long>> rest = new ArrayList<>();
+		for (Map.Entry<String, Long> e : now.entrySet())
+		{
+			if (e.getValue() == null || e.getValue() <= 0 || took.contains(e.getKey())
+				|| !"Skilling".equals(StatRegistry.family(e.getKey()))
+				|| !craft.equalsIgnoreCase(StatRegistry.subgroup(e.getKey())))
 			{
 				continue;
 			}
-			labels.add(StatRegistry.rowLabel(key));
-			figures.add(fmt(v));
+			rest.add(e);
+		}
+		rest.sort(Map.Entry.<String, Long>comparingByValue().reversed());
+		for (Map.Entry<String, Long> e : rest)
+		{
+			took.add(e.getKey());
+		}
+		for (String key : took)
+		{
 			if (labels.size() >= 6)
 			{
 				break;
 			}
+			labels.add(StatRegistry.rowLabel(key));
+			figures.add(fmt(now.get(key)));
 		}
 		return tip(craft, labels.toArray(new String[0]),
 			figures.toArray(new String[0]));
