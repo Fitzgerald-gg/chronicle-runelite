@@ -6838,10 +6838,14 @@ class ChroniclePanel extends PluginPanel
 				historyJourney = d.journey;
 				historyDay = d.day;
 				historyFeedTs = newestTs(d.feed);
-				if (view == View.HISTORY)
-				{
-					rebuild();
-				}
+				// Unconditional. This named View.HISTORY, which viewOf() never
+				// returns, so the read landed and nothing was ever redrawn: a
+				// reader standing on a board that wants the spine kept the
+				// sentence where the board should be. Three boards read it, the
+				// skills sheet, Now and the Journal's frontispiece, and rebuild()
+				// already declines to run while the panel is hidden, so there is
+				// nothing for a view test to save here.
+				rebuild();
 			}
 		}.execute();
 	}

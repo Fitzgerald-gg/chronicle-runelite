@@ -129,7 +129,17 @@ public class AchievementDiaryTest
 		}
 	}
 
-	/** TRAP: the wiki's numbering leaking in, or a task cut off mid-sentence. */
+	/**
+	 * TRAP: the wiki's own apparatus leaking into a task - its list numbering at
+	 * the front, or a footnote reference at the back that points at a note the row
+	 * did not bring with it.
+	 *
+	 * <p>Deliberately NOT a check that a task ends in punctuation. Two of the 492
+	 * genuinely do not, because the wiki wrote them that way: one Desert task and
+	 * one Wilderness task simply have no full stop. An assertion on the end of the
+	 * string would fail on both and teach whoever hit it to edit the data to suit
+	 * the test.
+	 */
 	@Test
 	public void aTaskIsAWholeInstructionAndCarriesNoListNumber()
 	{
@@ -149,8 +159,8 @@ public class AchievementDiaryTest
 					assertTrue("too short to be an instruction: " + task,
 						task.length() > 8);
 					// NOT endsWith("...") : "Between a Rock..." is a real quest and
-					// three Desert tasks name it. A cell cut short by the parser ends
-					// without punctuation at all, which is the thing worth catching.
+					// three Desert tasks name it, so an ellipsis is not evidence of
+					// truncation here. A leaked footnote reference is.
 					assertFalse("a footnote reference outlived its footnote: " + task,
 						task.matches(".*\\[[a-z]{0,2}\\s?\\d*\\]$"));
 				}
