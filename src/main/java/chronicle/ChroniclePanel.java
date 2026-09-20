@@ -8365,7 +8365,12 @@ class ChroniclePanel extends PluginPanel
 	private static JsonObject bundledDiaries;
 	private static JsonObject bundledCombat;
 
-	private static JsonObject bundle(String name, JsonObject cached)
+	// Takes the injected Gson rather than making one, as bossRoster and taxonomy
+	// beside it do. A fresh Gson is on the Plugin Hub's disallowed list and is
+	// what its packager rejects a plugin for, and this one wore a fully qualified
+	// name, so it did not answer a grep for "new Gson()".
+	private static JsonObject bundle(com.google.gson.Gson gson, String name,
+		JsonObject cached)
 	{
 		if (cached != null)
 		{
@@ -8375,7 +8380,7 @@ class ChroniclePanel extends PluginPanel
 			ChroniclePanel.class.getResourceAsStream("/chronicle/" + name),
 			java.nio.charset.StandardCharsets.UTF_8))
 		{
-			return new com.google.gson.Gson().fromJson(r, JsonObject.class);
+			return gson.fromJson(r, JsonObject.class);
 		}
 		catch (Exception e)
 		{
@@ -8531,7 +8536,7 @@ class ChroniclePanel extends PluginPanel
 
 	private void buildDiaries(JPanel p)
 	{
-		bundledDiaries = bundle("osrs_achievement_diaries.json", bundledDiaries);
+		bundledDiaries = bundle(plugin.gson(), "osrs_achievement_diaries.json", bundledDiaries);
 		JsonObject tasks = bundledDiaries.has("diaries")
 			? bundledDiaries.getAsJsonObject("diaries") : new JsonObject();
 		JsonObject mine = achievements().has("diaries")
@@ -8609,7 +8614,7 @@ class ChroniclePanel extends PluginPanel
 
 	private void buildCombatAchievements(JPanel p)
 	{
-		bundledCombat = bundle("osrs_combat_achievements.json", bundledCombat);
+		bundledCombat = bundle(plugin.gson(), "osrs_combat_achievements.json", bundledCombat);
 		JsonObject all = bundledCombat.has("tasks")
 			? bundledCombat.getAsJsonObject("tasks") : new JsonObject();
 		long[] c = combatStanding();
@@ -10150,7 +10155,7 @@ class ChroniclePanel extends PluginPanel
 	private int searchAchievements(JPanel p, String ql)
 	{
 		java.util.Set<Integer> done = caDone();
-		bundledCombat = bundle("osrs_combat_achievements.json", bundledCombat);
+		bundledCombat = bundle(plugin.gson(), "osrs_combat_achievements.json", bundledCombat);
 		JsonObject tasks = bundledCombat.has("tasks")
 			? bundledCombat.getAsJsonObject("tasks") : new JsonObject();
 		List<JsonObject> caHits = new ArrayList<>();
@@ -10170,7 +10175,7 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 
-		bundledDiaries = bundle("osrs_achievement_diaries.json", bundledDiaries);
+		bundledDiaries = bundle(plugin.gson(), "osrs_achievement_diaries.json", bundledDiaries);
 		JsonObject diaries = bundledDiaries.has("diaries")
 			? bundledDiaries.getAsJsonObject("diaries") : new JsonObject();
 		List<String[]> diaryHits = new ArrayList<>();   // {task, region, tier, requirements}
