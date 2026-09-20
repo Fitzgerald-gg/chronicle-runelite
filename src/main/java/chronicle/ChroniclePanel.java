@@ -7313,7 +7313,13 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (rowsBySection.isEmpty() && floorTotals.isEmpty())
 		{
-			p.add(note("Nothing tracked here yet."));
+			// Named for both things it is empty OF. This board is one family of
+			// four under one period of six, and "here" named neither, so a
+			// reader on Living for a week that ate nothing was told the record
+			// held nothing at all.
+			p.add(note(wholeRecord()
+				? "Nothing under " + statsFamily + " yet."
+				: "Nothing under " + statsFamily + " inside " + periodInSentence() + "."));
 			return p;
 		}
 
