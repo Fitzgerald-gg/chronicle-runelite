@@ -1660,6 +1660,17 @@ class ChroniclePanel extends PluginPanel
 			p.add(noPeriod());
 			return p;
 		}
+		// The loot roll dates a kill to the DAY, so no cell on this board can
+		// answer for a sitting and every one of them would draw a dash. Seventy
+		// dashes is a wall that says one thing seventy times; the sentence says
+		// it once, and the lifetime counts are a click away on the period strip.
+		if (sessionPeriod())
+		{
+			p.add(note("Kills are dated by day and not by sitting, so this board "
+				+ "has nothing to say about the one you are in. Any longer period "
+				+ "answers it, and the sitting's own kills are on the Record tab."));
+			return p;
+		}
 		int at = -1;
 		for (int i = 0; i < roster.size(); i++)
 		{
@@ -2826,11 +2837,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(head);
 		p.add(vgap(6));
-		p.add(note("The loot roll keeps one entry a day, so what a sitting took "
-			+ (dropsLeftBehind ? "or left " : "")
-			+ "cannot be broken down by source or by kind. The figures above are "
-			+ "this sitting's own, counted as the drops landed. Any longer period "
-			+ "reads the roll and ranks it."));
+		p.add(note("The figures above are this sitting's own, counted as the drops "
+			+ "landed. The dated roll keeps one entry a day, so it cannot break a "
+			+ "sitting down by source or by kind; any longer period it can, and "
+			+ "ranks it."));
 		return p;
 	}
 
@@ -3090,7 +3100,11 @@ class ChroniclePanel extends PluginPanel
 		//
 		// Except over a window, where the roll keeps what was left behind as
 		// items alone: there the reading has one axis, so none is offered.
-		if (!dropsLeftBehind || wholeRecord())
+		//
+		// And except over the sitting, where neither reading has an axis at all:
+		// the sitting counts its take rather than ranking it, so a control that
+		// swapped between two lists would swap between the same board twice.
+		if ((!dropsLeftBehind || wholeRecord()) && !sessionPeriod())
 		{
 			axes.add(toggle(dropsByKind
 				? (dropsLeftBehind ? "By item" : "By kind") : "By source", () ->
@@ -8849,7 +8863,9 @@ class ChroniclePanel extends PluginPanel
 	private JPanel headline(HistoryProgress progress, List<Map.Entry<String, Long>> gains,
 		SkillStand stand, HistoryLog.Levels opened, long[] played)
 	{
-		JPanel card = card("The period");
+		// Named for what it IS: a card headed "The period" over a strip saying
+		// "This session" is the panel using two words for one thing.
+		JPanel card = card(sessionPeriod() ? "This sitting" : "The period");
 		long xp = 0;
 		for (Map.Entry<String, Long> g : gains)
 		{
@@ -8871,7 +8887,12 @@ class ChroniclePanel extends PluginPanel
 				return card;
 			}
 			card.add(row("Time played", hoursMinutes(played[0]), null));
-			card.add(row("Sessions", fmt(played[1]), null));
+			// Not under the sitting, where the answer is one and saying so is the
+			// card telling the reader what the heading above it already did.
+			if (!sessionPeriod())
+			{
+				card.add(row("Sessions", fmt(played[1]), null));
+			}
 			card.add(row("Experience", "+" + gp(xp), xp > 0 ? accent() : null));
 			card.add(row("99s reached",
 				fmt(same ? Math.max(0, shut.nines - opened.nines) : 0), null));
@@ -8880,7 +8901,10 @@ class ChroniclePanel extends PluginPanel
 		if (played[1] > 0)
 		{
 			card.add(row("Time played", hoursMinutes(played[0]), null));
-			card.add(row("Sessions", fmt(played[1]), null));
+			if (!sessionPeriod())
+			{
+				card.add(row("Sessions", fmt(played[1]), null));
+			}
 		}
 		if (xp > 0)
 		{
@@ -9584,7 +9608,7 @@ class ChroniclePanel extends PluginPanel
 			JsonObject task = all.getAsJsonObject(id).deepCopy();
 			// the table is KEYED by the game's task id and the rows do not carry it
 			task.addProperty("id", Integer.parseInt(id));
-			bySource.computeIfAbsent(task.get("monster").getAsString(),
+			bySource.computeIfAbsent(caSource(task.get("monster").getAsString()),
 				k -> new ArrayList<>()).add(task);
 		}
 		for (Map.Entry<String, java.util.List<JsonObject>> e : bySource.entrySet())
@@ -9605,9 +9629,10 @@ class ChroniclePanel extends PluginPanel
 			boolean open = foldOpen(foldKey);
 			// quietHead, so these read as the same kind of fold as every other one
 			// in the panel rather than as a board with its own rules.
+			int n = e.getValue().size();
 			p.add(quietHead(e.getKey(), known
-				? fmt(got) + " / " + fmt(e.getValue().size())
-				: fmt(e.getValue().size()) + " tasks", foldKey));
+				? fmt(got) + " / " + fmt(n)
+				: fmt(n) + (n == 1 ? " task" : " tasks"), foldKey));
 			if (!open)
 			{
 				continue;
@@ -9620,18 +9645,54 @@ class ChroniclePanel extends PluginPanel
 				// the rows take neither colour: an undone task and a task nobody
 				// has asked about look nothing alike, and saying so in red would
 				// be six hundred assertions this board cannot make.
-				JPanel line = row(task.get("name").getAsString(),
+				JPanel line = row(withoutSource(task.get("name").getAsString(), e.getKey()),
 					prettyTier(task.get("tier").getAsString()),
 					known ? (has ? ACCENT_SESSION : ACCENT_RED) : null, known);
 				line.setToolTipText(tip(task.get("name").getAsString(),
 					new String[]{"Tier", "Where", "Task"},
 					new String[]{task.get("tier").getAsString(),
-						task.get("monster").getAsString(),
+						caSource(task.get("monster").getAsString()),
 						task.get("task").getAsString()}));
 				p.add(line);
 			}
 			p.add(vgap(4));
 		}
+	}
+
+	/**
+	 * A task's name with the heading it already sits under taken off the front.
+	 *
+	 * <p>Under CHAMBERS OF XERIC, "Chambers of Xeric Veteran" is "Veteran": the
+	 * heading said the rest of it, and the name column is about a hundred and
+	 * forty pixels wide, so the repeated half was pushing the part that
+	 * identifies the task off the end behind an ellipsis. Names that do not
+	 * carry the prefix, and the one that IS the prefix, are left alone - a row
+	 * reading nothing at all would be worse than a long one.
+	 */
+	private static String withoutSource(String name, String source)
+	{
+		if (name == null || source == null || name.length() <= source.length()
+			|| !name.regionMatches(true, 0, source, 0, source.length()))
+		{
+			return name;
+		}
+		String rest = name.substring(source.length()).trim();
+		// a name that differed from its source only by punctuation
+		return rest.isEmpty() ? name : rest;
+	}
+
+	/**
+	 * What a combat achievement is filed under.
+	 *
+	 * <p>The wiki answers "N/A" for the handful of tasks that name no monster,
+	 * which is an answer to a question the reader did not ask. One task has it
+	 * today - deal a hundred damage with thralls, which is done wherever you
+	 * like - and it drew a heading reading N/A in a list of bosses.
+	 */
+	private static String caSource(String monster)
+	{
+		return monster == null || monster.trim().isEmpty()
+			|| "N/A".equalsIgnoreCase(monster.trim()) ? "Anywhere" : monster;
 	}
 
 	/** The head card's four figures, as the markup a tooltip takes. */
@@ -9642,7 +9703,8 @@ class ChroniclePanel extends PluginPanel
 		{
 			xp += g.getValue();
 		}
-		return tip(wholeRecord() ? "Lifetime" : "The period",
+		return tip(sessionPeriod() ? "This sitting"
+			: wholeRecord() ? "Lifetime" : "The period",
 			new String[]{playedIsTheGames ? "Time played (the game's own)"
 				: "Time played", "Sessions", "Experience"},
 			new String[]{hoursMinutes(played[0]), fmt(played[1]), "+" + gp(xp)});
@@ -9730,7 +9792,7 @@ class ChroniclePanel extends PluginPanel
 		cell.setToolTipText(gained != null
 			? tip(craft, new String[]{"Level", wholeRecord() ? "Experience"
 				: "Gained in " + window().label},
-				new String[]{fmt(level), (wholeRecord() ? "" : "+") + gp(gained)})
+				new String[]{fmt(level), (wholeRecord() ? "" : "+") + xpShort(gained)})
 			: tip(craft, new String[]{"Level"}, new String[]{fmt(level)}));
 		// The cell has always carried a tooltip, which is a mouse listener; this
 		// is what makes the hand cursor honest. Its counters had no other way in.
@@ -9772,7 +9834,7 @@ class ChroniclePanel extends PluginPanel
 			// what some period added to it. "+13.6M xp" did not fit the cell and
 			// clipped to "+13.6M ...", which spent the room on the one word the
 			// reader did not need.
-			JLabel g = new JLabel((wholeRecord() ? "" : "+") + gp(gained));
+			JLabel g = new JLabel((wholeRecord() ? "" : "+") + xpShort(gained));
 			g.setFont(FontManager.getRunescapeSmallFont());
 			g.setForeground(accent());
 			text.add(g);
@@ -12265,6 +12327,38 @@ class ChroniclePanel extends PluginPanel
 		if (Math.abs(n) >= 10_000L)
 		{
 			return String.format(Locale.UK, "%dk", n / 1_000);
+		}
+		return fmt(n);
+	}
+
+	/**
+	 * Experience, in a cell about fifty pixels wide.
+	 *
+	 * <p>gp() keeps the grouped figure up to ten thousand, which is right for a
+	 * purse: nobody wants their bank read as 9.7k. In a skill cell it put
+	 * "+4,600" beside "+96k" in the same grid, two registers for the same kind
+	 * of thing. This has one rule from a thousand up, and the cell's own room is
+	 * what sets where that rule starts.
+	 */
+	private static String xpShort(long n)
+	{
+		long a = Math.abs(n);
+		if (a >= 1_000_000_000L)
+		{
+			return String.format(Locale.UK, "%.2fB", n / 1_000_000_000.0);
+		}
+		if (a >= 1_000_000L)
+		{
+			return String.format(Locale.UK, "%.1fM", n / 1_000_000.0);
+		}
+		if (a >= 100_000L)
+		{
+			return String.format(Locale.UK, "%dk", n / 1_000);
+		}
+		if (a >= 1_000L)
+		{
+			String k = String.format(Locale.UK, "%.1f", n / 1_000.0);
+			return (k.endsWith(".0") ? k.substring(0, k.length() - 2) : k) + "k";
 		}
 		return fmt(n);
 	}

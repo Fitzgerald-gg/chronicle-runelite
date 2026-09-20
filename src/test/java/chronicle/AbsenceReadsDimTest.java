@@ -191,8 +191,10 @@ public class AbsenceReadsDimTest
 		openFold(p, "ca:Barrows");
 		assertEquals("a done task should be green",
 			green(), nameColour(p, "buildCombatAchievements", "Noxious Foe"));
+		// "Barrows Novice", less the heading it sits under, which the board takes
+		// off the front so the part that identifies the task has the cell's width
 		assertEquals("an undone task should be red",
-			red(), nameColour(p, "buildCombatAchievements", "Barrows Novice"));
+			red(), nameColour(p, "buildCombatAchievements", "Novice"));
 	}
 
 	/**

@@ -105,9 +105,16 @@ public class LootByKindTest
 		return false;
 	}
 
-	/** The lens is a control on the board, not a control on one period. */
+	/**
+	 * The lens is a control on the board, not a control on one period.
+	 *
+	 * <p>Except the sitting, which has no ranked list to regroup: the dated roll
+	 * keeps one entry a DAY, so it cannot answer for a few hours inside one, and
+	 * the sitting shows its own counted tally instead. A control that swapped
+	 * between two readings of a board that has neither would be a dead control.
+	 */
 	@Test
-	public void theKindLensIsOfferedAtEveryPeriod() throws Exception
+	public void theKindLensIsOfferedAtEveryPeriodThatHasAList() throws Exception
 	{
 		ChroniclePanel p = panel();
 		for (String period : ChroniclePanel.PERIODS)
@@ -116,8 +123,16 @@ public class LootByKindTest
 			List<String> said = board(p);
 			// One toggle carrying the reading it is on, so only one of the two
 			// labels is ever drawn. The rule is that the axis is OFFERED here.
-			assertTrue("the grouping control vanished at " + period,
-				says(said, "By kind") || says(said, "By source"));
+			boolean offered = says(said, "By kind") || says(said, "By source");
+			if (ChroniclePanel.SESSION.equals(period))
+			{
+				assertFalse("a grouping control was offered over a board with"
+					+ " nothing to group: " + said, offered);
+				assertTrue("and the sitting said nothing about why: " + said,
+					says(said, "counted as the drops landed"));
+				continue;
+			}
+			assertTrue("the grouping control vanished at " + period, offered);
 		}
 	}
 
