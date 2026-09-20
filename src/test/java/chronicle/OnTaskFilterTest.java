@@ -142,15 +142,63 @@ public class OnTaskFilterTest
 		return null;
 	}
 
-	/** An item a task paid gets the filter. One no task paid does not. */
+	/**
+	 * An item a task paid gets the filter. One no task paid does not.
+	 *
+	 * <p>Read on the axis being drawn at all rather than on one of its labels,
+	 * the same way the board's own test reads it: this page draws the one toggle
+	 * the board draws now, and a toggle shows the reading it is ON, so at the
+	 * default setting it says "All".
+	 */
 	@Test
 	public void theFilterAppearsOnlyWhereThereIsSomethingToFilter() throws Exception
 	{
 		ChroniclePanel p = panel();
+		List<String> paid = say(p, "buildItemDetail", "Fire rune");
 		assertTrue("an item tasks paid was offered no filter",
-			has(say(p, "buildItemDetail", "Fire rune"), "On task"));
+			has(paid, "On task") || has(paid, "All"));
+		List<String> never = say(p, "buildItemDetail", "Zulrah's scales");
 		assertFalse("an item no task ever paid was offered a filter",
-			has(say(p, "buildItemDetail", "Zulrah's scales"), "On task"));
+			has(never, "On task") || has(never, "All"));
+	}
+
+	/**
+	 * And it is the SAME control on both, not a second design for one piece of
+	 * state. The page used to draw a pair of pills whose dark half named the
+	 * reading the reader had not chosen, which is what toggle() replaced.
+	 */
+	@Test
+	public void thePageAndTheBoardDrawTheSameControl() throws Exception
+	{
+		ChroniclePanel p = panel();
+		set(p, "onTaskOnly", false);
+		List<String> off = say(p, "buildItemDetail", "Fire rune");
+		assertTrue("the toggle should show the reading it is on: " + off,
+			exactly(off, "All"));
+		assertFalse("a pill pair naming the reading NOT chosen is the old design: "
+			+ off, exactly(off, "On task"));
+
+		set(p, "onTaskOnly", true);
+		List<String> on = say(p, "buildItemDetail", "Fire rune");
+		assertTrue(on.toString(), exactly(on, "On task"));
+		assertFalse(on.toString(), exactly(on, "All"));
+	}
+
+	/**
+	 * A label in its own right, not a substring of one. The page carries rows
+	 * called "All sources" and "Obtained on task", so a contains() check answers
+	 * yes to both readings of the toggle at once.
+	 */
+	private static boolean exactly(List<String> said, String label)
+	{
+		for (String s : said)
+		{
+			if (label.equals(s))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** And a page with no filter on it ignores the setting entirely. */

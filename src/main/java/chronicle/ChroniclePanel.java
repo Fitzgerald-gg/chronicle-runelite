@@ -1427,11 +1427,14 @@ class ChroniclePanel extends PluginPanel
 		else if ("Collections".equals(label))
 		{
 			figure = plugin.clogFinished();
-			int avail = plugin.clogAvailable();
+			int[] logStanding = clogStanding();
 			hover = tip("Collection log",
 				new String[]{"Obtained", "Available", "Share"},
-				new String[]{fmt(figure), fmt(avail),
-					avail > 0 ? Math.round(figure * 1000.0 / avail) / 10.0 + "%" : "-"});
+				new String[]{fmt(figure),
+					logStanding != null ? fmt(logStanding[1]) : "not yet",
+					logStanding != null
+						? Math.round(logStanding[0] * 1000.0 / logStanding[1]) / 10.0 + "%"
+						: "-"});
 			mountKindIcon(icon, label);
 		}
 		else if ("Quests".equals(label))
@@ -2600,40 +2603,6 @@ class ChroniclePanel extends PluginPanel
 	// worse than a number the reader cannot narrow at all.
 	private boolean onTaskOnly;
 
-	/**
-	 * All, or only what the tasks logged. Drawn where the record can answer
-	 * both, and nowhere else.
-	 */
-	private JPanel onTaskPicker()
-	{
-		JPanel strip = new JPanel(new GridLayout(1, 2, 3, 3));
-		strip.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		for (String g : new String[]{"All", "On task"})
-		{
-			boolean on = "On task".equals(g) == onTaskOnly;
-			JLabel pill = new JLabel(g, JLabel.CENTER);
-			pill.setOpaque(true);
-			pill.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-			pill.setFont(FontManager.getRunescapeSmallFont());
-			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-			pill.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
-			pill.setToolTipText("All".equals(g) ? "Everything the ledger holds"
-				: "Only what slayer tasks logged");
-			pill.setCursor(java.awt.Cursor.getPredefinedCursor(
-				java.awt.Cursor.HAND_CURSOR));
-			pill.addMouseListener(clicker(() ->
-			{
-				onTaskOnly = "On task".equals(g);
-				lootKind = null;
-				rebuildInPlace();
-			}));
-			strip.add(pill);
-		}
-		JPanel hold = column();
-		hold.add(strip);
-		hold.add(vgap(6));
-		return hold;
-	}
 
 	/** What the tasks paid inside the period, as a bag the kind lens can read. */
 	private List<LocalStore.BagItem> onTaskBag()
@@ -2728,6 +2697,11 @@ class ChroniclePanel extends PluginPanel
 			axes.add(toggle(onTaskOnly ? "On task" : "All", () ->
 			{
 				onTaskOnly = !onTaskOnly;
+				// Like the two axes above it. The kinds a task paid are not the
+				// kinds everything paid, and this axis is only ever drawn while
+				// the board is BY KIND, so a narrowing left standing could strand
+				// the reader on a kind the new reading has no members of.
+				lootKind = null;
 				rebuildInPlace();
 			}));
 		}
@@ -4041,8 +4015,11 @@ class ChroniclePanel extends PluginPanel
 		p.add(vgap(6));
 
 		JPanel log = card("Collection log");
-		log.add(row("Slots filled", fmt(f.getOrDefault("clogSlots", 0L)) + " of "
-			+ fmt(f.getOrDefault("clogAvailable", 0L)), accent()));
+		// A total of zero is a total nobody has told us, so it is not printed as
+		// one. This card reports what the record HOLDS, so the slots still stand.
+		long availKnown = f.getOrDefault("clogAvailable", 0L);
+		log.add(row("Slots filled", fmt(f.getOrDefault("clogSlots", 0L))
+			+ (availKnown > 0 ? " of " + fmt(availKnown) : ""), accent()));
 		log.add(row("Items named", fmt(f.getOrDefault("clogItems", 0L)), null));
 		log.add(row("Pages with a count", fmt(f.getOrDefault("clogPages", 0L)), null));
 		log.add(row("Kill Log lines", fmt(f.getOrDefault("killLogLines", 0L)), null));
@@ -4864,7 +4841,18 @@ class ChroniclePanel extends PluginPanel
 		p.add(vgap(6));
 		if (hasTask)
 		{
-			p.add(onTaskPicker());
+			// The same control the Loot board draws for the same piece of state.
+			// This page used to draw it as a pair of pills, which is the thing
+			// toggle() exists to have replaced.
+			JPanel hold = column();
+			hold.add(toggle(onTaskOnly ? "On task" : "All", () ->
+			{
+				onTaskOnly = !onTaskOnly;
+				lootKind = null;
+				rebuildInPlace();
+			}));
+			hold.add(vgap(6));
+			p.add(hold);
 		}
 		if (srcs.isEmpty())
 		{
@@ -5316,14 +5304,21 @@ class ChroniclePanel extends PluginPanel
 		{
 			return logInWindow(p);
 		}
-		int avail = Math.max(plugin.clogAvailable(), 1712);
+		int[] standing = clogStanding();
 		int fin = plugin.clogFinished();
 		JPanel head = card("Collection log");
-		if (fin > 0)
+		if (standing != null)
 		{
-			head.add(row(fmt(fin) + " / " + fmt(avail),
-				Math.round(100f * fin / avail) + "%", accent()));
-			head.add(progress((float) fin / avail));
+			head.add(row(fmt(standing[0]) + " / " + fmt(standing[1]),
+				Math.round(100f * standing[0] / standing[1]) + "%", accent()));
+			head.add(progress((float) standing[0] / standing[1]));
+		}
+		else if (fin > 0)
+		{
+			// The slots are known and the total is not, which is a real state: the
+			// count rises on a chat event, the total only on a login sync.
+			head.add(row("Slots obtained", fmt(fin), accent()));
+			head.add(row("Open your log in game once for the total", "", null));
 		}
 		else
 		{
@@ -6059,6 +6054,31 @@ class ChroniclePanel extends PluginPanel
 			head = c == ' ' || c == '(';
 		}
 		return sb.toString();
+	}
+
+	/**
+	 * The collection log's standing: how many slots are held, and how many there
+	 * are, or null when the game has not said how many there are.
+	 *
+	 * <p>One rule, because this figure was computed four different ways on four
+	 * surfaces. The total is not something Chronicle can work out: the taxonomy
+	 * lists page entries and one item can sit on several pages, so counting it
+	 * gives a different number from the log's own. It comes from a pair of varps
+	 * the client syncs at login, which costs nothing and needs no interface
+	 * opened - and until it arrives it is zero, which is a not-yet and not an
+	 * answer.
+	 *
+	 * <p>The old readings each dealt with that zero on their own account. One
+	 * floored the total at a literal 1712, which stood in for a missing total and
+	 * also overrode any real total below it. Another printed the obtained count as
+	 * the total, so an account waiting on its first sync read "412 / 412": a
+	 * collection log, finished. Neither is now possible, because neither surface
+	 * gets to invent a denominator.
+	 */
+	private int[] clogStanding()
+	{
+		int avail = plugin.clogAvailable();
+		return avail > 0 ? new int[]{plugin.clogFinished(), avail} : null;
 	}
 
 	private static Obtained obtained(JsonObject cl)
@@ -10464,11 +10484,18 @@ class ChroniclePanel extends PluginPanel
 			plate.add(row("Total level", fmt(overall[0])
 				+ (combat > 0 ? " · combat " + combat : ""), null));
 		}
+		int[] logStanding = clogStanding();
 		int fin = plugin.clogFinished();
-		if (fin > 0)
+		if (logStanding != null)
 		{
-			plate.add(row("Collection log", fmt(fin) + " / "
-				+ fmt(Math.max(plugin.clogAvailable(), fin)), null));
+			plate.add(row("Collection log",
+				fmt(logStanding[0]) + " / " + fmt(logStanding[1]), null));
+		}
+		else if (fin > 0)
+		{
+			// Not "412 / 412". Standing the obtained count in for the total read as
+			// a finished collection log on an account that had simply not synced.
+			plate.add(row("Collection log", fmt(fin) + " obtained", null));
 		}
 		p.add(plate);
 
