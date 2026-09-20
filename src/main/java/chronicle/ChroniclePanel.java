@@ -2293,6 +2293,12 @@ class ChroniclePanel extends PluginPanel
 		movedKcs = null;
 		rolledKcs = null;
 		rollUsed = false;
+		// Cleared in addKinds too, and for the same reason those three above are
+		// here: that board is not the only thing that asks for them, and it is
+		// not the first thing drawn.
+		skilled = null;
+		ledgerNames = null;
+		sourceKinds.clear();
 		// The labels of the build just discarded are nobody's business now. Left to
 		// pile up, an icon that never lands would hold every label the panel ever
 		// drew, which is the same unbounded queue that made the trackers page lag.
