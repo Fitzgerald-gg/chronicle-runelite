@@ -391,6 +391,35 @@ public final class StatRegistry
 	}
 
 	// section within the family; "" means the family's flat top list
+	/**
+	 * The handful of counters that answer "how is this skill going" in one line
+	 * each: logs chopped, fish caught, food cooked and food burned, pickpockets
+	 * and stalls. These are the FLOORS a craft's typed rows reconcile to, which
+	 * is what makes them the right headline - a total rather than one of the
+	 * things summed into it.
+	 *
+	 * <p>Where a craft keeps no floor, its named keys stand in: Smithing counts
+	 * items smithed and cannonballs, Construction counts builds, and neither
+	 * has a broader figure over them.
+	 */
+	public static List<String> headlines(String skill)
+	{
+		for (SkillSpec s : SKILLS)
+		{
+			if (!s.name.equalsIgnoreCase(skill))
+			{
+				continue;
+			}
+			List<String> out = new ArrayList<>(Arrays.asList(s.floors));
+			if (out.isEmpty())
+			{
+				out.addAll(Arrays.asList(s.keys));
+			}
+			return out;
+		}
+		return java.util.Collections.emptyList();
+	}
+
 	public static String subgroup(String key)
 	{
 		String fam = family(key);

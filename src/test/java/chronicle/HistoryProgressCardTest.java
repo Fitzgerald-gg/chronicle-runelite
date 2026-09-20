@@ -521,6 +521,73 @@ public class HistoryProgressCardTest
 		return out[0];
 	}
 
+	/**
+	 * A boss tile's hover, as a flat list of its title, labels and figures.
+	 *
+	 * <p>These used to be a card the cell expanded into below its row, read off
+	 * the board with labels(kills(p)). The card IS the hover now - the click goes
+	 * to the boss's loot instead - so the same assertions read it from here.
+	 */
+	private static List<String> bossHover(ChroniclePanel panel, String boss)
+		throws Exception
+	{
+		// Over the whole record: a narrowed period draws only the bosses it
+		// holds, and these are about what the card SAYS rather than which cells
+		// a week puts on the grid.
+		set(panel, "histGranularity", "Lifetime");
+		JPanel board = kills(panel);
+		final String[] tip = {null};
+		List<java.awt.Component> flat = new ArrayList<>();
+		collectComponents(board, flat);
+		for (java.awt.Component c : flat)
+		{
+			if (!(c instanceof javax.swing.JComponent))
+			{
+				continue;
+			}
+			String t = ((javax.swing.JComponent) c).getToolTipText();
+			if (t != null && t.contains(">" + boss + "<"))
+			{
+				tip[0] = t;
+				break;
+			}
+		}
+		List<String> out = new ArrayList<>();
+		if (tip[0] == null)
+		{
+			return out;
+		}
+		java.util.regex.Matcher m = java.util.regex.Pattern
+			.compile("<div[^>]*>([^<]*)(?:<span[^>]*>([^<]*)</span>)?")
+			.matcher(tip[0]);
+		while (m.find())
+		{
+			String label = m.group(1) == null ? "" : m.group(1).replaceAll(":\\s*$", "").trim();
+			if (!label.isEmpty())
+			{
+				out.add(label);
+			}
+			if (m.group(2) != null && !m.group(2).trim().isEmpty())
+			{
+				out.add(m.group(2).trim());
+			}
+		}
+		return out;
+	}
+
+	private static void collectComponents(java.awt.Component c,
+		List<java.awt.Component> out)
+	{
+		out.add(c);
+		if (c instanceof Container)
+		{
+			for (java.awt.Component k : ((Container) c).getComponents())
+			{
+				collectComponents(k, out);
+			}
+		}
+	}
+
 	private static List<String> labels(Container c)
 	{
 		List<String> out = new ArrayList<>();
@@ -3655,8 +3722,7 @@ public class HistoryProgressCardTest
 		st.clog = cl;
 
 		ChroniclePanel p = panel(st);
-		set(p, "bossOpen", "Wintertodt");
-		List<String> todt = labels(kills(p));
+		List<String> todt = bossHover(p, "Wintertodt");
 		assertFalse("the cart's loot is in the journal: " + todt,
 			String.join(" ", todt).contains("No loot from here has reached"));
 		assertTrue("the container is not named as what it is: " + todt,
@@ -3665,8 +3731,7 @@ public class HistoryProgressCardTest
 		assertTrue("the kills are not the boss's own: " + todt, todt.contains("447"));
 
 		// and a fight paid out through two of them shows both
-		set(p, "bossOpen", "Tempoross");
-		List<String> temp = labels(kills(p));
+		List<String> temp = bossHover(p, "Tempoross");
 		assertTrue(temp.toString(), temp.contains("Reward pool"));
 		assertTrue(temp.toString(), temp.contains("Casket"));
 	}
@@ -3683,19 +3748,17 @@ public class HistoryProgressCardTest
 			new LocalStore.SourceRow("Corrupted Rat", 18, 18, 0L, null, 0, 0));
 
 		ChroniclePanel p = panel(st);
-		set(p, "bossOpen", "The Corrupted Gauntlet");
-		List<String> card = labels(kills(p));
+		List<String> card = bossHover(p, "The Corrupted Gauntlet");
 		assertFalse("95k of it is in the ledger: " + card,
 			String.join(" ", card).contains("No loot from here has reached"));
 		assertTrue("the payout is not shown: " + card, card.contains("Corrupted Hunllef"));
 		assertFalse("a filler creature was counted as the fight's loot: " + card,
 			card.contains("Corrupted Rat"));
 
-		// and a fight whose payout has genuinely never been looted still says so
-		set(p, "bossOpen", "The Gauntlet");
-		// the note wraps, so it arrives as more than one label
-		assertTrue(labels(kills(p)).toString(),
-			String.join(" ", labels(kills(p))).contains("No loot from here has reached"));
+		// and a fight whose payout has genuinely never been looted still says so,
+		// in the two words a hover card has room for
+		List<String> none = bossHover(p, "The Gauntlet");
+		assertTrue(none.toString(), none.contains("none yet"));
 	}
 
 	@Test
@@ -3718,18 +3781,16 @@ public class HistoryProgressCardTest
 		st.clog = cl;
 
 		ChroniclePanel p = panel(st);
-		set(p, "bossOpen", "Tempoross");
-		assertTrue(labels(kills(p)).toString(), labels(kills(p)).contains("3:46"));
+		List<String> pool = bossHover(p, "Tempoross");
+		assertTrue(pool.toString(), pool.contains("3:46"));
 
 		// a page counting two fights gives each its own, and neither the other's
-		set(p, "bossOpen", "The Gauntlet");
-		List<String> plain = labels(kills(p));
+		List<String> plain = bossHover(p, "The Gauntlet");
 		assertTrue(plain.toString(), plain.contains("8:55"));
 		assertFalse("the corrupted best is on the plain Gauntlet: " + plain,
 			plain.contains("13:11"));
 
-		set(p, "bossOpen", "The Corrupted Gauntlet");
-		List<String> corrupt = labels(kills(p));
+		List<String> corrupt = bossHover(p, "The Corrupted Gauntlet");
 		assertTrue(corrupt.toString(), corrupt.contains("13:11"));
 		assertFalse("it took the plain Gauntlet's best: " + corrupt,
 			corrupt.contains("8:55"));
@@ -3760,8 +3821,7 @@ public class HistoryProgressCardTest
 		st.clog = cl;
 
 		ChroniclePanel p = panel(st);
-		set(p, "bossOpen", "Wintertodt");
-		List<String> todtCard = labels(kills(p));
+		List<String> todtCard = bossHover(p, "Wintertodt");
 		assertTrue("the counter is unnamed: " + todtCard,
 			todtCard.contains("Rewards claimed"));
 		assertTrue(todtCard.toString(), todtCard.contains("1,078"));
@@ -3770,8 +3830,7 @@ public class HistoryProgressCardTest
 		// ": number" and comes back as 55 under the label "Personal Best: 8".
 		// Capture turns those away now, but a journal already holding one keeps
 		// it, because these lines are floor-merged and never removed.
-		set(p, "bossOpen", "The Gauntlet");
-		List<String> card = labels(kills(p));
+		List<String> card = bossHover(p, "The Gauntlet");
 		assertFalse("a best time is being read as a count: " + card,
 			card.contains("Personal Best: 8"));
 		assertFalse(card.toString(), card.contains("Personal Best Corrupted: 13"));
@@ -3787,8 +3846,7 @@ public class HistoryProgressCardTest
 		assertFalse("the corrupted count is on the plain Gauntlet's card: " + card,
 			card.contains("Corrupted Gauntlet completion count"));
 
-		set(p, "bossOpen", "The Corrupted Gauntlet");
-		List<String> corrupted = labels(kills(p));
+		List<String> corrupted = bossHover(p, "The Corrupted Gauntlet");
 		assertTrue("the corrupted fight lost its own count: " + corrupted,
 			corrupted.contains("Kills tracked") && corrupted.contains("1"));
 		// and it must not inherit the plain Gauntlet's page counter, which on an

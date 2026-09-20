@@ -506,13 +506,28 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			bump(bySource, "loots", 1);
 			bump(bySource, "value", value);
 			JsonObject items = sub(into, "items");
+			// The SITTING keeps its items per source as well as in total, which
+			// is what lets a source's own page answer for a sitting. The dated
+			// roll deliberately does not: it is written to disk and kept for
+			// four hundred days, and sources times items a day is a different
+			// order of file. So a longer period can say what a source paid and
+			// not what it paid it IN.
+			JsonObject mine = into == sessionRoll ? sub(bySource, "items") : null;
 			for (JsonElement pe : priced)
 			{
 				JsonObject p = pe.getAsJsonObject();
-				JsonObject it = sub(items, String.valueOf(p.get("id").getAsInt()));
+				String id = String.valueOf(p.get("id").getAsInt());
+				JsonObject it = sub(items, id);
 				it.addProperty("n", p.get("name").getAsString());
 				bump(it, "q", p.get("qty").getAsLong());
 				bump(it, "v", p.get("value").getAsLong());
+				if (mine != null)
+				{
+					JsonObject own = sub(mine, id);
+					own.addProperty("n", p.get("name").getAsString());
+					bump(own, "q", p.get("qty").getAsLong());
+					bump(own, "v", p.get("value").getAsLong());
+				}
 			}
 		}
 	}
@@ -643,6 +658,58 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		rank(sources, w.sources);
 		rank(left, w.leftItems);
 		return w;
+	}
+
+	/** What ONE source paid this sitting, ranked, or empty where it paid nothing. */
+	java.util.List<BagItem> sessionSourceItems(String source)
+	{
+		java.util.Map<String, long[]> items = new java.util.LinkedHashMap<>();
+		java.util.Map<String, Integer> ids = new java.util.LinkedHashMap<>();
+		synchronized (lock)
+		{
+			if (!sessionRoll.has("sources") || !sessionRoll.get("sources").isJsonObject())
+			{
+				return new java.util.ArrayList<>();
+			}
+			JsonObject all = sessionRoll.getAsJsonObject("sources");
+			for (String name : all.keySet())
+			{
+				if (!name.equalsIgnoreCase(source) || !all.get(name).isJsonObject())
+				{
+					continue;
+				}
+				JsonObject one = all.getAsJsonObject(name);
+				if (!one.has("items") || !one.get("items").isJsonObject())
+				{
+					continue;
+				}
+				JsonObject its = one.getAsJsonObject("items");
+				for (String id : its.keySet())
+				{
+					JsonObject e = its.getAsJsonObject(id);
+					String label = e.has("n") ? e.get("n").getAsString() : id;
+					long[] t = items.computeIfAbsent(label, k -> new long[2]);
+					t[0] += asLong(e.get("q"));
+					t[1] += asLong(e.get("v"));
+					try
+					{
+						ids.putIfAbsent(label, Integer.parseInt(id));
+					}
+					catch (NumberFormatException ignored)
+					{
+						// a name-keyed entry from an older shape
+					}
+				}
+			}
+		}
+		java.util.List<BagItem> out = new java.util.ArrayList<>();
+		for (java.util.Map.Entry<String, long[]> e : items.entrySet())
+		{
+			out.add(new BagItem(ids.getOrDefault(e.getKey(), 0), e.getKey(),
+				e.getValue()[0], e.getValue()[1]));
+		}
+		out.sort((a, b) -> Long.compare(b.value, a.value));
+		return out;
 	}
 
 	// fold one day's breakdown into the running tally. `named` reads the stored

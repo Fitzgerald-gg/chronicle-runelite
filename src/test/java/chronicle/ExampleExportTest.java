@@ -103,7 +103,7 @@ public class ExampleExportTest
 		"tab", "subByTab", "view",
 		"histFacet", "histGranularity", "histCursor", "histFrom", "histTo",
 		"detailSource", "detailItem", "detailSkill", "detailTask",
-		"allTrackers", "showInfo", "sheetPage", "bossOpen", "slayerLens",
+		"allTrackers", "showInfo", "sheetPage", "slayerLens",
 		"clogPageSel", "journalLens", "dropsLeftBehind",
 		"dropsByKind", "lootKind", "lootTask", "onTaskOnly",
 		"statsFamily", "leftBehindSource", "leftBehindItem", "clogTab",
@@ -131,7 +131,7 @@ public class ExampleExportTest
 	private static Map<String, String> notState()
 	{
 		Map<String, String> m = new LinkedHashMap<>();
-		for (String n : new String[]{"movedKcs", "rolledKcs", "rollUsed", "kcByKind", "chatKcByKind", "killKinds", "movedTypes", "aboveBoard",
+		for (String n : new String[]{"movedKcs", "rolledKcs", "rollUsed", "kcByKind", "chatKcByKind", "killKinds", "movedTypes", "aboveBoard", "buildPeriodCounters", "periodCountersAsked",
 			"grindsCache", "journeyCache", "ledgerNames", "consumVals",
 			"resourcesDropped", "buildSources", "buildClog", "buildSpan",
 			"spanAsked", "historySpine", "historyFeed", "historyJourney",

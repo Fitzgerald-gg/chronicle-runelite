@@ -161,7 +161,7 @@ public class ClickAffordanceTest
 	 */
 	private static void clearNav() throws Exception
 	{
-		for (String f : new String[]{"sheetPage", "bossOpen"})
+		for (String f : new String[]{"sheetPage"})
 		{
 			Field nf = ChroniclePanel.class.getDeclaredField(f);
 			nf.setAccessible(true);

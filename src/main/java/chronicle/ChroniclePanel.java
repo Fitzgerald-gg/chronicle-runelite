@@ -677,7 +677,6 @@ class ChroniclePanel extends PluginPanel
 	// whether any cell on this build was counted off the roll rather than the spine
 	private boolean rollUsed;
 	// which cell has its card open, if any
-	private String bossOpen;
 
 	/**
 	 * The board is the hiscores roster, which is the list the official plugin
@@ -1652,6 +1651,16 @@ class ChroniclePanel extends PluginPanel
 				rebuild();
 			}));
 		}
+		else if (!source.isEmpty())
+		{
+			// The tiles with no board of their own ARE loot sources - the rift's
+			// rewards, Soul Wars' - and the figure they carry is that source's
+			// count. So they open it, rather than being the only things on the
+			// sheet that say a number and do nothing when you press them.
+			cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			final String open = source;
+			cell.addMouseListener(clicker(() -> openSourceLoose(open)));
+		}
 		cell.add(icon, BorderLayout.WEST);
 		boolean lit = figure > 0 && activityStirred(label, source);
 		JLabel fig = new JLabel(figure > 0 ? fmt(figure) : "-", JLabel.RIGHT);
@@ -1703,9 +1712,7 @@ class ChroniclePanel extends PluginPanel
 			List<Boss> had = new ArrayList<>();
 			for (Boss b : roster)
 			{
-				// the open one stays whatever it holds, or clicking a cell would
-				// close the card it just opened
-				if (bossKillsInWindow(b.name) > 0 || b.name.equals(bossOpen))
+				if (bossKillsInWindow(b.name) > 0)
 				{
 					had.add(b);
 				}
@@ -1718,22 +1725,12 @@ class ChroniclePanel extends PluginPanel
 			}
 			roster = had;
 		}
-		int at = -1;
-		for (int i = 0; i < roster.size(); i++)
-		{
-			if (roster.get(i).name.equals(bossOpen))
-			{
-				at = i;
-				break;
-			}
-		}
-		int cut = at < 0 ? roster.size() : Math.min(roster.size(), (at / 3 + 1) * 3);
-		// Built before anything is added, because building is what discovers
-		// whether a cell had to fall back to the roll.
-		JPanel opening = bossSheet(roster.subList(0, cut));
-		JPanel card = at >= 0 ? bossCard(roster.get(at)) : null;
-		JPanel rest = at >= 0 && cut < roster.size()
-			? bossSheet(roster.subList(cut, roster.size())) : null;
+		// One grid, no longer split around an opened cell: what that cell used to
+		// expand into is the hover now, so nothing is inserted mid-sheet and
+		// nothing below it moves when a boss is pressed. Built before anything is
+		// added, because building is what discovers whether a cell had to fall
+		// back to the roll.
+		JPanel opening = bossSheet(roster);
 		java.time.LocalDate shortFrom = rollUsed ? rollShortOf() : null;
 		if (shortFrom != null)
 		{
@@ -1747,16 +1744,6 @@ class ChroniclePanel extends PluginPanel
 			p.add(vgap(4));
 		}
 		p.add(opening);
-		if (card != null)
-		{
-			p.add(vgap(4));
-			p.add(card);
-			p.add(vgap(4));
-			if (rest != null)
-			{
-				p.add(rest);
-			}
-		}
 		p.add(vgap(6));
 		return p;
 	}
@@ -1776,7 +1763,6 @@ class ChroniclePanel extends PluginPanel
 	private JPanel bossCell(Boss b)
 	{
 		final long kc = bossKillsInWindow(b.name);
-		final boolean lit = b.name.equals(bossOpen);
 		JPanel cell = new JPanel(new BorderLayout(3, 0));
 		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		cell.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
@@ -1790,10 +1776,7 @@ class ChroniclePanel extends PluginPanel
 		// zero is the record declining to answer for this window, which is what
 		// the dash beside it says. Folding the two together made the hover assert
 		// "none yet" over a tile that was saying it did not know.
-		cell.setToolTipText(tip(b.name,
-			new String[]{wholeRecord() ? "Kills" : "Kills in " + window().label},
-			new String[]{kc > 0 ? fmt(kc)
-				: (kc == 0 ? "none yet" : "not dated this far back")}));
+		cell.setToolTipText(bossTip(b));
 		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 
 		JLabel icon = new JLabel();
@@ -1807,37 +1790,36 @@ class ChroniclePanel extends PluginPanel
 
 		JLabel fig = new JLabel(kc > 0 ? fmt(kc) : "-", JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
-		fig.setForeground(lit ? accent()
-			: (kc > 0 ? TILE_LIT : ColorScheme.LIGHT_GRAY_COLOR.darker()));
+		fig.setForeground(kc > 0 ? TILE_LIT : ColorScheme.LIGHT_GRAY_COLOR.darker());
 		cell.add(fig, BorderLayout.EAST);
-		cell.addMouseListener(clicker(() ->
-		{
-			bossOpen = lit ? null : b.name;
-			rebuildInPlace();
-		}));
+		// Straight to the loot, which is where a reader pressing a boss means to
+		// go, and not always a page of its own name: a skilling boss pays out
+		// through a cart or a pool.
+		final String open = bossLootSource(b);
+		cell.addMouseListener(clicker(() -> openSourceLoose(open)));
 		return cell;
 	}
 
 	/**
-	 * What one boss came to. The cell carries the kills the window moved; the
-	 * card carries the whole record's, which is the count wherever one is known
-	 * and the ledger's own loot-event tally where none is. Below that, what those
-	 * kills paid, on a row that opens the source's own page.
+	 * What one boss came to. The cell carries the kills the window moved; this
+	 * carries the whole record's, which is the count wherever one is known and
+	 * the ledger's own loot-event tally where none is, and then what those kills
+	 * paid.
+	 *
+	 * <p>Everything the boss card used to say, as the hover card it should have
+	 * been.
+	 *
+	 * <p>Every cell on this grid expanded into a block below the row it sat in,
+	 * and the hover over it said only what the cell already drew. So the reader
+	 * had to click to learn anything, the click pushed the rest of the grid down
+	 * the page, and a second click was needed to put it back. The block is the
+	 * hover now, and the click goes where a reader pressing a boss means to go:
+	 * its loot.
 	 */
-	private JPanel bossCard(Boss b)
+	private String bossTip(Boss b)
 	{
-		JPanel card = new JPanel();
-		card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-		card.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		card.setBorder(BorderFactory.createEmptyBorder(6, CARD_INSET, 6, CARD_INSET));
-		card.setAlignmentX(Component.LEFT_ALIGNMENT);
-		JLabel title = new JLabel(b.name.toUpperCase(Locale.ROOT));
-		title.setFont(FontManager.getRunescapeSmallFont());
-		title.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
-		title.setAlignmentX(Component.LEFT_ALIGNMENT);
-		card.add(title);
-		card.add(vgap(3));
-
+		List<String> labels = new ArrayList<>();
+		List<String> figures = new ArrayList<>();
 		String kind = LocalStore.kindOf(b.name);
 		LocalStore.SourceRow src = null;
 		// What the fight is paid out through as well as the fight itself. A
@@ -1864,33 +1846,74 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		long known = bossKills(b.name);
-		card.add(row("Kills tracked",
-			known > 0 ? fmt(known) : src != null ? fmt(src.loots) : "-",
-			known > 0 || src != null ? accent() : null));
+		labels.add("Kills tracked");
+		figures.add(known > 0 ? fmt(known) : src != null ? fmt(src.loots) : "-");
 		// the best time, which is a time
 		for (Map.Entry<String, Long> pb : bestTimes(b.name))
 		{
-			card.add(row(pb.getKey(), clock(pb.getValue()), null));
+			labels.add(pb.getKey());
+			figures.add(clock(pb.getValue()));
 		}
 		// what the page itself counts, which need not be kills at all
 		for (Map.Entry<String, Long> ln : logLines(b.name))
 		{
-			card.add(row(ln.getKey(), fmt(ln.getValue()), null));
+			labels.add(ln.getKey());
+			figures.add(fmt(ln.getValue()));
 		}
 		if (src != null)
 		{
-			card.add(dropsRow("Drops", src));
+			labels.add("Drops");
+			figures.add(paidFigure(src));
 		}
 		for (LocalStore.SourceRow r : paidOut)
 		{
 			// named as the game pays it out, not as a second boss
-			card.add(dropsRow(beforeBracket(r.name), r));
+			labels.add(beforeBracket(r.name));
+			figures.add(paidFigure(r));
 		}
 		if (src == null && paidOut.isEmpty())
 		{
-			card.add(note("No loot from here has reached the journal yet."));
+			labels.add("Loot");
+			figures.add("none yet");
 		}
-		return card;
+		return tip(b.name, labels.toArray(new String[0]),
+			figures.toArray(new String[0]));
+	}
+
+	private String paidFigure(LocalStore.SourceRow r)
+	{
+		long qty = 0;
+		for (LocalStore.BagItem it : plugin.sourceItems(r.name))
+		{
+			qty += it.qty;
+		}
+		return fmt(qty) + " \u00b7 " + gp(r.value) + " gp";
+	}
+
+	/**
+	 * Where a boss's loot actually lives, which is not always under its own name:
+	 * a skilling boss pays out through a cart or a pool, and that is the page a
+	 * reader pressing the tile wants.
+	 */
+	private String bossLootSource(Boss b)
+	{
+		String kind = LocalStore.kindOf(b.name);
+		for (LocalStore.SourceRow r : sources())
+		{
+			if (LocalStore.kindOf(r.name).equals(kind))
+			{
+				return r.name;
+			}
+		}
+		for (LocalStore.SourceRow r : sources())
+		{
+			if (namesInBrackets(r.name, b.name)
+				|| r.name.equalsIgnoreCase(PAYS_OUT.get(b.name)))
+			{
+				return r.name;
+			}
+		}
+		return b.name;
 	}
 
 	// ------------------------------------------------------------------
@@ -2241,6 +2264,8 @@ class ChroniclePanel extends PluginPanel
 		chatKcByKind = null;
 		killKinds = null;
 		movedTypes = null;
+		buildPeriodCounters = null;
+		periodCountersAsked = false;
 		// These are cleared in buildKills too, and have to be: a test builds that
 		// board with no rebuild around it. But the activity tiles above the boss
 		// grid ask rolledKills as well, and they are drawn BEFORE buildKills gets
@@ -2373,6 +2398,11 @@ class ChroniclePanel extends PluginPanel
 		// control was hung before it. Applied here, once, so the row carries its
 		// own caveat instead of the board carrying two lines of it.
 		periodHolder.setToolTipText(measuredSince);
+		// The tile that was lit is about to be taken out of the hierarchy, and a
+		// component removed under the cursor is never told it was exited. Put it
+		// back before it goes, or its listener keeps a live reference to a tile
+		// nobody can reach and the next sweep has nothing to undo.
+		unlight();
 		canvas.removeAll();
 		canvas.add(body, BorderLayout.NORTH);
 		// The sub-tabs hang outside the scroll pane, because navigation must not
@@ -4592,6 +4622,27 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
+	/**
+	 * What the roll says one source paid inside the window, as {count, worth}.
+	 *
+	 * <p>The sitting reads its own entry and every other period the dated days,
+	 * which is the same split every other board makes.
+	 */
+	private long[] sourceInWindow(String name)
+	{
+		Window w = window();
+		LocalStore.LootWindow win = sessionPeriod() ? plugin.sessionLootWindow()
+			: plugin.lootBetween(w.start, w.end);
+		for (String[] r : win.sources)
+		{
+			if (r[0].equalsIgnoreCase(name))
+			{
+				return new long[]{safeParse(r[1]), safeParse(r[2])};
+			}
+		}
+		return new long[]{0, 0};
+	}
+
 	/** Open a source by a loose name (a task's plural, a kill-log row): exact,
 	 *  then singular, then containment, else the raw name and an empty view. */
 	void openSourceLoose(String name)
@@ -5572,9 +5623,19 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		final LocalStore.SourceRow sr = found;
+		// What THIS period's roll says this source paid, where the period is not
+		// the whole record. The page below reads these in place of the ledger's
+		// lifetime figures, so clicking a source on a board narrowed to a week
+		// opens that week rather than silently opening everything.
+		long[] inWindow = wholeRecord() ? null
+			: sourceInWindow(sr != null ? sr.name : name);
 		// Read before the row is built, because the copy hands back the WHOLE
-		// page: every loot line, not the twenty five the page mounts.
-		final List<LocalStore.BagItem> bag = plugin.sourceItems(sr != null ? sr.name : name);
+		// page: every loot line, not the twenty five the page mounts. The sitting
+		// keeps its own items per source and can answer exactly; a longer period
+		// cannot, and the page says so rather than quietly showing a lifetime.
+		final List<LocalStore.BagItem> bag = sessionPeriod()
+			? plugin.sessionSourceItems(sr != null ? sr.name : name)
+			: plugin.sourceItems(sr != null ? sr.name : name);
 		bag.sort(Comparator.comparingLong((LocalStore.BagItem b) -> b.value).reversed());
 		p.add(backRow(() -> copySourcePage(name)));
 		p.add(vgap(4));
@@ -5594,16 +5655,25 @@ class ChroniclePanel extends PluginPanel
 			// "Tracked" has to go with it. The reconciled count carries kills
 			// from before this plugin was ever installed, so the one word the
 			// old label leaned on is the one thing it is not.
-			long shown = killed ? standingKills(sr) : sr.loots;
+			long shown = inWindow != null ? inWindow[0]
+				: killed ? standingKills(sr) : sr.loots;
 			head.add(row(killed ? "Kills" : "Times looted", fmt(shown), accent()));
 			// Divided by DROPS, not by kills. sr.value accrues once per loot
 			// event beside sr.loots, so loots is the only divisor its numerator
 			// matches; over sr.kc it read 38% high on Brutal black dragon, whose
 			// kc is an import floor of 50 under 69 logged drops.
-			head.add(row("Worth", gp(sr.value) + " gp"
-				+ (sr.loots > 0 ? " · " + gp(sr.value / Math.max(1, sr.loots))
+			long worth = inWindow != null ? inWindow[1] : sr.value;
+			long over = inWindow != null ? inWindow[0] : sr.loots;
+			head.add(row("Worth", gp(worth) + " gp"
+				+ (over > 0 ? " · " + gp(worth / Math.max(1, over))
 					+ (killed ? " gp/drop" : " gp each") : ""), null));
-			addKillSources(head, sr, killed ? shown : -1);
+			// The reconciled kill count and the log's own lines are lifetime
+			// standings, and stay off a narrowed page rather than sitting under
+			// figures that are not.
+			if (inWindow == null)
+			{
+				addKillSources(head, sr, killed ? shown : -1);
+			}
 			// what the log's own page counts for it, in the log's own words
 			for (Map.Entry<String, Long> pbLine : bestTimes(sr.name))
 			{
@@ -5706,6 +5776,17 @@ class ChroniclePanel extends PluginPanel
 				p.add(vgap(5));
 			}
 			p.add(group("Loot"));
+			// Said once, under the heading it applies to. The dated roll keeps a
+			// day's items in one heap rather than per source, so a week can say
+			// what this source paid and not what it paid it in; only the sitting,
+			// which keeps its own, can break it down.
+			if (inWindow != null && !sessionPeriod())
+			{
+				p.add(note("The figures above are " + periodInSentence() + "'s. "
+					+ "What follows is everything this source has ever paid: the "
+					+ "dated roll keeps a day's items together rather than under "
+					+ "the thing that dropped them."));
+			}
 			int cap = drillShown.getOrDefault(name, 25);
 			int mounted = 0;
 			for (LocalStore.BagItem b : bag)
@@ -9056,7 +9137,7 @@ class ChroniclePanel extends PluginPanel
 		// three - where the level opened, where it closed, and what moved - and
 		// half of a 242 pixel column cannot hold that beside a name, so the two
 		// tiles take a row each instead of overlapping in one.
-		JPanel combat = combatLevelTile();
+		JPanel combat = combatLevelTile(gain);
 		JPanel total = totalLevelTile(stand, opened);
 		if (wholeRecord())
 		{
@@ -9077,7 +9158,7 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/** The combat level, wearing a handful of the combat counters on hover. */
-	private JPanel combatLevelTile()
+	private JPanel combatLevelTile(Map<String, Long> gain)
 	{
 		JPanel cell = new JPanel(new BorderLayout(3, 0));
 		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -9091,7 +9172,12 @@ class ChroniclePanel extends PluginPanel
 		int cb = plugin.combatLevel();
 		JLabel fig = new JLabel(cb > 0 ? fmt(cb) : "-", JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
-		fig.setForeground(cb > 0 ? TILE_LIT : ColorScheme.LIGHT_GRAY_COLOR.darker());
+		// Dim unless the period moved it. A combat level is a function of seven
+		// skills, and the record keeps no dated copy of it, so what is asked is
+		// whether any of those seven gained: they are the only things that can
+		// move it, and none of them moving means it did not.
+		fig.setForeground(cb > 0 && (wholeRecord() || combatSkillsMoved(gain))
+			? TILE_LIT : ColorScheme.LIGHT_GRAY_COLOR.darker());
 		cell.add(fig, BorderLayout.EAST);
 		// This tile is the way in to the combat achievements, which is what a
 		// reader means when they click the word Combat on a sheet of levels.
@@ -9185,6 +9271,121 @@ class ChroniclePanel extends PluginPanel
 		{
 			Long n = rolledKills(source);
 			return n != null && n > 0;
+		}
+		return false;
+	}
+
+	// countersForPeriod walks the spine or the sitting; the skill grid asks it
+	// once per cell, which is twenty three times a build.
+	private Map<String, Long> buildPeriodCounters;
+	private boolean periodCountersAsked;
+
+	private Map<String, Long> periodCounters()
+	{
+		if (!periodCountersAsked)
+		{
+			periodCountersAsked = true;
+			buildPeriodCounters = countersForPeriod();
+		}
+		return buildPeriodCounters == null ? java.util.Collections.emptyMap()
+			: buildPeriodCounters;
+	}
+
+	/**
+	 * The handful of counters that say how a craft is going, as a hover card.
+	 *
+	 * <p>The card used to carry the level and the gain, which are the two things
+	 * the cell already draws without being hovered. These are what the cell
+	 * cannot say: logs chopped, fish caught, food cooked and food burned. The
+	 * whole list is a click away, which the last line says.
+	 */
+	private String skillTip(String craft, long level, Long gained)
+	{
+		List<String> labels = new ArrayList<>();
+		List<String> figures = new ArrayList<>();
+		labels.add("Level");
+		figures.add(fmt(level));
+		if (gained != null)
+		{
+			labels.add(wholeRecord() ? "Experience" : "Gained");
+			figures.add((wholeRecord() ? "" : "+") + xpShort(gained));
+		}
+		Map<String, Long> now = periodCounters();
+		for (String key : StatRegistry.headlines(craft))
+		{
+			Long v = now.get(key);
+			if (v == null || v <= 0)
+			{
+				continue;
+			}
+			labels.add(StatRegistry.rowLabel(key));
+			figures.add(fmt(v));
+			if (labels.size() >= 6)
+			{
+				break;
+			}
+		}
+		return tip(craft, labels.toArray(new String[0]),
+			figures.toArray(new String[0]));
+	}
+
+	/**
+	 * Slayer's card, which is not a list of counters: the skill has a whole board
+	 * of its own and this is the way in to it.
+	 */
+	private String slayerTip(long level, Long gained)
+	{
+		long[] ms = windowMs();
+		long[] tally = plugin.onTaskTally(ms[0], ms[1], null, wholeRecord());
+		long paid = 0;
+		for (LocalStore.BagItem b : plugin.onTaskLoot(ms[0], ms[1], null, wholeRecord()))
+		{
+			paid += b.value;
+		}
+		List<String> labels = new ArrayList<>();
+		List<String> figures = new ArrayList<>();
+		labels.add("Level");
+		figures.add(fmt(level));
+		if (gained != null)
+		{
+			labels.add(wholeRecord() ? "Experience" : "Gained");
+			figures.add((wholeRecord() ? "" : "+") + xpShort(gained));
+		}
+		labels.add("Tasks tracked");
+		figures.add(fmt(tally[2]));
+		labels.add("Kills on task");
+		figures.add(fmt(tally[0]));
+		labels.add("On-task loot");
+		figures.add(gp(paid) + " gp");
+		return tip("Slayer", labels.toArray(new String[0]),
+			figures.toArray(new String[0]));
+	}
+
+	// The seven a combat level is worked out from.
+	private static final net.runelite.api.Skill[] COMBAT_SKILLS = {
+		net.runelite.api.Skill.ATTACK, net.runelite.api.Skill.STRENGTH,
+		net.runelite.api.Skill.DEFENCE, net.runelite.api.Skill.HITPOINTS,
+		net.runelite.api.Skill.RANGED, net.runelite.api.Skill.MAGIC,
+		net.runelite.api.Skill.PRAYER};
+
+	/**
+	 * Whether this period could have moved the combat level.
+	 *
+	 * <p>Not whether it DID: the record keeps no dated combat level, and the two
+	 * ends of a period would have to be worked out from seven experience figures
+	 * apiece. Gaining combat experience and not gaining a level is the common
+	 * case, so this lights the tile a little more often than it strictly should;
+	 * the alternative is leaving it lit always, which is the thing being fixed.
+	 */
+	private static boolean combatSkillsMoved(Map<String, Long> gain)
+	{
+		for (net.runelite.api.Skill sk : COMBAT_SKILLS)
+		{
+			Long g = gain.get(sk.name().toLowerCase(Locale.ROOT));
+			if (g != null && g > 0)
+			{
+				return true;
+			}
 		}
 		return false;
 	}
@@ -9816,8 +10017,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		return tip(sessionPeriod() ? "This sitting"
 			: wholeRecord() ? "Lifetime" : "The period",
-			new String[]{playedIsTheGames ? "Time played (the game's own)"
-				: "Time played", "Sessions", "Experience"},
+			new String[]{"Time played", "Sessions", "Experience"},
 			new String[]{hoursMinutes(played[0]), fmt(played[1]), "+" + gp(xp)});
 	}
 
@@ -9884,7 +10084,11 @@ class ChroniclePanel extends PluginPanel
 		}
 		JLabel fig = new JLabel(figure, JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
-		fig.setForeground(levels > 0 ? accent() : Color.WHITE);
+		// The same rule the skills above it and the tiles below it follow: a
+		// standing that this period did not move reads dim. A lifetime moved all
+		// of it, so it is never dimmed there.
+		fig.setForeground(levels > 0 ? accent()
+			: wholeRecord() ? Color.WHITE : ColorScheme.LIGHT_GRAY_COLOR.darker());
 		cell.add(fig, BorderLayout.EAST);
 		return cell;
 	}
@@ -9900,15 +10104,17 @@ class ChroniclePanel extends PluginPanel
 		// The same hover card the boss and activity tiles draw. This was the last
 		// tile on the sheet answering in a sentence while the two grids under it
 		// answered in a titled block.
-		cell.setToolTipText(gained != null
-			? tip(craft, new String[]{"Level", wholeRecord() ? "Experience"
-				: "Gained in " + window().label},
-				new String[]{fmt(level), (wholeRecord() ? "" : "+") + xpShort(gained)})
-			: tip(craft, new String[]{"Level"}, new String[]{fmt(level)}));
+		boolean slayer = net.runelite.api.Skill.SLAYER.equals(sk);
+		cell.setToolTipText(slayer ? slayerTip(level, gained)
+			: skillTip(craft, level, gained));
 		// The cell has always carried a tooltip, which is a mouse listener; this
 		// is what makes the hand cursor honest. Its counters had no other way in.
 		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-		cell.addMouseListener(clicker(() -> openSkill(craft)));
+		// Slayer opens the board it has rather than a drill of its counters: the
+		// tasks, what each paid and the kills on them are a whole view already,
+		// and a card of slayer counters beside it would be the lesser half.
+		cell.addMouseListener(clicker(slayer ? () -> applyTab(View.SLAYER)
+			: () -> openSkill(craft)));
 
 		JLabel icon = new JLabel();
 		java.awt.image.BufferedImage img = skillIcon(sk);
@@ -12385,6 +12591,33 @@ class ChroniclePanel extends PluginPanel
 		return eventSaysInside;
 	}
 
+	/**
+	 * The one tile currently wearing a hover, and how to take it off again.
+	 *
+	 * <p>mouseExited is not a promise. A tooltip drawn over the tile can leave
+	 * getMousePosition non-null, so the exit is declined as "still inside"; the
+	 * pointer then leaves while the tooltip has it, no second exit is ever
+	 * delivered, and the tile stays lit with nothing to put it back. It also
+	 * goes missing when a component is taken out of the hierarchy under the
+	 * cursor, which a redraw does constantly.
+	 *
+	 * <p>So lighting is not left to depend on it. At most one tile is lit at a
+	 * time and lighting any tile puts the last one back, which corrects a stuck
+	 * one the moment the reader touches anything else; and a redraw sweeps it,
+	 * which corrects the rest.
+	 */
+	private static Runnable litNow;
+
+	private static void unlight()
+	{
+		Runnable was = litNow;
+		litNow = null;
+		if (was != null)
+		{
+			was.run();
+		}
+	}
+
 	private static MouseAdapter clicker(Runnable r)
 	{
 		return new MouseAdapter()
@@ -12406,7 +12639,10 @@ class ChroniclePanel extends PluginPanel
 				{
 					return;
 				}
+				// whatever was lit before this is not under the pointer now
+				unlight();
 				javax.swing.JComponent c = (javax.swing.JComponent) e.getComponent();
+				target = c;
 				wasOpaque = c.isOpaque();
 				wasBackground = c.getBackground();
 				// Its OWN ground where it paints one, and what it sits on where it
@@ -12419,7 +12655,23 @@ class ChroniclePanel extends PluginPanel
 				c.setOpaque(true);
 				c.repaint();
 				lit = true;
+				litNow = this::putBack;
 			}
+
+			/** Undo the hover, from wherever the undoing is noticed. */
+			private void putBack()
+			{
+				if (!lit || target == null)
+				{
+					return;
+				}
+				target.setOpaque(wasOpaque);
+				target.setBackground(wasBackground);
+				target.repaint();
+				lit = false;
+			}
+
+			private javax.swing.JComponent target;
 
 			@Override
 			public void mouseExited(MouseEvent e)
@@ -12439,11 +12691,8 @@ class ChroniclePanel extends PluginPanel
 				{
 					return;
 				}
-				javax.swing.JComponent c = (javax.swing.JComponent) e.getComponent();
-				c.setOpaque(wasOpaque);
-				c.setBackground(wasBackground);
-				c.repaint();
-				lit = false;
+				litNow = null;
+				putBack();
 			}
 		};
 	}

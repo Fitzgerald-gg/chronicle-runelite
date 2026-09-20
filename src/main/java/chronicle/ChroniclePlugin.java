@@ -1092,6 +1092,12 @@ public class ChroniclePlugin extends Plugin
 		return localStore.sessionLootWindow();
 	}
 
+	/** What one source paid this sitting. */
+	java.util.List<LocalStore.BagItem> sessionSourceItems(String source)
+	{
+		return localStore.sessionSourceItems(source);
+	}
+
 	int sessionLoots()
 	{
 		return localStore.sessionLoots();
