@@ -8232,7 +8232,10 @@ class ChroniclePanel extends PluginPanel
 		card.add(row("Loot taken", gp(kept) + " gp", null));
 		card.add(row("Loot left", gp(left) + " gp", null));
 		card.add(row("Discarded", gp(summaryValue(progress, "itemsDroppedValue")) + " gp", null));
-		card.add(row("Food consumed", gp(summaryValue(progress, "consumedValue")) + " gp", null));
+		// Upkeep, which is the name HistoryProgress already gives this key: the
+		// figure counts every potion dose drunk as well as every meal, and "Food"
+		// filed a night on brews and restores under the wrong word.
+		card.add(row("Upkeep", gp(summaryValue(progress, "consumedValue")) + " gp", null));
 		p.add(card);
 		p.add(vgap(6));
 	}
@@ -10148,8 +10151,13 @@ class ChroniclePanel extends PluginPanel
 		sb.append("<div style='color:#8f8f8f'>").append(title).append("</div>");
 		for (int i = 0; i < labels.length && i < figures.length; i++)
 		{
+			// Clipped as taskTip clips: a figure is a number or a name, and the
+			// one place a sentence reaches this - a combat task's description -
+			// threw a tooltip across the monitor.
+			String figure = figures[i].length() > 78 ? figures[i].substring(0, 78) + "..."
+				: figures[i];
 			sb.append("<div>").append(labels[i]).append(": <span style='color:#c8a25a'>")
-				.append(figures[i]).append("</span></div>");
+				.append(figure).append("</span></div>");
 		}
 		return sb.append("</body></html>").toString();
 	}

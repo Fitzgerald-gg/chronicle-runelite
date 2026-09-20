@@ -1,0 +1,17 @@
+<!--
+  The test JVM otherwise picks up the client's own logback config from the
+  classpath and appends every warning a test provokes to ~/.runelite/logs/
+  client.log - the file the owner reads to diagnose the live plugin. A night
+  of suite runs put several hundred "[Test worker] WARN" lines in it. Tests
+  log to the console and nowhere else.
+-->
+<configuration>
+	<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{20} - %msg%n</pattern>
+		</encoder>
+	</appender>
+	<root level="WARN">
+		<appender-ref ref="STDOUT"/>
+	</root>
+</configuration>

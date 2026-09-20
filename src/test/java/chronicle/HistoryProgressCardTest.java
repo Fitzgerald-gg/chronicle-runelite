@@ -3478,7 +3478,7 @@ public class HistoryProgressCardTest
 		int at = all.indexOf("WHAT IT WAS WORTH");
 		assertTrue("no value card: " + all, at >= 0);
 		for (String name : new String[]{"Loot received", "Loot taken", "Loot left",
-			"Discarded", "Food consumed"})
+			"Discarded", "Upkeep"})
 		{
 			String v = beside(all, name);
 			assertNotNull(name + " is missing: " + all, v);

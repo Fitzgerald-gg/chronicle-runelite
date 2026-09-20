@@ -489,9 +489,6 @@ public class ChroniclePlugin extends Plugin
 		localName = name;
 		sessionStartMs = System.currentTimeMillis();
 		loadPlaytime();
-		if (!cloudActive())
-		{
-		}
 		refreshPanel();
 		final String who = name;
 		// A different name on the RSProfile pointer means an in-game rename: move the
@@ -1226,7 +1223,6 @@ public class ChroniclePlugin extends Plugin
 		return earliest == Long.MAX_VALUE ? 0 : earliest;
 	}
 
-	// The combat level as the journal last saw it, or 0.
 	/**
 	 * Quests, diaries and combat achievements as the journal holds them.
 	 *
@@ -1675,7 +1671,7 @@ public class ChroniclePlugin extends Plugin
 			localStore.setTrackers(sessionView(), localName);
 			// One closing baseline per day; the History tab and year cards subtract over it.
 			checkDependencies();
-		if (historyLog.dayRolledOver(localName))
+			if (historyLog.dayRolledOver(localName))
 			{
 				appendHistoryBaseline();
 			}
