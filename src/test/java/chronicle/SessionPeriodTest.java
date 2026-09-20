@@ -268,4 +268,139 @@ public class SessionPeriodTest
 		assertTrue("a virtual level is drawn on a period, where it says nothing"
 			+ " about that period", around.contains("wholeRecord()"));
 	}
+
+	/** Pretend the client started {@code agoMs} ago. */
+	private static void began(long agoMs) throws Exception
+	{
+		Field pf = ChroniclePanel.class.getDeclaredField("plugin");
+		pf.setAccessible(true);
+		Object plug = pf.get(panel);
+		Field sf = ChroniclePlugin.class.getDeclaredField("sessionStartMs");
+		sf.setAccessible(true);
+		sf.setLong(plug, System.currentTimeMillis() - agoMs);
+	}
+
+	private static long[] windowMs() throws Exception
+	{
+		Method m = ChroniclePanel.class.getDeclaredMethod("windowMs");
+		m.setAccessible(true);
+		return (long[]) m.invoke(panel);
+	}
+
+	private static boolean inside(long ts) throws Exception
+	{
+		Method m = ChroniclePanel.class.getDeclaredMethod("insideWindow", long.class);
+		m.setAccessible(true);
+		return (Boolean) m.invoke(panel, ts);
+	}
+
+	/**
+	 * TRAP: the one that made every dated board wrong under this period.
+	 *
+	 * <p>Every other period is a run of whole days, so the code that turns one
+	 * into a pair of timestamps rounded to midnight, which loses nothing. The
+	 * sitting is hours inside a day, and rounded the same way it swallows
+	 * everything since midnight: a level earned at breakfast was reported under
+	 * "This session" at teatime, which is what was seen in the client.
+	 */
+	@Test
+	public void theSittingBeginsWhenTheClientDidAndNotAtMidnight() throws Exception
+	{
+		period("Session");
+		began(90 * 60_000L);
+		long[] ms = windowMs();
+		long midnight = java.time.LocalDate.now()
+			.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+		long now = System.currentTimeMillis();
+		assertTrue("the sitting was rounded back to midnight, which is Day's answer"
+			+ " and not the sitting's", ms[0] > midnight || midnight == now);
+		assertTrue("the sitting did not begin when the client did",
+			Math.abs(ms[0] - (now - 90 * 60_000L)) < 5_000L);
+		assertTrue("the sitting runs past now", ms[1] >= now - 5_000L);
+	}
+
+	/** The same bound, applied to the stamps every dated board files a line by. */
+	@Test
+	public void aLineFromEarlierTodayIsNotThisSitting() throws Exception
+	{
+		period("Session");
+		began(60 * 60_000L);
+		long now = System.currentTimeMillis();
+		assertFalse("a line from two hours ago was filed under a sitting an hour old",
+			inside(now - 2 * 60 * 60_000L));
+		assertTrue("a line from ten minutes ago is this sitting and was dropped",
+			inside(now - 10 * 60_000L));
+	}
+
+	/**
+	 * TRAP: an undated line, which the journal wrote before it carried stamps.
+	 * Any period measured in days admits it and files it a little loosely. A
+	 * sitting cannot: a line that cannot say when it happened is not evidence
+	 * that it happened in the last hour.
+	 */
+	@Test
+	public void anUndatedLineIsNotClaimedByTheSitting() throws Exception
+	{
+		period("Day");
+		assertTrue("a dated period stopped admitting its undated lines", inside(0));
+		period("Session");
+		assertFalse("an undated line was counted as part of this sitting", inside(0));
+		period("Lifetime");
+		assertTrue("a lifetime stopped admitting its undated lines", inside(0));
+	}
+
+	/**
+	 * The loot roll keeps ONE entry a day, by design, which is what lets a year
+	 * of drops be summed without holding a year of drops. Asked for a sitting it
+	 * can only answer with the day the sitting is in, so it is not asked: the
+	 * sitting counts its own take as the drops land, and the board says why the
+	 * breakdown is not under it.
+	 */
+	@Test
+	public void theLootBoardCountsTheSittingRatherThanRankingTheDay() throws Exception
+	{
+		period("Session");
+		began(30 * 60_000L);
+		final java.util.List<String> said = new java.util.ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = ChroniclePanel.class
+					.getDeclaredMethod("dropsInWindow", javax.swing.JPanel.class);
+				m.setAccessible(true);
+				javax.swing.JPanel into = (javax.swing.JPanel) m.invoke(panel,
+					new javax.swing.JPanel());
+				collect(into, said);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		String all = String.join(" | ", said);
+		// not "one entry a day", which the roll's own empty message also says:
+		// this is the sentence that belongs to the sitting
+		assertTrue("the board did not say why the breakdown is missing: " + all,
+			all.contains("counted as the drops landed"));
+		assertTrue("the board drew no head card, so it says nothing at all about"
+			+ " what the sitting took: " + all, all.contains("Drops"));
+		assertTrue("and the head card must be the sitting's own figures, not a"
+			+ " board about the roll: " + all, !all.contains("has been dated yet"));
+	}
+
+	private static void collect(java.awt.Component c, java.util.List<String> out)
+	{
+		if (c instanceof javax.swing.JLabel && ((javax.swing.JLabel) c).getText() != null)
+		{
+			out.add(((javax.swing.JLabel) c).getText());
+		}
+		if (c instanceof java.awt.Container)
+		{
+			for (java.awt.Component k : ((java.awt.Container) c).getComponents())
+			{
+				collect(k, out);
+			}
+		}
+	}
 }

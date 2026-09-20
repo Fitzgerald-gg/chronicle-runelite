@@ -2796,6 +2796,45 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
+	 * The sitting's loot, which the dated roll cannot be asked for.
+	 *
+	 * <p>The roll keeps ONE entry a day, by design: it is what lets a year of
+	 * drops be summed without holding a year of drops. A sitting is a few hours
+	 * inside one of those entries, so narrowing the roll to it is not something
+	 * that can be done a little less accurately - it hands back the whole day
+	 * under a heading saying "This session", which is the flaw this board had.
+	 *
+	 * <p>What the sitting DOES know exactly is its own tally, counted as the
+	 * drops land: how many, what they were worth, and the same three figures on
+	 * the left-behind side. So the head card is exact and the ranked list says
+	 * plainly why it is not there, rather than a ranked list of the wrong day.
+	 */
+	private JPanel sittingsLoot(JPanel p)
+	{
+		JPanel head = card(dropsLeftBehind ? "Left behind" : "Drops received");
+		if (dropsLeftBehind)
+		{
+			long[] left = plugin.sessionUntakenTally();
+			head.add(row("Items", fmt(left[0]), ACCENT_RED));
+			head.add(row("Worth", gp(left[1]) + " gp", null));
+			head.add(row("Kills that left one", fmt(plugin.sessionUntakenKills()), null));
+		}
+		else
+		{
+			head.add(row("Drops", fmt(plugin.sessionLoots()), accent()));
+			head.add(row("Worth", gp(plugin.sessionLootValue()) + " gp", null));
+		}
+		p.add(head);
+		p.add(vgap(6));
+		p.add(note("The loot roll keeps one entry a day, so what a sitting took "
+			+ (dropsLeftBehind ? "or left " : "")
+			+ "cannot be broken down by source or by kind. The figures above are "
+			+ "this sitting's own, counted as the drops landed. Any longer period "
+			+ "reads the roll and ranks it."));
+		return p;
+	}
+
+	/**
 	 * The loot a window actually holds, off the dated roll rather than off the
 	 * ledger's running totals. A range the roll has nothing for shows nothing:
 	 * that is the answer, not an empty board to be filled with a lifetime.
@@ -2806,6 +2845,13 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel dropsInWindow(JPanel p)
 	{
+		// Before the roll is consulted at all: whether the roll is empty, or
+		// begins mid-window, are both answers ABOUT the roll, and the sitting is
+		// not read from it.
+		if (sessionPeriod())
+		{
+			return sittingsLoot(p);
+		}
 		Window win = window();
 		long rollFrom = plugin.lootRollFrom();
 		long fromMs = win.start.atStartOfDay(ZoneId.systemDefault())
@@ -2917,12 +2963,27 @@ class ChroniclePanel extends PluginPanel
 	/**
 	 * The period as epoch millis, for the records that carry a stamp rather than
 	 * a daily baseline. A lifetime admits everything, which is what it means.
+	 *
+	 * <p>The sitting is the one period whose bounds are NOT a pair of days. Every
+	 * other period is a run of whole days and rounding to midnight loses nothing;
+	 * a sitting that began this afternoon, rounded the same way, swallows the
+	 * whole morning. So it takes the moment the client started, exactly, and runs
+	 * to now. This is the only place that difference is expressed, and everything
+	 * that dates a line by its stamp reads it from here.
 	 */
 	private long[] windowMs()
 	{
 		if (wholeRecord())
 		{
 			return new long[]{Long.MIN_VALUE / 2, Long.MAX_VALUE / 2};
+		}
+		if (sessionPeriod())
+		{
+			long began = plugin.sessionStart();
+			return new long[]{began > 0 ? began
+				: java.time.LocalDate.now().atStartOfDay(ZoneId.systemDefault())
+					.toInstant().toEpochMilli(),
+				System.currentTimeMillis()};
 		}
 		Window w = window();
 		return new long[]{
@@ -3557,12 +3618,10 @@ class ChroniclePanel extends PluginPanel
 	private JPanel addOnTaskLoot(JPanel p)
 	{
 		Window w = window();
-		final long from = wholeRecord() ? Long.MIN_VALUE / 2
-			: w.start.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-		final long to = wholeRecord() ? Long.MAX_VALUE / 2
-			: w.end.plusDays(1).atStartOfDay(ZoneId.systemDefault())
-				.toInstant().toEpochMilli() - 1;
-		final List<LocalStore.BagItem> bag = plugin.onTaskLoot(from, to, lootTask);
+		// windowMs, not a second copy of it: this had its own pair of midnights
+		// and so reported the whole day's task loot under the sitting.
+		long[] ms = windowMs();
+		final List<LocalStore.BagItem> bag = plugin.onTaskLoot(ms[0], ms[1], lootTask);
 		if (bag.isEmpty())
 		{
 			p.add(taskPicker());
@@ -3595,7 +3654,7 @@ class ChroniclePanel extends PluginPanel
 		// superiors this bag actually came off. It used to be every task in the
 		// window, which is why the figures had to be dropped entirely the
 		// moment a reader picked one.
-		final long[] tally = plugin.onTaskTally(from, to, lootTask);
+		final long[] tally = plugin.onTaskTally(ms[0], ms[1], lootTask);
 		p.add(onTaskHead(qty, value, tally));
 		p.add(vgap(6));
 		p.add(taskPicker());
@@ -10224,14 +10283,21 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private boolean insideWindow(long ts)
 	{
-		if (wholeRecord() || ts <= 0)
+		if (wholeRecord())
 		{
 			return true;
 		}
-		Window w = window();
-		java.time.LocalDate on = java.time.Instant.ofEpochMilli(ts)
-			.atZone(ZoneId.systemDefault()).toLocalDate();
-		return !on.isBefore(w.start) && !on.isAfter(w.end);
+		if (ts <= 0)
+		{
+			// An undated line, which is a line written before the journal carried
+			// stamps. Admitted by any period measured in days, where it is at
+			// worst filed a little loosely. Never admitted by the sitting: a line
+			// that cannot say when it happened certainly cannot claim to have
+			// happened in the last hour.
+			return !sessionPeriod();
+		}
+		long[] ms = windowMs();
+		return ts >= ms[0] && ts <= ms[1];
 	}
 
 	/** What a dated board says when the window simply held nothing. */
@@ -10619,8 +10685,13 @@ class ChroniclePanel extends PluginPanel
 			// the groups open to; an entry with no usable stamp is skipped. The
 			// milestones themselves are the Journal tab's business: it is the
 			// same feed, read day by day, and drawing it twice was clutter.
-			long fromMs = pStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-			long toMs = end.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+			// The sitting bounds itself by the moment the client started, not by
+			// the midnight before it, or the walk below hands the whole day's
+			// feed to a board headed "This session".
+			long fromMs = sessionPeriod() ? windowMs()[0]
+				: pStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+			long toMs = sessionPeriod() ? windowMs()[1]
+				: end.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			Map<String, Long> fromFeed = new java.util.HashMap<>();
 			Map<String, List<String[]>> named = new LinkedHashMap<>();
 			long[] played = {0, 0};   // minutes, sessions
@@ -10721,7 +10792,23 @@ class ChroniclePanel extends PluginPanel
 				// the items and sources beside them, so it answers a period
 				// exactly and can say what the loot actually was.
 				long rollFrom = plugin.lootRollFrom();
-				if (rollFrom > 0 && rollFrom <= fromMs)
+				if (sessionPeriod())
+				{
+					// The roll is dated by DAY, so asked for a sitting it answers
+					// with the day the sitting is in. The sitting counts its own
+					// take as the drops land, which is the exact figure; what it
+					// does not keep is the breakdown, so no named lists are put
+					// under these and the groups simply do not open.
+					long[] left = plugin.sessionUntakenTally();
+					sessionsSpeak[0] = true;
+					sessionsHoldTheFloor[0] = true;
+					retro.put("dropsReceived", (long) plugin.sessionLoots());
+					retro.put("lootValue", plugin.sessionLootValue());
+					retro.put("lootLeftCount", left[0]);
+					retro.put("lootLeftValue", left[1]);
+					retro.put("lootLeftKills", (long) plugin.sessionUntakenKills());
+				}
+				else if (rollFrom > 0 && rollFrom <= fromMs)
 				{
 					LocalStore.LootWindow w = plugin.lootBetween(pStart, pEnd);
 					sessionsSpeak[0] = true;
