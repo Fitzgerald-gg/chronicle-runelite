@@ -4404,4 +4404,68 @@ public class HistoryProgressCardTest
 				real.invoke(null, xp), virt.invoke(null, xp));
 		}
 	}
+
+	/**
+	 * The total is the game's, and stays the game's.
+	 *
+	 * <p>Virtual levels are what a tile SHOWS, because the experience curve does
+	 * not stop where the game stops naming levels. The total is a different kind
+	 * of thing: it is a statistic the game itself keeps and publishes, a player
+	 * knows their own, and it appears on the hiscores. Summing virtual levels
+	 * would produce a number that is not it - on the owner's own account, 2,253
+	 * where the game says 2,235 - and no amount of being defensible makes that
+	 * the number he would be looking for.
+	 */
+	@Test
+	public void theTotalCountsTheLevelsTheGameNamesAndNotTheOnesPastThem()
+		throws Exception
+	{
+		Class<?> baseline = Class.forName("chronicle.HistoryLog$Baseline");
+		java.lang.reflect.Constructor<?> c = baseline.getDeclaredConstructor();
+		c.setAccessible(true);
+		Object at = c.newInstance();
+		java.lang.reflect.Field skills = baseline.getDeclaredField("skills");
+		skills.setAccessible(true);
+		@SuppressWarnings("unchecked")
+		java.util.Map<String, Long> xp = (java.util.Map<String, Long>) skills.get(at);
+		// 13,034,431 is exactly 99; 50M is 112; 200M is the cap at 126
+		xp.put("attack", 13_034_431L);
+		xp.put("strength", 50_000_000L);
+		xp.put("defence", 200_000_000L);
+		java.lang.reflect.Field complete = baseline.getDeclaredField("complete");
+		complete.setAccessible(true);
+		complete.setBoolean(at, true);
+
+		java.lang.reflect.Method levels = HistoryLog.class.getDeclaredMethod(
+			"levels", baseline, java.util.List.class);
+		levels.setAccessible(true);
+		Object got = levels.invoke(null, at,
+			java.util.Arrays.asList("attack", "strength", "defence"));
+
+		java.lang.reflect.Field of = got.getClass().getDeclaredField("of");
+		java.lang.reflect.Field virtual = got.getClass().getDeclaredField("virtual");
+		java.lang.reflect.Field total = got.getClass().getDeclaredField("total");
+		java.lang.reflect.Field nines = got.getClass().getDeclaredField("nines");
+		of.setAccessible(true);
+		virtual.setAccessible(true);
+		total.setAccessible(true);
+		nines.setAccessible(true);
+		@SuppressWarnings("unchecked")
+		java.util.Map<String, Integer> real = (java.util.Map<String, Integer>) of.get(got);
+		@SuppressWarnings("unchecked")
+		java.util.Map<String, Integer> past =
+			(java.util.Map<String, Integer>) virtual.get(got);
+
+		assertEquals("the game names them all 99", Integer.valueOf(99), real.get("attack"));
+		assertEquals(Integer.valueOf(99), real.get("strength"));
+		assertEquals(Integer.valueOf(99), real.get("defence"));
+
+		assertEquals("and the curve carries on", Integer.valueOf(99), past.get("attack"));
+		assertEquals(Integer.valueOf(112), past.get("strength"));
+		assertEquals(Integer.valueOf(126), past.get("defence"));
+
+		assertEquals("the total counts what the game names, not what the curve"
+			+ " reaches", 99 * 3, total.getInt(got));
+		assertEquals("and so does the count of 99s", 3, nines.getInt(got));
+	}
 }
