@@ -389,12 +389,43 @@ public class ChroniclePlugin extends Plugin
 		{
 			takeLiveSkills();
 		}
-		long rev = localStore.revision() + statStore.revision() + clogCapture.revision()
-			+ skillRevision;
-		if (rev != lastDrawnRevision)
+		// WHICH store moved, not merely that one did. A board is redrawn when the
+		// thing it shows has changed and left alone otherwise: an hour of
+		// training moves the counters and the skills on almost every tick, and
+		// redrawing the drops board for it costs twenty five milliseconds of
+		// laying out and painting fifteen hundred components that say exactly
+		// what they said before.
+		int moved = 0;
+		long r = localStore.revision();
+		if (r != lastLootRevision)
 		{
-			lastDrawnRevision = rev;
-			refreshPanel();
+			lastLootRevision = r;
+			moved |= ChroniclePanel.MOVED_RECORD;
+		}
+		r = statStore.revision();
+		if (r != lastCounterRevision)
+		{
+			lastCounterRevision = r;
+			moved |= ChroniclePanel.MOVED_COUNTERS;
+		}
+		r = clogCapture.revision();
+		if (r != lastClogRevision)
+		{
+			lastClogRevision = r;
+			moved |= ChroniclePanel.MOVED_CLOG;
+		}
+		if (skillRevision != lastSkillRevision)
+		{
+			lastSkillRevision = skillRevision;
+			moved |= ChroniclePanel.MOVED_SKILLS;
+		}
+		if (moved != 0)
+		{
+			ChroniclePanel p = panel;
+			if (p != null)
+			{
+				p.update(moved);
+			}
 		}
 		if (!pendingLoginSetup)
 		{
@@ -827,6 +858,26 @@ public class ChroniclePlugin extends Plugin
 	long sessionStart()
 	{
 		return sessionStartMs;
+	}
+
+	/**
+	 * Minutes this sitting has run, or 0 when there is no sitting in progress.
+	 *
+	 * <p>A sitting reaches the journal as one dated line when it CLOSES, so
+	 * until then the time played figure is every sitting but the one the reader
+	 * is having. On a long evening that is the difference between the number on
+	 * screen and the number they would recognise.
+	 *
+	 * <p>Zero once logged out, which is exactly when the closing line exists to
+	 * be counted instead, so the two can never both be in the sum.
+	 */
+	long sessionElapsedMinutes()
+	{
+		if (sessionStartMs <= 0 || client.getGameState() != GameState.LOGGED_IN)
+		{
+			return 0;
+		}
+		return Math.max(0, (System.currentTimeMillis() - sessionStartMs) / 60_000L);
 	}
 
 	// This session's xp split by skill, biggest first, each with its own rate. Held in
@@ -1730,8 +1781,12 @@ public class ChroniclePlugin extends Plugin
 	// Helpers
 	// ------------------------------------------------------------------
 
-	// The summed revision of the three stores as of the last draw asked for.
-	private long lastDrawnRevision;
+	// Each store's revision as of the last draw asked for, kept apart so a draw
+	// can be asked for only of the boards that show what moved.
+	private long lastLootRevision;
+	private long lastCounterRevision;
+	private long lastClogRevision;
+	private long lastSkillRevision;
 
 	/**
 	 * Every skill's level and experience as the CLIENT has them this tick.

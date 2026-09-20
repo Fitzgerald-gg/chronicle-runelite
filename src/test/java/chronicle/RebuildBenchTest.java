@@ -67,6 +67,7 @@ public class RebuildBenchTest
 			final Object view = v;
 			final long[] best = {Long.MAX_VALUE};
 			final int[] rows = {0};
+			final int[] tall = {0};
 			for (int i = 0; i < 12; i++)
 			{
 				SwingUtilities.invokeAndWait(() ->
@@ -94,12 +95,25 @@ public class RebuildBenchTest
 						}
 						Method rebuild = ChroniclePanel.class.getDeclaredMethod("rebuild");
 						rebuild.setAccessible(true);
+						// What the client does: build, lay out at the height the
+						// content actually wants, and paint it. Laying out at a
+						// fixed 800 and never painting measures the cheap half.
 						panel.setSize(242, 800);
 						long t0 = System.nanoTime();
 						rebuild.invoke(panel);
-						panel.doLayout();
+						layoutAll(panel);
+						int want = Math.max(300, panel.getPreferredSize().height);
+						panel.setSize(242, want);
+						layoutAll(panel);
+						java.awt.image.BufferedImage img =
+							new java.awt.image.BufferedImage(242, Math.min(want, 20000),
+								java.awt.image.BufferedImage.TYPE_INT_RGB);
+						java.awt.Graphics2D g = img.createGraphics();
+						panel.paint(g);
+						g.dispose();
 						long dt = System.nanoTime() - t0;
 						best[0] = Math.min(best[0], dt);
+						tall[0] = want;
 						List<Component> flat = new ArrayList<>();
 						flatten(panel, flat);
 						rows[0] = flat.size();
@@ -110,8 +124,8 @@ public class RebuildBenchTest
 					}
 				});
 			}
-			System.out.printf("BENCH %-10s %6.2f ms  (%d components)%n",
-				((Enum<?>) v).name(), best[0] / 1_000_000.0, rows[0]);
+			System.out.printf("BENCH %-10s %7.2f ms  (%d components, %dpx)%n",
+				((Enum<?>) v).name(), best[0] / 1_000_000.0, rows[0], tall[0]);
 			if ("DROPS".equals(((Enum<?>) v).name()))
 			{
 				SwingUtilities.invokeAndWait(() ->
@@ -146,6 +160,18 @@ public class RebuildBenchTest
 						throw new RuntimeException(e);
 					}
 				});
+			}
+		}
+	}
+
+	private static void layoutAll(Component c)
+	{
+		c.doLayout();
+		if (c instanceof Container)
+		{
+			for (Component k : ((Container) c).getComponents())
+			{
+				layoutAll(k);
 			}
 		}
 	}

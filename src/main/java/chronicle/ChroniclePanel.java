@@ -1886,8 +1886,71 @@ class ChroniclePanel extends PluginPanel
 	// board nobody is looking at.
 	private boolean staleWhileHidden;
 
+	/** The ledger: drops, the feed, the kill log, the journal's own record. */
+	static final int MOVED_RECORD = 1;
+
+	/** The counters: every tracker, which an hour of play moves constantly. */
+	static final int MOVED_COUNTERS = 2;
+
+	/** Experience and levels. */
+	static final int MOVED_SKILLS = 4;
+
+	/** The collection log's own capture. */
+	static final int MOVED_CLOG = 8;
+
+	private static final int MOVED_ANY = MOVED_RECORD | MOVED_COUNTERS
+		| MOVED_SKILLS | MOVED_CLOG;
+
+	/**
+	 * Whether the board on screen shows any of what has just moved.
+	 *
+	 * <p>Every board reads live, but no board reads everything. The drops list
+	 * runs to fifteen hundred components and nine thousand pixels when it is
+	 * opened out, and laying that out and painting it costs twenty five
+	 * milliseconds; doing it because a woodcutting tick moved a counter it does
+	 * not show is the whole of the lag.
+	 *
+	 * <p>A board left undrawn is not left stale: navigating to one rebuilds it,
+	 * and anything it DOES show will move soon enough on its own.
+	 */
+	private boolean viewCares(int moved)
+	{
+		if ((moved & MOVED_ANY) == 0)
+		{
+			return false;
+		}
+		switch (view)
+		{
+			case DROPS:
+			case SLAYER:
+			case JOURNAL:
+				return (moved & MOVED_RECORD) != 0;
+			case LOG:
+				return (moved & (MOVED_RECORD | MOVED_CLOG)) != 0;
+			case KILLS:
+				return (moved & (MOVED_RECORD | MOVED_CLOG)) != 0;
+			case STATS:
+				return (moved & (MOVED_COUNTERS | MOVED_RECORD)) != 0;
+			case SHEET:
+			case HISTORY:
+			case HOME:
+			default:
+				return true;
+		}
+	}
+
 	/** Rebuild the panel from plugin state. Safe to call from any thread. */
 	void update()
+	{
+		update(MOVED_ANY);
+	}
+
+	/**
+	 * Rebuild, if the board on screen shows any of what moved.
+	 *
+	 * <p>Safe to call from any thread.
+	 */
+	void update(int moved)
 	{
 		if (!queued.compareAndSet(false, true))
 		{
@@ -1914,6 +1977,17 @@ class ChroniclePanel extends PluginPanel
 			// the timer, which is what that timer is now mostly for.
 			if (popupShowing() || scrollHeld() || beingRead())
 			{
+				staleWhileHidden = true;
+				return;
+			}
+			if (!viewCares(moved))
+			{
+				return;
+			}
+			long floor = redrawFloorMs();
+			if (floor > 0 && System.currentTimeMillis() - lastBuildAt < floor)
+			{
+				// Owed, and paid by the timer once the board has had its breath.
 				staleWhileHidden = true;
 				return;
 			}
@@ -2049,6 +2123,42 @@ class ChroniclePanel extends PluginPanel
 	private long buildsRun;
 
 	private void rebuild()
+	{
+		long began = System.nanoTime();
+		try
+		{
+			rebuildNow();
+		}
+		finally
+		{
+			lastBuildNanos = System.nanoTime() - began;
+			lastBuildAt = System.currentTimeMillis();
+		}
+	}
+
+	// How long the last draw took, and when it finished. A board opened right
+	// out runs to fifteen hundred components and nine thousand pixels, and what
+	// it costs to lay out and paint is the only honest guide to how often it can
+	// afford to be drawn again.
+	private long lastBuildNanos;
+	private long lastBuildAt;
+
+	/**
+	 * How long a board must be left alone between record-driven draws.
+	 *
+	 * <p>Nothing for the ordinary boards, which cost a millisecond or two. A
+	 * board that took twelve milliseconds is one the reader has opened right out,
+	 * and drawing it on every tick spends a twentieth of the client's time saying
+	 * what it already said. Navigation is never held back by this - only the
+	 * record redrawing under somebody who did not ask it to.
+	 */
+	private long redrawFloorMs()
+	{
+		long ms = lastBuildNanos / 1_000_000L;
+		return ms < 12 ? 0 : Math.min(2000L, ms * 60L);
+	}
+
+	private void rebuildNow()
 	{
 		buildsRun++;
 		// A new pass, so the per-rebuild answers are no longer answered.
@@ -9169,12 +9279,13 @@ class ChroniclePanel extends PluginPanel
 		head.add(row("Not started", fmt(not.size()), null));
 		p.add(head);
 		p.add(vgap(6));
-		// Done first, then started, then the rest. The old order led with the
-		// longest list a player has NOT done, so the page opened on a wall of
-		// quests belonging to somebody else's account.
-		addNames(p, "COMPLETE", done, true);
-		addNames(p, "IN PROGRESS", going, true);
-		addNames(p, "NOT STARTED", not, false);
+		// What is under way first, and open; what is finished and what has not
+		// been started are folded. Two hundred and thirteen quests drawn flat is
+		// a wall however it is sorted, and of the three lists the one a reader
+		// wants on opening the page is the four they are in the middle of.
+		addNames(p, "IN PROGRESS", going, true, true);
+		addNames(p, "COMPLETE", done, true, false);
+		addNames(p, "NOT STARTED", not, false, false);
 	}
 
 	/**
@@ -9185,14 +9296,22 @@ class ChroniclePanel extends PluginPanel
 	 * the heading scrolls off and leaves a wall of names that no longer say
 	 * anything about themselves.
 	 */
-	private void addNames(JPanel p, String heading, List<String> names, boolean held)
+	private void addNames(JPanel p, String heading, List<String> names, boolean held,
+		boolean openByDefault)
 	{
 		if (names.isEmpty())
 		{
 			return;
 		}
 		java.util.Collections.sort(names);
-		p.add(group(heading + " (" + fmt(names.size()) + ")"));
+		String foldKey = "quests:" + heading;
+		boolean open = openFolds.contains(foldKey) != openByDefault;
+		p.add(quietHead(heading, fmt(names.size()), foldKey));
+		if (!open)
+		{
+			p.add(vgap(4));
+			return;
+		}
 		for (String n : names)
 		{
 			p.add(row(n, "", held ? null : ColorScheme.LIGHT_GRAY_COLOR.darker(), !held));
@@ -10585,6 +10704,22 @@ class ChroniclePanel extends PluginPanel
 					}
 					played[0] = 0;
 					played[1] = 0;
+				}
+			}
+
+			// The sitting in progress, which is in no dated line yet: a sitting
+			// reaches the journal when it CLOSES, so until then this figure was
+			// every sitting the reader has had except the one they are having.
+			// Counted only where the period reaches today, and zero once logged
+			// out, which is exactly when the closing line exists to be counted
+			// instead - so the two can never both be in the sum.
+			if (!pEnd.isBefore(java.time.LocalDate.now()))
+			{
+				long running = plugin.sessionElapsedMinutes();
+				if (running > 0)
+				{
+					played[0] += running;
+					played[1]++;
 				}
 			}
 

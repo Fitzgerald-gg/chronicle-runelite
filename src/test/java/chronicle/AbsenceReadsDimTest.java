@@ -213,14 +213,19 @@ public class AbsenceReadsDimTest
 	}
 
 	/**
-	 * The quest board marked state only in its group heading. With over a hundred
-	 * and fifty quests, no cap and no fold, that heading scrolls off and leaves a
-	 * wall of names saying nothing about themselves.
+	 * The quest board marks state on the row and not only in its heading, which
+	 * used to be the only carrier and scrolled off within a screen.
+	 *
+	 * <p>Its three lists are folds now, and only the one under way is open: two
+	 * hundred and thirteen quests drawn flat is a wall however it is sorted. So
+	 * the rows exist once their fold is opened, which is the point of the fold.
 	 */
 	@Test
 	public void anUnstartedQuestReadsDimAndAFinishedOneDoesNot() throws Exception
 	{
 		ChroniclePanel p = panel(SOME, "chronicle-dim-quests");
+		openFold(p, "quests:COMPLETE");
+		openFold(p, "quests:NOT STARTED");
 		assertNotEquals("the finished quest went dim with the rest",
 			DIM, nameColour(p, "buildQuests", "Cook's Assistant"));
 		assertEquals("an unstarted quest should be dim",
