@@ -165,7 +165,7 @@ public class SkillingStatTracker implements StatTracker
 		{
 			return;
 		}
-		String o = opt.toLowerCase();
+		String o = opt.toLowerCase(java.util.Locale.ROOT);
 		// Skip the obvious non-skilling verbs so one landing just before an xp drop
 		// can't mis-tag it. Anything else is captured, since a target is only read
 		// when an xp drop pairs with it.

@@ -249,8 +249,8 @@ public class MovementStatTracker implements StatTracker
 	{
 		String option = event.getMenuOption() == null ? "" : event.getMenuOption();
 		String target = event.getMenuTarget() == null ? "" : event.getMenuTarget();
-		String optLow = option.toLowerCase();
-		String tgtLow = Text.removeTags(target).toLowerCase();
+		String optLow = option.toLowerCase(java.util.Locale.ROOT);
+		String tgtLow = Text.removeTags(target).toLowerCase(java.util.Locale.ROOT);
 
 		// walking drops the pending. Left armed, a cancelled cast gets consumed by
 		// whatever region hop comes next and credits the wrong method.
@@ -479,7 +479,7 @@ public class MovementStatTracker implements StatTracker
 		try
 		{
 			return itemManager.getItemComposition(itemManager.canonicalize(itemId))
-				.getName().toLowerCase();
+				.getName().toLowerCase(java.util.Locale.ROOT);
 		}
 		catch (RuntimeException e)   // an id the cache cannot name
 		{
@@ -553,7 +553,7 @@ public class MovementStatTracker implements StatTracker
 
 	private void armTeleport(String label, boolean fromNexus)
 	{
-		pendingLabel = label == null ? "" : label.toLowerCase();
+		pendingLabel = label == null ? "" : label.toLowerCase(java.util.Locale.ROOT);
 		pendingFromNexus = fromNexus;
 		pendingTick = client.getTickCount();
 		pendingMethod = null;   // callers that know the means set it after arming
@@ -622,7 +622,7 @@ public class MovementStatTracker implements StatTracker
 	// first when the click's target names an item as well.
 	private String rowLabel(MenuOptionClicked event, String optLow, String tgtLow)
 	{
-		String row = menuRowText(event.getWidgetId(), event.getParam0()).toLowerCase();
+		String row = menuRowText(event.getWidgetId(), event.getParam0()).toLowerCase(java.util.Locale.ROOT);
 		return (row + " " + optLow + " " + tgtLow).trim();
 	}
 
@@ -641,7 +641,7 @@ public class MovementStatTracker implements StatTracker
 	private String menuRowText(int componentId, int index)
 	{
 		String own = widgetChildText(componentId, index);
-		if (index < 0 || matchDestinationKey(own.toLowerCase()) != null)
+		if (index < 0 || matchDestinationKey(own.toLowerCase(java.util.Locale.ROOT)) != null)
 		{
 			return own;
 		}
@@ -649,7 +649,7 @@ public class MovementStatTracker implements StatTracker
 		for (int child = 0; child < MENU_CHILD_SCAN; child++)
 		{
 			String beside = rowOfList((group << 16) | child, index);
-			if (!beside.isEmpty() && matchDestinationKey(beside.toLowerCase()) != null)
+			if (!beside.isEmpty() && matchDestinationKey(beside.toLowerCase(java.util.Locale.ROOT)) != null)
 			{
 				return beside;
 			}
@@ -916,7 +916,7 @@ public class MovementStatTracker implements StatTracker
 		{
 			return null;
 		}
-		String clean = label.toLowerCase();
+		String clean = label.toLowerCase(java.util.Locale.ROOT);
 		for (String[] destination : DESTINATIONS)
 		{
 			if (clean.contains(destination[0]))

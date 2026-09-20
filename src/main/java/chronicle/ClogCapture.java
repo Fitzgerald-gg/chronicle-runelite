@@ -410,7 +410,7 @@ public class ClogCapture
 			for (int i = 1; i < head.length; i++)
 			{
 				String line = text(head[i]);
-				if (line == null || line.toLowerCase().startsWith("obtained"))
+				if (line == null || line.toLowerCase(java.util.Locale.ROOT).startsWith("obtained"))
 				{
 					continue;
 				}

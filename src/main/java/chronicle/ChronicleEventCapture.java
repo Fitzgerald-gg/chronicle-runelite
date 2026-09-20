@@ -1331,7 +1331,7 @@ public class ChronicleEventCapture
 		{
 			JsonObject data = new JsonObject();
 			data.addProperty("area", d.group("region").trim());
-			data.addProperty("difficulty", d.group("grade").trim().toUpperCase());
+			data.addProperty("difficulty", d.group("grade").trim().toUpperCase(java.util.Locale.ROOT));
 			emit("DIARY", data);
 			return;
 		}
@@ -1416,7 +1416,7 @@ public class ChronicleEventCapture
 		if (ca.find())
 		{
 			JsonObject data = new JsonObject();
-			data.addProperty("tier", ca.group("grade").trim().toUpperCase());
+			data.addProperty("tier", ca.group("grade").trim().toUpperCase(java.util.Locale.ROOT));
 			data.addProperty("task", COMBAT_TASK_POINTS.matcher(ca.group("challenge").trim()).replaceAll(""));
 			emit("COMBAT_ACHIEVEMENT", data);
 			return;
@@ -1427,7 +1427,7 @@ public class ChronicleEventCapture
 		if (clue.find())
 		{
 			JsonObject data = new JsonObject();
-			data.addProperty("clueType", clue.group("rank").trim().toUpperCase());
+			data.addProperty("clueType", clue.group("rank").trim().toUpperCase(java.util.Locale.ROOT));
 			try
 			{
 				data.addProperty("clueCount", Integer.parseInt(clue.group("tally").replace(",", "")));
@@ -1681,7 +1681,7 @@ public class ChronicleEventCapture
 		{
 			return "";
 		}
-		return Text.removeTags(name).replaceAll("\\s*\\(.+\\)$", "").trim().toLowerCase();
+		return Text.removeTags(name).replaceAll("\\s*\\(.+\\)$", "").trim().toLowerCase(java.util.Locale.ROOT);
 	}
 
 	// null while the name can't be read yet.

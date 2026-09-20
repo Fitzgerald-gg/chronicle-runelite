@@ -481,7 +481,7 @@ public final class StatRegistry
 		}
 		if (key.startsWith("teleportsVia"))
 		{
-			return "· by " + key.substring("teleportsVia".length()).toLowerCase();
+			return "· by " + key.substring("teleportsVia".length()).toLowerCase(Locale.ROOT);
 		}
 		if (key.equals("teleportsTotal") || key.equals("teleports"))
 		{

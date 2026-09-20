@@ -1412,6 +1412,34 @@ public class ChroniclePlugin extends Plugin
 		});
 	}
 
+	/**
+	 * Whether a Loot Tracker archive key holds a kind of loot this plugin keeps.
+	 *
+	 * <p>An allow list rather than a block list, so a record type added to the
+	 * core plugin later is ignored until somebody decides it belongs here, rather
+	 * than inherited because nobody thought to name it.
+	 */
+	private static boolean wantedLootType(String key)
+	{
+		if (key == null)
+		{
+			return false;
+		}
+		for (net.runelite.http.api.loottracker.LootRecordType t
+			: net.runelite.http.api.loottracker.LootRecordType.values())
+		{
+			if (t == net.runelite.http.api.loottracker.LootRecordType.PLAYER)
+			{
+				continue;
+			}
+			if (key.startsWith("drops_" + t.name() + "_"))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	// Executor: the config-archive scan and its JSON parse, no game state.
 	private java.util.List<RawSource> readLootTrackerArchive(String profileKey)
 	{
@@ -1433,6 +1461,17 @@ public class ChroniclePlugin extends Plugin
 		}
 		for (String key : keys)
 		{
+			// The archive holds the core plugin's PvP records too, keyed
+			// drops_PLAYER_<the victim's display name> and carrying their
+			// inventory. Adopting one would put another player's name and their
+			// items into this journal and onto the Loot board, under the account
+			// that killed them. The live path already refuses these outright,
+			// saying that this plugin only ever records its own account; the
+			// inherited path has to refuse them on the same terms.
+			if (!wantedLootType(key))
+			{
+				continue;
+			}
 			String raw = configManager.getConfiguration("loottracker", profileKey, key);
 			if (raw == null || raw.isEmpty())
 			{
@@ -1441,6 +1480,13 @@ public class ChroniclePlugin extends Plugin
 			try
 			{
 				JsonObject o = gson.fromJson(raw, JsonObject.class);
+				// Belt and braces: the record names its own type, so a key spelled
+				// some other way than expected is still caught.
+				if (o.has("type") && "PLAYER".equalsIgnoreCase(
+					String.valueOf(o.get("type").getAsString())))
+				{
+					continue;
+				}
 				String source = o.has("name") ? o.get("name").getAsString() : null;
 				if (source == null || source.isEmpty())
 				{

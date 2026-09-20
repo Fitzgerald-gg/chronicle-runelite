@@ -118,4 +118,49 @@ public class DisallowedApiTest
 		}
 		assertTrue(String.join("\n  ", bad), bad.isEmpty());
 	}
+
+	/**
+	 * Case folding without a locale.
+	 *
+	 * <p>This plugin lowercases game text and matches it with contains() against
+	 * ASCII literals that are never folded themselves, which is an asymmetric
+	 * compare: whether it holds depends on the machine's locale. On a Turkish or
+	 * Azeri client String.toLowerCase() turns I into a dotless i, so "Lunar Isle",
+	 * "Ice Plateau", "Harmony Island" and "Icy Basalt" stop matching their own
+	 * destination keys and those teleports quietly stop being counted.
+	 *
+	 * <p>The same call also writes into the journal: a combat achievement tier
+	 * upper-cased without a locale is persisted as "ELITE" with a dotted capital
+	 * I, and stays in the feed for good.
+	 *
+	 * <p>Every one of these in this plugin is producing a key or a stored value
+	 * rather than text for a reader, so Locale.ROOT is right for all of them. The
+	 * test is here rather than a comment because it costs one line to reintroduce
+	 * and the machine that reintroduces it will never be the machine that notices.
+	 */
+	@Test
+	public void noCaseFoldingHappensInWhicheverLocaleTheClientRunsIn() throws Exception
+	{
+		Pattern bare = Pattern.compile("\\.to(?:Lower|Upper)Case\\s*\\(\\s*\\)");
+		List<String> bad = new ArrayList<>();
+		for (Path f : mainSources())
+		{
+			String src = code(new String(Files.readAllBytes(f), StandardCharsets.UTF_8));
+			Matcher m = bare.matcher(src);
+			while (m.find())
+			{
+				int line = 1;
+				for (int i = 0; i < m.start(); i++)
+				{
+					if (src.charAt(i) == '\n')
+					{
+						line++;
+					}
+				}
+				bad.add(f + ":" + line + "  " + m.group().trim());
+			}
+		}
+		assertTrue("case folded in the client's locale, not the record's; pass"
+			+ " Locale.ROOT:\n  " + String.join("\n  ", bad), bad.isEmpty());
+	}
 }
