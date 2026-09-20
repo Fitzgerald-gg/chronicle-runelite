@@ -152,7 +152,11 @@ public class AbsenceReadsDimTest
 	public void withNoBitsAtAllNothingIsDimmed() throws Exception
 	{
 		ChroniclePanel p = panel(EMPTY, "chronicle-dim-unknown");
-		assertNotEquals("an unknown board dimmed itself into a wrong answer",
+		assertNotEquals("an unknown combat board dimmed itself into a wrong answer",
 			DIM, nameColour(p, "buildCombatAchievements", "Noxious Foe"));
+		// The same trap on the diary board, which had the rule applied to it
+		// without the guard: no diaries block is not forty eight unfinished tiers.
+		assertNotEquals("an unknown diary board dimmed itself into a wrong answer",
+			DIM, nameColour(p, "buildDiaries", "Easy"));
 	}
 }

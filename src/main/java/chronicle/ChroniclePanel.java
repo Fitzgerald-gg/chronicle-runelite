@@ -8542,12 +8542,27 @@ class ChroniclePanel extends PluginPanel
 		JsonObject mine = achievements().has("diaries")
 			&& achievements().get("diaries").isJsonObject()
 			? achievements().getAsJsonObject("diaries") : new JsonObject();
-		long[] d = diaryStanding();
+		// A journal written before the diaries were captured, or one belonging to an
+		// account that has not finished a login yet, carries no tiers at all. That
+		// is not the same as having finished none of them, and the difference is
+		// the whole board: unguarded, every tier dims and the head reads 0 / 0, so
+		// a new install greets its owner by reporting that they have done nothing.
+		boolean known = mine.size() > 0;
 		JPanel head = card("Achievement diaries");
-		head.add(row("Tiers done", d[0] + " / " + d[1], accent()));
-		head.add(row("Regions finished", fmt(d[2]) + " / " + fmt(d[3]), null));
+		if (known)
+		{
+			long[] d = diaryStanding();
+			head.add(row("Tiers done", d[0] + " / " + d[1], accent()));
+			head.add(row("Regions finished", fmt(d[2]) + " / " + fmt(d[3]), null));
+		}
 		p.add(head);
 		p.add(vgap(6));
+		if (!known)
+		{
+			p.add(note("Which tiers you have finished arrives when you next log in. "
+				+ "Until then this is what each one asks for."));
+			p.add(vgap(4));
+		}
 		// The game states which TIERS are done and never which tasks, so a tier is
 		// ticked or it is not, and the tasks under it are what it asks for rather
 		// than a checklist of what is left.
@@ -8580,7 +8595,8 @@ class ChroniclePanel extends PluginPanel
 				JPanel line = row(tier.substring(0, 1).toUpperCase(Locale.ROOT)
 						+ tier.substring(1),
 					fmt(n) + " tasks",
-					got ? null : ColorScheme.LIGHT_GRAY_COLOR.darker(), !got);
+					known && !got ? ColorScheme.LIGHT_GRAY_COLOR.darker() : null,
+					known && !got);
 				// Hover, not click: the tasks are in the tooltip and there is no
 				// board underneath this to open. It carried a hand cursor for a
 				// click that was never wired.
@@ -9066,6 +9082,13 @@ class ChroniclePanel extends PluginPanel
 		pick.setFont(FontManager.getRunescapeSmallFont());
 		pick.setToolTipText("Narrow this board to one task");
 		pick.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		// The label needs the listener too, not just the row. Its tooltip registers
+		// it with the ToolTipManager, which adds a mouse listener of its own, and
+		// from then on the label is the deepest listening component under the
+		// pointer: Swing delivers the press there and does not pass it up, so the
+		// row's listener never runs. The task name is the half of this row that
+		// looks most like the control, and it was the half that did nothing.
+		pick.addMouseListener(clicker(() -> taskMenu().show(r, 0, r.getHeight())));
 		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 		r.addMouseListener(clicker(() -> taskMenu().show(r, 0, r.getHeight())));
 		return r;

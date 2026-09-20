@@ -436,7 +436,17 @@ public class PanelPreviewTest
 	// Fixture data: long names and dense lists, the states that clip
 	// ------------------------------------------------------------------
 
-	private StubPlugin fixturePlugin() throws Exception
+	/**
+	 * The fixture account. Package-visible and static because other tests hold
+	 * invariants over every surface and need the same dense, long-named data this
+	 * one draws: a second copy would drift from the one the renders are taken of.
+	 */
+	static StubPlugin fixtureStub() throws Exception
+	{
+		return fixturePlugin();
+	}
+
+	private static StubPlugin fixturePlugin() throws Exception
 	{
 		StubPlugin s = new StubPlugin(mockItems());
 		s.spriteManager = mockSprites();
