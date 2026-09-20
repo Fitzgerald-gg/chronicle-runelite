@@ -146,17 +146,50 @@ public class ActivityTileTest
 	}
 
 	/**
+	 * The combat achievements are reached from the COMBAT LEVEL, which is what a
+	 * reader means when they click the word Combat on a sheet of levels. There
+	 * was an activity tile doing the job instead, sitting among the clue scrolls
+	 * and the rifts as though it were one of them.
+	 */
+	@Test
+	public void combatIsNotOneOfTheActivities() throws Exception
+	{
+		Field f = ChroniclePanel.class.getDeclaredField("ACTIVITIES");
+		f.setAccessible(true);
+		for (String[] a : (String[][]) f.get(null))
+		{
+			assertTrue("combat is still filed as an activity",
+				!"Combat".equals(a[0]));
+		}
+	}
+
+	/**
 	 * Clicked, not merely wired. A listener that is present and a click that
 	 * arrives are different questions, and the second is the one being asked.
 	 */
 	@Test
-	public void clickingCombatOpensTheCombatAchievements() throws Exception
+	public void clickingTheCombatLevelOpensTheCombatAchievements() throws Exception
 	{
-		JPanel tile = tileSaying("Combat achievements");
-		assertNotNull("the combat tile was not drawn at all", tile);
-		press(tile);
-		assertEquals("clicking Combat did not open the combat achievements",
-			"combat", nav("sheetPage"));
+		final JPanel[] tile = {null};
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = ChroniclePanel.class.getDeclaredMethod("combatLevelTile");
+				m.setAccessible(true);
+				tile[0] = (JPanel) m.invoke(panel);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		assertNotNull(tile[0]);
+		assertTrue("the combat level says nothing about the achievements it opens",
+			tile[0].getToolTipText().contains("Achievement points"));
+		press(tile[0]);
+		assertEquals("clicking the combat level did not open the combat"
+			+ " achievements", "combat", nav("sheetPage"));
 	}
 
 	@Test

@@ -1423,7 +1423,6 @@ class ChroniclePanel extends PluginPanel
 		{"Collections", "", "log"},
 		{"Quests", "", "quests"},
 		{"Diaries", "", "diaries"},
-		{"Combat", "", "combat"},
 	};
 
 	/**
@@ -1463,10 +1462,6 @@ class ChroniclePanel extends PluginPanel
 				return net.runelite.api.SpriteID.TAB_QUESTS;
 			case "Diaries":
 				return net.runelite.api.SpriteID.TAB_QUESTS_GREEN_ACHIEVEMENT_DIARIES;
-			case "Combat":
-				// The game names no sprite for the combat achievements themselves,
-				// so this is its own emblem for combat.
-				return net.runelite.api.SpriteID.TAB_COMBAT;
 			default:
 				return 0;
 		}
@@ -8843,14 +8838,26 @@ class ChroniclePanel extends PluginPanel
 		fig.setFont(FontManager.getRunescapeSmallFont());
 		fig.setForeground(cb > 0 ? TILE_LIT : ColorScheme.LIGHT_GRAY_COLOR.darker());
 		cell.add(fig, BorderLayout.EAST);
+		// This tile is the way in to the combat achievements, which is what a
+		// reader means when they click the word Combat on a sheet of levels.
+		// There was an activity tile doing the job instead, sitting among the
+		// clue scrolls and the rifts as though it were one of them.
 		Map<String, Long> c = counters();
+		long[] ca = combatStanding();
 		cell.setToolTipText(tip("Combat",
-			new String[]{"Damage dealt", "Highest hit", "Deaths", "Hits blocked"},
+			new String[]{"Achievement points", "Tiers unlocked", "Damage dealt",
+				"Highest hit"},
 			new String[]{
+				ca[1] > 0 ? fmt(ca[0]) + " / " + fmt(ca[1]) : fmt(ca[0]),
+				fmt(ca[2]) + " / 6",
 				fmt(c.getOrDefault(chronicle.counters.StatKeys.DAMAGE_DEALT, 0L)),
-				fmt(c.getOrDefault(chronicle.counters.StatKeys.HIGHEST_HIT, 0L)),
-				fmt(c.getOrDefault(chronicle.counters.StatKeys.DEATHS, 0L)),
-				fmt(c.getOrDefault(chronicle.counters.StatKeys.HITS_BLOCKED, 0L))}));
+				fmt(c.getOrDefault(chronicle.counters.StatKeys.HIGHEST_HIT, 0L))}));
+		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		cell.addMouseListener(clicker(() ->
+		{
+			sheetPage = "combat";
+			rebuild();
+		}));
 		return cell;
 	}
 
