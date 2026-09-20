@@ -2675,10 +2675,20 @@ class ChroniclePanel extends PluginPanel
 			// the kills whose loot was all picked up: the loot events less the kills
 			// that left a stack behind, one unit both ways. "Left behind" below
 			// counts stacks, so it is not what this subtracts.
-			strip.add(row("Drops taken",
-				fmt(Math.max(0, plugin.sessionLoots() - plugin.sessionUntakenKills())),
-				ACCENT_SESSION));
-			mounted++;
+			//
+			// Drawn only where it DIFFERS from the line above it. Taking
+			// everything is the ordinary case, and there it repeated the received
+			// count verbatim - the same number twice, one under the other, saying
+			// nothing the first had not. It appears exactly when Left behind
+			// does, so the two arrive together and mean something, or neither is
+			// on screen.
+			if (plugin.sessionUntakenKills() > 0)
+			{
+				strip.add(row("Drops taken",
+					fmt(Math.max(0, plugin.sessionLoots() - plugin.sessionUntakenKills())),
+					ACCENT_SESSION));
+				mounted++;
+			}
 		}
 		long[] untaken = plugin.sessionUntakenTally();
 		if (untaken[0] > 0)
@@ -10696,9 +10706,12 @@ class ChroniclePanel extends PluginPanel
 		// The same for every counter: a period reaching today closes on the live
 		// totals. Without it the trackers board reported a week that stopped at
 		// midnight and caught up overnight.
-		return s == null ? null
-			: HistoryLog.gained(s.opening.counters, s.earliest.counters,
-				closingNow(s.closing.counters, counters()));
+		if (s == null)
+		{
+			return null;
+		}
+		return peaksNotDeltas(HistoryLog.gained(s.opening.counters,
+			s.earliest.counters, closingNow(s.closing.counters, counters())), s);
 	}
 
 	/**
@@ -10715,6 +10728,47 @@ class ChroniclePanel extends PluginPanel
 		String label = window().label;
 		return label.startsWith("This ")
 			? Character.toLowerCase(label.charAt(0)) + label.substring(1) : label;
+	}
+
+	/**
+	 * A high-water counter answers a period with its PEAK, not with a difference.
+	 *
+	 * <p>Highest hit is a record, not a tally. Subtracting one record from
+	 * another is the arithmetic every other counter wants and the one thing this
+	 * kind must not have: a best of 68 at the start of a week and 75 at the end
+	 * printed "Highest hit 7", which nobody hit. The store has always known this
+	 * - LocalStore.MAX_KEYS takes a max where a lifetime would otherwise sum -
+	 * and StatRegistry has carried the same two names under a comment saying a
+	 * period delta of one means nothing. Nothing read it.
+	 *
+	 * <p>Where the record ROSE inside the window, the closing figure is the
+	 * period's own best by definition: it beat everything that came before it.
+	 * Where it did not rise, the period's best is simply not in the record - the
+	 * spine keeps the running maximum and not the hits under it - so the row is
+	 * dropped rather than answered with a nought or with an older record.
+	 */
+	private static Map<String, Long> peaksNotDeltas(Map<String, Long> moved, Span s)
+	{
+		for (String key : StatRegistry.peakKeys())
+		{
+			if (!moved.containsKey(key))
+			{
+				continue;
+			}
+			long opened = s.opening.counters == null ? 0
+				: s.opening.counters.getOrDefault(key, 0L);
+			long shut = s.closing.counters == null ? 0
+				: s.closing.counters.getOrDefault(key, 0L);
+			if (shut > opened)
+			{
+				moved.put(key, shut);
+			}
+			else
+			{
+				moved.remove(key);
+			}
+		}
+		return moved;
 	}
 
 	/**
@@ -10949,13 +11003,27 @@ class ChroniclePanel extends PluginPanel
 			JLabel fwd = new JLabel(">");
 			for (JLabel arrow : new JLabel[]{back, fwd})
 			{
-				arrow.setForeground(accent());
 				arrow.setFont(FontManager.getRunescapeBoldFont());
-				arrow.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 				arrow.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 6));
 			}
+			back.setForeground(accent());
+			back.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 			back.addMouseListener(clicker(() -> stepPeriod(-1)));
-			fwd.addMouseListener(clicker(() -> stepPeriod(1)));
+			// The log has no forward. A reader arrives on the present window and
+			// returns to it every time they pick a period, so this arrow spent
+			// most of its life computing the next granule, finding it after today
+			// and clamping straight back - a press that redrew the same board,
+			// from a control wearing the same accent and the same hand cursor as
+			// the live one beside it. Drawn dim and inert instead, which is the
+			// rule the row already keeps for Lifetime and for the sitting, and
+			// still drawn so the label between them does not slide.
+			boolean ahead = canStepForward();
+			fwd.setForeground(ahead ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+			if (ahead)
+			{
+				fwd.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				fwd.addMouseListener(clicker(() -> stepPeriod(1)));
+			}
 			r.add(back, BorderLayout.WEST);
 			r.add(fwd, BorderLayout.EAST);
 		}
@@ -10984,6 +11052,24 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/** Move the window one granule, or one span where exact dates are set. */
+	/**
+	 * Whether there is anywhere forward to go.
+	 *
+	 * <p>With exact dates this also closes a hole. Stepping moved BOTH ends by
+	 * the span with no clamp, while window() pins only the end to today, so
+	 * pressing on past the present first collapsed the window onto one end and
+	 * then inverted it - and the dateline, built from the unpinned start and the
+	 * pinned end, printed backwards: "22 Sept - 20 Sept".
+	 */
+	private boolean canStepForward()
+	{
+		if (histFrom != null && histTo != null)
+		{
+			return histTo.isBefore(java.time.LocalDate.now());
+		}
+		return !stepForward(histCursor).isAfter(java.time.LocalDate.now());
+	}
+
 	private void stepPeriod(int by)
 	{
 		if (histFrom != null && histTo != null)

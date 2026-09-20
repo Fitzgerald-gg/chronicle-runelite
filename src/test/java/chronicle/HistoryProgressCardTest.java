@@ -3207,6 +3207,71 @@ public class HistoryProgressCardTest
 		assertFalse("lifetime has nowhere to step forward to", arrowShows(history(p), ">"));
 	}
 
+	/**
+	 * TRAP: the forward arrow is still DRAWN on the present window, so a test
+	 * that only asks whether it is on screen passes whatever it does. It is
+	 * drawn on purpose - the label between the two would slide if it vanished -
+	 * and it is the colour and the cursor that say whether it is live.
+	 *
+	 * <p>A log has no forward. A reader arrives on the present window and returns
+	 * to it every time they pick a period, so this arrow spent most of its life
+	 * computing the next granule, finding it after today and clamping back: a
+	 * press that redrew the same board, from a control wearing the same accent
+	 * as the live one beside it.
+	 */
+	@Test
+	public void theForwardArrowIsInertOnThePresentWindow() throws Exception
+	{
+		ChroniclePanel p = panel(stub(true));
+		set(p, "histGranularity", "Week");
+		JLabel fwd = arrow(history(p), ">");
+		assertTrue("the forward arrow is gone, and the label will slide", fwd != null);
+		assertEquals("the present week offers a step into next week",
+			ColorScheme.LIGHT_GRAY_COLOR.darker(), fwd.getForeground());
+		assertEquals("and answers the cursor as though it would take it",
+			java.awt.Cursor.getDefaultCursor(), fwd.getCursor());
+		assertEquals("and would act on a press", 0, fwd.getMouseListeners().length);
+
+		// stepped back, there IS somewhere forward to go, and it says so
+		Method step = ChroniclePanel.class.getDeclaredMethod("stepPeriod", int.class);
+		step.setAccessible(true);
+		edt(() -> step.invoke(p, -1));
+		JLabel live = arrow(history(p), ">");
+		assertEquals("a week in the past cannot step forward to the present",
+			accentOf(p), live.getForeground());
+		assertTrue("and it is dead when it should not be",
+			live.getMouseListeners().length > 0);
+	}
+
+	private static java.awt.Color accentOf(ChroniclePanel p) throws Exception
+	{
+		Method m = ChroniclePanel.class.getDeclaredMethod("accent");
+		m.setAccessible(true);
+		final java.awt.Color[] c = new java.awt.Color[1];
+		edt(() -> c[0] = (java.awt.Color) m.invoke(p));
+		return c[0];
+	}
+
+	private static JLabel arrow(Container c, String text)
+	{
+		for (Component k : c.getComponents())
+		{
+			if (k instanceof JLabel && text.equals(((JLabel) k).getText()))
+			{
+				return (JLabel) k;
+			}
+			if (k instanceof Container)
+			{
+				JLabel deeper = arrow((Container) k, text);
+				if (deeper != null)
+				{
+					return deeper;
+				}
+			}
+		}
+		return null;
+	}
+
 	// whether the stepper's arrow is on screen, which is not the same as whether
 	// the label exists: a hidden component is still in the tree
 	private static boolean arrowShows(Container c, String text)

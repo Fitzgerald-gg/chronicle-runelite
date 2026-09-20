@@ -30,8 +30,10 @@ import static org.junit.Assert.assertTrue;
  * The Home tab's session strip, its three loot rows: "Drops received" (the loot
  * events and their gp), "Drops taken" (those events less the kills that left a
  * stack on the floor, floored at none) and "Left behind" (the stacks and their
- * gp). The middle row is in one unit with the first and is drawn whenever
- * anything was received; the stacks under the third are never what it subtracts.
+ * gp). The middle row is in one unit with the first, and is drawn only where it
+ * DIFFERS from it: taking everything is the ordinary case, and there it repeated
+ * the received count verbatim. So it appears exactly when the third row does.
+ * The stacks under that third row are never what it subtracts.
  */
 public class HomeSessionStripTest
 {
@@ -181,11 +183,23 @@ public class HomeSessionStripTest
 		assertEquals("4 · 100 gp", beside(strip, "Left behind"));
 	}
 
+	/**
+	 * Nothing left behind means every drop was taken - and so the strip does not
+	 * say so. The taken count is the received count exactly here, and printing it
+	 * put the same number twice, one line under the other, the second saying
+	 * nothing the first had not. It is drawn only where it differs, which is
+	 * exactly when Left behind is drawn too.
+	 *
+	 * <p>The arithmetic it used to assert is still held, by the two cases that DO
+	 * differ: the floor above, and a sitting that left a handful.
+	 */
 	@Test
-	public void nothingLeftBehindMeansEveryDropWasTaken() throws Exception
+	public void nothingLeftBehindIsNotWorthAnotherLine() throws Exception
 	{
 		List<String> strip = home(stub(12, 3_000, 0, 0, 0));
-		assertEquals("12", beside(strip, "Drops taken"));
+		assertEquals("12 · 3,000 gp", beside(strip, "Drops received"));
+		assertFalse("the received count was repeated under a second name: " + strip,
+			strip.contains("Drops taken"));
 		assertFalse(strip.toString(), strip.contains("Left behind"));
 	}
 
