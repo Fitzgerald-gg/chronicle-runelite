@@ -350,6 +350,15 @@ class HistoryLog
 	static final class Levels
 	{
 		final Map<String, Integer> of = new java.util.LinkedHashMap<>();
+		/**
+		 * The same levels counted past 99.
+		 *
+		 * <p>Beside {@link #of} rather than instead of it. The totals and the
+		 * count of 99s are the game's own statistics and stop at 99 where the
+		 * game does; what a skill tile SHOWS is what the account has actually
+		 * done, which carries on.
+		 */
+		final Map<String, Integer> virtual = new java.util.LinkedHashMap<>();
 		int total;
 		int drawn;
 		int nines;
@@ -394,6 +403,14 @@ class HistoryLog
 				level = Math.max(HITPOINTS_FLOOR, level);
 			}
 			out.of.put(key, level);
+			// The same floor: the game gives a new account ten hitpoints, and a
+			// virtual reading of the curve alone would put it at nine.
+			int past = xp != null ? PaceBook.virtualLevelAt(xp) : level;
+			if (HITPOINTS.equals(key) && past > 0)
+			{
+				past = Math.max(HITPOINTS_FLOOR, past);
+			}
+			out.virtual.put(key, past);
 			out.total += level;
 			if (level > 0)
 			{

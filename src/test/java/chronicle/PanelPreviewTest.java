@@ -126,7 +126,12 @@ public class PanelPreviewTest
 		collapseAll(panel);
 		// the boss board, which is the hiscores roster and not the log's pages
 		shoot(panel, out, prefix + "-kills", "KILLS");
-		// and the whole sheet it now sits at the bottom of
+		// and the whole sheet it now sits at the bottom of. The history read has
+		// to have landed first: the skills band is drawn from the spine, so
+		// without this the sheet was photographed saying "Reading your history"
+		// and every render of it since has been of a board with no skills on it.
+		regatherHistory(panel);
+		awaitHistory(panel);
 		shoot(panel, out, prefix + "-sheet", "SHEET");
 		// the sheet's activity pages (the log has its own shot, above)
 		for (String page : new String[]{"clues", "quests", "diaries", "combat"})

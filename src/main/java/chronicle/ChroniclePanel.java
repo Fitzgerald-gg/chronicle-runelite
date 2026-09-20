@@ -8627,9 +8627,17 @@ class ChroniclePanel extends PluginPanel
 		{
 			String key = sk.name().toLowerCase(Locale.ROOT);
 			long[] cur = sheet.get(key);
+			// The level the game names, for the total, which is the game's own
+			// statistic and stops at 99.
 			long level = cur != null && cur[0] > 0 ? cur[0] : closed.of.get(key);
-			levels.put(sk, level);
 			total += level;
+			// And the level the account has actually reached, for the tile. Off
+			// the live experience where there is some, and off the closing line
+			// otherwise.
+			long shown = cur != null && cur.length > 1 && cur[1] > 0
+				? PaceBook.virtualLevelAt(cur[1])
+				: closed.virtual.getOrDefault(key, (int) level);
+			levels.put(sk, Math.max(level, shown));
 		}
 		long[] ov = sheet.get("overall");
 		return new SkillStand(order, keys, levels,
@@ -8784,7 +8792,8 @@ class ChroniclePanel extends PluginPanel
 		for (net.runelite.api.Skill sk : order)
 		{
 			String key = sk.name().toLowerCase(Locale.ROOT);
-			Integer was = opened == null ? null : opened.of.get(key);
+			Integer was = opened == null ? null
+				: opened.virtual.getOrDefault(key, opened.of.get(key));
 			Long from = was == null ? null : Long.valueOf(was.longValue());
 			grid.add(skillCell(sk, levels.get(sk), gain.get(key), from));
 		}
@@ -9509,7 +9518,7 @@ class ChroniclePanel extends PluginPanel
 		cell.setToolTipText(gained != null
 			? tip(craft, new String[]{"Level", wholeRecord() ? "Experience"
 				: "Gained in " + window().label},
-				new String[]{fmt(level), "+" + gp(gained)})
+				new String[]{fmt(level), (wholeRecord() ? "" : "+") + gp(gained)})
 			: tip(craft, new String[]{"Level"}, new String[]{fmt(level)}));
 		// The cell has always carried a tooltip, which is a mouse listener; this
 		// is what makes the hand cursor honest. Its counters had no other way in.
@@ -9546,7 +9555,12 @@ class ChroniclePanel extends PluginPanel
 
 		if (gained != null)
 		{
-			JLabel g = new JLabel("+" + gp(gained) + " xp");
+			// No unit: it is a skill, so it is experience. And no plus on the
+			// whole record, where the figure is what the skill HAS rather than
+			// what some period added to it. "+13.6M xp" did not fit the cell and
+			// clipped to "+13.6M ...", which spent the room on the one word the
+			// reader did not need.
+			JLabel g = new JLabel((wholeRecord() ? "" : "+") + gp(gained));
 			g.setFont(FontManager.getRunescapeSmallFont());
 			g.setForeground(accent());
 			text.add(g);
@@ -11748,22 +11762,41 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private static boolean stillUnder(MouseEvent e)
 	{
-		if (e.getComponent().getMousePosition() != null)
-		{
-			return true;
-		}
+		boolean over = false;
+		boolean pointerKnown = false;
 		try
 		{
-			if (java.awt.MouseInfo.getPointerInfo() != null)
-			{
-				return false;   // there is a pointer, and it is not here
-			}
+			over = e.getComponent().getMousePosition() != null;
+			pointerKnown = java.awt.MouseInfo.getPointerInfo() != null;
 		}
 		catch (RuntimeException ignored)
 		{
-			// no pointer to ask about; fall through to the event's own reading
+			// headless, or no pointer device: neither question can be answered,
+			// and both of these throw rather than returning nothing
 		}
-		return e.getComponent().contains(e.getPoint());
+		return stillUnder(over, pointerKnown, e.getComponent().contains(e.getPoint()));
+	}
+
+	/**
+	 * The decision itself, separated from the asking.
+	 *
+	 * <p>Both questions above throw where there is no display, so the rule could
+	 * not otherwise be tested at all: the headless case is the one that falls
+	 * back to the event's own coordinates, which is exactly the case worth
+	 * pinning down.
+	 */
+	static boolean stillUnder(boolean overComponent, boolean pointerKnown,
+		boolean eventSaysInside)
+	{
+		if (overComponent)
+		{
+			return true;    // the pointer is demonstrably on it
+		}
+		if (pointerKnown)
+		{
+			return false;   // there is a pointer, and it is somewhere else
+		}
+		return eventSaysInside;
 	}
 
 	private static MouseAdapter clicker(Runnable r)

@@ -234,4 +234,41 @@ class PaceBook
 		}
 		return 1;
 	}
+
+	// The same curve carried on past 99, which is what a virtual level is: the
+	// game stops naming them at 99 and the formula does not stop.
+	private static final int MAX_VIRTUAL_LEVEL = 126;
+
+	private static final long[] XP_FOR_VIRTUAL = virtualCurve();
+
+	private static long[] virtualCurve()
+	{
+		long[] table = new long[MAX_VIRTUAL_LEVEL + 1];
+		double points = 0;
+		for (int level = 1; level < MAX_VIRTUAL_LEVEL; level++)
+		{
+			points += Math.floor(level + 300.0 * Math.pow(2.0, level / 7.0));
+			table[level + 1] = (long) Math.floor(points / 4.0);
+		}
+		return table;
+	}
+
+	/**
+	 * The level {@code xp} has reached, counting past 99.
+	 *
+	 * <p>Kept apart from levelAt, which the pace line measures against: a
+	 * projection to the next level should stop at 99 where the game does, and a
+	 * sheet showing what an account has actually done should not.
+	 */
+	static int virtualLevelAt(long xp)
+	{
+		for (int level = MAX_VIRTUAL_LEVEL; level > 1; level--)
+		{
+			if (xp >= XP_FOR_VIRTUAL[level])
+			{
+				return level;
+			}
+		}
+		return 1;
+	}
 }

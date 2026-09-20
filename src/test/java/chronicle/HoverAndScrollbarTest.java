@@ -73,50 +73,32 @@ public class HoverAndScrollbarTest
 	}
 
 	/**
-	 * Crossing onto a child fires an exit on the parent while the pointer has not
-	 * left it, and the row must stay lit.
+	 * The rule an exit is judged by.
 	 *
-	 * <p>Asked of Swing rather than of the event, because the event's own
-	 * coordinates cannot tell the two cases apart: a quick move off the edge of a
-	 * grid can be stamped with a point that still falls inside, and the cell was
-	 * then left lit with nothing to put it back. So this asserts the rule at the
-	 * place that decides it, with no pointer in the room - which is the state the
-	 * fallback is written for.
+	 * <p>Crossing onto a child fires an exit on the parent while the pointer has
+	 * not left it, and the row must stay lit. The event's own coordinates cannot
+	 * tell that from a real exit: on a quick move off the edge of a grid the exit
+	 * can be stamped with a point that still falls inside, and the cell was then
+	 * left lit with nothing to put it back, which is how a sheet ends up with
+	 * half a dozen tiles glowing at once.
 	 */
 	@Test
-	public void crossingOntoAChildLeavesTheRowLit() throws Exception
+	public void anExitIsJudgedByWhereThePointerActuallyIs() throws Exception
 	{
-		Method under = ChroniclePanel.class
-			.getDeclaredMethod("stillUnder", MouseEvent.class);
-		under.setAccessible(true);
-		JPanel row = rowOverCard(new Color(30, 30, 30));
-		row.setSize(100, 20);
-		assertTrue("an exit stamped inside the row, with no pointer anywhere else"
-				+ " to contradict it, is the pointer crossing onto a child",
-			(Boolean) under.invoke(null, at(row, MouseEvent.MOUSE_EXITED, 5, 5))
-				|| java.awt.MouseInfo.getPointerInfo() != null);
-	}
+		Method rule = ChroniclePanel.class.getDeclaredMethod("stillUnder",
+			boolean.class, boolean.class, boolean.class);
+		rule.setAccessible(true);
 
-	/**
-	 * And an exit is believed when the pointer really has gone, even where the
-	 * event says otherwise. This is the half that was wrong: a tile left lit has
-	 * nothing left to put it back, and a sheet ends up glowing in patches.
-	 */
-	@Test
-	public void anExitStampedInsideStillClearsWhenThePointerHasGone() throws Exception
-	{
-		JPanel row = rowOverCard(new Color(30, 30, 30));
-		row.setSize(100, 20);
-		MouseAdapter hover = clicker();
-		row.addMouseListener(hover);
-		hover.mouseEntered(at(row, MouseEvent.MOUSE_ENTERED, 5, 5));
-		assertTrue(row.isOpaque());
-		hover.mouseExited(at(row, MouseEvent.MOUSE_EXITED, 5, 5));
-		if (java.awt.MouseInfo.getPointerInfo() != null)
-		{
-			assertFalse("the pointer is demonstrably elsewhere, so the row must"
-				+ " have been put back", row.isOpaque());
-		}
+		// on the component: crossing onto a child, and it stays lit
+		assertTrue((Boolean) rule.invoke(null, true, true, false));
+
+		// a pointer exists and is not on it: a real exit, whatever the event says
+		assertFalse("an exit stamped inside was believed over the pointer itself",
+			(Boolean) rule.invoke(null, false, true, true));
+
+		// no pointer to ask about at all: the event's own reading is all there is
+		assertTrue((Boolean) rule.invoke(null, false, false, true));
+		assertFalse((Boolean) rule.invoke(null, false, false, false));
 	}
 
 	/**

@@ -3239,8 +3239,10 @@ public class HistoryProgressCardTest
 		List<String> all = labels(history(p));
 		int at = all.indexOf("ATT");
 		assertTrue(all.toString(), at >= 0);
-		// icon, the pair, the xp
-		assertEquals(all.toString(), Arrays.asList("ATT", "73 to 75", "+250k xp"),
+		// icon, the pair, the xp. No unit on the figure: it is a skill, so it is
+		// experience, and "+250k xp" did not fit the cell - it clipped to
+		// "+250k ..." and spent the room on the one word nobody needed.
+		assertEquals(all.toString(), Arrays.asList("ATT", "73 to 75", "+250k"),
 			all.subList(at, at + 3));
 	}
 
@@ -4365,5 +4367,41 @@ public class HistoryProgressCardTest
 		Component west = ((BorderLayout) row.getLayout())
 			.getLayoutComponent(BorderLayout.WEST);
 		return west instanceof javax.swing.JLabel ? (javax.swing.JLabel) west : null;
+	}
+
+	/**
+	 * Levels past ninety nine.
+	 *
+	 * <p>The game stops naming them at 99 and the experience curve does not, so a
+	 * sheet showing what an account has actually done shows the level the
+	 * experience has reached. The totals and the count of 99s are the game's own
+	 * statistics and stay where the game puts them.
+	 */
+	@Test
+	public void aSkillPastNinetyNineShowsTheLevelItHasActuallyReached() throws Exception
+	{
+		java.lang.reflect.Method real = PaceBook.class
+			.getDeclaredMethod("levelAt", long.class);
+		real.setAccessible(true);
+		java.lang.reflect.Method virt = PaceBook.class
+			.getDeclaredMethod("virtualLevelAt", long.class);
+		virt.setAccessible(true);
+
+		// 13,034,431 is exactly 99; 14,391,160 is 100
+		assertEquals(99, ((Integer) real.invoke(null, 13_034_431L)).intValue());
+		assertEquals(99, ((Integer) virt.invoke(null, 13_034_431L)).intValue());
+		assertEquals("the game stops at 99 and the pace line goes with it",
+			99, ((Integer) real.invoke(null, 200_000_000L)).intValue());
+		assertEquals("a maxed skill has reached 126", 126,
+			((Integer) virt.invoke(null, 200_000_000L)).intValue());
+		assertEquals(100, ((Integer) virt.invoke(null, 14_391_160L)).intValue());
+
+		// and the two agree everywhere below 99, or the sheet would disagree with
+		// itself on every ordinary account
+		for (long xp : new long[]{0, 83, 1_154, 100_000, 5_000_000, 13_034_430L})
+		{
+			assertEquals("the curves part company below 99 at " + xp,
+				real.invoke(null, xp), virt.invoke(null, xp));
+		}
 	}
 }
