@@ -865,17 +865,13 @@ class ChroniclePanel extends PluginPanel
 		{
 			return bossKills(name);
 		}
-		// The sitting has no closing baseline to measure against, so it is read
-		// from what the kills DROPPED, which is dated to the day and is the same
-		// fallback a period the spine cannot answer for already uses.
+		// The sitting cannot be answered here and does not pretend to be. Kills
+		// are dated to the DAY - the loot roll keeps one entry a day - so a
+		// sitting that began this afternoon would be handed this morning's kills
+		// as well, under a heading saying "This session". A dash is the true
+		// answer and the hover says why.
 		if (sessionPeriod())
 		{
-			Long rolledNow = rolledKills(name);
-			if (rolledNow != null)
-			{
-				rollUsed = true;
-				return rolledNow;
-			}
 			return -1;
 		}
 		Span s = span();
@@ -1430,6 +1426,53 @@ class ChroniclePanel extends PluginPanel
 		{"Combat", "", "combat"},
 	};
 
+	/**
+	 * The emblem each activity wears.
+	 *
+	 * <p>These used to be worked out the way a boss tile's is, by asking the
+	 * ledger for the dearest thing that source ever dropped. For a boss that is a
+	 * fair likeness. For an activity it is nonsense: Rifts wore whichever runes
+	 * were priciest that week, Clues wore some hard-clue reward, and the four
+	 * with no drop source behind them at all - Collections, Quests, Diaries and
+	 * Combat - fell through to a generic tab icon and were indistinguishable from
+	 * each other.
+	 *
+	 * <p>Four of the seven ARE hiscores rows, so they carry their own art and it
+	 * is the same art the official panel draws; taking it from the enum means it
+	 * follows the client rather than a number written down here. The other three
+	 * are not on the hiscores and take the game's own tab icons.
+	 */
+	private static int activitySprite(String label)
+	{
+		net.runelite.client.hiscore.HiscoreSkill own = null;
+		switch (label)
+		{
+			case "Clues":
+				own = net.runelite.client.hiscore.HiscoreSkill.CLUE_SCROLL_ALL;
+				break;
+			case "Rifts closed":
+				own = net.runelite.client.hiscore.HiscoreSkill.RIFTS_CLOSED;
+				break;
+			case "Soul Wars":
+				own = net.runelite.client.hiscore.HiscoreSkill.SOUL_WARS_ZEAL;
+				break;
+			case "Collections":
+				own = net.runelite.client.hiscore.HiscoreSkill.COLLECTIONS_LOGGED;
+				break;
+			case "Quests":
+				return net.runelite.api.SpriteID.TAB_QUESTS;
+			case "Diaries":
+				return net.runelite.api.SpriteID.TAB_QUESTS_GREEN_ACHIEVEMENT_DIARIES;
+			case "Combat":
+				// The game names no sprite for the combat achievements themselves,
+				// so this is its own emblem for combat.
+				return net.runelite.api.SpriteID.TAB_COMBAT;
+			default:
+				return 0;
+		}
+		return own.getSpriteId();
+	}
+
 	private static final String[] CLUE_TIERS = {
 		"Beginner", "Easy", "Medium", "Hard", "Elite", "Master"};
 
@@ -1450,8 +1493,10 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel activitySheet()
 	{
+		// No heading. The tiles are three across, wearing the game's own emblems,
+		// between the skills grid above and the boss grid below; a word naming
+		// them costs a row and tells a reader what the icons already say.
 		JPanel p = column();
-		p.add(group("ACTIVITIES"));
 		JPanel grid = new JPanel(new GridLayout(0, 3, 2, 2));
 		grid.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -1504,7 +1549,7 @@ class ChroniclePanel extends PluginPanel
 					: fmt(each[i]) + (worth[i] > 0 ? " · " + gp(worth[i]) + " gp" : "");
 			}
 			hover = tip("Clues", labels, figures);
-			mountKindIcon(icon, "Clue Scroll (Hard)");
+			wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
 		}
 		else if ("Collections".equals(label))
 		{
@@ -1517,7 +1562,7 @@ class ChroniclePanel extends PluginPanel
 					logStanding != null
 						? Math.round(logStanding[0] * 1000.0 / logStanding[1]) / 10.0 + "%"
 						: "-"});
-			mountKindIcon(icon, label);
+			wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
 		}
 		else if ("Quests".equals(label))
 		{
@@ -1542,7 +1587,7 @@ class ChroniclePanel extends PluginPanel
 			hover = tip("Quests",
 				new String[]{"Complete", "In progress", "Known"},
 				new String[]{fmt(done), fmt(started), fmt(q.size())});
-			mountKindIcon(icon, label);
+			wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
 		}
 		else if ("Diaries".equals(label))
 		{
@@ -1551,7 +1596,7 @@ class ChroniclePanel extends PluginPanel
 			hover = tip("Achievement diaries",
 				new String[]{"Tiers done", "Regions finished", "Regions"},
 				new String[]{d[0] + " / " + d[1], fmt(d[2]), fmt(d[3])});
-			mountKindIcon(icon, label);
+			wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
 		}
 		else if ("Combat".equals(label))
 		{
@@ -1561,13 +1606,13 @@ class ChroniclePanel extends PluginPanel
 				new String[]{"Points", "Tiers unlocked", "Seen by name"},
 				new String[]{c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]),
 					fmt(c[2]) + " / 6", fmt(c[3])});
-			mountKindIcon(icon, label);
+			wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
 		}
 		else
 		{
 			figure = bossKills(source);
 			hover = tip(label, new String[]{"Count"}, new String[]{fmt(figure)});
-			mountKindIcon(icon, source);
+			wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
 		}
 		cell.setToolTipText(hover);
 		if (!page.isEmpty())
@@ -1693,7 +1738,9 @@ class ChroniclePanel extends PluginPanel
 		cell.setToolTipText(tip(b.name,
 			new String[]{wholeRecord() ? "Kills" : "Kills in " + window().label},
 			new String[]{kc > 0 ? fmt(kc)
-				: (kc == 0 ? "none yet" : "not dated this far back")}));
+				: (kc == 0 ? "none yet"
+					: sessionPeriod() ? "kills are dated by day, not by sitting"
+						: "not dated this far back")}));
 		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 
 		JLabel icon = new JLabel();
@@ -8746,12 +8793,27 @@ class ChroniclePanel extends PluginPanel
 		// Combat beside Total, the way the game's own panel puts them, and each
 		// carrying the reading that belongs to it: the period on the total, the
 		// combat counters on the combat level.
-		JPanel levels2 = new JPanel(new GridLayout(1, 2, 2, 2));
-		levels2.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		levels2.setAlignmentX(Component.LEFT_ALIGNMENT);
-		levels2.add(combatLevelTile());
-		levels2.add(totalLevelTile(stand, opened));
-		p.add(levels2);
+		// Side by side while the total is one figure. On a period it becomes
+		// three - where the level opened, where it closed, and what moved - and
+		// half of a 242 pixel column cannot hold that beside a name, so the two
+		// tiles take a row each instead of overlapping in one.
+		JPanel combat = combatLevelTile();
+		JPanel total = totalLevelTile(stand, opened);
+		if (wholeRecord())
+		{
+			JPanel levels2 = new JPanel(new GridLayout(1, 2, 2, 2));
+			levels2.setBackground(ColorScheme.DARK_GRAY_COLOR);
+			levels2.setAlignmentX(Component.LEFT_ALIGNMENT);
+			levels2.add(combat);
+			levels2.add(total);
+			p.add(levels2);
+		}
+		else
+		{
+			p.add(combat);
+			p.add(vgap(2));
+			p.add(total);
+		}
 		p.add(vgap(6));
 	}
 
@@ -8766,7 +8828,7 @@ class ChroniclePanel extends PluginPanel
 		JLabel name = new JLabel("Combat");
 		name.setFont(FontManager.getRunescapeSmallFont());
 		name.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
-		cell.add(name, BorderLayout.WEST);
+		cell.add(name, BorderLayout.CENTER);
 		int cb = plugin.combatLevel();
 		JLabel fig = new JLabel(cb > 0 ? fmt(cb) : "-", JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
@@ -9412,10 +9474,15 @@ class ChroniclePanel extends PluginPanel
 		cell.setAlignmentX(Component.LEFT_ALIGNMENT);
 		cell.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
 
+		// CENTER, not WEST. BorderLayout gives WEST and EAST each their preferred
+		// width and lets them overlap when the row is narrower than the two of
+		// them; CENTER takes what is left. On a period the figure grows from
+		// "2,235" to "2,231 to 2,235 - +2" and the two were drawn on top of one
+		// another, which is how "Total level" came out as T2a2l3ke2t5o1t2a2l.
 		JLabel name = new JLabel("Total level");
 		name.setFont(FontManager.getRunescapeSmallFont());
 		name.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
-		cell.add(name, BorderLayout.WEST);
+		cell.add(name, BorderLayout.CENTER);
 
 		if (periodTip != null)
 		{
@@ -10279,13 +10346,50 @@ class ChroniclePanel extends PluginPanel
 			// does.
 			HistoryLog.Baseline closing = HistoryLog.stateAt(hist, at.getKey());
 			HistoryLog.Baseline opening = HistoryLog.stateAt(hist, from.getKey());
+			// A period that reaches today closes on the client, not on the spine.
+			// The spine's newest line is written when the journal is flushed, so
+			// a board measuring to it sat still through an hour of training and
+			// moved on logout: the levels above already read live and the GAIN
+			// did not, which is the half a reader is watching.
+			Map<String, Long> closesOn = closing.skills;
+			if (!pEnd.isBefore(java.time.LocalDate.now()))
+			{
+				Map<String, Long> nowXp = new java.util.HashMap<>(closing.skills);
+				for (Map.Entry<String, long[]> e : plugin.skillSheet().entrySet())
+				{
+					if (e.getValue() != null && e.getValue().length > 1
+						&& e.getValue()[1] > 0)
+					{
+						nowXp.merge(e.getKey(), e.getValue()[1], Math::max);
+					}
+				}
+				closesOn = nowXp;
+			}
 			List<Map.Entry<String, Long>> gains = new ArrayList<>();
 			for (Map.Entry<String, Long> e : HistoryLog.gained(opening.skills,
-				earliest.skills, closing.skills, opening.complete).entrySet())
+				earliest.skills, closesOn, opening.complete).entrySet())
 			{
 				if (!"overall".equals(e.getKey()))
 				{
 					gains.add(e);
+				}
+			}
+			// The sitting is counted, not measured between two of the spine's
+			// lines. A session that began today shares its dates with Day, so a
+			// board reading the spine draws Day's figures under the sitting's
+			// name; the experience tracker holds what THIS sitting earned, per
+			// skill, and that is a different number the moment the day started
+			// before the client did.
+			if (sessionPeriod())
+			{
+				gains.clear();
+				for (ExperienceStatTracker.SkillGain g : plugin.sessionSkillXp())
+				{
+					if (g.skill != null && g.xp > 0)
+					{
+						gains.add(new java.util.AbstractMap.SimpleEntry<>(
+							g.skill.name().toLowerCase(Locale.ROOT), g.xp));
+					}
 				}
 			}
 			gains.sort(Map.Entry.<String, Long>comparingByValue().reversed());
@@ -11572,12 +11676,35 @@ class ChroniclePanel extends PluginPanel
 		return ColorScheme.DARKER_GRAY_COLOR;
 	}
 
-	private static Color lifted(Color c)
+	/**
+	 * What a surface reads as under the cursor.
+	 *
+	 * <p>The client names a hover colour for each of its two grounds, and they
+	 * are not a lightening by some amount: DARKER_GRAY hovers to 60 and DARK_GRAY
+	 * hovers to 35, which is DARKER. Using its values means a hovered row here
+	 * reads the way a hovered row does anywhere else in the client.
+	 *
+	 * <p>This used to lift the colour of whatever was BEHIND the component by a
+	 * fixed fifteen. Two things were wrong with that. A row sitting on a card
+	 * came out at 45 and a cell sitting in a grid came out at 55, so one panel
+	 * had two hover colours depending on what a thing happened to be sitting in;
+	 * and neither was a colour the client uses, so both read as approximately
+	 * right and exactly nothing.
+	 */
+	private static Color hoverOf(Color ground)
 	{
+		if (ColorScheme.DARKER_GRAY_COLOR.equals(ground))
+		{
+			return ColorScheme.DARKER_GRAY_HOVER_COLOR;
+		}
+		if (ColorScheme.DARK_GRAY_COLOR.equals(ground))
+		{
+			return ColorScheme.DARK_GRAY_HOVER_COLOR;
+		}
 		return new Color(
-			Math.min(255, c.getRed() + HOVER_LIFT),
-			Math.min(255, c.getGreen() + HOVER_LIFT),
-			Math.min(255, c.getBlue() + HOVER_LIFT));
+			Math.min(255, ground.getRed() + HOVER_LIFT),
+			Math.min(255, ground.getGreen() + HOVER_LIFT),
+			Math.min(255, ground.getBlue() + HOVER_LIFT));
 	}
 
 	// Everything clickable in the panel is wired through here, so the hover is
@@ -11605,6 +11732,40 @@ class ChroniclePanel extends PluginPanel
 		return cell;
 	}
 
+	/**
+	 * Whether the pointer is still over the component an exit was delivered for.
+	 *
+	 * <p>Crossing onto a child fires an exit on the parent while the pointer has
+	 * not left it, and the row must stay lit. The event's own coordinates are not
+	 * a reliable way to tell: on a quick move off the edge of a grid the exit can
+	 * be stamped with a point that still falls inside, and the cell was then left
+	 * lit with nothing left to put it back, which is how a sheet ends up with
+	 * half a dozen tiles glowing at once.
+	 *
+	 * <p>So Swing is asked instead, and only where there is a pointer to ask
+	 * about: getMousePosition is null both when the pointer is elsewhere and when
+	 * there is no pointer at all, and those are opposite answers.
+	 */
+	private static boolean stillUnder(MouseEvent e)
+	{
+		if (e.getComponent().getMousePosition() != null)
+		{
+			return true;
+		}
+		try
+		{
+			if (java.awt.MouseInfo.getPointerInfo() != null)
+			{
+				return false;   // there is a pointer, and it is not here
+			}
+		}
+		catch (RuntimeException ignored)
+		{
+			// no pointer to ask about; fall through to the event's own reading
+		}
+		return e.getComponent().contains(e.getPoint());
+	}
+
 	private static MouseAdapter clicker(Runnable r)
 	{
 		return new MouseAdapter()
@@ -11629,7 +11790,13 @@ class ChroniclePanel extends PluginPanel
 				javax.swing.JComponent c = (javax.swing.JComponent) e.getComponent();
 				wasOpaque = c.isOpaque();
 				wasBackground = c.getBackground();
-				c.setBackground(lifted(behind(c)));
+				// Its OWN ground where it paints one, and what it sits on where it
+				// does not. Taken from the parent either way, a tile that paints
+				// itself darker than its grid was hovered as though it were the
+				// grid, which is why the boss sheet lit differently from the rows.
+				Color ground = wasOpaque && wasBackground != null
+					? wasBackground : behind(c);
+				c.setBackground(hoverOf(ground));
 				c.setOpaque(true);
 				c.repaint();
 				lit = true;
@@ -11639,8 +11806,17 @@ class ChroniclePanel extends PluginPanel
 			public void mouseExited(MouseEvent e)
 			{
 				// Crossing onto a child fires an exit on the parent while the
-				// pointer is still inside it, and the row must stay lit.
-				if (!lit || e.getComponent().contains(e.getPoint()))
+				// pointer is still inside it, and the row must stay lit. Asked of
+				// Swing rather than of the event: contains(getPoint()) reads the
+				// coordinates the exit was stamped with, which on a fast move off
+				// the edge of a grid can still fall inside, and the cell was then
+				// left lit with nothing to put it back. getMousePosition is null
+				// exactly when the pointer is not over the component.
+				if (!lit || !(e.getComponent() instanceof javax.swing.JComponent))
+				{
+					return;
+				}
+				if (stillUnder(e))
 				{
 					return;
 				}

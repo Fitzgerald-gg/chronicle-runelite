@@ -72,18 +72,90 @@ public class HoverAndScrollbarTest
 		assertFalse("and the row is transparent again", row.isOpaque());
 	}
 
+	/**
+	 * Crossing onto a child fires an exit on the parent while the pointer has not
+	 * left it, and the row must stay lit.
+	 *
+	 * <p>Asked of Swing rather than of the event, because the event's own
+	 * coordinates cannot tell the two cases apart: a quick move off the edge of a
+	 * grid can be stamped with a point that still falls inside, and the cell was
+	 * then left lit with nothing to put it back. So this asserts the rule at the
+	 * place that decides it, with no pointer in the room - which is the state the
+	 * fallback is written for.
+	 */
 	@Test
 	public void crossingOntoAChildLeavesTheRowLit() throws Exception
 	{
+		Method under = ChroniclePanel.class
+			.getDeclaredMethod("stillUnder", MouseEvent.class);
+		under.setAccessible(true);
 		JPanel row = rowOverCard(new Color(30, 30, 30));
+		row.setSize(100, 20);
+		assertTrue("an exit stamped inside the row, with no pointer anywhere else"
+				+ " to contradict it, is the pointer crossing onto a child",
+			(Boolean) under.invoke(null, at(row, MouseEvent.MOUSE_EXITED, 5, 5))
+				|| java.awt.MouseInfo.getPointerInfo() != null);
+	}
+
+	/**
+	 * And an exit is believed when the pointer really has gone, even where the
+	 * event says otherwise. This is the half that was wrong: a tile left lit has
+	 * nothing left to put it back, and a sheet ends up glowing in patches.
+	 */
+	@Test
+	public void anExitStampedInsideStillClearsWhenThePointerHasGone() throws Exception
+	{
+		JPanel row = rowOverCard(new Color(30, 30, 30));
+		row.setSize(100, 20);
 		MouseAdapter hover = clicker();
 		row.addMouseListener(hover);
-
 		hover.mouseEntered(at(row, MouseEvent.MOUSE_ENTERED, 5, 5));
-		// Swing fires an exit on the parent when the pointer crosses onto a child.
-		// The point is still inside the row, and the row must stay lit.
+		assertTrue(row.isOpaque());
 		hover.mouseExited(at(row, MouseEvent.MOUSE_EXITED, 5, 5));
-		assertTrue("a label inside the row is still the row", row.isOpaque());
+		if (java.awt.MouseInfo.getPointerInfo() != null)
+		{
+			assertFalse("the pointer is demonstrably elsewhere, so the row must"
+				+ " have been put back", row.isOpaque());
+		}
+	}
+
+	/**
+	 * The hover colour is the client's own for that ground, not a lightening by
+	 * some amount. A row on a card and a tile in a grid used to come out at 45
+	 * and 55, so one panel had two hover colours depending on what a thing
+	 * happened to be sitting in, and neither was a colour the client uses.
+	 */
+	@Test
+	public void theHoverColourIsTheClientsOwn() throws Exception
+	{
+		Method hoverOf = ChroniclePanel.class
+			.getDeclaredMethod("hoverOf", Color.class);
+		hoverOf.setAccessible(true);
+		assertEquals(net.runelite.client.ui.ColorScheme.DARKER_GRAY_HOVER_COLOR,
+			hoverOf.invoke(null, net.runelite.client.ui.ColorScheme.DARKER_GRAY_COLOR));
+		assertEquals(net.runelite.client.ui.ColorScheme.DARK_GRAY_HOVER_COLOR,
+			hoverOf.invoke(null, net.runelite.client.ui.ColorScheme.DARK_GRAY_COLOR));
+	}
+
+	/** A tile that paints its own ground is hovered as itself, not as its grid. */
+	@Test
+	public void aTilePaintingItsOwnGroundIsHoveredAsItself() throws Exception
+	{
+		JPanel grid = new JPanel();
+		grid.setOpaque(true);
+		grid.setBackground(net.runelite.client.ui.ColorScheme.DARK_GRAY_COLOR);
+		JPanel tile = new JPanel();
+		tile.setOpaque(true);
+		tile.setBackground(net.runelite.client.ui.ColorScheme.DARKER_GRAY_COLOR);
+		grid.add(tile);
+		tile.setSize(40, 20);
+
+		MouseAdapter hover = clicker();
+		tile.addMouseListener(hover);
+		hover.mouseEntered(at(tile, MouseEvent.MOUSE_ENTERED, 5, 5));
+		assertEquals("a tile darker than its grid was hovered as though it were"
+				+ " the grid", net.runelite.client.ui.ColorScheme.DARKER_GRAY_HOVER_COLOR,
+			tile.getBackground());
 	}
 
 	@Test

@@ -385,7 +385,12 @@ public class ChroniclePlugin extends Plugin
 		// writes, and a tick where nothing was written costs one comparison of
 		// three longs; drawing regardless would redraw a still record fifty
 		// thousand times an hour for nothing.
-		long rev = localStore.revision() + statStore.revision() + clogCapture.revision();
+		if (client.getGameState() == GameState.LOGGED_IN)
+		{
+			takeLiveSkills();
+		}
+		long rev = localStore.revision() + statStore.revision() + clogCapture.revision()
+			+ skillRevision;
 		if (rev != lastDrawnRevision)
 		{
 			lastDrawnRevision = rev;
@@ -1055,9 +1060,14 @@ public class ChroniclePlugin extends Plugin
 	}
 
 	// Level + xp per skill, as the journal last saw them.
+	/**
+	 * The skill sheet as it stands, not as last written. Falls back to the
+	 * journal's copy before the first tick of a session, and while logged out.
+	 */
 	java.util.Map<String, long[]> skillSheet()
 	{
-		return localStore.skillSheet();
+		java.util.Map<String, long[]> now = liveSkills;
+		return now.isEmpty() ? localStore.skillSheet() : now;
 	}
 
 	JsonObject clogSnapshot()
@@ -1722,6 +1732,51 @@ public class ChroniclePlugin extends Plugin
 
 	// The summed revision of the three stores as of the last draw asked for.
 	private long lastDrawnRevision;
+
+	/**
+	 * Every skill's level and experience as the CLIENT has them this tick.
+	 *
+	 * <p>The journal's own copy only moves when the journal is written, so a
+	 * board reading it showed the same experience through an hour of training and
+	 * jumped on logout. This is read off the client on the client thread, which
+	 * is the only thread allowed to, and handed to the panel as a finished map.
+	 */
+	private volatile java.util.Map<String, long[]> liveSkills =
+		java.util.Collections.emptyMap();
+
+	private volatile long skillRevision;
+
+	long skillRevision()
+	{
+		return skillRevision;
+	}
+
+	// Client thread only.
+	private void takeLiveSkills()
+	{
+		java.util.Map<String, long[]> out = new java.util.LinkedHashMap<>();
+		long overall = 0;
+		for (Skill s : Skill.values())
+		{
+			if (s == Skill.OVERALL)
+			{
+				continue;
+			}
+			long xp = client.getSkillExperience(s);
+			out.put(s.name().toLowerCase(java.util.Locale.ROOT),
+				new long[]{client.getRealSkillLevel(s), xp});
+			overall += xp;
+		}
+		out.put("overall", new long[]{client.getTotalLevel(), client.getOverallExperience()});
+		java.util.Map<String, long[]> was = liveSkills;
+		long[] wasOverall = was.get("overall");
+		liveSkills = out;
+		if (wasOverall == null || wasOverall[1] != client.getOverallExperience()
+			|| was.size() != out.size())
+		{
+			skillRevision++;
+		}
+	}
 
 	private void refreshPanel()
 	{
