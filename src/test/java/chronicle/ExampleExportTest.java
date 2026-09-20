@@ -108,7 +108,7 @@ public class ExampleExportTest
 		"dropsByKind", "lootKind", "lootTask", "onTaskOnly",
 		"statsFamily", "leftBehindSource", "leftBehindItem", "clogTab",
 		"openFolds", "histListShown", "drillShown", "journalShown",
-		"dropsShown", "slayerShown",
+		"dropsShown", "slayerShown", "bossesShown",
 	};
 
 	/**

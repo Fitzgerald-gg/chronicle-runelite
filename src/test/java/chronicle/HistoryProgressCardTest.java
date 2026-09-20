@@ -531,10 +531,12 @@ public class HistoryProgressCardTest
 	private static List<String> bossHover(ChroniclePanel panel, String boss)
 		throws Exception
 	{
-		// Over the whole record: a narrowed period draws only the bosses it
-		// holds, and these are about what the card SAYS rather than which cells
-		// a week puts on the grid.
+		// Over the whole record and OPENED: a narrowed period draws only the
+		// bosses it holds, and even the lifetime draws a glance of twelve before
+		// offering the rest. These are about what the card SAYS rather than
+		// which cells a period puts on the grid, so ask for every cell.
 		set(panel, "histGranularity", "Lifetime");
+		set(panel, "bossesShown", Integer.MAX_VALUE);
 		JPanel board = kills(panel);
 		final String[] tip = {null};
 		List<java.awt.Component> flat = new ArrayList<>();
