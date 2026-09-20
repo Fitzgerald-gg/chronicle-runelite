@@ -38,10 +38,17 @@ LEAD = re.compile(r"^\d+\.\s*")
 # is the wiki telling the reader the GAME has the typo, which is worth keeping.
 FOOTNOTE = re.compile(r"\[(?!sic\])[a-z]{0,2}\s?\d*\]")
 
+# What survives FOOTNOTE is a note that says something: "[sic]", and the
+# "[boostable]" / "[not boostable]" that tells a reader whether a level can be
+# reached with a potion. The wiki carries them in a <sup>, so stripping tags
+# leaves them welded to the preceding word - "70 Defence[not boostable]" - which
+# reads as a typo rather than as a note. Give them the space the markup was.
+GLUED_NOTE = re.compile(r"(?<=\S)\[")
+
 def text(cell):
     # tags out with NO space, so "<a>mine</a>." stays "mine."
     s = paintable(WS.sub(" ", html.unescape(re.sub(r"<[^>]+>", "", cell))).strip())
-    return FOOTNOTE.sub("", s).strip()
+    return GLUED_NOTE.sub(" [", FOOTNOTE.sub("", s)).strip()
 
 def outer_tables(body, attr_pat):
     """Every table matching attr_pat, with nested tables removed.

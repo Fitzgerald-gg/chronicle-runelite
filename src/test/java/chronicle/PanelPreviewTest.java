@@ -426,6 +426,9 @@ public class PanelPreviewTest
 
 		setSearch(panel, "dragon");
 		shoot(panel, out, prefix + "-search", "HOME");
+		// a query the bundled tables answer and the record cannot
+		setSearch(panel, "barrows");
+		shoot(panel, out, prefix + "-search-achv", "HOME");
 		setSearch(panel, "");
 	}
 

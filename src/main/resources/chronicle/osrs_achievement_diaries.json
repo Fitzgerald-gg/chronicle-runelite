@@ -17,7 +17,7 @@
      "requirements": "5 Thieving"
     },
     {
-     "task": "Sell Silk to Silk trader[sic] in Ardougne for 60 coins each. Note: You must first offer to sell your silk for 120 coins, then counter his bid with 60 coins. He'll refuse to speak to you if you've just stolen from his silk stall, and his behaviour only resets after you've spent at least ten consecutive minutes outside of Ardougne without logging off.",
+     "task": "Sell Silk to Silk trader [sic] in Ardougne for 60 coins each. Note: You must first offer to sell your silk for 120 coins, then counter his bid with 60 coins. He'll refuse to speak to you if you've just stolen from his silk stall, and his behaviour only resets after you've spent at least ten consecutive minutes outside of Ardougne without logging off.",
      "requirements": "Silk"
     },
     {
@@ -33,7 +33,7 @@
      "requirements": "Completion of Biohazard"
     },
     {
-     "task": "Have Tindel Marchant identify a Rusted Sword[sic] for you. Note: There is a 1/100 chance the sword turns out to be nothing, in which case you'll have to bring a new one.",
+     "task": "Have Tindel Marchant identify a Rusted Sword [sic] for you. Note: There is a 1/100 chance the sword turns out to be nothing, in which case you'll have to bring a new one.",
      "requirements": "Rusty sword and 100 coins"
     },
     {
@@ -67,7 +67,7 @@
      "requirements": "Completion of Plague City 51 Magic Means to cast Ardougne Teleport ( 2 2 )"
     },
     {
-     "task": "Travel to Castlewars[sic] by Hot Air Balloon.",
+     "task": "Travel to Castlewars [sic] by Hot Air Balloon.",
      "requirements": "Completion of Enlightened Journey 50 Firemaking Yew log If the route has not been unlocked yet, 11 total yew logs are required to unlock it before flying again to Castle Wars to complete this task. Upon unlocking the route, you may use 1 normal log to depart to Taverley before returning to Castle Wars for the task completion."
     },
     {
@@ -138,7 +138,7 @@
     },
     {
      "task": "Enter your POH from Yanille.",
-     "requirements": "50 Construction[not boostable] 25,000 coins for an estate agent to move your house to Yanille Note: In Deadman Mode, the task is instead \"Ask the Estate Agent to move your house to Yanille.\" This does not cost anything as your house will not be moved."
+     "requirements": "50 Construction [not boostable] 25,000 coins for an estate agent to move your house to Yanille Note: In Deadman Mode, the task is instead \"Ask the Estate Agent to move your house to Yanille.\" This does not cost anything as your house will not be moved."
     },
     {
      "task": "Smith a Dragon sq shield in West Ardougne.",
@@ -152,7 +152,7 @@
    "elite": [
     {
      "task": "Catch a Manta ray in the Fishing Trawler and cook it in Port Khazard. Note: Completing or updating any other task in-between these steps will reset the progress for this task.",
-     "requirements": "81 Fishing[not boostable] and 91 Cooking[boostable] Raw manta ray, multiple recommended in case of burning one"
+     "requirements": "81 Fishing [not boostable] and 91 Cooking [boostable] Raw manta ray, multiple recommended in case of burning one"
     },
     {
      "task": "Picklock the door to the basement of Yanille Agility Dungeon.",
@@ -164,7 +164,7 @@
     },
     {
      "task": "Make a rune crossbow yourself from scratch within Witchaven or Yanille. Note: You must use the spinning wheel in Witchaven to make the crossbow string and the anvil in Yanille to make the runite limbs. Fletching the yew stock and completing the rune crossbow can be done in either settlement. Completing or updating any other task in-between these steps will reset the progress for this task.",
-     "requirements": "10 Crafting, 91 Smithing[boostable] and 69 Fletching Yew logs, runite bar, hammer, knife, and sinew or a tree root"
+     "requirements": "10 Crafting, 91 Smithing [boostable] and 69 Fletching Yew logs, runite bar, hammer, knife, and sinew or a tree root"
     },
     {
      "task": "Imbue a Salve amulet at Nightmare Zone, or equip a Salve amulet that was imbued there. Note: You cannot use a Scroll of imbuing from Emir's Arena or use Zeal Tokens from Soul Wars. In Deadman Mode only: the task becomes \"Attempt to equip an imbued Salve amulet at the Nightmare Zone plinth.\" This must be a salve amulet (ei), the regular imbued version will not work.",
@@ -211,7 +211,7 @@
      "requirements": "Any grimy herb and 200 coins"
     },
     {
-     "task": "Collect 5 Potato Cactus[sic] from the Kalphite Hive. Note: You can bring a single potato cactus to the lair, then drop and pick it up five times.",
+     "task": "Collect 5 Potato Cactus [sic] from the Kalphite Hive. Note: You can bring a single potato cactus to the lair, then drop and pick it up five times.",
      "requirements": "Rope Antipoison and food recommended if not bringing your own potato cactus"
     },
     {
@@ -669,7 +669,7 @@
      "requirements": "Partial completion of the Troll Stronghold, or completion of the Easy Combat Achievements for Ghommal's hilt 1 70 Agility, 70 Strength, 70 Hitpoints, and 70 Ranged (only Hitpoints is boostable) See the boss overview (or see the individual strategy guides for Kree'arra, General Graardor, Commander Zilyana, and K'ril Tsutsaroth)"
     },
     {
-     "task": "Slay a Spiritual mage within the Godwars Dungeon[sic].",
+     "task": "Slay a Spiritual mage within the Godwars Dungeon [sic].",
      "requirements": "Partial completion of the Troll Stronghold, or completion of the Easy Combat Achievements for Ghommal's hilt 1 83 Slayer Weaponry"
     }
    ]
@@ -701,7 +701,7 @@
      "requirements": "None"
     },
     {
-     "task": "Defeat one of each elemental in the workshop. Note: These are the earth, water, air, and fire elemental found on the 1st floor[UK]2nd floor[US] of the workshop. Only the roaming earth elementals count.",
+     "task": "Defeat one of each elemental in the workshop. Note: These are the earth, water, air, and fire elemental found on the 1st floor [UK]2nd floor [US] of the workshop. Only the roaming earth elementals count.",
      "requirements": "Started Elemental Workshop I Battered key and weaponry"
     },
     {
@@ -727,7 +727,7 @@
      "requirements": "Completion of Alfred Grimhand's Barcrawl 35 Agility"
     },
     {
-     "task": "Create a Super Antipoison[sic] potion from scratch in the Seers/Catherby Area. Note: Completing or updating any other task in-between adding ingredients will reset the progress for this task.",
+     "task": "Create a Super Antipoison [sic] potion from scratch in the Seers/Catherby Area. Note: Completing or updating any other task in-between adding ingredients will reset the progress for this task.",
      "requirements": "48 Herblore Vial of water, irit leaf, unicorn horn dust"
     },
     {
@@ -905,7 +905,7 @@
      "requirements": "200 coins 40 Agility recommended"
     },
     {
-     "task": "Discover hidden wall[sic] in the dungeon below the volcano.",
+     "task": "Discover hidden wall [sic] in the dungeon below the volcano.",
      "requirements": "Started Dragon Slayer I"
     },
     {
@@ -999,7 +999,7 @@
      "requirements": "Completion of Tai Bwo Wannai Trio (speak to Tinsay after the quest) 30 Cooking Raw karambwan, multiple recommended in case of burning one"
     },
     {
-     "task": "Kill a deathwing[sic] in the dungeon under the Kharazi Jungle.",
+     "task": "Kill a deathwing [sic] in the dungeon under the Kharazi Jungle.",
      "requirements": "Partial completion of Legends' Quest The quest can be started without all the required skills, but reaching this area requires 50 Agility, 50 Thieving, 52 Mining, and 50 Strength (all boostable). Any axe, any machete, any pickaxe, and a lockpick"
     },
     {
@@ -1022,7 +1022,7 @@
    "elite": [
     {
      "task": "Craft 56 Nature runes simultaneously from Essence without the use of Extracts.",
-     "requirements": "91 Runecraft[boostable] 28 pure or daeyalt essence (less may suffice with Raiments of the Eye pieces) Access to the Nature Altar (nature talisman/tiara, catalytic talisman/tiara, or the Abyss)"
+     "requirements": "91 Runecraft [boostable] 28 pure or daeyalt essence (less may suffice with Raiments of the Eye pieces) Access to the Nature Altar (nature talisman/tiara, catalytic talisman/tiara, or the Abyss)"
     },
     {
      "task": "Equip a Fire Cape or Infernal Cape in Mor Ul Rek.",
@@ -1034,7 +1034,7 @@
     },
     {
      "task": "Create an antivenom potion whilst standing in the horse shoe mine.",
-     "requirements": "87 Herblore[boostable] Antidote++ and 5-20 Zulrah's scales (5 per dose)"
+     "requirements": "87 Herblore [boostable] Antidote++ and 5-20 Zulrah's scales (5 per dose)"
     },
     {
      "task": "Check the health of your Calquat tree patch. Note: This is the farming patch next to Imiago.",
@@ -1049,7 +1049,7 @@
      "requirements": "15 Mining Any pickaxe"
     },
     {
-     "task": "Kill a Sandcrab[sic].",
+     "task": "Kill a Sandcrab [sic].",
      "requirements": "None"
     },
     {
@@ -1115,7 +1115,7 @@
      "requirements": "45 Farming"
     },
     {
-     "task": "Switch to the Necromancy Spellbook at Tyss.[sic]",
+     "task": "Switch to the Necromancy Spellbook at Tyss. [sic]",
      "requirements": "None"
     },
     {
@@ -1166,7 +1166,7 @@
     },
     {
      "task": "Plant some Logavano seeds at the Tithe Farm.",
-     "requirements": "74 Farming[boostable] Seed dibber"
+     "requirements": "74 Farming [boostable] Seed dibber"
     },
     {
      "task": "Kill a Zombie in the Shayzien Crypts.",
@@ -1286,7 +1286,7 @@
     },
     {
      "task": "Purchase an upgraded device from Ava.",
-     "requirements": "Completion of Animal Magnetism 50 Ranged[not boostable] 75 steel arrows with Ava's attractor, or 75 steel arrows with 999 coins"
+     "requirements": "Completion of Animal Magnetism 50 Ranged [not boostable] 75 steel arrows with Ava's attractor, or 75 steel arrows with 999 coins"
     },
     {
      "task": "Travel to the Wizards' Tower by Fairy ring.",
@@ -1351,7 +1351,7 @@
      "requirements": "Completion of Another Slice of H.A.M."
     },
     {
-     "task": "Purchase some Barrows gloves from the Lumbridge bank chest[sic].",
+     "task": "Purchase some Barrows gloves from the Lumbridge bank chest [sic].",
      "requirements": "Full completion of Recipe for Disaster 130,000 coins"
     },
     {
@@ -1385,7 +1385,7 @@
      "requirements": "75 Woodcutting Any axe"
     },
     {
-     "task": "Smith an Adamant platebody down Draynor sewer.[sic]",
+     "task": "Smith an Adamant platebody down Draynor sewer. [sic]",
      "requirements": "88 Smithing 5 adamantite bars and a hammer"
     },
     {
@@ -1437,7 +1437,7 @@
      "requirements": "Pot, bucket, and any bones"
     },
     {
-     "task": "Kill a werewolf in its human form using the Wolfbane Dagger[sic].",
+     "task": "Kill a werewolf in its human form using the Wolfbane Dagger [sic].",
      "requirements": "Wolfbane"
     },
     {
@@ -1471,7 +1471,7 @@
      "requirements": "Completion of Cabin Fever 40 Cooking Empty inventory and head slot At least one opposing player to start the game"
     },
     {
-     "task": "Board the Swampy boat[sic] at the Hollows.",
+     "task": "Board the Swampy boat [sic] at the Hollows.",
      "requirements": "Quest start of Nature Spirit Dramen or Lunar staff recommended to travel to Fairy ring code BKR"
     },
     {
@@ -1497,8 +1497,8 @@
      "requirements": "Completion of Desert Treasure I 66 Magic and 50 Construction 100,000 coins, 2 limestone bricks, 3 teak planks, hammer, and saw to construct a portal chamber with an activatable teak portal and teleport focus, if you haven't already 200 law runes and 100 blood runes to direct a portal to Kharyrll, or 2000 law runes and 1000 blood runes if adding the portal to a portal nexus instead"
     },
     {
-     "task": "Climb up the advanced spike chain within Slayer Tower. Note: This chain is located on the 1st floor[UK]2nd floor[US] near the Infernal Mages, leading to the 2nd floor[UK]3rd floor[US] to near the Nechryael.",
-     "requirements": "71 Agility [boostable] Slayer helmet or nose peg recommended against the aberrant spectres, when climbing the spikey chain on the ground floor[UK]1st floor[US] as a shortcut to the advanced spikey chain Only a successful climb (not taking damage) will count as task completed."
+     "task": "Climb up the advanced spike chain within Slayer Tower. Note: This chain is located on the 1st floor [UK]2nd floor [US] near the Infernal Mages, leading to the 2nd floor [UK]3rd floor [US] to near the Nechryael.",
+     "requirements": "71 Agility [boostable] Slayer helmet or nose peg recommended against the aberrant spectres, when climbing the spikey chain on the ground floor [UK]1st floor [US] as a shortcut to the advanced spikey chain Only a successful climb (not taking damage) will count as task completed."
     },
     {
      "task": "Harvest some Watermelon from the Allotment patch on Harmony Island.",
@@ -1551,12 +1551,12 @@
      "requirements": "84 Crafting 3 black dragon leather, and a needle and thread or the costume needle"
     },
     {
-     "task": "Kill an Abyssal demon in the Slayer Tower. Note: Abyssal demons on the 2nd floor[UK]3rd floor[US] do not require a Slayer task to kill like those in the basement.",
+     "task": "Kill an Abyssal demon in the Slayer Tower. Note: Abyssal demons on the 2nd floor [UK]3rd floor [US] do not require a Slayer task to kill like those in the basement.",
      "requirements": "85 Slayer Weaponry"
     },
     {
      "task": "Loot the Barrows chest while wearing any complete barrows set. Note: This includes the weapon that is part of the equipped set.",
-     "requirements": "70 Defence[not boostable] Various other skill requirements depending on the set used, none of which can be boosted: 70 Attack and 70 Magic for Ahrim's 70 Attack and 70 Strength for Dharok's or Torag's 70 Attack for Guthan's or Verac's 70 Ranged for Karil's"
+     "requirements": "70 Defence [not boostable] Various other skill requirements depending on the set used, none of which can be boosted: 70 Attack and 70 Magic for Ahrim's 70 Attack and 70 Strength for Dharok's or Torag's 70 Attack for Guthan's or Verac's 70 Ranged for Karil's"
     }
    ]
   },
@@ -1599,7 +1599,7 @@
      "requirements": "Bones"
     },
     {
-     "task": "Spin a bowl on the pottery wheel and fire it in the oven in Barb Village[sic].",
+     "task": "Spin a bowl on the pottery wheel and fire it in the oven in Barb Village [sic].",
      "requirements": "8 Crafting Soft clay"
     },
     {
@@ -1707,7 +1707,7 @@
      "requirements": "68 Farming and 60 Woodcutting Yew sapling, any axe, and a spade 10 cactus spines recommended to pay the gardener"
     },
     {
-     "task": "Pray at the altar in Varrock palace with Smite active. Note: The altar is found on the 1st floor[UK]2nd floor[US] of the palace.",
+     "task": "Pray at the altar in Varrock palace with Smite active. Note: The altar is found on the 1st floor [UK]2nd floor [US] of the palace.",
      "requirements": "52 Prayer"
     },
     {
@@ -1982,7 +1982,7 @@
     },
     {
      "task": "Chop some yew logs from a fallen Ent. Note: This must be done within the Wilderness. You can find ents north and east of the chaos temple with the elder chaos druids.",
-     "requirements": "61 Woodcutting[not boostable] Any axe and weaponry"
+     "requirements": "61 Woodcutting [not boostable] Any axe and weaponry"
     },
     {
      "task": "Enter the Wilderness Godwars Dungeon. Note: While you're here, with a high enough Slayer level you can also complete another medium task and a hard task by killing a bloodveld and spiritual warrior, respectively.",
@@ -2013,7 +2013,7 @@
      "requirements": "None"
     },
     {
-     "task": "Smith a Golden helmet[sic] in the Resource Area. Note: You cannot do this while you already have a gold helmet in your inventory or bank, this must be dropped first. With 75 Smithing, you can bring 2 adamantite bars here as well to smith an adamant scimitar for a hard task.",
+     "task": "Smith a Golden helmet [sic] in the Resource Area. Note: You cannot do this while you already have a gold helmet in your inventory or bank, this must be dropped first. With 75 Smithing, you can bring 2 adamantite bars here as well to smith an adamant scimitar for a hard task.",
      "requirements": "Partial completion of Between a Rock... 50 Smithing 7500 coins, 3 gold bars, and a hammer"
     },
     {
@@ -2047,7 +2047,7 @@
      "requirements": "See the strategy guide"
     },
     {
-     "task": "Kill the Crazy Arc.[sic], Chaos Fanatic & Scorpia. Note: While these bosses can be killed in any order, completing or updating any other task in-between will reset the progress for this task.",
+     "task": "Kill the Crazy Arc. [sic], Chaos Fanatic & Scorpia. Note: While these bosses can be killed in any order, completing or updating any other task in-between will reset the progress for this task.",
      "requirements": "See the individual strategy guides for the Crazy archaeologist, Chaos Fanatic, and Scorpia"
     },
     {
@@ -2073,7 +2073,7 @@
      "requirements": "Completion of Desert Treasure I 96 Magic Ancient Magicks selected Means to cast Ghorrock Teleport ( 8 2 )"
     },
     {
-     "task": "Fish and Cook[sic] a Dark Crab in the Resource Area.",
+     "task": "Fish and Cook [sic] a Dark Crab in the Resource Area.",
      "requirements": "85 Fishing and 90 Cooking Lobster pot and dark fishing bait 3,750-7,500 coins"
     },
     {
@@ -2085,7 +2085,7 @@
      "requirements": "84 Thieving"
     },
     {
-     "task": "Slay a spiritual mage inside the wilderness Godwars Dungeon[sic].",
+     "task": "Slay a spiritual mage inside the wilderness Godwars Dungeon [sic].",
      "requirements": "60 Agility or 60 Strength, and 83 Slayer Weaponry and god equipment"
     },
     {

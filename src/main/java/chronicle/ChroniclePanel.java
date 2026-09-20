@@ -270,6 +270,9 @@ class ChroniclePanel extends PluginPanel
 			MaterialTab target = searchJump != null ? tabByTab.get(tabFor(searchJump)) : null;
 			if (target != null)
 			{
+				// The page is read off first: selecting the tab clears it, along
+				// with the query that named it.
+				final String page = searchJumpPage;
 				// select() returns early on the tab already showing, so its
 				// onSelectEvent, the only place the query is cleared and the
 				// panel rebuilt, never fires. Do that work here instead.
@@ -280,6 +283,11 @@ class ChroniclePanel extends PluginPanel
 				else
 				{
 					tabGroup.select(target);
+				}
+				if (page != null)
+				{
+					sheetPage = page;
+					rebuild();
 				}
 			}
 		});
@@ -8550,15 +8558,19 @@ class ChroniclePanel extends PluginPanel
 				}
 				int n = tiers.getAsJsonArray(tier).size();
 				boolean got = held != null && held.has(tier) && held.get(tier).getAsBoolean();
+				// Done is carried by brightness here too, so the count can stay on
+				// every row: a finished tier used to say "done" and take its own
+				// task count away with it, and it was the one marker in the panel
+				// that was a word rather than a weight.
 				JPanel line = row(tier.substring(0, 1).toUpperCase(Locale.ROOT)
 						+ tier.substring(1),
-					got ? "done" : fmt(n) + " tasks", got ? accent() : null);
-				final String reg = region;
-				final String tr = tier;
-				line.setCursor(java.awt.Cursor.getPredefinedCursor(
-					java.awt.Cursor.HAND_CURSOR));
+					fmt(n) + " tasks",
+					got ? null : ColorScheme.LIGHT_GRAY_COLOR.darker(), !got);
+				// Hover, not click: the tasks are in the tooltip and there is no
+				// board underneath this to open. It carried a hand cursor for a
+				// click that was never wired.
 				line.setToolTipText(taskTip(region + " " + tier,
-					tiers.getAsJsonArray(tr)));
+					tiers.getAsJsonArray(tier)));
 				p.add(line);
 			}
 			p.add(vgap(4));
@@ -10119,12 +10131,117 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
+	/**
+	 * Combat achievements and diary entries, from the bundled tables rather than
+	 * from the record: these are the two things the reader can ask about before
+	 * having done them. Short queries are left out by the caller, or a two letter
+	 * prefix answers with a hundred and fifty diary entries.
+	 */
+	private int searchAchievements(JPanel p, String ql)
+	{
+		java.util.Set<Integer> done = caDone();
+		bundledCombat = bundle("osrs_combat_achievements.json", bundledCombat);
+		JsonObject tasks = bundledCombat.has("tasks")
+			? bundledCombat.getAsJsonObject("tasks") : new JsonObject();
+		List<JsonObject> caHits = new ArrayList<>();
+		for (String id : tasks.keySet())
+		{
+			JsonObject t = tasks.getAsJsonObject(id);
+			if (t.get("name").getAsString().toLowerCase(Locale.ROOT).contains(ql)
+				|| t.get("task").getAsString().toLowerCase(Locale.ROOT).contains(ql))
+			{
+				JsonObject hit = t.deepCopy();
+				hit.addProperty("id", Integer.parseInt(id));
+				caHits.add(hit);
+				if (caHits.size() >= 2)
+				{
+					break;
+				}
+			}
+		}
+
+		bundledDiaries = bundle("osrs_achievement_diaries.json", bundledDiaries);
+		JsonObject diaries = bundledDiaries.has("diaries")
+			? bundledDiaries.getAsJsonObject("diaries") : new JsonObject();
+		List<String[]> diaryHits = new ArrayList<>();   // {task, region, tier, requirements}
+		diarySearch:
+		for (String region : diaries.keySet())
+		{
+			JsonObject tiers = diaries.getAsJsonObject(region);
+			for (String tier : tiers.keySet())
+			{
+				for (com.google.gson.JsonElement e : tiers.getAsJsonArray(tier))
+				{
+					JsonObject t = e.getAsJsonObject();
+					String task = t.get("task").getAsString();
+					if (!task.toLowerCase(Locale.ROOT).contains(ql))
+					{
+						continue;
+					}
+					diaryHits.add(new String[]{task, region, tier,
+						t.has("requirements") ? t.get("requirements").getAsString() : ""});
+					if (diaryHits.size() >= 2)
+					{
+						break diarySearch;
+					}
+				}
+			}
+		}
+
+		if (caHits.isEmpty() && diaryHits.isEmpty())
+		{
+			return 0;
+		}
+		p.add(group("Achievements"));
+		jump(View.SHEET, caHits.isEmpty() ? "diaries" : "combat");
+		for (JsonObject t : caHits)
+		{
+			boolean has = !done.isEmpty() && done.contains(t.get("id").getAsInt());
+			JPanel r = row(t.get("name").getAsString(), t.get("monster").getAsString(),
+				!done.isEmpty() && !has ? ColorScheme.LIGHT_GRAY_COLOR.darker() : null,
+				!done.isEmpty() && !has);
+			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			r.setToolTipText(tip(t.get("name").getAsString(),
+				new String[]{"Tier", "Where", "Task"},
+				new String[]{t.get("tier").getAsString(),
+					t.get("monster").getAsString(), t.get("task").getAsString()}));
+			r.addMouseListener(clicker(() -> openSheetPage("combat")));
+			p.add(r);
+			p.add(ghostRow(t.get("task").getAsString(), ""));
+		}
+		for (String[] d : diaryHits)
+		{
+			// The tier alone on the right, and the region down on the ghost line
+			// with the requirement: a diary entry has no name, so the task text IS
+			// the hit, and a region taking a third of the row cut it to "Purchase
+			// ..." which answers nothing.
+			JPanel r = row(d[0], d[2], null);
+			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			r.setToolTipText(tip(d[1] + " " + d[2],
+				new String[]{"Task", "Needs"},
+				new String[]{d[0], d[3].isEmpty() ? "nothing" : d[3]}));
+			r.addMouseListener(clicker(() -> openSheetPage("diaries")));
+			p.add(r);
+			p.add(ghostRow(d[3].isEmpty() ? d[1] : d[1] + " \u00b7 " + d[3], ""));
+		}
+		return caHits.size() + diaryHits.size();
+	}
+
+	/** The sheet, opened straight onto one of its pages. */
+	private void openSheetPage(String page)
+	{
+		applyTab(Tab.HISCORES);
+		sheetPage = page;
+		rebuild();
+	}
+
 	private JPanel buildSearch(String q)
 	{
 		JPanel p = column();
 		String ql = q.toLowerCase(Locale.ROOT);
 		int total = 0;
 		searchJump = null;
+		searchJumpPage = null;
 
 		// The queries that name a VIEW rather than a thing in the record.
 		// Offered while they are being typed, so they are found rather than known.
@@ -10310,6 +10427,15 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 
+		// The two bundled tables. A combat achievement is found by its name and a
+		// diary entry by what it asks for, since a diary entry has no name, and
+		// either way the line underneath is the requirement: what the reader was
+		// actually asking when they typed it.
+		if (ql.length() >= 3)
+		{
+			total += searchAchievements(p, ql);
+		}
+
 		// Journal milestone lines.
 		List<JsonObject> feedHits = new ArrayList<>();
 		for (JsonObject e : plugin.feedNewest(500))
@@ -10349,12 +10475,21 @@ class ChroniclePanel extends PluginPanel
 
 	// Where Enter lands: the first group that answered sets the view.
 	private View searchJump;
+	private String searchJumpPage;
 
 	private void jump(View target)
+	{
+		jump(target, null);
+	}
+
+	// Some boards are a page WITHIN a view, and landing on the view without the
+	// page drops the reader one step short of what they typed.
+	private void jump(View target, String page)
 	{
 		if (searchJump == null)
 		{
 			searchJump = target;
+			searchJumpPage = page;
 		}
 	}
 

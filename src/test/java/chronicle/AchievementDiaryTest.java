@@ -5,11 +5,14 @@ package chronicle;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.awt.Font;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
@@ -191,5 +194,45 @@ public class AchievementDiaryTest
 		assertTrue(d.getAsJsonObject("Ardougne").getAsJsonArray("easy").get(0)
 			.getAsJsonObject().get("task").getAsString()
 			.startsWith("Have Wizard Cromperty teleport you to the Rune Essence mine."));
+	}
+
+	/**
+	 * TRAP: a wiki note welded to the word before it. The wiki puts "[sic]" and
+	 * the "[not boostable]" that says a level cannot be potioned into a &lt;sup&gt;,
+	 * and stripping tags without putting the markup's space back produced
+	 * "70 Defence[not boostable]", which a reader takes for a typo in the plugin
+	 * rather than for a note about the requirement. Cheap to reintroduce, since
+	 * the tag stripper deliberately joins everything else with no space.
+	 */
+	@Test
+	public void noNoteIsWeldedToTheWordBeforeIt()
+	{
+		java.util.regex.Pattern glued = java.util.regex.Pattern.compile("\\S\\[");
+		List<String> bad = new ArrayList<>();
+		JsonObject all = diaries();
+		for (String region : all.keySet())
+		{
+			JsonObject tiers = all.getAsJsonObject(region);
+			for (String tier : TIERS)
+			{
+				if (!tiers.has(tier))
+				{
+					continue;
+				}
+				for (JsonElement e : tiers.getAsJsonArray(tier))
+				{
+					JsonObject t = e.getAsJsonObject();
+					for (String field : new String[]{"task", "requirements"})
+					{
+						if (t.has(field) && glued.matcher(t.get(field).getAsString()).find())
+						{
+							bad.add(region + " " + tier + " " + field + ": "
+								+ t.get(field).getAsString());
+						}
+					}
+				}
+			}
+		}
+		assertTrue("a note is welded to the preceding word: " + bad, bad.isEmpty());
 	}
 }
