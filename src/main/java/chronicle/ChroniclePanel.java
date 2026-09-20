@@ -1486,8 +1486,15 @@ class ChroniclePanel extends PluginPanel
 		JPanel cell = new JPanel(new BorderLayout(3, 0));
 		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		cell.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
-		cell.setToolTipText(b.name + (kc > 0
-			? ", " + fmt(kc) + (wholeRecord() ? " killed" : " in " + window().label) : ""));
+		// The same hover card the activity tiles above it draw. These two grids
+		// sit on one sheet, and a tile answering in a sentence beside a tile
+		// answering in a titled block is two panels pretending to be one. It also
+		// has to answer at all: Callisto and Artio share a sprite, as do Vet'ion
+		// and Calvar'ion and the three Dagannoth kings, so for some of these tiles
+		// the hover is the only thing that says which boss it is.
+		cell.setToolTipText(tip(b.name,
+			new String[]{wholeRecord() ? "Kills" : "Kills in " + window().label},
+			new String[]{kc > 0 ? fmt(kc) : "none yet"}));
 		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
 
 		JLabel icon = new JLabel();
@@ -8426,7 +8433,10 @@ class ChroniclePanel extends PluginPanel
 			}
 			if (r == null)
 			{
-				p.add(row(tier, "-", null));
+				// Dimmed, like an unheld log slot and an unfinished diary tier. The
+				// dash alone left a tier nobody has ever opened reading exactly as
+				// bright as one they have.
+				p.add(row(tier, "-", ColorScheme.LIGHT_GRAY_COLOR.darker(), true));
 				continue;
 			}
 			long n = Math.max(r.kc, r.loots);
