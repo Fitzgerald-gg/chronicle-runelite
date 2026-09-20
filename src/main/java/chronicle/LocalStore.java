@@ -1156,7 +1156,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					src.add("items", new JsonObject());
 				}
 				JsonObject items = src.getAsJsonObject("items");
-				long total = 0;
 				for (BagItem b : seed.items)
 				{
 					JsonObject hit = null;

@@ -509,6 +509,13 @@ class ChroniclePanel extends PluginPanel
 			case HISTORY:
 			case LOG:
 				return Tab.HISCORES;
+			// The Trackers tab IS the counters board: viewOf maps TRACKERS to
+			// STATS, and without the return leg STATS fell through to Record, so
+			// asking for the counters landed a tab away from them. The Ledger
+			// under Record is also a STATS board, but it is one family of the
+			// table and Trackers is the whole of it.
+			case STATS:
+				return Tab.TRACKERS;
 			case JOURNAL:
 			case HOME:
 			default:
@@ -8804,13 +8811,36 @@ class ChroniclePanel extends PluginPanel
 			accent()));
 		head.add(row("Tiers unlocked", fmt(c[2]) + " / 6", null));
 		java.util.Set<Integer> headDone = caDone();
+		// The game reports ids; the table names them. Those two populations agree
+		// today and stop agreeing the first time Jagex adds a combat achievement,
+		// because the varps already carry 672 slots and this jar's table will still
+		// hold 655 names for as long as it takes an update to reach the Hub. So the
+		// fraction counts only what the table can account for, and the ids it
+		// cannot name are said out loud rather than folded into a numerator that
+		// would read "661 / 655" over tiers summing to 655.
+		long named = 0;
+		for (int id : headDone)
+		{
+			if (all.has(String.valueOf(id)))
+			{
+				named++;
+			}
+		}
+		long unnamed = headDone.size() - named;
 		if (!headDone.isEmpty())
 		{
-			head.add(row("Tasks done", fmt(headDone.size()) + " / " + fmt(all.size()),
-				accent()));
+			head.add(row("Tasks done", fmt(named) + " / " + fmt(all.size()), accent()));
 		}
 		p.add(head);
 		p.add(vgap(6));
+		if (unnamed > 0)
+		{
+			p.add(note("You have also done " + fmt(unnamed) + " combat achievement"
+				+ (unnamed == 1 ? "" : "s") + " added to the game since this copy of"
+				+ " Chronicle was built. They are counted by the game, not named"
+				+ " here, until the plugin updates."));
+			p.add(vgap(4));
+		}
 		// Which tasks are DONE, from the game's own per-task bits rather than from
 		// the handful this journal happened to watch land. Empty on a journal
 		// written before those bits were captured, and the board then says what each
@@ -10522,7 +10552,7 @@ class ChroniclePanel extends PluginPanel
 		if (!statHits.isEmpty())
 		{
 			p.add(group("Trackers"));
-			jump(View.HISTORY);
+			jump(View.STATS);
 			for (int i = 0; i < Math.min(4, statHits.size()); i++)
 			{
 				Map.Entry<String, Long> e = statHits.get(i);
@@ -10632,8 +10662,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (!slotFirstPage.isEmpty())
 		{
+			// The log is a page WITHIN the sheet, so naming the view alone landed
+			// the reader on the top of the sheet with their query cleared.
 			p.add(group("Collection log"));
-			jump(View.LOG);
+			jump(View.SHEET, "log");
 			for (Map.Entry<String, String> hit : slotFirstPage.entrySet())
 			{
 				boolean got = Boolean.TRUE.equals(slotGot.get(hit.getKey()));

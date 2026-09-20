@@ -18,6 +18,7 @@ import net.runelite.client.ui.ColorScheme;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * One rule across four boards: brightness says whether you have the thing.
@@ -57,6 +58,15 @@ public class AbsenceReadsDimTest
 		+ "\"diaries\":{\"ardougne\":{\"easy\":true,\"medium\":false,"
 		+ "\"hard\":false,\"elite\":false}},"
 		+ "\"combat\":{\"points\":10,\"tasksDone\":[0]}},"
+		+ "\"trackers\":{},\"skills\":{},\"feed\":[]}";
+
+	// The game says a task is done that this jar's table has never heard of, which
+	// is what every player sees between a content update and a plugin update.
+	private static final String AHEAD =
+		"{\"schema\":1,\"rsn\":\"Somebody\",\"drops\":{},"
+		+ "\"collection_log\":{\"finished\":0,\"available\":1717},"
+		+ "\"achievements\":{\"combat\":{\"points\":10,"
+		+ "\"tasksDone\":[0,1,2,660,661]}},"
 		+ "\"trackers\":{},\"skills\":{},\"feed\":[]}";
 
 	private static ChroniclePanel panel(String journal, String dirName) throws Exception
@@ -180,5 +190,53 @@ public class AbsenceReadsDimTest
 			DIM, nameColour(p, "buildQuests", "Cook's Assistant"));
 		assertEquals("an unstarted quest should be dim",
 			DIM, nameColour(p, "buildQuests", "Dragon Slayer II"));
+	}
+
+	/**
+	 * A game that is ahead of the bundled table.
+	 *
+	 * <p>The varps carry 672 task slots and this jar's table names 655 of them, so
+	 * the first combat achievement Jagex adds is reported by the game and unknown
+	 * to the plugin for as long as an update takes to reach the Hub. The head used
+	 * to count every id the game sent against the table's size, which would have
+	 * read "658 / 655" over tiers that can only sum to 655.
+	 */
+	@Test
+	public void tasksTheTableCannotNameAreSaidOutLoudNotCountedIn() throws Exception
+	{
+		java.util.List<String> said = new java.util.ArrayList<>();
+		ChroniclePanel p = panel(AHEAD, "chronicle-ahead");
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				JPanel into = new JPanel();
+				java.lang.reflect.Method m = ChroniclePanel.class
+					.getDeclaredMethod("buildCombatAchievements", JPanel.class);
+				m.setAccessible(true);
+				m.invoke(p, into);
+				List<Component> flat = new ArrayList<>();
+				flatten(into, flat);
+				for (Component c : flat)
+				{
+					if (c instanceof JLabel && ((JLabel) c).getText() != null)
+					{
+						said.add(((JLabel) c).getText());
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		String all = String.join(" | ", said);
+		assertTrue("the fraction counted ids the board cannot account for: " + all,
+			all.contains("3 / 655"));
+		// note() wraps its sentence across labels, so match a fragment of one line
+		assertTrue("the two unnameable tasks were silently dropped: " + all,
+			all.contains("also done 2 combat"));
+		assertTrue("and the table's own total stood in for the game's, which this"
+			+ " journal has never heard: " + all, all.contains("2,697"));
 	}
 }
