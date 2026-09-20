@@ -85,4 +85,33 @@ public class ReadmeTest
 				!text.contains(gone));
 		}
 	}
+
+	/**
+	 * The two places a version is written say the same thing.
+	 *
+	 * <p>The Hub shows the one in runelite-plugin.properties verbatim on the
+	 * plugin's page; gradle.properties names the jar. They are written by hand,
+	 * in different files, and nothing has ever compared them.
+	 */
+	@Test
+	public void theTwoVersionsAgree() throws Exception
+	{
+		java.util.Properties hub = new java.util.Properties();
+		try (java.io.InputStream in = Files.newInputStream(
+			Paths.get("runelite-plugin.properties")))
+		{
+			hub.load(in);
+		}
+		java.util.Properties build = new java.util.Properties();
+		try (java.io.InputStream in = Files.newInputStream(Paths.get("gradle.properties")))
+		{
+			build.load(in);
+		}
+		String shown = hub.getProperty("version");
+		String jar = build.getProperty("version");
+		assertTrue("the Hub has no version to show", shown != null && !shown.isEmpty());
+		assertTrue("the jar has no version", jar != null && !jar.isEmpty());
+		assertTrue("the Hub shows " + shown + " and the jar is built as " + jar,
+			jar.equals(shown) || jar.startsWith(shown + "."));
+	}
 }
