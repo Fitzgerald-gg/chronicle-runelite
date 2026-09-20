@@ -9132,6 +9132,15 @@ class ChroniclePanel extends PluginPanel
 		// tier asks for rather than pretending nothing is done.
 		java.util.Set<Integer> done = caDone();
 		boolean known = !done.isEmpty();
+		if (!known)
+		{
+			// Said, not implied. Without it the board draws every task in the same
+			// colour and a reader with no reason to think otherwise reads that as
+			// an answer rather than as the absence of one.
+			p.add(note("Which tasks you have done arrives when you next log in. "
+				+ "Until then this is what each tier asks for."));
+			p.add(vgap(4));
+		}
 		java.util.Map<String, java.util.List<JsonObject>> byTier = new LinkedHashMap<>();
 		for (String tier : new String[]{"easy", "medium", "hard", "elite", "master",
 			"grandmaster"})
@@ -9163,22 +9172,31 @@ class ChroniclePanel extends PluginPanel
 					got++;
 				}
 			}
-			p.add(group(e.getKey().toUpperCase(Locale.ROOT) + (known
-				? " (" + fmt(got) + " / " + fmt(e.getValue().size()) + ")"
-				: " (" + fmt(e.getValue().size()) + ")")));
+			// A fold per tier. Six hundred and fifty five rows drawn flat is
+			// twelve thousand pixels of scroll in a column two hundred and forty
+			// wide, four times the next longest thing in this panel, and the
+			// reader who wants to know how their elite tier is going has to walk
+			// past three hundred tasks to reach it.
+			String foldKey = "ca:" + e.getKey();
+			boolean open = foldOpen(foldKey);
+			p.add(quietHead(e.getKey(), known
+				? fmt(got) + " / " + fmt(e.getValue().size())
+				: fmt(e.getValue().size()) + " tasks", foldKey));
+			if (!open)
+			{
+				continue;
+			}
 			for (JsonObject task : e.getValue())
 			{
 				boolean has = known && done.contains(task.get("id").getAsInt());
-				// Brightness carries it, as it does on the clue, diary and quest
-				// boards. A "done" in the right hand column would say it 97 times
-				// over and cost the board the one thing that column is for, which
-				// is where the task is done. (The collection log is the exception
-				// to the rule, not its origin: it paints a held slot green and an
-				// absent one red, after the log in the game.)
+				// Green done, red not, after the collection log and after the log
+				// in the game. Where the game has not said which tasks are done
+				// the rows take neither colour: an undone task and a task nobody
+				// has asked about look nothing alike, and saying so in red would
+				// be six hundred assertions this board cannot make.
 				JPanel line = row(task.get("name").getAsString(),
 					task.get("monster").getAsString(),
-					known && !has ? ColorScheme.LIGHT_GRAY_COLOR.darker() : null,
-					known && !has);
+					known ? (has ? ACCENT_SESSION : ACCENT_RED) : null, known);
 				line.setToolTipText(tip(task.get("name").getAsString(),
 					new String[]{"Tier", "Where", "Task"},
 					new String[]{task.get("tier").getAsString(),

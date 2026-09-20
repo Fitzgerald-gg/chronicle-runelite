@@ -134,6 +134,11 @@ public class PanelPreviewTest
 			set(panel, "sheetPage", page);
 			shoot(panel, out, prefix + "-page-" + page, "SHEET");
 		}
+		// one combat tier opened, where the rows actually live
+		set(panel, "sheetPage", "combat");
+		expandSection(panel, "ca:easy");
+		shoot(panel, out, prefix + "-page-combat-open", "SHEET");
+		collapseAll(panel);
 		set(panel, "sheetPage", null);
 		shoot(panel, out, prefix + "-drops", "DROPS");
 		// the log narrowed: what the journal dates as landing inside the window

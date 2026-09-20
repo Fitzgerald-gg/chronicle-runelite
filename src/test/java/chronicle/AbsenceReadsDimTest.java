@@ -23,19 +23,45 @@ import static org.junit.Assert.assertTrue;
 /**
  * One rule across four boards: brightness says whether you have the thing.
  *
- * <p>Held reads bright, absent reads dim, across the clue, diary, quest and
- * combat boards. The rule is invisible in a structural test, since a dim row and
- * a bright row have the same shape, so a board can slide off it without anything
+ * <p>Held reads bright, absent reads dim, across the clue, diary and quest
+ * boards. The rule is invisible in a structural test, since a dim row and a
+ * bright row have the same shape, so a board can slide off it without anything
  * failing. That is what these hold.
  *
- * <p>The collection log is deliberately NOT on this rule and is not asserted
- * here: it paints a held slot green and an absent one red, after the log in the
- * game. This javadoc used to cite it as the rule's origin, which was simply
- * untrue - it was the one board that had never been on it.
+ * <p>Two boards are deliberately NOT on this rule and are not asserted here.
+ * The collection log paints a held slot green and an absent one red, after the
+ * log in the game, and the combat board was brought onto that same pair at its
+ * owner's word. Brightness answers "do you have this" for a thing you might
+ * have; green and red answer it for a checklist you are working through.
  */
 public class AbsenceReadsDimTest
 {
 	private static final Color DIM = ColorScheme.LIGHT_GRAY_COLOR.darker();
+
+	private static Color field(String name) throws Exception
+	{
+		java.lang.reflect.Field f = ChroniclePanel.class.getDeclaredField(name);
+		f.setAccessible(true);
+		return (Color) f.get(null);
+	}
+
+	private static Color green() throws Exception
+	{
+		return field("ACCENT_SESSION");
+	}
+
+	private static Color red() throws Exception
+	{
+		return field("ACCENT_RED");
+	}
+
+	@SuppressWarnings("unchecked")
+	private static void openFold(ChroniclePanel p, String key) throws Exception
+	{
+		java.lang.reflect.Field f = ChroniclePanel.class.getDeclaredField("openFolds");
+		f.setAccessible(true);
+		((java.util.Collection<String>) f.get(p)).add(key);
+	}
 
 	// A record with nothing in it: no diary tier done, no clue casket opened, and
 	// no combat achievement bits, so every board is asked about things absent.
@@ -149,15 +175,20 @@ public class AbsenceReadsDimTest
 		assertEquals("an unfinished tier should be dim", DIM, medium);
 	}
 
+	/**
+	 * The combat board answers in the collection log's colours: green for done,
+	 * red for not. Its tiers are folded, so the rows only exist once a tier is
+	 * opened - which is the point of the fold.
+	 */
 	@Test
-	public void anUndoneCombatTaskReadsDimAndADoneOneDoesNot() throws Exception
+	public void aDoneCombatTaskIsGreenAndAnUndoneOneIsRed() throws Exception
 	{
-		ChroniclePanel p = panel(SOME, "chronicle-dim-combat");
-		// task 0, the only bit set
-		assertNotEquals("the done task went dim with the rest",
-			DIM, nameColour(p, "buildCombatAchievements", "Noxious Foe"));
-		assertEquals("an undone task should be dim",
-			DIM, nameColour(p, "buildCombatAchievements", "Barrows Novice"));
+		ChroniclePanel p = panel(SOME, "chronicle-colour-combat");
+		openFold(p, "ca:easy");
+		assertEquals("a done task should be green",
+			green(), nameColour(p, "buildCombatAchievements", "Noxious Foe"));
+		assertEquals("an undone task should be red",
+			red(), nameColour(p, "buildCombatAchievements", "Barrows Novice"));
 	}
 
 	/**
@@ -169,8 +200,12 @@ public class AbsenceReadsDimTest
 	public void withNoBitsAtAllNothingIsDimmed() throws Exception
 	{
 		ChroniclePanel p = panel(EMPTY, "chronicle-dim-unknown");
+		openFold(p, "ca:easy");
+		java.awt.Color unknown = nameColour(p, "buildCombatAchievements", "Noxious Foe");
 		assertNotEquals("an unknown combat board dimmed itself into a wrong answer",
-			DIM, nameColour(p, "buildCombatAchievements", "Noxious Foe"));
+			DIM, unknown);
+		assertNotEquals("an unknown board called a task done", green(), unknown);
+		assertNotEquals("an unknown board called a task undone", red(), unknown);
 		// The same trap on the diary board, which had the rule applied to it
 		// without the guard: no diaries block is not forty eight unfinished tiers.
 		assertNotEquals("an unknown diary board dimmed itself into a wrong answer",
