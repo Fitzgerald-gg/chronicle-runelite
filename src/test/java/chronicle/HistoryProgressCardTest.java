@@ -2748,8 +2748,13 @@ public class HistoryProgressCardTest
 			seen[0] = display.getComponent(0);
 			seen[2] = labels(display);
 			tick(p);
-			seen[1] = ((javax.swing.JPanel) d.get(p)).getComponent(0);
 		});
+		// The tick queues its draw rather than running one inline, so the read has
+		// to come after that queue has drained or it reads the board from before.
+		edt(() ->
+		{
+		});
+		edt(() -> seen[1] = ((javax.swing.JPanel) d.get(p)).getComponent(0));
 		@SuppressWarnings("unchecked")
 		List<String> said = (List<String>) seen[2];
 		assertTrue("this is not the trackers page: " + said, said.contains("TRACKERS"));
@@ -2766,14 +2771,22 @@ public class HistoryProgressCardTest
 		setView(p, "HOME");
 		Field d = ChroniclePanel.class.getDeclaredField("display");
 		d.setAccessible(true);
+		// The board has had its breath, so the redraw floor is not what this is
+		// about and cannot decide it on a slow machine.
+		Field at = ChroniclePanel.class.getDeclaredField("lastBuildAt");
+		at.setAccessible(true);
 		final Object[] seen = new Object[2];
 		edt(() ->
 		{
+			at.setLong(p, 0L);
 			javax.swing.JPanel display = (javax.swing.JPanel) d.get(p);
 			seen[0] = display.getComponent(0);
 			tick(p);
-			seen[1] = ((javax.swing.JPanel) d.get(p)).getComponent(0);
 		});
+		edt(() ->
+		{
+		});
+		edt(() -> seen[1] = ((javax.swing.JPanel) d.get(p)).getComponent(0));
 		assertNotSame("the sitting stopped refreshing on its own tick",
 			seen[0], seen[1]);
 	}

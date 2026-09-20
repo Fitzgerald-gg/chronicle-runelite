@@ -183,4 +183,89 @@ public class SessionPeriodTest
 			}
 		}
 	}
+
+	/**
+	 * TRAP: a level gained EARLIER TODAY, in a sitting that has since ended.
+	 *
+	 * <p>The spine is written once a day, so the nearest line before a sitting
+	 * that began this evening is the eve of today. Measured from that, everything
+	 * done this morning falls inside the sitting: Hunter reads "91 to 92" and the
+	 * total level reads "+1" under a heading saying "This session", for something
+	 * that happened hours ago in a different sitting.
+	 *
+	 * <p>Where the sitting began is derivable exactly and needs no baseline: the
+	 * experience each skill has now, less what THIS sitting earned.
+	 */
+	@Test
+	public void theSittingOpensWhereTheSittingBeganNotWhereTheDayDid() throws Exception
+	{
+		java.lang.reflect.Method m = ChroniclePanel.class
+			.getDeclaredMethod("baselineAt", Map.class);
+		m.setAccessible(true);
+
+		// 6,517,253 is exactly level 92; 5,902,831 is 91
+		Map<String, Long> now = new java.util.HashMap<>();
+		now.put("hunter", 6_600_000L);
+
+		// nothing gained this sitting: the sitting opened where it stands, so
+		// there is no range to draw and no level to claim
+		Object openedQuiet = m.invoke(null, new java.util.HashMap<>(now));
+		java.lang.reflect.Method levels = HistoryLog.class.getDeclaredMethod(
+			"levels", Class.forName("chronicle.HistoryLog$Baseline"), List.class);
+		levels.setAccessible(true);
+		Object quiet = levels.invoke(null, openedQuiet, Arrays.asList("hunter"));
+		java.lang.reflect.Field of = quiet.getClass().getDeclaredField("of");
+		of.setAccessible(true);
+		@SuppressWarnings("unchecked")
+		Map<String, Integer> quietLevels = (Map<String, Integer>) of.get(quiet);
+		assertEquals("a skill untouched this sitting opened where it stands",
+			Integer.valueOf(92), quietLevels.get("hunter"));
+
+		// and with 300k earned this sitting, it opened at 91 and really did climb
+		Map<String, Long> openXp = new java.util.HashMap<>();
+		openXp.put("hunter", 6_600_000L - 300_000L);
+		Object climbed = levels.invoke(null, m.invoke(null, openXp),
+			Arrays.asList("hunter"));
+		@SuppressWarnings("unchecked")
+		Map<String, Integer> climbedLevels = (Map<String, Integer>) of.get(climbed);
+		assertEquals("the sitting's own gain is what moved it",
+			Integer.valueOf(91), climbedLevels.get("hunter"));
+	}
+
+	/**
+	 * A baseline built this way has to be complete, or the total tile stops
+	 * naming an opening: it refuses to pair two ends that disagree about how many
+	 * skills were drawn, and an incomplete baseline reads an absent skill as
+	 * undrawn rather than as level one.
+	 */
+	@Test
+	public void theDerivedOpeningCountsAsACompleteSnapshot() throws Exception
+	{
+		java.lang.reflect.Method m = ChroniclePanel.class
+			.getDeclaredMethod("baselineAt", Map.class);
+		m.setAccessible(true);
+		Object at = m.invoke(null, new java.util.HashMap<String, Long>());
+		java.lang.reflect.Field complete = at.getClass().getDeclaredField("complete");
+		complete.setAccessible(true);
+		assertTrue("an incomplete opening cannot be paired with its close",
+			complete.getBoolean(at));
+	}
+
+	/**
+	 * Virtual levels are a statement about where an account STANDS, so they
+	 * belong to the whole record. A period reports what moved, and a level past
+	 * 99 cannot move.
+	 */
+	@Test
+	public void virtualLevelsAreForTheWholeRecordOnly() throws Exception
+	{
+		String src = new String(java.nio.file.Files.readAllBytes(
+			java.nio.file.Paths.get("src/main/java/chronicle/ChroniclePanel.java")),
+			java.nio.charset.StandardCharsets.UTF_8);
+		int at = src.indexOf("PaceBook.virtualLevelAt(cur[1])");
+		assertTrue("the skill grid no longer reads a virtual level at all", at > 0);
+		String around = src.substring(Math.max(0, at - 200), at);
+		assertTrue("a virtual level is drawn on a period, where it says nothing"
+			+ " about that period", around.contains("wholeRecord()"));
+	}
 }

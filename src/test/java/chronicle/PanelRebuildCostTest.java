@@ -118,6 +118,44 @@ public class PanelRebuildCostTest
 			1, builds.getLong(p) - before);
 	}
 
+	/**
+	 * TRAP: the guard above is only worth what the paths through it honour, and
+	 * the sitting's own three second ticker used to go straight to rebuild().
+	 *
+	 * <p>So a reader on another plugin entirely had this board laid out and
+	 * painted for them twenty times a minute, forever, and the guard that was
+	 * written to stop exactly that never saw the calls. Fired by hand here, since
+	 * waiting three seconds for it in a test is three seconds.
+	 */
+	@Test
+	public void theSittingsOwnTickerIsNotDrawnForAHiddenPanel() throws Exception
+	{
+		ChroniclePanel p = panel();
+		Field builds = field("buildsRun");
+		field("everShown").setBoolean(p, true);
+		Field t = field("homeTicker");
+		javax.swing.Timer ticker = (javax.swing.Timer) t.get(p);
+		edt();
+		long before = builds.getLong(p);
+
+		for (int i = 0; i < 5; i++)
+		{
+			final int n = i;
+			SwingUtilities.invokeAndWait(() ->
+			{
+				for (java.awt.event.ActionListener l : ticker.getActionListeners())
+				{
+					l.actionPerformed(new java.awt.event.ActionEvent(ticker, n, "tick"));
+				}
+			});
+			edt();
+		}
+		assertEquals("the sitting redrew itself for a panel nobody was looking at",
+			0, builds.getLong(p) - before);
+		assertTrue("and did not even know it owed the reader a board",
+			field("staleWhileHidden").getBoolean(p));
+	}
+
 	/** The per-build memo is dropped at the top of each build, not kept. */
 	@Test
 	public void theMemoDoesNotOutliveTheBuild() throws Exception

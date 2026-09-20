@@ -375,16 +375,12 @@ class ChroniclePanel extends PluginPanel
 			}
 			if (showingSitting())
 			{
-				// Same view, same content: the reader stays where they were reading.
-				keepScroll = true;
-				try
-				{
-					rebuild();
-				}
-				finally
-				{
-					keepScroll = false;
-				}
+				// Through update() and not straight to rebuild(): this used to draw
+				// the board every three seconds whether or not anybody was looking
+				// at it, which is the exact waste the visibility guard exists to
+				// stop, and it is owed-and-repaid by the branch above when they
+				// come back. It keeps the scroll for the same reason update() does.
+				update();
 			}
 		});
 		homeTicker.start();
@@ -8726,6 +8722,22 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
+	/**
+	 * A baseline standing at the given experience.
+	 *
+	 * <p>Marked complete, because the live sheet lists every skill: an incomplete
+	 * baseline reads a skill it does not name as undrawn rather than as level one,
+	 * and the total tile refuses to name an opening when the two ends disagree
+	 * about how many skills were drawn.
+	 */
+	private static HistoryLog.Baseline baselineAt(Map<String, Long> xp)
+	{
+		HistoryLog.Baseline at = new HistoryLog.Baseline();
+		at.skills.putAll(xp);
+		at.complete = true;
+		return at;
+	}
+
 	private SkillStand skillStand(HistoryLog.Baseline closing, boolean live)
 	{
 		Map<String, long[]> sheet = live ? plugin.skillSheet() : java.util.Collections.emptyMap();
@@ -8747,12 +8759,13 @@ class ChroniclePanel extends PluginPanel
 			// statistic and stops at 99.
 			long level = cur != null && cur[0] > 0 ? cur[0] : closed.of.get(key);
 			total += level;
-			// And the level the account has actually reached, for the tile. Off
-			// the live experience where there is some, and off the closing line
-			// otherwise.
-			long shown = cur != null && cur.length > 1 && cur[1] > 0
-				? PaceBook.virtualLevelAt(cur[1])
-				: closed.virtual.getOrDefault(key, (int) level);
+			// And on the whole record, the level the experience has actually
+			// reached. Only there: a period reports what MOVED, and a level past
+			// 99 cannot move, so a virtual level on a period is a figure that
+			// says nothing about the period it is drawn under. Lifetime is the
+			// reading that is about where the account stands.
+			long shown = wholeRecord() && cur != null && cur.length > 1 && cur[1] > 0
+				? PaceBook.virtualLevelAt(cur[1]) : level;
 			levels.put(sk, Math.max(level, shown));
 		}
 		long[] ov = sheet.get("overall");
@@ -9404,6 +9417,13 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
+	/** "grandmaster" as the game writes it. */
+	private static String prettyTier(String tier)
+	{
+		return tier == null || tier.isEmpty() ? ""
+			: Character.toUpperCase(tier.charAt(0)) + tier.substring(1);
+	}
+
 	/** A tier's tasks, as the markup a tooltip takes. Capped so it stays readable. */
 	private static String taskTip(String title, com.google.gson.JsonArray tasks)
 	{
@@ -9493,24 +9513,22 @@ class ChroniclePanel extends PluginPanel
 				+ "Until then this is what each tier asks for."));
 			p.add(vgap(4));
 		}
-		java.util.Map<String, java.util.List<JsonObject>> byTier = new LinkedHashMap<>();
-		for (String tier : new String[]{"easy", "medium", "hard", "elite", "master",
-			"grandmaster"})
-		{
-			byTier.put(tier, new ArrayList<>());
-		}
+		// Filed by what they are fought against, not by tier. Six tiers meant one
+		// of them was a hundred and seventy three rows to mount the moment it was
+		// opened; ninety one sources with six tasks apiece is a list a reader can
+		// hold and a fold that costs nothing to open. Each row still names its
+		// own tier, so nothing about them is lost.
+		java.util.Map<String, java.util.List<JsonObject>> bySource = new java.util.TreeMap<>(
+			String.CASE_INSENSITIVE_ORDER);
 		for (String id : all.keySet())
 		{
 			JsonObject task = all.getAsJsonObject(id).deepCopy();
 			// the table is KEYED by the game's task id and the rows do not carry it
 			task.addProperty("id", Integer.parseInt(id));
-			java.util.List<JsonObject> into = byTier.get(task.get("tier").getAsString());
-			if (into != null)
-			{
-				into.add(task);
-			}
+			bySource.computeIfAbsent(task.get("monster").getAsString(),
+				k -> new ArrayList<>()).add(task);
 		}
-		for (Map.Entry<String, java.util.List<JsonObject>> e : byTier.entrySet())
+		for (Map.Entry<String, java.util.List<JsonObject>> e : bySource.entrySet())
 		{
 			if (e.getValue().isEmpty())
 			{
@@ -9524,13 +9542,10 @@ class ChroniclePanel extends PluginPanel
 					got++;
 				}
 			}
-			// A fold per tier. Six hundred and fifty five rows drawn flat is
-			// twelve thousand pixels of scroll in a column two hundred and forty
-			// wide, four times the next longest thing in this panel, and the
-			// reader who wants to know how their elite tier is going has to walk
-			// past three hundred tasks to reach it.
 			String foldKey = "ca:" + e.getKey();
 			boolean open = foldOpen(foldKey);
+			// quietHead, so these read as the same kind of fold as every other one
+			// in the panel rather than as a board with its own rules.
 			p.add(quietHead(e.getKey(), known
 				? fmt(got) + " / " + fmt(e.getValue().size())
 				: fmt(e.getValue().size()) + " tasks", foldKey));
@@ -9547,7 +9562,7 @@ class ChroniclePanel extends PluginPanel
 				// has asked about look nothing alike, and saying so in red would
 				// be six hundred assertions this board cannot make.
 				JPanel line = row(task.get("name").getAsString(),
-					task.get("monster").getAsString(),
+					prettyTier(task.get("tier").getAsString()),
 					known ? (has ? ACCENT_SESSION : ACCENT_RED) : null, known);
 				line.setToolTipText(tip(task.get("name").getAsString(),
 					new String[]{"Tier", "Where", "Task"},
@@ -10818,8 +10833,42 @@ class ChroniclePanel extends PluginPanel
 					: HistoryLog.gained(opening.counters, earliest.counters,
 						closing.counters),
 				null, whole ? new java.util.HashMap<>() : retro, leftDated || whole);
+			// The sitting is measured from where the sitting began, which the
+			// spine cannot say: it is written once a day, so its nearest earlier
+			// line is the eve of TODAY. Measured from that, a level gained this
+			// morning in a sitting that has since ended reads as this sitting's -
+			// Hunter 91 to 92, and a total level up by one, under a heading
+			// saying "This session", for something that happened hours ago.
+			//
+			// Where the sitting began is exactly derivable and needs no baseline:
+			// the experience each skill has now, less what THIS sitting earned.
+			// Both ends then come off the same live reading, which also keeps the
+			// count of skills drawn on each side equal - the total tile refuses
+			// to name an opening when they differ.
+			HistoryLog.Baseline sittingOpen = null;
+			if (sessionPeriod())
+			{
+				Map<String, Long> openXp = new java.util.HashMap<>(closesOn);
+				for (ExperienceStatTracker.SkillGain g : plugin.sessionSkillXp())
+				{
+					if (g.skill == null || g.xp <= 0)
+					{
+						continue;
+					}
+					String key = g.skill.name().toLowerCase(Locale.ROOT);
+					Long had = openXp.get(key);
+					if (had != null)
+					{
+						openXp.put(key, Math.max(0, had - g.xp));
+					}
+				}
+				sittingOpen = baselineAt(openXp);
+				closing = baselineAt(closesOn);
+			}
 			SkillStand stand = skillStand(closing, live);
-			HistoryLog.Levels opened = HistoryLog.levels(opening, stand.keys);
+			HistoryLog.Levels opened = sittingOpen != null
+				? HistoryLog.levels(sittingOpen, stand.keys)
+				: HistoryLog.levels(opening, stand.keys);
 			// On the sheet the head card is not drawn at all: its four figures are
 			// what the total level tile says when the cursor is on it, which costs
 			// no room on a 225px board and puts the reading beside the number it

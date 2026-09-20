@@ -177,14 +177,18 @@ public class AbsenceReadsDimTest
 
 	/**
 	 * The combat board answers in the collection log's colours: green for done,
-	 * red for not. Its tiers are folded, so the rows only exist once a tier is
-	 * opened - which is the point of the fold.
+	 * red for not. Its sources are folded, so the rows only exist once a source
+	 * is opened - which is the point of the fold.
 	 */
 	@Test
 	public void aDoneCombatTaskIsGreenAndAnUndoneOneIsRed() throws Exception
 	{
 		ChroniclePanel p = panel(SOME, "chronicle-colour-combat");
-		openFold(p, "ca:easy");
+		// Filed by what they are fought against, so the fold a task sits in is its
+		// monster and not its tier. Both of these are easy tasks and they live in
+		// two different folds.
+		openFold(p, "ca:Aberrant Spectre");
+		openFold(p, "ca:Barrows");
 		assertEquals("a done task should be green",
 			green(), nameColour(p, "buildCombatAchievements", "Noxious Foe"));
 		assertEquals("an undone task should be red",
@@ -200,7 +204,7 @@ public class AbsenceReadsDimTest
 	public void withNoBitsAtAllNothingIsDimmed() throws Exception
 	{
 		ChroniclePanel p = panel(EMPTY, "chronicle-dim-unknown");
-		openFold(p, "ca:easy");
+		openFold(p, "ca:Aberrant Spectre");
 		java.awt.Color unknown = nameColour(p, "buildCombatAchievements", "Noxious Foe");
 		assertNotEquals("an unknown combat board dimmed itself into a wrong answer",
 			DIM, unknown);
