@@ -4230,10 +4230,14 @@ class ChroniclePanel extends PluginPanel
 		}
 		kcs.sort(Map.Entry.<String, Long>comparingByValue().reversed());
 		JPanel card = card("Kill log");
+		// Capped like every other list, and opened like every other list: it
+		// used to stop at twenty and send the reader to the search box for the
+		// rest, which made the search the only door to most of the log.
+		final int cap = drillShown.getOrDefault("killlog", ROW_CAP);
 		int mounted = 0;
 		for (Map.Entry<String, Long> e : kcs)
 		{
-			if (mounted++ >= 20)
+			if (mounted++ >= cap)
 			{
 				break;
 			}
@@ -4243,9 +4247,9 @@ class ChroniclePanel extends PluginPanel
 			r.addMouseListener(clicker(() -> openSourceLoose(mob)));
 			card.add(r);
 		}
-		if (kcs.size() > 20)
+		if (kcs.size() > cap)
 		{
-			card.add(ghostRow("and " + fmt(kcs.size() - 20) + " more. Search finds them", ""));
+			card.add(expander("killlog", cap, kcs.size()));
 		}
 		p.add(card);
 		return p;
@@ -5532,12 +5536,14 @@ class ChroniclePanel extends PluginPanel
 			return byTaskRows(p, properName(name));
 		}
 		p.add(group("From"));
+		// the copy lifts itemSourceCap; a reader lifts the drill's own cap
+		final int srcCap = Math.max(itemSourceCap, drillShown.getOrDefault("item:src:" + name, 0));
 		int mounted = 0;
 		for (Object[] s : srcs)
 		{
-			if (mounted++ >= itemSourceCap)
+			if (mounted++ >= srcCap)
 			{
-				p.add(ghostRow("+ " + (srcs.size() - itemSourceCap) + " more sources", ""));
+				p.add(expander("item:src:" + name, srcCap, srcs.size()));
 				break;
 			}
 			JPanel r = row((String) s[0], "×" + fmt((long) s[1])
@@ -5587,12 +5593,13 @@ class ChroniclePanel extends PluginPanel
 			return p;
 		}
 		p.add(group("By task"));
+		final int taskCap = Math.max(itemSourceCap, drillShown.getOrDefault("item:task:" + name, 0));
 		int mounted = 0;
 		for (Object[] t : split)
 		{
-			if (mounted++ >= itemSourceCap)
+			if (mounted++ >= taskCap)
 			{
-				p.add(ghostRow("+ " + (split.size() - itemSourceCap) + " more tasks", ""));
+				p.add(expander("item:task:" + name, taskCap, split.size()));
 				break;
 			}
 			p.add(row("Task: " + t[0], "×" + fmt((long) t[1])
