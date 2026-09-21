@@ -178,9 +178,9 @@ public class ActivityTileTest
 				// takes the period's gains now, so it can dim itself when the
 				// period moved none of the seven skills behind a combat level
 				Method m = ChroniclePanel.class.getDeclaredMethod("combatLevelTile",
-					java.util.Map.class);
+					java.util.Map.class, HistoryLog.Levels.class);
 				m.setAccessible(true);
-				tile[0] = (JPanel) m.invoke(panel, new java.util.HashMap<String, Long>());
+				tile[0] = (JPanel) m.invoke(panel, new java.util.HashMap<String, Long>(), null);
 			}
 			catch (Exception e)
 			{

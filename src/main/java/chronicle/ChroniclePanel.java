@@ -9280,7 +9280,7 @@ class ChroniclePanel extends PluginPanel
 		// three - where the level opened, where it closed, and what moved - and
 		// half of a 242 pixel column cannot hold that beside a name, so the two
 		// tiles take a row each instead of overlapping in one.
-		JPanel combat = combatLevelTile(gain);
+		JPanel combat = combatLevelTile(gain, opened);
 		JPanel total = totalLevelTile(stand, opened);
 		if (wholeRecord())
 		{
@@ -9301,7 +9301,7 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/** The combat level, wearing a handful of the combat counters on hover. */
-	private JPanel combatLevelTile(Map<String, Long> gain)
+	private JPanel combatLevelTile(Map<String, Long> gain, HistoryLog.Levels opened)
 	{
 		JPanel cell = new JPanel(new BorderLayout(3, 0));
 		cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -9313,7 +9313,14 @@ class ChroniclePanel extends PluginPanel
 		name.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
 		cell.add(name, BorderLayout.CENTER);
 		int cb = plugin.combatLevel();
-		JLabel fig = new JLabel(cb > 0 ? fmt(cb) : "-", JLabel.RIGHT);
+		// Where it opened, when the period moved it: the shape the total level
+		// tile beside this one already draws. Worked out from the seven skills'
+		// opening levels, since the record keeps no dated combat level, and only
+		// where all seven are there to work it out from.
+		Integer was = openingCombat(opened);
+		boolean climbed = !wholeRecord() && was != null && cb > was;
+		JLabel fig = new JLabel(cb > 0 ? (climbed ? fmt(was) + " to " + fmt(cb) : fmt(cb)) : "-",
+			JLabel.RIGHT);
 		fig.setFont(FontManager.getRunescapeSmallFont());
 		// Dim unless the period moved it. A combat level is a function of seven
 		// skills, and the record keeps no dated copy of it, so what is asked is
@@ -9513,6 +9520,28 @@ class ChroniclePanel extends PluginPanel
 		figures.add(gp(paid) + " gp");
 		return tip("Slayer", labels.toArray(new String[0]),
 			figures.toArray(new String[0]));
+	}
+
+	/** The combat level the seven opening levels work out to, or null short of all seven. */
+	private static Integer openingCombat(HistoryLog.Levels opened)
+	{
+		if (opened == null || opened.of == null)
+		{
+			return null;
+		}
+		int[] lv = new int[COMBAT_SKILLS.length];
+		for (int i = 0; i < COMBAT_SKILLS.length; i++)
+		{
+			Integer l = opened.of.get(COMBAT_SKILLS[i].name().toLowerCase(Locale.ROOT));
+			if (l == null || l <= 0)
+			{
+				return null;
+			}
+			lv[i] = l;
+		}
+		// attack, strength, defence, hitpoints, ranged, magic, prayer
+		return net.runelite.api.Experience.getCombatLevel(lv[0], lv[1], lv[2], lv[3],
+			lv[5], lv[4], lv[6]);
 	}
 
 	// The seven a combat level is worked out from.
@@ -10271,8 +10300,15 @@ class ChroniclePanel extends PluginPanel
 		// Slayer opens the board it has rather than a drill of its counters: the
 		// tasks, what each paid and the kills on them are a whole view already,
 		// and a card of slayer counters beside it would be the lesser half.
-		cell.addMouseListener(clicker(slayer ? () -> applyTab(View.SLAYER)
-			: () -> openSkill(craft)));
+		// The hover promised the tasks, the kills on them and what they paid, so
+		// the click lands on the Tasks lens rather than on whichever lens the
+		// slayer board was last left on: the lens is sticky by design and this
+		// is the one way in that names a destination.
+		cell.addMouseListener(clicker(slayer ? () ->
+		{
+			slayerLens = "Tasks";
+			applyTab(View.SLAYER);
+		} : () -> openSkill(craft)));
 
 		JLabel icon = new JLabel();
 		java.awt.image.BufferedImage img = skillIcon(sk);
@@ -10497,10 +10533,18 @@ class ChroniclePanel extends PluginPanel
 			}
 			item.addActionListener(e ->
 			{
+				// The cursor becomes the END of the window that was on screen,
+				// clamped to today. Every pick used to reset it to today, so a
+				// reader who stepped Day back to the twelfth to find something
+				// and then picked Week to read the week around it was thrown
+				// back to the present. From Lifetime or the sitting the end is
+				// today anyway, so nothing changes there.
+				java.time.LocalDate keep = window().end;
+				java.time.LocalDate today = java.time.LocalDate.now();
 				histGranularity = g;
 				histFrom = null;
 				histTo = null;
-				histCursor = java.time.LocalDate.now();
+				histCursor = keep.isAfter(today) ? today : keep;
 				rebuildInPlace();
 			});
 			menu.add(item);
@@ -12200,7 +12244,12 @@ class ChroniclePanel extends PluginPanel
 			{
 				Map.Entry<String, Long> e = statHits.get(i);
 				String v = StatRegistry.isGp(e.getKey()) ? gp(e.getValue()) + " gp" : fmt(e.getValue());
-				p.add(row(StatRegistry.label(e.getKey()), v, null));
+				// A door, like the drop and source rows beneath: three of the six
+				// groups drew rows that named a thing and did nothing when pressed.
+				JPanel tr = row(StatRegistry.label(e.getKey()), v, null);
+				tr.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				tr.addMouseListener(clicker(this::openAllTrackers));
+				p.add(tr);
 				total++;
 			}
 		}
@@ -12319,8 +12368,15 @@ class ChroniclePanel extends PluginPanel
 				// replacing the address with the word "obtained" - which threw
 				// away the page this loop had just worked out, and only for the
 				// slots the reader HAS.
-				p.add(row(hit.getKey(), hit.getValue(),
-					got ? ACCENT_SESSION : ACCENT_RED, true));
+				JPanel sr = row(hit.getKey(), hit.getValue(),
+					got ? ACCENT_SESSION : ACCENT_RED, true);
+				sr.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				sr.addMouseListener(clicker(() ->
+				{
+					sheetPage = "log";
+					applyTab(View.SHEET);
+				}));
+				p.add(sr);
 				total++;
 			}
 		}
@@ -12354,7 +12410,10 @@ class ChroniclePanel extends PluginPanel
 			for (JsonObject e : feedHits)
 			{
 				long ts = e.has("ts") ? e.get("ts").getAsLong() : 0;
-				p.add(row(feedLine(e), ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "", null));
+				JPanel jr = row(feedLine(e), ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "", null);
+				jr.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				jr.addMouseListener(clicker(() -> applyTab(View.JOURNAL)));
+				p.add(jr);
 				total++;
 			}
 		}
