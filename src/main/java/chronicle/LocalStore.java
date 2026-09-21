@@ -1006,7 +1006,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	// Panel-facing reads (copies only; safe to call from the EDT)
 	// ------------------------------------------------------------------
 
-	net.runelite.client.game.ItemManager items()
+	ItemManager items()
 	{
 		return itemManager;
 	}
@@ -1145,7 +1145,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				return out;
 			}
-			com.google.gson.JsonArray feed = root.getAsJsonArray("feed");
+			JsonArray feed = root.getAsJsonArray("feed");
 			for (int i = feed.size() - 1; i >= 0 && out.size() < n; i--)
 			{
 				if (feed.get(i).isJsonObject())
@@ -2038,7 +2038,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				return new java.util.ArrayList<>();
 			}
-			com.google.gson.JsonArray arr = sl.getAsJsonArray("tasks");
+			JsonArray arr = sl.getAsJsonArray("tasks");
 			// the journal keeps them oldest first; a picker wants the newest at
 			// the top, so this walks back
 			for (int i = arr.size() - 1; i >= 0; i--)
@@ -2462,7 +2462,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** The journey as the journal knows it, shaped for the panel (newest first). */
-	chronicle.ChronicleApiClient.SlayerJourney slayerJourney()
+	SlayerJourney slayerJourney()
 	{
 		synchronized (lock)
 		{
@@ -2474,7 +2474,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				? root.getAsJsonObject("slayer") : new JsonObject();
 			JsonArray tasks = sl.has("tasks") && sl.get("tasks").isJsonArray()
 				? sl.getAsJsonArray("tasks") : new JsonArray();
-			java.util.List<chronicle.ChronicleApiClient.SlayerTask> out =
+			java.util.List<SlayerTask> out =
 				new java.util.ArrayList<>(tasks.size());
 			long totalKills = 0;
 			long totalValue = 0;
@@ -2489,7 +2489,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				long value = seg.has("value") ? asLong(seg.get("value")) : 0;
 				totalKills += kills;
 				totalValue += value;
-				out.add(new chronicle.ChronicleApiClient.SlayerTask(
+				out.add(new SlayerTask(
 					seg.has("task") ? seg.get("task").getAsString() : "?",
 					kills,
 					seg.has("assignment") ? asLong(seg.get("assignment")) : 0,
@@ -2500,7 +2500,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					// completion was parked or its completion was missed, and is done.
 					i == tasks.size() - 1 && isOpen(seg)));
 			}
-			return new chronicle.ChronicleApiClient.SlayerJourney(
+			return new SlayerJourney(
 				(int) (sl.has("completed") ? asLong(sl.get("completed")) : 0),
 				totalKills, totalValue,
 				sl.has("xp_est") ? asLong(sl.get("xp_est")) : 0,
@@ -3957,7 +3957,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			leftValue += u.value;
 			leftKills += u.kills;
 		}
-		chronicle.ChronicleApiClient.SlayerJourney journey = slayerJourney();
+		SlayerJourney journey = slayerJourney();
 		int finished = clogFraction()[0];
 		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
 		out.put("dropsReceived", loots);
@@ -4836,4 +4836,48 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
+
+	/** The slayer journey the journal computes for the panel, from its on-disk task array. */
+	public static final class SlayerJourney
+	{
+		public final int completedTasks;
+		public final long totalKills;
+		public final long totalValueGp;
+		public final long totalXpEst;
+		public final java.util.List<SlayerTask> tasks;
+
+		SlayerJourney(int completedTasks, long totalKills, long totalValueGp,
+			long totalXpEst, java.util.List<SlayerTask> tasks)
+		{
+			this.completedTasks = completedTasks;
+			this.totalKills = totalKills;
+			this.totalValueGp = totalValueGp;
+			this.totalXpEst = totalXpEst;
+			this.tasks = tasks;
+		}
+	}
+
+	/** One task segment of the journey, newest first. */
+	public static final class SlayerTask
+	{
+		public final String task;
+		public final long kills;
+		public final long assignment;
+		public final long noLootKills;
+		public final double ts;          // epoch seconds
+		public final long totalValue;
+		public final boolean inProgress;
+
+		SlayerTask(String task, long kills, long assignment, long noLootKills,
+			double ts, long totalValue, boolean inProgress)
+		{
+			this.task = task;
+			this.kills = kills;
+			this.assignment = assignment;
+			this.noLootKills = noLootKills;
+			this.ts = ts;
+			this.totalValue = totalValue;
+			this.inProgress = inProgress;
+		}
+	}
 }

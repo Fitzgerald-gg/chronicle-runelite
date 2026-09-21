@@ -107,9 +107,9 @@ public class LocalSlayerJourneyTest
 	{
 		onTaskKill("Dust devils", 120, 1, 1);
 		onTaskKill("Dust devils", 120, 1, 2);
-		ChronicleApiClient.SlayerJourney j = store.slayerJourney();
+		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(1, j.tasks.size());
-		ChronicleApiClient.SlayerTask t = j.tasks.get(0);
+		LocalStore.SlayerTask t = j.tasks.get(0);
 		assertEquals("Dust devils", t.task);
 		assertEquals(2, t.kills);
 		assertEquals(120, t.assignment);
@@ -123,9 +123,9 @@ public class LocalSlayerJourneyTest
 		onTaskKill("Nechryael", 150, 1, 1);
 		onTaskKill("Nechryael", 150, 1, 1);
 		completion("Nechryael", 150, 214);
-		ChronicleApiClient.SlayerJourney j = store.slayerJourney();
+		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(1, j.tasks.size());
-		ChronicleApiClient.SlayerTask t = j.tasks.get(0);
+		LocalStore.SlayerTask t = j.tasks.get(0);
 		assertFalse(t.inProgress);
 		assertEquals(150, t.kills);          // trued up to the finished line
 		assertEquals(148, t.noLootKills);    // 150 exact − 2 witnessed
@@ -164,9 +164,9 @@ public class LocalSlayerJourneyTest
 		countedKill("Nechryael", 150, 1);
 		completion("Nechryael", 150, 214);
 		finishingKill("Nechryael");
-		ChronicleApiClient.SlayerJourney j = store.slayerJourney();
+		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(1, j.tasks.size());
-		ChronicleApiClient.SlayerTask t = j.tasks.get(0);
+		LocalStore.SlayerTask t = j.tasks.get(0);
 		assertFalse(t.inProgress);
 		assertEquals(150, t.kills);            // the game's number stands
 		assertEquals(147, t.noLootKills);      // 150 - 3 witnessed, the last one folded in
@@ -182,7 +182,7 @@ public class LocalSlayerJourneyTest
 		completion("Nechryael", 150, 214);
 		finishingKill("Nechryael");
 		countedKill("Nechryael", 130, 129);   // the new assignment's first kill, seconds later
-		ChronicleApiClient.SlayerJourney j = store.slayerJourney();
+		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(2, j.tasks.size());
 		assertTrue(j.tasks.get(0).inProgress);
 		assertEquals(1, j.tasks.get(0).kills);
@@ -203,7 +203,7 @@ public class LocalSlayerJourneyTest
 			+ "\"noLootKills\":148,\"open\":false,\"ts\":" + old + "}]}}").getBytes("UTF-8"));
 		store.load(dir, "Tester");
 		finishingKill("Nechryael");
-		ChronicleApiClient.SlayerJourney j = store.slayerJourney();
+		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(2, j.tasks.size());
 		assertEquals(1, j.tasks.get(0).kills);
 		assertTrue(j.tasks.get(0).inProgress);
@@ -222,7 +222,7 @@ public class LocalSlayerJourneyTest
 			+ "\"noLootKills\":148,\"open\":false,\"ts\":" + now + "}]}}").getBytes("UTF-8"));
 		store.load(dir, "Tester");
 		finishingKill("Nechryael");
-		ChronicleApiClient.SlayerJourney j = store.slayerJourney();
+		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(1, j.tasks.size());
 		assertEquals(150, j.tasks.get(0).kills);
 		assertEquals(147, j.tasks.get(0).noLootKills);
@@ -236,7 +236,7 @@ public class LocalSlayerJourneyTest
 		countedKill("Kalphite", 2, 1);
 		countedKill("Kalphite", 2, 0);
 		completion("Kalphite", 2, null);
-		ChronicleApiClient.SlayerJourney j = store.slayerJourney();
+		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(2, j.tasks.get(0).kills);
 		assertEquals(2, j.tasks.get(0).assignment);
 		assertEquals(0, j.tasks.get(0).noLootKills);
@@ -248,7 +248,7 @@ public class LocalSlayerJourneyTest
 	{
 		countedKill("Abyssal demons", 222, 284);   // initial restored stale from config
 		countedKill("Abyssal demons", 222, 283);
-		ChronicleApiClient.SlayerTask t = store.slayerJourney().tasks.get(0);
+		LocalStore.SlayerTask t = store.slayerJourney().tasks.get(0);
 		assertEquals(2, t.kills);
 		assertEquals(285, t.assignment);   // remaining is post-decrement, so 284 proves 285
 		assertTrue(t.inProgress);
@@ -263,7 +263,7 @@ public class LocalSlayerJourneyTest
 		countedKill("Dust devils", 120, 0);
 		countedKill("Dust devils", 130, 129);
 		countedKill("Dust devils", 130, 128);
-		ChronicleApiClient.SlayerJourney j = store.slayerJourney();
+		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(2, j.tasks.size());
 		assertEquals(2, j.tasks.get(0).kills);
 		assertEquals(130, j.tasks.get(0).assignment);
@@ -280,7 +280,7 @@ public class LocalSlayerJourneyTest
 		countedKill("Greater demons", 80, 30);   // a Konar task in between
 		countedKill("Hellhounds", 100, 48);      // back on it: the counter continues
 		countedKill("Hellhounds", 100, 47);
-		ChronicleApiClient.SlayerJourney j = store.slayerJourney();
+		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(2, j.tasks.size());
 		assertEquals("Hellhounds", j.tasks.get(0).task);   // one task, now the newest
 		assertEquals(4, j.tasks.get(0).kills);
@@ -302,7 +302,7 @@ public class LocalSlayerJourneyTest
 		countedKill("Hellhounds", 100, 50);
 		countedKill("Greater demons", 80, 30);
 		countedKill("Hellhounds", 120, 119);   // a higher counter: a new assignment
-		ChronicleApiClient.SlayerJourney j = store.slayerJourney();
+		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(3, j.tasks.size());
 		assertEquals(1, j.tasks.get(0).kills);
 		assertEquals(120, j.tasks.get(0).assignment);
@@ -316,7 +316,7 @@ public class LocalSlayerJourneyTest
 	{
 		onTaskKill("Bloodveld", 200, 1, 1);   // no counter at all: the oldest capture shape
 		onTaskKill("Jellies", 100, 1, 1);
-		ChronicleApiClient.SlayerJourney j = store.slayerJourney();
+		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(2, j.tasks.size());
 		assertTrue(j.tasks.get(0).inProgress);
 		assertFalse(j.tasks.get(1).inProgress);

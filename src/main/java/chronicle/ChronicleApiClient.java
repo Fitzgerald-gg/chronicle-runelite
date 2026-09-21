@@ -327,69 +327,6 @@ public class ChronicleApiClient
 		});
 	}
 
-	/** One dry chase: the journal's own kc weighed against the bundled wiki rate book. */
-	public static final class GrindRow
-	{
-		public final String boss;
-		public final String item;
-		public final long kc;
-		public final long rate;
-		public final double percentileDry;
-
-		GrindRow(String boss, String item, long kc, long rate, double percentileDry)
-		{
-			this.boss = boss;
-			this.item = item;
-			this.kc = kc;
-			this.rate = rate;
-			this.percentileDry = percentileDry;
-		}
-	}
-
-	/** The slayer journey the journal computes for the panel, from its on-disk task array. */
-	public static final class SlayerJourney
-	{
-		public final int completedTasks;
-		public final long totalKills;
-		public final long totalValueGp;
-		public final long totalXpEst;
-		public final java.util.List<SlayerTask> tasks;
-
-		SlayerJourney(int completedTasks, long totalKills, long totalValueGp,
-			long totalXpEst, java.util.List<SlayerTask> tasks)
-		{
-			this.completedTasks = completedTasks;
-			this.totalKills = totalKills;
-			this.totalValueGp = totalValueGp;
-			this.totalXpEst = totalXpEst;
-			this.tasks = tasks;
-		}
-	}
-
-	/** One task segment of the journey, newest first. */
-	public static final class SlayerTask
-	{
-		public final String task;
-		public final long kills;
-		public final long assignment;
-		public final long noLootKills;
-		public final double ts;          // epoch seconds
-		public final long totalValue;
-		public final boolean inProgress;
-
-		SlayerTask(String task, long kills, long assignment, long noLootKills,
-			double ts, long totalValue, boolean inProgress)
-		{
-			this.task = task;
-			this.kills = kills;
-			this.assignment = assignment;
-			this.noLootKills = noLootKills;
-			this.ts = ts;
-			this.totalValue = totalValue;
-			this.inProgress = inProgress;
-		}
-	}
-
 	@Nullable
 	private HttpUrl resolve(String baseUrl, String path)
 	{

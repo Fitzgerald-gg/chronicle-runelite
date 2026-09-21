@@ -4,15 +4,31 @@
 package chronicle;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.io.RandomAccessFile;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -47,7 +63,7 @@ class HistoryLog
 	// Last date appended, per account, for this session; gates the rollover append
 	// and names the day the first append after midnight closes.
 	// Keyed per account: two characters played on the same day each still get a line.
-	private final Map<String, String> lastAppendedDate = new java.util.concurrent.ConcurrentHashMap<>();
+	private final Map<String, String> lastAppendedDate = new ConcurrentHashMap<>();
 
 	/** Append today's closing baseline. Called at login-load, day rollover and logout. */
 	synchronized void append(File dir, String rsn, Map<String, Long> skills,
@@ -118,11 +134,11 @@ class HistoryLog
 
 	// One line for `date` carrying `state`, in place of any line the tail already
 	// holds for that date.
-	private void writeLine(File f, String date, JsonObject state) throws java.io.IOException
+	private void writeLine(File f, String date, JsonObject state) throws IOException
 	{
 		JsonObject line = new JsonObject();
 		line.addProperty("date", date);
-		for (Map.Entry<String, com.google.gson.JsonElement> e : state.entrySet())
+		for (Map.Entry<String, JsonElement> e : state.entrySet())
 		{
 			line.add(e.getKey(), e.getValue());
 		}
@@ -139,9 +155,9 @@ class HistoryLog
 
 	static final class Baseline
 	{
-		final Map<String, Long> skills = new java.util.HashMap<>();
-		final Map<String, Long> counters = new java.util.HashMap<>();
-		final Map<String, Long> kcs = new java.util.HashMap<>();
+		final Map<String, Long> skills = new HashMap<>();
+		final Map<String, Long> counters = new HashMap<>();
+		final Map<String, Long> kcs = new HashMap<>();
 		/**
 		 * A complete snapshot: the line carries "overall" and the skills it
 		 * lists sum exactly to it, so a skill it does not list stood at zero
@@ -185,7 +201,7 @@ class HistoryLog
 	 * <p>A fresh state, never one of the spine's own baselines: the caller may
 	 * hold it as long as it likes.
 	 */
-	static Baseline stateAt(java.util.TreeMap<LocalDate, Baseline> spine, LocalDate on)
+	static Baseline stateAt(TreeMap<LocalDate, Baseline> spine, LocalDate on)
 	{
 		Baseline out = new Baseline();
 		if (spine == null || on == null)
@@ -219,7 +235,7 @@ class HistoryLog
 	 * on or before {@code end}.
 	 */
 	static Map.Entry<LocalDate, Baseline> windowStart(
-		java.util.TreeMap<LocalDate, Baseline> spine, LocalDate start, LocalDate end)
+		TreeMap<LocalDate, Baseline> spine, LocalDate start, LocalDate end)
 	{
 		if (spine == null || spine.isEmpty() || start == null || end == null)
 		{
@@ -240,7 +256,7 @@ class HistoryLog
 	 * kill count first minted inside the window, or a skill the imported past
 	 * predates. A recorded value, never absence read as zero.
 	 */
-	static Baseline earliest(java.util.TreeMap<LocalDate, Baseline> spine, LocalDate upTo)
+	static Baseline earliest(TreeMap<LocalDate, Baseline> spine, LocalDate upTo)
 	{
 		Baseline out = new Baseline();
 		if (spine == null || upTo == null)
@@ -267,7 +283,7 @@ class HistoryLog
 	 * predate the counters, and the journal-derived totals (dropsReceived and
 	 * the rest) joined the line later than the trackers.
 	 */
-	static LocalDate firstCarrying(java.util.SortedMap<LocalDate, Baseline> spine, String key)
+	static LocalDate firstCarrying(SortedMap<LocalDate, Baseline> spine, String key)
 	{
 		if (spine == null)
 		{
@@ -309,7 +325,7 @@ class HistoryLog
 	static Map<String, Long> gained(Map<String, Long> start, Map<String, Long> earliest,
 		Map<String, Long> end, boolean startComplete)
 	{
-		Map<String, Long> out = new java.util.LinkedHashMap<>();
+		Map<String, Long> out = new LinkedHashMap<>();
 		if (end == null)
 		{
 			return out;
@@ -349,7 +365,7 @@ class HistoryLog
 	 */
 	static final class Levels
 	{
-		final Map<String, Integer> of = new java.util.LinkedHashMap<>();
+		final Map<String, Integer> of = new LinkedHashMap<>();
 		/**
 		 * The same levels counted past 99.
 		 *
@@ -358,7 +374,7 @@ class HistoryLog
 		 * game does; what a skill tile SHOWS is what the account has actually
 		 * done, which carries on.
 		 */
-		final Map<String, Integer> virtual = new java.util.LinkedHashMap<>();
+		final Map<String, Integer> virtual = new LinkedHashMap<>();
 		int total;
 		int drawn;
 		int nines;
@@ -387,7 +403,7 @@ class HistoryLog
 	 * impossibility. Wherever the state speaks for hitpoints at all it draws
 	 * 10 at the least, which is what the site publishes.
 	 */
-	static Levels levels(Baseline state, java.util.List<String> skills)
+	static Levels levels(Baseline state, List<String> skills)
 	{
 		Levels out = new Levels();
 		if (state == null || skills == null)
@@ -437,7 +453,7 @@ class HistoryLog
 			return;
 		}
 		String needle = "\"date\":\"" + date + "\"";
-		try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(f, "rw"))
+		try (RandomAccessFile raf = new RandomAccessFile(f, "rw"))
 		{
 			long keep = raf.length();
 			while (keep > 0)
@@ -465,7 +481,7 @@ class HistoryLog
 	}
 
 	// Offset just past the newline before `end`, i.e. where that last line begins.
-	private static long lineStart(java.io.RandomAccessFile raf, long end) throws java.io.IOException
+	private static long lineStart(RandomAccessFile raf, long end) throws IOException
 	{
 		long i = end - 1;
 		while (i > 0)
@@ -506,14 +522,14 @@ class HistoryLog
 		{
 			return 0;
 		}
-		java.util.TreeMap<String, String> keep = new java.util.TreeMap<>();
+		TreeMap<String, String> keep = new TreeMap<>();
 		int seen = 0;
 		int unreadable = 0;
 		// ISO dates sort as text, so the map's own order is the calendar's.
 		String previous = null;
 		boolean ordered = true;
-		try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(
-			new java.io.FileInputStream(f), StandardCharsets.UTF_8)))
+		try (BufferedReader r = new BufferedReader(new InputStreamReader(
+			new FileInputStream(f), StandardCharsets.UTF_8)))
 		{
 			String line;
 			while ((line = r.readLine()) != null)
@@ -583,8 +599,8 @@ class HistoryLog
 		}
 		try
 		{
-			java.nio.file.Files.move(tmp.toPath(), f.toPath(),
-				java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+			Files.move(tmp.toPath(), f.toPath(),
+				StandardCopyOption.REPLACE_EXISTING);
 		}
 		catch (Exception e)
 		{
@@ -596,16 +612,16 @@ class HistoryLog
 		return dropped;
 	}
 
-	java.util.TreeMap<LocalDate, Baseline> read(File dir, String rsn)
+	TreeMap<LocalDate, Baseline> read(File dir, String rsn)
 	{
-		java.util.TreeMap<LocalDate, Baseline> out = new java.util.TreeMap<>();
+		TreeMap<LocalDate, Baseline> out = new TreeMap<>();
 		File f = new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX);
 		if (!f.isFile())
 		{
 			return out;
 		}
-		try (java.io.BufferedReader r = new java.io.BufferedReader(
-			new java.io.InputStreamReader(new java.io.FileInputStream(f), StandardCharsets.UTF_8)))
+		try (BufferedReader r = new BufferedReader(
+			new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8)))
 		{
 			String line;
 			while ((line = r.readLine()) != null)
@@ -642,7 +658,7 @@ class HistoryLog
 	{
 		if (o.has(key) && o.get(key).isJsonObject())
 		{
-			for (Map.Entry<String, com.google.gson.JsonElement> e
+			for (Map.Entry<String, JsonElement> e
 				: o.getAsJsonObject(key).entrySet())
 			{
 				try
@@ -670,12 +686,12 @@ class HistoryLog
 		{
 			return 0;
 		}
-		java.util.Set<String> have = read(dir, rsn).keySet().stream()
-			.map(java.time.LocalDate::toString)
-			.collect(java.util.stream.Collectors.toSet());
+		Set<String> have = read(dir, rsn).keySet().stream()
+			.map(LocalDate::toString)
+			.collect(Collectors.toSet());
 		int added = 0;
-		try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(
-			new java.io.FileInputStream(source), StandardCharsets.UTF_8)))
+		try (BufferedReader r = new BufferedReader(new InputStreamReader(
+			new FileInputStream(source), StandardCharsets.UTF_8)))
 		{
 			File out = new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX);
 			if (!dir.isDirectory() && !dir.mkdirs())

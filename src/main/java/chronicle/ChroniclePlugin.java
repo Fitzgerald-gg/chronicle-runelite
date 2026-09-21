@@ -850,7 +850,8 @@ public class ChroniclePlugin extends Plugin
 	{
 		if (!cloudActive())
 		{
-			chat("Chronicle: enable cloud sync (and set a server) under Advanced in the plugin settings first.");
+			chat("Chronicle: enable cloud sync (and set a server) under Advanced in the "
+				+ "plugin settings first.");
 			return;
 		}
 		clientThread.invoke(this::pushCurrent);
@@ -911,6 +912,7 @@ public class ChroniclePlugin extends Plugin
 	private volatile long playtimeMinutes;
 	private volatile long playtimeAt;
 	private boolean playtimeLogged;
+	private volatile long sessionStartMs;
 
 	/**
 	 * The game's own figure, carried forward to now.
@@ -1059,7 +1061,7 @@ public class ChroniclePlugin extends Plugin
 
 	// The journal's task-by-task slayer journey; the panel fetches on first open.
 	void fetchSlayerJourney(
-		java.util.function.Consumer<ChronicleApiClient.SlayerJourney> onDone)
+		java.util.function.Consumer<LocalStore.SlayerJourney> onDone)
 	{
 		final String rsn = localName;
 		if (rsn == null || !localStore.isReadyFor(rsn))
@@ -1072,7 +1074,7 @@ public class ChroniclePlugin extends Plugin
 
 	// The same journey read on the calling thread, for the History tab's gather
 	// worker; null while no store is mounted. Never call this on the EDT.
-	ChronicleApiClient.SlayerJourney slayerJourney()
+	LocalStore.SlayerJourney slayerJourney()
 	{
 		final String rsn = localName;
 		if (rsn == null || !localStore.isReadyFor(rsn))
@@ -1447,7 +1449,7 @@ public class ChroniclePlugin extends Plugin
 
 	// Dryness, computed from the journal's own collection log and kill counts against
 	// the bundled wiki rate book. The panel fetches once per session.
-	void fetchGrinds(java.util.function.Consumer<java.util.List<ChronicleApiClient.GrindRow>> onDone)
+	void fetchGrinds(java.util.function.Consumer<java.util.List<GrindBook.GrindRow>> onDone)
 	{
 		final String rsn = localName;
 		if (rsn == null || !localStore.isReadyFor(rsn))
@@ -1484,8 +1486,6 @@ public class ChroniclePlugin extends Plugin
 	{
 		return eventCapture.slayerSeenThisSession();
 	}
-
-	private volatile long sessionStartMs;
 
 	// The logout diary line: one dated feed entry closing the session. Local only,
 	// skipped when the session was too slight to be worth a line.

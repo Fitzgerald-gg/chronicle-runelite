@@ -63,7 +63,7 @@ public class SlayerSegmentHealTest
 			+ "\"monsters\":{\"Nechryael\":1,\"Man\":1,\"Baby impling\":1,\"Eclectic impling\":1},"
 			+ "\"items\":{\"Bones\":{\"id\":526,\"qty\":4,\"value\":900}}}]}}");
 		store.load(dir, "Tester");
-		ChronicleApiClient.SlayerTask t = store.slayerJourney().tasks.get(0);
+		LocalStore.SlayerTask t = store.slayerJourney().tasks.get(0);
 		assertEquals(1, t.kills);
 		List<LocalStore.UntakenRow> mons = store.slayerTaskMonsters(0);
 		assertEquals(1, mons.size());
@@ -81,7 +81,7 @@ public class SlayerSegmentHealTest
 			+ "{\"task\":\"Dust devils\",\"kills\":208,\"assignment\":208,\"value\":5,\"open\":true,"
 			+ "\"monsters\":{\"Dust devil\":206,\"Choke devil\":2}}]}}");
 		store.load(dir, "Tester");
-		ChronicleApiClient.SlayerTask t = store.slayerJourney().tasks.get(0);
+		LocalStore.SlayerTask t = store.slayerJourney().tasks.get(0);
 		assertEquals(208, t.kills);
 		List<LocalStore.UntakenRow> mons = store.slayerTaskMonsters(0);
 		assertEquals(2, mons.size());
@@ -110,7 +110,7 @@ public class SlayerSegmentHealTest
 			+ "{\"task\":\"Nechryael\",\"kills\":2,\"assignment\":0,\"value\":0,\"open\":true,"
 			+ "\"monsters\":{\"Man\":1,\"Hoop Snake\":1}}]}}");
 		store.load(dir, "Tester");
-		ChronicleApiClient.SlayerJourney j = store.slayerJourney();
+		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(1, j.tasks.size());
 		assertEquals(0, j.tasks.get(0).kills);
 		assertEquals(0, store.slayerTaskMonsters(0).size());

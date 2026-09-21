@@ -8,6 +8,10 @@
  */
 package chronicle.counters;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +45,7 @@ public class ChronicleCounters
 
 	// Per-consumable gp lands here; the plugin points it at the journal's lifetime
 	// consumable map. Volatile: set at startUp, read on the client thread in trackers().
-	private volatile java.util.function.BiConsumer<String, Integer> consumableSink;
+	private volatile BiConsumer<String, Integer> consumableSink;
 
 	// The account's gathered-item ledger, wired at startUp and read on the client
 	// thread in trackers(). Volatile on the same grounds as the sink.
@@ -66,7 +70,7 @@ public class ChronicleCounters
 		this.skillDeriver = skillDeriver;
 	}
 
-	public void setConsumableSink(java.util.function.BiConsumer<String, Integer> sink)
+	public void setConsumableSink(BiConsumer<String, Integer> sink)
 	{
 		this.consumableSink = sink;
 	}
@@ -125,17 +129,17 @@ public class ChronicleCounters
 	 * that tally has been running. Empty until the first event of a session builds the
 	 * trackers. Read from the EDT for the panel; never from the journal's own totals.
 	 */
-	public java.util.List<ExperienceStatTracker.SkillGain> sessionSkillXp()
+	public List<ExperienceStatTracker.SkillGain> sessionSkillXp()
 	{
 		// Read the field once: a reset() landing mid-call must not null it under us.
 		ExperienceStatTracker xp = experience;
-		return xp == null ? java.util.Collections.emptyList() : xp.sessionGains();
+		return xp == null ? Collections.emptyList() : xp.sessionGains();
 	}
 
 	// Catch per tracker. One throwing on a line it did not expect otherwise robs every
 	// tracker after it of the event, with nothing to say why the counters stalled.
 	// Errors propagate; only a tracker's own bad reasoning is ours to swallow.
-	private void fanOut(java.util.function.Consumer<StatTracker> delivery)
+	private void fanOut(Consumer<StatTracker> delivery)
 	{
 		for (StatTracker t : trackers())
 		{

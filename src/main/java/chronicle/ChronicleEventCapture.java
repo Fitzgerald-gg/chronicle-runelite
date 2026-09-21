@@ -10,13 +10,16 @@ package chronicle;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -97,8 +100,8 @@ public class ChronicleEventCapture
 	// ledger already follows. Everything else is the game counting an encounter,
 	// including the lines that carry no word at all ("Your subdued Wintertodt
 	// count is:", "Your completed Chambers of Xeric count is:").
-	private static final java.util.Set<String> NOT_A_KILL =
-		new java.util.HashSet<>(java.util.Arrays.asList("lap", "harvest"));
+	private static final Set<String> NOT_A_KILL =
+		new HashSet<>(Arrays.asList("lap", "harvest"));
 
 	static final Pattern COLLECTION_ITEM = Pattern.compile(
 		"^New item added to your collection log: (?<entry>.+)$");
@@ -212,8 +215,9 @@ public class ChronicleEventCapture
 	// after a kill so manual drops aren't counted. On despawn we ask the item's own
 	// scheduled despawn tick whether it timed out (left behind) or was taken early;
 	// the timed-out ones are batched into a LOOT_UNTAKEN event.
-	private static final int SELF_OWNED = TileItem.OWNERSHIP_SELF;
 	private static final int KILL_ARM_TICKS = 3;
+	// ticks past a stack's own despawn before we conclude nobody is going to tell us
+	private static final int TIMEOUT_GRACE = 5;
 	private final Map<TileItem, GroundLoot> groundLoot = new IdentityHashMap<>();
 	// Self-owned items seen on recent ticks, awaiting a kill to confirm them as loot.
 	// LootManager posts the kill's ServerNpcLoot after the tick's ItemSpawned events
@@ -224,8 +228,8 @@ public class ChronicleEventCapture
 	// Stacks that were tracked when the scene unloaded. Only these can come back on
 	// a new object; anything else spawning is a fresh drop, even where it is the
 	// same thing on the same tile as one we already hold.
-	private final java.util.Set<TileItem> unloaded =
-		java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+	private final Set<TileItem> unloaded =
+		Collections.newSetFromMap(new IdentityHashMap<>());
 	// The kills of the last few ticks, each carrying the source name stamped onto the
 	// loot it produced so the Uncollected ledger can say where things were left.
 	private final List<RecentKill> recentKills = new ArrayList<>();
@@ -559,9 +563,6 @@ public class ChronicleEventCapture
 		}
 	}
 
-	// ticks past a stack's own despawn before we conclude nobody is going to tell us
-	private static final int TIMEOUT_GRACE = 5;
-
 	// Promote buffered self-owned spawns to tracked kill loot when they landed within
 	// KILL_ARM_TICKS of a kill. Runs at GameTick and keeps a spawn pending for that
 	// window, so the later-firing ServerNpcLoot (posted by LootManager, usually from
@@ -779,7 +780,7 @@ public class ChronicleEventCapture
 			return;
 		}
 		boolean group = it.getOwnership() == TileItem.OWNERSHIP_GROUP;
-		if (!group && it.getOwnership() != SELF_OWNED)
+		if (!group && it.getOwnership() != TileItem.OWNERSHIP_SELF)
 		{
 			return;
 		}
@@ -1331,7 +1332,7 @@ public class ChronicleEventCapture
 		{
 			JsonObject data = new JsonObject();
 			data.addProperty("area", d.group("region").trim());
-			data.addProperty("difficulty", d.group("grade").trim().toUpperCase(java.util.Locale.ROOT));
+			data.addProperty("difficulty", d.group("grade").trim().toUpperCase(Locale.ROOT));
 			emit("DIARY", data);
 			return;
 		}
@@ -1416,7 +1417,7 @@ public class ChronicleEventCapture
 		if (ca.find())
 		{
 			JsonObject data = new JsonObject();
-			data.addProperty("tier", ca.group("grade").trim().toUpperCase(java.util.Locale.ROOT));
+			data.addProperty("tier", ca.group("grade").trim().toUpperCase(Locale.ROOT));
 			data.addProperty("task", COMBAT_TASK_POINTS.matcher(ca.group("challenge").trim()).replaceAll(""));
 			emit("COMBAT_ACHIEVEMENT", data);
 			return;
@@ -1427,7 +1428,7 @@ public class ChronicleEventCapture
 		if (clue.find())
 		{
 			JsonObject data = new JsonObject();
-			data.addProperty("clueType", clue.group("rank").trim().toUpperCase(java.util.Locale.ROOT));
+			data.addProperty("clueType", clue.group("rank").trim().toUpperCase(Locale.ROOT));
 			try
 			{
 				data.addProperty("clueCount", Integer.parseInt(clue.group("tally").replace(",", "")));
@@ -1681,7 +1682,7 @@ public class ChronicleEventCapture
 		{
 			return "";
 		}
-		return Text.removeTags(name).replaceAll("\\s*\\(.+\\)$", "").trim().toLowerCase(java.util.Locale.ROOT);
+		return Text.removeTags(name).replaceAll("\\s*\\(.+\\)$", "").trim().toLowerCase(Locale.ROOT);
 	}
 
 	// null while the name can't be read yet.

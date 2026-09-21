@@ -33,16 +33,16 @@ public class TemporossRewardPoolTest
 		"Big harpoonfish", "Tome of water (empty)", "Dragon harpoon",
 	};
 
-	private static List<ChronicleApiClient.GrindRow> rows(JsonObject clog,
+	private static List<GrindBook.GrindRow> rows(JsonObject clog,
 		List<LocalStore.SourceRow> sources)
 	{
 		return new GrindBook(new Gson()).grinds(clog, sources);
 	}
 
-	private static ChronicleApiClient.GrindRow find(List<ChronicleApiClient.GrindRow> rows,
+	private static GrindBook.GrindRow find(List<GrindBook.GrindRow> rows,
 		String item)
 	{
-		for (ChronicleApiClient.GrindRow g : rows)
+		for (GrindBook.GrindRow g : rows)
 		{
 			if (g.item.equals(item))
 			{
@@ -82,8 +82,8 @@ public class TemporossRewardPoolTest
 	@Test
 	public void uniquesArePricedOnSearchesNotSubdues()
 	{
-		List<ChronicleApiClient.GrindRow> rows = rows(clog(), ledger());
-		ChronicleApiClient.GrindRow harpoon = find(rows, "Dragon harpoon");
+		List<GrindBook.GrindRow> rows = rows(clog(), ledger());
+		GrindBook.GrindRow harpoon = find(rows, "Dragon harpoon");
 		assertNotNull("Dragon harpoon has no row", harpoon);
 		assertEquals(POOL, harpoon.boss);
 		assertEquals(114, harpoon.kc);
@@ -92,7 +92,7 @@ public class TemporossRewardPoolTest
 		for (String item : new String[]{"Fish barrel", "Tackle box", "Big harpoonfish",
 			"Tome of water (empty)"})
 		{
-			ChronicleApiClient.GrindRow g = find(rows, item);
+			GrindBook.GrindRow g = find(rows, item);
 			assertNotNull(item + " has no row", g);
 			assertEquals(item + " is not priced on searches", 114, g.kc);
 			assertEquals(item + " is off the pool's card", POOL, g.boss);
@@ -104,7 +104,7 @@ public class TemporossRewardPoolTest
 	@Test
 	public void neitherSubduesNorCasketsPriceTheBlock()
 	{
-		for (ChronicleApiClient.GrindRow g : rows(clog(), ledger()))
+		for (GrindBook.GrindRow g : rows(clog(), ledger()))
 		{
 			if (g.boss.toLowerCase(java.util.Locale.ROOT).contains("tempoross"))
 			{
@@ -141,8 +141,8 @@ public class TemporossRewardPoolTest
 		}
 		byCat.add("Tempoross", page);
 		clog.add("by_cat", byCat);
-		List<ChronicleApiClient.GrindRow> rows = rows(clog, ledger());
-		for (ChronicleApiClient.GrindRow g : rows)
+		List<GrindBook.GrindRow> rows = rows(clog, ledger());
+		for (GrindBook.GrindRow g : rows)
 		{
 			assertFalse("an owned item is still being chased: " + g.item,
 				g.boss.equals(POOL));
@@ -153,11 +153,11 @@ public class TemporossRewardPoolTest
 	@Test
 	public void obtainedIsReadOffTheWholeLogSet()
 	{
-		List<ChronicleApiClient.GrindRow> rows = rows(
+		List<GrindBook.GrindRow> rows = rows(
 			clog("Fish barrel", "Tackle box", "Big harpoonfish", "Tome of Water (empty)",
 				"Dragon harpoon"),
 			ledger());
-		for (ChronicleApiClient.GrindRow g : rows)
+		for (GrindBook.GrindRow g : rows)
 		{
 			assertFalse("an owned item is still being chased: " + g.item,
 				g.boss.equals(POOL));
@@ -221,7 +221,7 @@ public class TemporossRewardPoolTest
 		LocalStore store = new LocalStore(im, new Gson());
 		store.load(dir, rsn);
 		List<LocalStore.SourceRow> sources = store.dropSources();
-		for (ChronicleApiClient.GrindRow g : rows(store.clogSnapshot(), sources))
+		for (GrindBook.GrindRow g : rows(store.clogSnapshot(), sources))
 		{
 			boolean carded = false;
 			for (LocalStore.SourceRow sr : sources)

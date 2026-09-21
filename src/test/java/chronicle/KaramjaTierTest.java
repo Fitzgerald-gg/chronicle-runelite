@@ -84,10 +84,8 @@ public class KaramjaTierTest
 		try
 		{
 			f.set(SYNC, new JsonObject());   // present but empty: no "diaries" key
-			assertEquals("the fallback is the figure that was hardcoded", 10,
-				tierSize("easy", 10));
-			assertTrue("a tier size of zero would call every tier finished",
-				tierSize("easy", 10) > 0);
+			assertEquals("the fallback is the figure that was hardcoded, and a tier "
+				+ "size of zero would call every tier finished", 10, tierSize("easy", 10));
 		}
 		finally
 		{

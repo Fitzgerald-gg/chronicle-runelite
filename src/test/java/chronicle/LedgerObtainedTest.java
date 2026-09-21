@@ -41,7 +41,7 @@ public class LedgerObtainedTest
 	private static Set<String> chased(JsonObject clog, List<LocalStore.SourceRow> sources)
 	{
 		Set<String> out = new HashSet<>();
-		for (ChronicleApiClient.GrindRow g : new GrindBook(new Gson()).grinds(clog, sources))
+		for (GrindBook.GrindRow g : new GrindBook(new Gson()).grinds(clog, sources))
 		{
 			out.add(g.boss + " / " + g.item);
 		}

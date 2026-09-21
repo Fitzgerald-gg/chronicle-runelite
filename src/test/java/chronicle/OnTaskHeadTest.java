@@ -31,7 +31,7 @@ import static org.junit.Assert.assertTrue;
 public class OnTaskHeadTest
 {
 	private static final String JOURNAL =
-		"{\"slayer\":{\"tasks\":[" 
+		"{\"slayer\":{\"tasks\":["
 		+ "{\"task\":\"Nechryael\",\"ts\":1700000000,\"kills\":120,"
 		+ "\"monsters\":{\"Nechryael\":118,\"Nechryarch\":2},"
 		+ "\"items\":{\"Death rune\":{\"id\":560,\"name\":\"Death rune\","

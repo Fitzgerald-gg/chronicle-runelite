@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.runelite.api.ChatMessageType;
@@ -24,15 +25,15 @@ import net.runelite.api.GameState;
 import net.runelite.api.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
-import net.runelite.client.game.ItemManager;
-import net.runelite.http.api.item.ItemPrice;
 import net.runelite.api.Skill;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOptionClicked;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.Text;
+import net.runelite.http.api.item.ItemPrice;
 
 import static chronicle.counters.StatKeys.BEERS_DRUNK;
 import static chronicle.counters.StatKeys.DIVINE_POTION_DAMAGE;
@@ -182,10 +183,10 @@ public class FoodStatTracker implements StatTracker
 	// Journal sink for per-consumable gp (typed key -> price at use). Null in tests, and
 	// until ChronicleCounters builds this tracker, which it defers until the plugin has
 	// wired the sink.
-	private final java.util.function.BiConsumer<String, Integer> consumableSink;
+	private final BiConsumer<String, Integer> consumableSink;
 
 	public FoodStatTracker(StatStore statStore, Client client, ItemManager itemManager,
-		java.util.function.BiConsumer<String, Integer> consumableSink)
+		BiConsumer<String, Integer> consumableSink)
 	{
 		this.itemManager = itemManager;
 		this.store = statStore;

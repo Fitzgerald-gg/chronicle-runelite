@@ -451,9 +451,7 @@ public class ClickAffordanceTest
 			java.awt.Dimension d = c.getPreferredSize();
 			if (!theirs && (d.width > 0 || d.height > 0))
 			{
-				{
 				bad.add(describe(c) + "  " + d.width + "x" + d.height);
-			}
 			}
 		}
 		assertTrue("a Swing button in a panel made of rows; use moreRow() for a"

@@ -79,18 +79,18 @@ public class SlayerJourneyRefreshTest
 	// Fixtures
 	// ------------------------------------------------------------------
 
-	private static ChronicleApiClient.SlayerJourney journeyOf(int completed, long kills,
-		ChronicleApiClient.SlayerTask... tasks)
+	private static LocalStore.SlayerJourney journeyOf(int completed, long kills,
+		LocalStore.SlayerTask... tasks)
 	{
-		List<ChronicleApiClient.SlayerTask> list = new ArrayList<>();
+		List<LocalStore.SlayerTask> list = new ArrayList<>();
 		java.util.Collections.addAll(list, tasks);
-		return new ChronicleApiClient.SlayerJourney(completed, kills, 5_000_000L, 0, list);
+		return new LocalStore.SlayerJourney(completed, kills, 5_000_000L, 0, list);
 	}
 
 	// ts 0 keeps the dateline off the card, which keeps the label list short
-	private static ChronicleApiClient.SlayerTask task(String name, long kills)
+	private static LocalStore.SlayerTask task(String name, long kills)
 	{
-		return new ChronicleApiClient.SlayerTask(name, kills, 0, 0, 0, 1_000L, false);
+		return new LocalStore.SlayerTask(name, kills, 0, 0, 0, 1_000L, false);
 	}
 
 	private CountingStub newStub()
@@ -112,7 +112,7 @@ public class SlayerJourneyRefreshTest
 
 		@Override
 		void fetchSlayerJourney(
-			java.util.function.Consumer<ChronicleApiClient.SlayerJourney> onDone)
+			java.util.function.Consumer<LocalStore.SlayerJourney> onDone)
 		{
 			fetches++;
 			super.fetchSlayerJourney(onDone);

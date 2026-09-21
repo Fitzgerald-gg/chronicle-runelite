@@ -95,6 +95,7 @@ public class ClogCapture
 	// it is written and read on the client thread alone.
 	private volatile int finished;
 	private volatile int available;
+	private boolean dirty;
 
 	// Enabled mid-session: no LOGGED_IN transition is coming. Read the varps now.
 	void primeFromVarps(net.runelite.api.Client c)
@@ -124,7 +125,6 @@ public class ClogCapture
 	{
 		return available;
 	}
-	private boolean dirty;
 
 	// Bumped alongside dirty, so the panel can tell the log moved without being
 	// told what moved. dirty is consumed by the push; this is not.
@@ -134,6 +134,7 @@ public class ClogCapture
 	{
 		return revision;
 	}
+
 	// Ticks since the kill log opened; -1 = idle. Row widgets can be built a tick
 	// or two after WidgetLoaded, so the scrape retries briefly once it's open.
 	private int killLogTicks = -1;
@@ -348,8 +349,6 @@ public class ClogCapture
 				{
 					slayerKcs.put(mob, Integer.parseInt(digits));
 					captured++;
-					dirty = true;
-					revision++;
 				}
 				catch (NumberFormatException ignored)
 				{
@@ -358,6 +357,8 @@ public class ClogCapture
 			}
 			if (captured > 0)
 			{
+				dirty = true;
+				revision++;
 				log.debug("slayer-log captured {} species", captured);
 			}
 		}

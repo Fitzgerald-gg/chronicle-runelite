@@ -8,7 +8,11 @@
  */
 package chronicle;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Client;
@@ -103,7 +107,7 @@ public class AchievementSync
 
 	private final Client client;
 	// RuneLite's own, injected: the Hub rejects a plugin that builds its own.
-	private final com.google.gson.Gson gson;
+	private final Gson gson;
 
 	// JSON of the last snapshot the server acked. Fields are built in a fixed order,
 	// which is what makes plain string equality a sound change gate. Written on an
@@ -116,7 +120,7 @@ public class AchievementSync
 	private volatile int cachedTick = -1;
 
 	@Inject
-	public AchievementSync(Client client, com.google.gson.Gson gson)
+	public AchievementSync(Client client, Gson gson)
 	{
 		this.client = client;
 		this.gson = gson;
@@ -137,10 +141,10 @@ public class AchievementSync
 	{
 		if (bundledDiaries == null)
 		{
-			try (java.io.InputStreamReader r = new java.io.InputStreamReader(
+			try (InputStreamReader r = new InputStreamReader(
 				AchievementSync.class.getResourceAsStream(
 					"/chronicle/osrs_achievement_diaries.json"),
-				java.nio.charset.StandardCharsets.UTF_8))
+				StandardCharsets.UTF_8))
 			{
 				bundledDiaries = gson.fromJson(r, JsonObject.class);
 			}
@@ -221,7 +225,7 @@ public class AchievementSync
 		combat.add("tiers", tiers);
 		// The words the panel reads come from the bundled table; these are just the
 		// ids, so the journal carries the smallest thing that can answer "which".
-		com.google.gson.JsonArray done = new com.google.gson.JsonArray();
+		JsonArray done = new JsonArray();
 		for (int word = 0; word < CA_TASK_COMPLETED.length; word++)
 		{
 			int bits = client.getVarpValue(CA_TASK_COMPLETED[word]);

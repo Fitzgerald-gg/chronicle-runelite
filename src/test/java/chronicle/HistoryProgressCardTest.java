@@ -329,22 +329,22 @@ public class HistoryProgressCardTest
 		return e;
 	}
 
-	private static ChronicleApiClient.SlayerTask task(String name, double ts, boolean inProgress)
+	private static LocalStore.SlayerTask task(String name, double ts, boolean inProgress)
 	{
 		return task(name, ts, inProgress, 100);
 	}
 
 	// the same, with the kills the segment holds
-	private static ChronicleApiClient.SlayerTask task(String name, double ts, boolean inProgress,
+	private static LocalStore.SlayerTask task(String name, double ts, boolean inProgress,
 		long kills)
 	{
-		return new ChronicleApiClient.SlayerTask(name, kills, inProgress ? 150 : 0, 0, ts, 1_000L,
+		return new LocalStore.SlayerTask(name, kills, inProgress ? 150 : 0, 0, ts, 1_000L,
 			inProgress);
 	}
 
-	private static ChronicleApiClient.SlayerJourney journey(ChronicleApiClient.SlayerTask... tasks)
+	private static LocalStore.SlayerJourney journey(LocalStore.SlayerTask... tasks)
 	{
-		return new ChronicleApiClient.SlayerJourney(tasks.length, 100L * tasks.length,
+		return new LocalStore.SlayerJourney(tasks.length, 100L * tasks.length,
 			1_000L * tasks.length, 0, new ArrayList<>(Arrays.asList(tasks)));
 	}
 

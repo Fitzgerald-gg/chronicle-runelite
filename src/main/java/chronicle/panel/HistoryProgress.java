@@ -304,14 +304,13 @@ public final class HistoryProgress
 	// Teleports section carries the period's total with its "Other means", one
 	// place for one figure.
 	private static final Set<String> SUMMARY_KEYS = new HashSet<>(Arrays.asList(
-		"dropsReceived", "lootValue", "lootLeftCount", "lootLeftValue", "lootLeftKills", "kills",
-		"slayerTasksCompleted", "slayerKills", "damageDealt", "damageDealtMelee",
-		"damageDealtRanged",
-		"damageDealtMagic", "deaths", "petsObtained", "questsCompleted", "diariesCompleted",
-		"combatAchievements", "levelsGained", "clogSlotsObtained", "distanceRan",
-		"distanceWalked",
-		"coinsSpentAtShops", "coinsEarnedAtShops", "coinsFromAlchemy", "consumedValue",
-		"resourcesGatheredValue", "resourcesDroppedValue", "itemsDroppedValue"));
+		"dropsReceived", "lootValue", "lootLeftCount", "lootLeftValue", "lootLeftKills",
+		"kills", "slayerTasksCompleted", "slayerKills", "damageDealt", "damageDealtMelee",
+		"damageDealtRanged", "damageDealtMagic", "deaths", "petsObtained", "questsCompleted",
+		"diariesCompleted", "combatAchievements", "levelsGained", "clogSlotsObtained",
+		"distanceRan", "distanceWalked", "coinsSpentAtShops", "coinsEarnedAtShops",
+		"coinsFromAlchemy", "consumedValue", "resourcesGatheredValue",
+		"resourcesDroppedValue", "itemsDroppedValue"));
 
 	private final List<Row> summary;
 	private final List<Section> sections;

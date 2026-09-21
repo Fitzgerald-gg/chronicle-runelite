@@ -15,29 +15,40 @@ import com.google.gson.JsonObject;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.GridLayout;
+import java.awt.Image;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
@@ -45,13 +56,13 @@ import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.ui.components.IconTextField;
 import net.runelite.client.ui.components.materialtabs.MaterialTab;
 import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
+import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.OSType;
 
@@ -493,7 +504,7 @@ class ChroniclePanel extends PluginPanel
 			pill.setFont(FontManager.getRunescapeSmallFont());
 			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 			pill.setForeground(name.equals(on) ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
-			pill.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			pill.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			pill.addMouseListener(clicker(() ->
 			{
 				subByTab.put(tab, name);
@@ -1091,7 +1102,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return out;
 		}
-		java.util.Set<String> lined = new java.util.HashSet<>();
+		Set<String> lined = new HashSet<>();
 		if (cl.has("kc_lines") && cl.get("kc_lines").isJsonObject())
 		{
 			for (String pageName : cl.getAsJsonObject("kc_lines").keySet())
@@ -1193,7 +1204,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				continue;
 			}
-			out.add(new java.util.AbstractMap.SimpleEntry<>(ln.getKey(), n));
+			out.add(new AbstractMap.SimpleEntry<>(ln.getKey(), n));
 		}
 		return out;
 	}
@@ -1217,15 +1228,15 @@ class ChroniclePanel extends PluginPanel
 	// Per build: every kind the record knows to be killed rather than searched,
 	// gathered or opened. Built once instead of walking the roster and the Kill
 	// Log again for every row of a board.
-	private java.util.Set<String> killKinds;
+	private Set<String> killKinds;
 
-	private java.util.Set<String> killKinds()
+	private Set<String> killKinds()
 	{
 		if (killKinds != null)
 		{
 			return killKinds;
 		}
-		java.util.Set<String> out = new java.util.HashSet<>();
+		Set<String> out = new HashSet<>();
 		for (Boss b : bossRoster(plugin.gson()))
 		{
 			out.add(LocalStore.kindOf(b.name));
@@ -1300,7 +1311,7 @@ class ChroniclePanel extends PluginPanel
 			long secs = safeLong(ln.getValue());
 			if (secs > 0 && lineBelongsTo(boss, ln.getKey()))
 			{
-				out.add(new java.util.AbstractMap.SimpleEntry<>(ln.getKey(), secs));
+				out.add(new AbstractMap.SimpleEntry<>(ln.getKey(), secs));
 			}
 		}
 		return out;
@@ -1630,7 +1641,7 @@ class ChroniclePanel extends PluginPanel
 		cell.setToolTipText(hover);
 		if (!page.isEmpty())
 		{
-			cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			cell.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			final String to = page;
 			cell.addMouseListener(clicker(() ->
 			{
@@ -1644,7 +1655,7 @@ class ChroniclePanel extends PluginPanel
 			// rewards, Soul Wars' - and the figure they carry is that source's
 			// count. So they open it, rather than being the only things on the
 			// sheet that say a number and do nothing when you press them.
-			cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			cell.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			final String open = source;
 			cell.addMouseListener(clicker(() -> openSourceLoose(open)));
 		}
@@ -1814,7 +1825,7 @@ class ChroniclePanel extends PluginPanel
 		// the dash beside it says. Folding the two together made the hover assert
 		// "none yet" over a tile that was saying it did not know.
 		cell.setToolTipText(bossTip(b));
-		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		cell.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
 		JLabel icon = new JLabel();
 		if (b.sprite > 0)
@@ -2538,8 +2549,8 @@ class ChroniclePanel extends PluginPanel
 		band.setOpaque(true);
 		band.setToolTipText(red ? stalled : captureWhy);
 		band.setCursor(bandFixes
-			? java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
-			: java.awt.Cursor.getDefaultCursor());
+			? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+			: Cursor.getDefaultCursor());
 		band.setVisible(true);
 	}
 
@@ -2575,7 +2586,7 @@ class ChroniclePanel extends PluginPanel
 			name.setForeground(accent());
 		}
 		head.setToolTipText("The damage this session, by style");
-		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		head.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		head.addMouseListener(clicker(() -> toggleFold(FOLD_HOME_DAMAGE)));
 	}
 
@@ -2593,7 +2604,7 @@ class ChroniclePanel extends PluginPanel
 			name.setForeground(accent());
 		}
 		head.setToolTipText("Each skill's xp and xp per hour this session");
-		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		head.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		head.addMouseListener(clicker(() -> toggleFold(FOLD_HOME_XP)));
 	}
 
@@ -2651,7 +2662,7 @@ class ChroniclePanel extends PluginPanel
 		JPanel strip = card("This session");
 		Map<String, Integer> sess = plugin.sessionCounters();
 		int mounted = 0;
-		java.util.Set<String> shownKeys = new java.util.HashSet<>();
+		Set<String> shownKeys = new HashSet<>();
 		for (String key : HOME_PINNED)
 		{
 			long v = sess.getOrDefault(key, 0);
@@ -2756,7 +2767,7 @@ class ChroniclePanel extends PluginPanel
 				slot.setPreferredSize(new Dimension(36, 32));
 				slot.setHorizontalAlignment(JLabel.CENTER);
 				slot.setToolTipText(d.name + (d.quantity > 1 ? " ×" + fmt(d.quantity) : ""));
-				slot.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				slot.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String itm = d.name;
 				slot.addMouseListener(clicker(() -> openItem(itm)));
 				AsyncBufferedImage img = plugin.items().getImage(d.itemId, d.quantity, d.quantity > 1);
@@ -2811,7 +2822,7 @@ class ChroniclePanel extends PluginPanel
 	 * herbiboar is not a number anybody wants. Returns the lines mounted.
 	 */
 	private int addSessionMovers(JPanel strip, Map<String, Integer> sess,
-		java.util.Set<String> shownKeys)
+		Set<String> shownKeys)
 	{
 		Map<String, List<Map.Entry<String, Long>>> byFamily = new LinkedHashMap<>();
 		// what each parent is standing for, so its row can open on them
@@ -2825,7 +2836,7 @@ class ChroniclePanel extends PluginPanel
 				continue;
 			}
 			Map.Entry<String, Long> moved =
-				new java.util.AbstractMap.SimpleEntry<>(key, (long) e.getValue());
+				new AbstractMap.SimpleEntry<>(key, (long) e.getValue());
 			String parent = parentOf(key, sess);
 			if (parent != null)
 			{
@@ -2880,7 +2891,7 @@ class ChroniclePanel extends PluginPanel
 		String listKey = "session:row:" + key;
 		boolean open = foldOpen(listKey);
 		JPanel head = sessionRow(key, value);
-		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		head.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		head.addMouseListener(clicker(() -> toggleFold(listKey)));
 		strip.add(head);
 		int mounted = 1;
@@ -2930,7 +2941,7 @@ class ChroniclePanel extends PluginPanel
 		headName.setFont(FontManager.getRunescapeSmallFont());
 		headName.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
 		head.setBorder(BorderFactory.createEmptyBorder(7, 2, 1, 2));
-		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		head.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		head.addMouseListener(clicker(() -> toggleFold(stateKey)));
 		return head;
 	}
@@ -3034,7 +3045,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			JPanel line = row(r[0], fmt(safeParse(r[1])) + " · "
 				+ gp(safeParse(r[2])) + " gp", null);
-			line.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			line.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			final String name = r[0];
 			// the drill is that source's or item's whole record, which is a
 			// different screen and says so by carrying its own dateline
@@ -3293,7 +3304,7 @@ class ChroniclePanel extends PluginPanel
 				break;
 			}
 			JPanel card = cardPlain();
-			card.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			card.add(row(r.name, gp(r.value) + " gp", accent()));
 			// The same two figures the page behind this card shows. It used to
 			// take its own from the ledger alone and disagree with the page it
@@ -3357,7 +3368,7 @@ class ChroniclePanel extends PluginPanel
 		for (Kind k : kindsOf(bag))
 		{
 			JPanel r = row(k.name, fmt(k.qty) + " \u00b7 " + gp(k.value) + " gp", accent());
-			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			r.setToolTipText(fmt(k.distinct)
 				+ (k.distinct == 1 ? " distinct item" : " distinct items"));
 			final String pick = k.name;
@@ -3506,8 +3517,8 @@ class ChroniclePanel extends PluginPanel
 					break;
 				}
 				JPanel card = cardPlain();
-				card.setCursor(java.awt.Cursor.getPredefinedCursor(
-					java.awt.Cursor.HAND_CURSOR));
+				card.setCursor(Cursor.getPredefinedCursor(
+					Cursor.HAND_CURSOR));
 				card.add(row(r.name, gp(r.value) + " gp", ACCENT_RED));
 				card.add(row("\u00d7" + fmt(r.qty), r.qty > 0
 					? gp(r.value / Math.max(1, r.qty)) + " gp each" : "", null));
@@ -3538,7 +3549,7 @@ class ChroniclePanel extends PluginPanel
 			// name and what it came to on top, the count and the rate under it.
 			// This is the half of the coin that reads as the other half.
 			JPanel card = cardPlain();
-			card.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			card.add(row(r.name, gp(r.value) + " gp", ACCENT_RED));
 			card.add(row(fmt(r.qty) + " left", r.qty > 0
 				? gp(r.value / Math.max(1, r.qty)) + " gp each" : "", null));
@@ -3556,11 +3567,11 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	// The dryness ledger, read once per session off the first source opened.
-	private List<ChronicleApiClient.GrindRow> grindsCache;
+	private List<GrindBook.GrindRow> grindsCache;
 	private boolean grindsFetching;
 
 	// The journey fetches once per session on first open; null = not yet asked.
-	private ChronicleApiClient.SlayerJourney journeyCache;
+	private LocalStore.SlayerJourney journeyCache;
 	private boolean journeyFetching;
 	// Index into the journey (newest-first) of the task under the glass, or -1.
 	private int detailTask = -1;
@@ -3614,12 +3625,12 @@ class ChroniclePanel extends PluginPanel
 		homeTicker.stop();
 		searchDebounce.stop();
 	}
-	private int slayerShown = ROW_CAP;
 
 	// Which of the Slayer tab's three boards is up. A boolean held two and could
 	// not hold a third. Sticky, like every other lens in the panel: applyTab clears
 	// what is paged out and what is drilled into, never which lens a reader chose.
 	private String slayerLens = "Tasks";
+	private int slayerShown = ROW_CAP;
 
 	// The current task, then ONE of two boards: the journal's task-by-task
 	// journey, or the game's own count per monster. They answer different
@@ -3654,8 +3665,8 @@ class ChroniclePanel extends PluginPanel
 			pill.setFont(FontManager.getRunescapeSmallFont());
 			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 			pill.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
-			pill.setCursor(java.awt.Cursor.getPredefinedCursor(
-				java.awt.Cursor.HAND_CURSOR));
+			pill.setCursor(Cursor.getPredefinedCursor(
+				Cursor.HAND_CURSOR));
 			pill.addMouseListener(clicker(() ->
 			{
 				slayerLens = l;
@@ -3773,7 +3784,7 @@ class ChroniclePanel extends PluginPanel
 		// them rather than a scroll.
 		java.util.LinkedHashMap<String, java.util.function.BooleanSupplier> ways =
 			new java.util.LinkedHashMap<>();
-		ways.put("These kinds", () -> copyKinds(bag, qty, value, tally));
+		ways.put("These kinds", () -> copyPicture(kindsPicture(bag, qty, value, tally)));
 		ways.put("Every item", () -> copyPicture(
 			lootPicture(lootTask == null ? "On-task loot" : lootTask, bag,
 				new long[]{qty, value}), true));
@@ -3823,16 +3834,6 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * The copy pill on the summary: the sixteen kinds, or every item under them
-	 * in one tall column.
-	 */
-	private boolean copyKinds(List<LocalStore.BagItem> bag, long qty, long value,
-		long[] tally)
-	{
-		return copyPicture(kindsPicture(bag, qty, value, tally));
-	}
-
-	/**
 	 * How this panel says a list goes on, and how it opens.
 	 *
 	 * <p>There were three. A Swing JButton on some boards, which is the only
@@ -3854,7 +3855,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel moreRow(String label, Runnable reveal)
 	{
 		JPanel more = ghostRow(label, "");
-		more.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		more.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		more.addMouseListener(clicker(reveal));
 		return more;
 	}
@@ -3867,7 +3868,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel actionRow(String label, Runnable go)
 	{
 		JPanel r = row(label, "", accent(), true);
-		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		r.addMouseListener(clicker(go));
 		return r;
 	}
@@ -3935,7 +3936,7 @@ class ChroniclePanel extends PluginPanel
 			.getLayoutComponent(BorderLayout.CENTER);
 		back.setFont(FontManager.getRunescapeSmallFont());
 		back.setForeground(accent());
-		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		r.addMouseListener(clicker(() ->
 		{
 			lootKind = null;
@@ -3961,7 +3962,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			JPanel r = row(b.name + (b.qty > 1 ? " \u00d7" + fmt(b.qty) : ""),
 				b.value > 0 ? gp(b.value) + " gp" : "", null);
-			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			final String item = b.name;
 			r.addMouseListener(clicker(() -> openItem(item)));
 			p.add(r);
@@ -4091,15 +4092,15 @@ class ChroniclePanel extends PluginPanel
 		}
 		take.setFont(FontManager.getRunescapeSmallFont());
 		take.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
-		take.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		take.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		take.setToolTipText("Copy this board as a picture");
 		take.addMouseListener(clicker(() ->
 		{
-			javax.swing.JPopupMenu menu = new javax.swing.JPopupMenu();
+			JPopupMenu menu = new JPopupMenu();
 			for (java.util.Map.Entry<String, java.util.function.BooleanSupplier> e
 				: choices.entrySet())
 			{
-				javax.swing.JMenuItem item = new javax.swing.JMenuItem(e.getKey());
+				JMenuItem item = new JMenuItem(e.getKey());
 				item.setFont(FontManager.getRunescapeSmallFont());
 				item.addActionListener(a ->
 				{
@@ -4130,7 +4131,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			take.setFont(FontManager.getRunescapeSmallFont());
 			take.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
-			take.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			take.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			take.setToolTipText("Copy this board as a picture");
 			take.addMouseListener(clicker(() ->
 			{
@@ -4159,7 +4160,7 @@ class ChroniclePanel extends PluginPanel
 				long v = safeLong(e.getValue());
 				if (v > 0)
 				{
-					kcs.add(new java.util.AbstractMap.SimpleEntry<>(e.getKey(), v));
+					kcs.add(new AbstractMap.SimpleEntry<>(e.getKey(), v));
 				}
 			}
 		}
@@ -4182,7 +4183,7 @@ class ChroniclePanel extends PluginPanel
 				break;
 			}
 			JPanel r = row(e.getKey(), fmt(e.getValue()), null);
-			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			final String mob = e.getKey();
 			r.addMouseListener(clicker(() -> openSourceLoose(mob)));
 			card.add(r);
@@ -4197,8 +4198,8 @@ class ChroniclePanel extends PluginPanel
 
 	// Has the journey moved since the copy on screen? A finished task, a new
 	// one, or another kill on the newest one is everything the block shows.
-	private static boolean journeyMoved(ChronicleApiClient.SlayerJourney was,
-		ChronicleApiClient.SlayerJourney now)
+	private static boolean journeyMoved(LocalStore.SlayerJourney was,
+		LocalStore.SlayerJourney now)
 	{
 		if (was == null)
 		{
@@ -4223,7 +4224,7 @@ class ChroniclePanel extends PluginPanel
 		JLabel bl = (JLabel) ((BorderLayout) back.getLayout()).getLayoutComponent(BorderLayout.CENTER);
 		bl.setFont(FontManager.getRunescapeSmallFont());
 		bl.setForeground(accent());
-		back.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		back.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		back.addMouseListener(clicker(() ->
 		{
 			detailTask = -1;
@@ -4231,8 +4232,8 @@ class ChroniclePanel extends PluginPanel
 		}));
 		p.add(back);
 		p.add(vgap(4));
-		ChronicleApiClient.SlayerJourney j = journeyCache;
-		ChronicleApiClient.SlayerTask t = j != null && index >= 0 && index < j.tasks.size()
+		LocalStore.SlayerJourney j = journeyCache;
+		LocalStore.SlayerTask t = j != null && index >= 0 && index < j.tasks.size()
 			? j.tasks.get(index) : null;
 		if (t == null)
 		{
@@ -4265,7 +4266,7 @@ class ChroniclePanel extends PluginPanel
 			for (LocalStore.UntakenRow m : monsters)
 			{
 				JPanel r = row(m.name, "×" + fmt(m.qty), null);
-				r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String who = m.name;
 				r.addMouseListener(clicker(() -> openSourceLoose(who)));
 				p.add(r);
@@ -4285,7 +4286,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				JPanel r = row(it.name + (it.qty > 1 ? " ×" + fmt(it.qty) : ""),
 					gp(it.value) + " gp", null);
-				r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String item = it.name;
 				r.addMouseListener(clicker(() -> openItem(item)));
 				p.add(r);
@@ -4310,7 +4311,7 @@ class ChroniclePanel extends PluginPanel
 		JLabel bl = (JLabel) ((BorderLayout) back.getLayout()).getLayoutComponent(BorderLayout.CENTER);
 		bl.setFont(FontManager.getRunescapeSmallFont());
 		bl.setForeground(accent());
-		back.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		back.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		back.addMouseListener(clicker(() ->
 		{
 			leftBehindSource = null;
@@ -4352,7 +4353,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				JPanel r = row(b.name + (b.qty > 1 ? " ×" + fmt(b.qty) : ""),
 					gp(b.value) + " gp", ACCENT_RED);
-				r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String itm = b.name;
 				r.addMouseListener(clicker(() ->
 				{
@@ -4391,7 +4392,7 @@ class ChroniclePanel extends PluginPanel
 		for (LocalStore.UntakenRow r : sources)
 		{
 			JPanel row = row(r.name, "×" + fmt(r.qty) + " · " + gp(r.value) + " gp", ACCENT_RED);
-			row.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			row.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			final String src = r.name;
 			row.addMouseListener(clicker(() ->
 			{
@@ -4404,7 +4405,7 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private void addJourney(JPanel p, ChronicleApiClient.SlayerJourney j)
+	private void addJourney(JPanel p, LocalStore.SlayerJourney j)
 	{
 		if (j.tasks.isEmpty() && j.completedTasks == 0)
 		{
@@ -4415,7 +4416,7 @@ class ChroniclePanel extends PluginPanel
 		// The period governs this board too. A task carries the stamp of its own
 		// close, so a window is a filter over the journey rather than a delta,
 		// and the headline counts what it admitted rather than the lifetime.
-		List<ChronicleApiClient.SlayerTask> shown = new ArrayList<>();
+		List<LocalStore.SlayerTask> shown = new ArrayList<>();
 		List<Integer> where = new ArrayList<>();
 		for (int i = 0; i < j.tasks.size(); i++)
 		{
@@ -4438,7 +4439,7 @@ class ChroniclePanel extends PluginPanel
 			tasksDone = 0;
 			killsOnTask = 0;
 			onTaskLoot = 0;
-			for (ChronicleApiClient.SlayerTask t : shown)
+			for (LocalStore.SlayerTask t : shown)
 			{
 				if (!t.inProgress)
 				{
@@ -4462,14 +4463,14 @@ class ChroniclePanel extends PluginPanel
 		int mounted = 0;
 		for (int k = 0; k < shown.size(); k++)
 		{
-			ChronicleApiClient.SlayerTask t = shown.get(k);
+			LocalStore.SlayerTask t = shown.get(k);
 			if (mounted++ >= slayerShown)
 			{
 				break;
 			}
 			JPanel card = cardPlain();
 			// Lit name, no suffix: the card has no room for one.
-			card.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			// the drill indexes the WHOLE journey, not the window's slice of it
 			final int at = where.get(k);
 			card.addMouseListener(clicker(() ->
@@ -4769,7 +4770,7 @@ class ChroniclePanel extends PluginPanel
 			// whole source list, and a board of two hundred names asking two
 			// hundred times copies it two hundred times before a single row is
 			// drawn.
-			Map<String, String> index = new java.util.HashMap<>();
+			Map<String, String> index = new HashMap<>();
 			for (LocalStore.SourceRow r : sources())
 			{
 				index.putIfAbsent(r.name.toLowerCase(Locale.ROOT), r.name);
@@ -4888,7 +4889,7 @@ class ChroniclePanel extends PluginPanel
 		JLabel l = (JLabel) layout.getLayoutComponent(BorderLayout.CENTER);
 		l.setFont(FontManager.getRunescapeSmallFont());
 		l.setForeground(accent());
-		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		r.addMouseListener(clicker(this::backDetail));
 		JLabel take = copy == null ? null
 			: (JLabel) layout.getLayoutComponent(BorderLayout.EAST);
@@ -4896,7 +4897,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			take.setFont(FontManager.getRunescapeSmallFont());
 			take.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
-			take.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			take.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			take.setToolTipText("Copy this page as a picture");
 			take.addMouseListener(clicker(() ->
 			{
@@ -4911,9 +4912,9 @@ class ChroniclePanel extends PluginPanel
 	/** A picture on the clipboard, which is the one thing every chat window takes. */
 	private static final class PageCopy implements java.awt.datatransfer.Transferable
 	{
-		private final java.awt.Image image;
+		private final Image image;
 
-		private PageCopy(java.awt.Image image)
+		private PageCopy(Image image)
 		{
 			this.image = image;
 		}
@@ -4944,7 +4945,7 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/** False where there is no desktop clipboard to reach, rather than throwing. */
-	private static boolean toClipboard(java.awt.Image image)
+	private static boolean toClipboard(Image image)
 	{
 		if (image == null)
 		{
@@ -4997,7 +4998,7 @@ class ChroniclePanel extends PluginPanel
 	 * is mapped: teaching the map to READ public.png as this flavour would change
 	 * what every other plugin in the client sees on the clipboard.
 	 */
-	private static java.awt.datatransfer.Transferable pngPayload(java.awt.Image image)
+	private static java.awt.datatransfer.Transferable pngPayload(Image image)
 	{
 		if (PNG_BYTES == null || OSType.getOSType() != OSType.MacOS
 			|| !(image instanceof java.awt.image.RenderedImage))
@@ -5094,7 +5095,7 @@ class ChroniclePanel extends PluginPanel
 	 * at all. The reader saw a picture that started in the middle of their loot
 	 * and had no way to know.
 	 */
-	private static java.awt.Image pageImage(JPanel page, int width)
+	private static Image pageImage(JPanel page, int width)
 	{
 		try
 		{
@@ -5220,12 +5221,12 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/** The picture itself, so that a preview can be drawn without a clipboard. */
-	static java.awt.Image copyImage(JPanel page)
+	static Image copyImage(JPanel page)
 	{
 		return copyImage(page, false);
 	}
 
-	static java.awt.Image copyImage(JPanel page, boolean tall)
+	static Image copyImage(JPanel page, boolean tall)
 	{
 		int cols = tall ? 1 : copyColumns(page.getComponentCount());
 		return pageImage(reflowed(page, cols), copyImageWidth(cols));
@@ -5279,8 +5280,6 @@ class ChroniclePanel extends PluginPanel
 		out.add(grid);
 		return out;
 	}
-
-
 
 	// how many sources an item's page mounts; lifted while a copy is drawn
 	private int itemSourceCap = 40;
@@ -5483,7 +5482,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			JPanel r = row((String) s[0], "×" + fmt((long) s[1])
 				+ ((long) s[2] > 0 ? " · " + gp((long) s[2]) + " gp" : ""), null);
-			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			final String src = (String) s[0];
 			r.addMouseListener(clicker(() -> openSource(src)));
 			p.add(r);
@@ -5814,7 +5813,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			if (grindsCache != null && !drawingCopy)
 			{
-				for (ChronicleApiClient.GrindRow g : grindsCache)
+				for (GrindBook.GrindRow g : grindsCache)
 				{
 					if (g.boss.equalsIgnoreCase(sr.name))
 					{
@@ -5855,8 +5854,8 @@ class ChroniclePanel extends PluginPanel
 				// one sprite grid in the panel a reader could not click: same
 				// five setup lines, same tooltip naming the item, and then
 				// nothing behind it.
-				slot.setCursor(java.awt.Cursor.getPredefinedCursor(
-					java.awt.Cursor.HAND_CURSOR));
+				slot.setCursor(Cursor.getPredefinedCursor(
+					Cursor.HAND_CURSOR));
 				final String spriteItem = b.name;
 				slot.addMouseListener(clicker(() -> openItem(spriteItem)));
 				AsyncBufferedImage img = plugin.items().getImage(b.itemId,
@@ -5891,7 +5890,7 @@ class ChroniclePanel extends PluginPanel
 				}
 				JPanel r = row(b.name + (b.qty > 1 ? " ×" + fmt(b.qty) : ""),
 					b.value > 0 ? gp(b.value) + " gp" : "", null);
-				r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String itm = b.name;
 				r.addMouseListener(clicker(() -> openItem(itm)));
 				p.add(r);
@@ -5925,7 +5924,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel logInWindow(JPanel p)
 	{
 		List<JsonObject> got = new ArrayList<>();
-		for (JsonObject e : plugin.feedNewest(4000))
+		for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
 		{
 			if ("COLLECTION".equals(typeOf(e)) && insideWindow(safeLong(e.get("ts"))))
 			{
@@ -5947,7 +5946,7 @@ class ChroniclePanel extends PluginPanel
 				? e.getAsJsonObject("data") : new JsonObject();
 			final String name = str(d, "itemName", "new item");
 			JPanel line = row(name, stamp(e), null);
-			line.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			line.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			line.addMouseListener(clicker(() -> openItem(name)));
 			p.add(line);
 		}
@@ -6009,8 +6008,8 @@ class ChroniclePanel extends PluginPanel
 			{
 				pill.setToolTipText(tabTip);
 			}
-			pill.setCursor(java.awt.Cursor.getPredefinedCursor(
-				java.awt.Cursor.HAND_CURSOR));
+			pill.setCursor(Cursor.getPredefinedCursor(
+				Cursor.HAND_CURSOR));
 			pill.addMouseListener(clicker(() ->
 			{
 				clogTab = tab;
@@ -6058,7 +6057,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				rowP.setToolTipText(lines);
 			}
-			rowP.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			rowP.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			rowP.addMouseListener(clicker(() ->
 			{
 				clogPageSel = open ? null : page;
@@ -6073,13 +6072,13 @@ class ChroniclePanel extends PluginPanel
 				// own pet emit carries the name alone.
 				boolean petPage = page.toLowerCase(Locale.ROOT).contains("pet");
 				Map<String, LocalStore.PetRow> known = petPage
-					? petsByName() : java.util.Collections.emptyMap();
+					? petsByName() : Collections.emptyMap();
 				// And a pet still out there gets the same line read the other way:
 				// what has been killed for it, and how much of the field holds it
 				// by that point. Only where the rate book prices the pet and the
 				// journal has a kill count; the rest of the page is untouched.
 				Map<String, GrindBook.PetChase> chases = petPage
-					? plugin.petChases(slots) : java.util.Collections.emptyMap();
+					? plugin.petChases(slots) : Collections.emptyMap();
 				// What each slot has to say for itself, settled before a row is
 				// mounted: seventy of these lines at once is a wall, so the page is
 				// a list of names and each one gives its line up only when asked.
@@ -6120,8 +6119,8 @@ class ChroniclePanel extends PluginPanel
 						continue;
 					}
 					String foldKey = "pets:" + page + ":" + slot.toLowerCase(Locale.ROOT);
-					r.setCursor(java.awt.Cursor.getPredefinedCursor(
-						java.awt.Cursor.HAND_CURSOR));
+					r.setCursor(Cursor.getPredefinedCursor(
+						Cursor.HAND_CURSOR));
 					r.addMouseListener(clicker(() -> toggleFold(foldKey)));
 					if (foldOpen(foldKey))
 					{
@@ -6144,7 +6143,7 @@ class ChroniclePanel extends PluginPanel
 		// is shown once, on Other, where the game itself puts what does not fit.
 		if ("Other".equals(clogTab))
 		{
-			java.util.Set<String> known = new java.util.HashSet<>();
+			Set<String> known = new HashSet<>();
 			for (Map<String, List<String>> tabPages : tax.values())
 			{
 				for (String pageName : tabPages.keySet())
@@ -6160,7 +6159,7 @@ class ChroniclePanel extends PluginPanel
 					strangers.add(pageName);
 				}
 			}
-			java.util.Collections.sort(strangers);
+			Collections.sort(strangers);
 			if (!strangers.isEmpty())
 			{
 				p.add(vgap(6));
@@ -6325,14 +6324,14 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		@Override
-		protected void paintTrack(java.awt.Graphics g, javax.swing.JComponent c,
+		protected void paintTrack(java.awt.Graphics g, JComponent c,
 			java.awt.Rectangle bounds)
 		{
 			// The board is the track.
 		}
 
 		@Override
-		protected void paintThumb(java.awt.Graphics g, javax.swing.JComponent c,
+		protected void paintThumb(java.awt.Graphics g, JComponent c,
 			java.awt.Rectangle t)
 		{
 			if (alpha <= 0.02f || t.isEmpty())
@@ -6392,7 +6391,7 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		@Override
-		public void uninstallUI(javax.swing.JComponent c)
+		public void uninstallUI(JComponent c)
 		{
 			if (fader != null)
 			{
@@ -6538,7 +6537,7 @@ class ChroniclePanel extends PluginPanel
 	private static List<Integer> tailFirst(Line l, int from)
 	{
 		List<Integer> order = new ArrayList<>(l.names.subList(from, l.names.size()));
-		java.util.Collections.reverse(order);
+		Collections.reverse(order);
 		return order;
 	}
 
@@ -6665,9 +6664,9 @@ class ChroniclePanel extends PluginPanel
 		r.setToolTipText(tip);
 		for (Component c : r.getComponents())
 		{
-			if (c instanceof javax.swing.JComponent)
+			if (c instanceof JComponent)
 			{
-				((javax.swing.JComponent) c).setToolTipText(tip);
+				((JComponent) c).setToolTipText(tip);
 			}
 		}
 		return r;
@@ -6790,7 +6789,8 @@ class ChroniclePanel extends PluginPanel
 				for (Map.Entry<String, com.google.gson.JsonElement> it
 					: pg.getValue().getAsJsonObject().entrySet())
 				{
-					items.merge(it.getKey().toLowerCase(Locale.ROOT), safeLong(it.getValue()), Math::max);
+					items.merge(it.getKey().toLowerCase(Locale.ROOT),
+						safeLong(it.getValue()), Math::max);
 				}
 				o.byPage.put(pg.getKey().toLowerCase(Locale.ROOT), items);
 			}
@@ -6805,7 +6805,7 @@ class ChroniclePanel extends PluginPanel
 	 * the first k, as the game does.
 	 */
 	private static boolean[] lightSlots(List<String> slots, Map<String, Long> pageItems,
-		Map<String, Long> owned, java.util.Set<String> sharedNames)
+		Map<String, Long> owned, Set<String> sharedNames)
 	{
 		boolean[] lit = new boolean[slots.size()];
 		Map<String, Integer> dupes = new LinkedHashMap<>();
@@ -6849,9 +6849,9 @@ class ChroniclePanel extends PluginPanel
 
 	// Slot names that more than one collection log page lists. Static: the
 	// taxonomy is a bundled file and does not change while the client is up.
-	private static java.util.Set<String> sharedSlotNames;
+	private static Set<String> sharedSlotNames;
 
-	private static synchronized java.util.Set<String> sharedSlotNames(
+	private static synchronized Set<String> sharedSlotNames(
 		com.google.gson.Gson gson)
 	{
 		if (sharedSlotNames != null)
@@ -6863,7 +6863,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			for (Map.Entry<String, List<String>> pg : tab.getValue().entrySet())
 			{
-				java.util.Set<String> onThisPage = new java.util.HashSet<>();
+				Set<String> onThisPage = new HashSet<>();
 				for (String slot : pg.getValue())
 				{
 					onThisPage.add(slot.toLowerCase(Locale.ROOT));
@@ -6874,7 +6874,7 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 		}
-		java.util.Set<String> shared = new java.util.HashSet<>();
+		Set<String> shared = new HashSet<>();
 		for (Map.Entry<String, Integer> e : homes.entrySet())
 		{
 			if (e.getValue() > 1)
@@ -6889,7 +6889,7 @@ class ChroniclePanel extends PluginPanel
 	// One named slot on one page, by the same rule the Log tab lights it with. A
 	// duplicate-named slot counts as held when any of its copies is lit.
 	private static boolean slotHeld(String slot, String page, List<String> pageSlots,
-		Obtained ob, java.util.Set<String> sharedNames)
+		Obtained ob, Set<String> sharedNames)
 	{
 		boolean[] lit = lightSlots(pageSlots, ob.byPage.get(page.toLowerCase(Locale.ROOT)),
 			ob.all, sharedNames);
@@ -7008,7 +7008,7 @@ class ChroniclePanel extends PluginPanel
 	// tab's progress groups (history:shut:) and its kind bands (history:kind:). The
 	// register is dropped whole when the account changes. The preview harness
 	// reaches this by name, so a rename here has to be made there too.
-	private final java.util.Set<String> openFolds = new java.util.HashSet<>();
+	private final Set<String> openFolds = new HashSet<>();
 
 	// Home's xp total, broken out per skill.
 	private static final String FOLD_HOME_XP = "home:xp";
@@ -7216,8 +7216,8 @@ class ChroniclePanel extends PluginPanel
 			boolean on = fam.equals(statsFamily);
 			pill.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 			pill.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
-			pill.setCursor(java.awt.Cursor.getPredefinedCursor(
-				java.awt.Cursor.HAND_CURSOR));
+			pill.setCursor(Cursor.getPredefinedCursor(
+				Cursor.HAND_CURSOR));
 			pill.addMouseListener(clicker(() ->
 			{
 				statsFamily = fam;
@@ -7383,7 +7383,7 @@ class ChroniclePanel extends PluginPanel
 							long fv = counters.getOrDefault(fk, 0L);
 							if (fv > 0 && !StatRegistry.hidden(fk))
 							{
-								floors.add(new java.util.AbstractMap.SimpleEntry<>(fk, fv));
+								floors.add(new AbstractMap.SimpleEntry<>(fk, fv));
 							}
 						}
 						floors.sort(StatRegistry::compareRows);
@@ -7556,7 +7556,7 @@ class ChroniclePanel extends PluginPanel
 		name.setFont(FontManager.getRunescapeSmallFont());
 		name.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
 		head.setBorder(BorderFactory.createEmptyBorder(3, 10, 1, 2));
-		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		head.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		head.addMouseListener(clicker(() -> toggleFold(stateKey)));
 		return head;
 	}
@@ -7585,16 +7585,19 @@ class ChroniclePanel extends PluginPanel
 	// How deep the milestone scan reads into the feed; a year-long window still
 	// has to find its own entries.
 	private static final int HISTORY_FEED_SCAN = 2000;
+	// Deeper still for the walks that look for one type of entry, which can sit
+	// a long way down a feed that is mostly loot.
+	private static final int FEED_SCAN_DEEP = 4000;
 
 	// The two reads the History tab lives on, held between rebuilds. The spine is
 	// a whole parse of an append-only file and the feed slice is deep-copied under
 	// the store's lock. Both are gathered on a worker thread; on the EDT that cost
 	// lands as a stall on every pill click.
-	private java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> historySpine;
+	private TreeMap<java.time.LocalDate, HistoryLog.Baseline> historySpine;
 	private List<JsonObject> historyFeed = new ArrayList<>();
 	// The slayer journey read beside them: the progress card's tasks-completed
 	// line counts its closed segments by date, which reach back past the spine.
-	private ChronicleApiClient.SlayerJourney historyJourney;
+	private LocalStore.SlayerJourney historyJourney;
 	// What that pair was true of: the day it was read and the newest feed entry
 	// it saw. Either one moving means the cache is stale.
 	private java.time.LocalDate historyDay;
@@ -7607,13 +7610,13 @@ class ChroniclePanel extends PluginPanel
 	// One gathered pass over the journal's calendar spine and its feed.
 	private static final class HistoryData
 	{
-		final java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> spine;
+		final TreeMap<java.time.LocalDate, HistoryLog.Baseline> spine;
 		final List<JsonObject> feed;
-		final ChronicleApiClient.SlayerJourney journey;
+		final LocalStore.SlayerJourney journey;
 		final java.time.LocalDate day;
 
-		HistoryData(java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> spine,
-			List<JsonObject> feed, ChronicleApiClient.SlayerJourney journey,
+		HistoryData(TreeMap<java.time.LocalDate, HistoryLog.Baseline> spine,
+			List<JsonObject> feed, LocalStore.SlayerJourney journey,
 			java.time.LocalDate day)
 		{
 			this.spine = spine;
@@ -7734,9 +7737,9 @@ class ChroniclePanel extends PluginPanel
 			HistoryProgress.Group g = progress.group(name);
 			boolean experience = "Experience".equals(name);
 			List<HistoryProgress.Row> rows = g != null ? g.rows()
-				: java.util.Collections.<HistoryProgress.Row>emptyList();
+				: Collections.<HistoryProgress.Row>emptyList();
 			List<HistoryProgress.Section> secs = g != null ? g.sections()
-				: java.util.Collections.<HistoryProgress.Section>emptyList();
+				: Collections.<HistoryProgress.Section>emptyList();
 			int lines = rows.size() + secs.size() + (experience ? gains.size() : 0);
 			if (lines == 0)
 			{
@@ -7789,11 +7792,11 @@ class ChroniclePanel extends PluginPanel
 	private static final String GAINS_LIST = "history:xp";
 
 	// One of a group's figures. Where the journal can name what the figure
-	// counts, the row is a fold
-	// and the names sit under it, each with the day it happened. An entry the
-	// journal counted but cannot name closes the list as a ghost, the way a
-	// section closes with its "Other": the head's figure is then accounted for
-	// on screen rather than opening to a shorter list than it claims.
+	// counts, the row is a fold and the names sit under it, each with the day
+	// it happened. An entry the journal counted but cannot name closes the
+	// list as a ghost, the way a section closes with its "Other": the head's
+	// figure is then accounted for on screen rather than opening to a shorter
+	// list than it claims.
 	private void addGroupRow(JPanel card, HistoryProgress.Row r, List<String[]> list)
 	{
 		if (list == null || list.isEmpty())
@@ -7804,7 +7807,7 @@ class ChroniclePanel extends PluginPanel
 		String listKey = "history:list:" + r.key();
 		boolean open = foldOpen(listKey);
 		JPanel head = row(r.label(), "+" + figure(r), null);
-		head.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		head.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		head.addMouseListener(clicker(() -> toggleFold(listKey)));
 		card.add(head);
 		if (open)
@@ -7899,7 +7902,7 @@ class ChroniclePanel extends PluginPanel
 		// it: a list of ninety tasks should not be fifteen clicks that each say six.
 		JPanel tail = ghostRow("Show " + fmt(size - cap) + " more", "");
 		JPanel more = inset ? nested(tail) : tail;
-		more.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		more.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		more.addMouseListener(clicker(() ->
 		{
 			histListShown.put(key, size);
@@ -7947,10 +7950,10 @@ class ChroniclePanel extends PluginPanel
 
 	// Closed slayer segments dated inside [fromMs, toMs): a segment's ts is its
 	// completion instant, in epoch seconds.
-	private static long closedTasksBetween(ChronicleApiClient.SlayerJourney j, long fromMs, long toMs)
+	private static long closedTasksBetween(LocalStore.SlayerJourney j, long fromMs, long toMs)
 	{
 		long n = 0;
-		for (ChronicleApiClient.SlayerTask t : j.tasks)
+		for (LocalStore.SlayerTask t : j.tasks)
 		{
 			if (closedInside(t, fromMs, toMs))
 			{
@@ -7964,10 +7967,10 @@ class ChroniclePanel extends PluginPanel
 	// set it, the kills the loot never saw included. The window is the one
 	// closedTasksBetween reads, so the two lines agree on which tasks are the
 	// period's.
-	private static long closedKillsBetween(ChronicleApiClient.SlayerJourney j, long fromMs, long toMs)
+	private static long closedKillsBetween(LocalStore.SlayerJourney j, long fromMs, long toMs)
 	{
 		long n = 0;
-		for (ChronicleApiClient.SlayerTask t : j.tasks)
+		for (LocalStore.SlayerTask t : j.tasks)
 		{
 			if (closedInside(t, fromMs, toMs))
 			{
@@ -7978,7 +7981,7 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	// A segment closed inside the window; the one in hand is nobody's yet.
-	private static boolean closedInside(ChronicleApiClient.SlayerTask t, long fromMs, long toMs)
+	private static boolean closedInside(LocalStore.SlayerTask t, long fromMs, long toMs)
 	{
 		long ms = (long) (t.ts * 1000);
 		return !t.inProgress && ms >= fromMs && ms < toMs;
@@ -7986,11 +7989,11 @@ class ChroniclePanel extends PluginPanel
 
 	// Those same segments by name, newest first, each with the kills it took
 	// and the day it closed: what the Combat group's tasks line opens to.
-	private static List<String[]> closedTaskNames(ChronicleApiClient.SlayerJourney j,
+	private static List<String[]> closedTaskNames(LocalStore.SlayerJourney j,
 		long fromMs, long toMs)
 	{
-		List<ChronicleApiClient.SlayerTask> closed = new ArrayList<>();
-		for (ChronicleApiClient.SlayerTask t : j.tasks)
+		List<LocalStore.SlayerTask> closed = new ArrayList<>();
+		for (LocalStore.SlayerTask t : j.tasks)
 		{
 			if (closedInside(t, fromMs, toMs))
 			{
@@ -7999,10 +8002,11 @@ class ChroniclePanel extends PluginPanel
 		}
 		closed.sort((a, b) -> Double.compare(b.ts, a.ts));
 		List<String[]> out = new ArrayList<>(closed.size());
-		for (ChronicleApiClient.SlayerTask t : closed)
+		for (LocalStore.SlayerTask t : closed)
 		{
 			long ms = (long) (t.ts * 1000);
-			out.add(new String[]{t.task, fmt(t.kills) + " · " + DAY.format(Instant.ofEpochMilli(ms))});
+			out.add(new String[]{t.task, fmt(t.kills) + " · "
+				+ DAY.format(Instant.ofEpochMilli(ms))});
 		}
 		return out;
 	}
@@ -8275,7 +8279,7 @@ class ChroniclePanel extends PluginPanel
 				continue;
 			}
 			byKind.computeIfAbsent(sourceKind(name), k -> new ArrayList<>())
-				.add(new java.util.AbstractMap.SimpleEntry<>(name, figure));
+				.add(new AbstractMap.SimpleEntry<>(name, figure));
 		}
 		Comparator<Map.Entry<String, Long>> byPaid = (a, b) ->
 		{
@@ -8308,9 +8312,9 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private static java.util.Set<String> union(java.util.Set<String> a, java.util.Set<String> b)
+	private static Set<String> union(Set<String> a, Set<String> b)
 	{
-		java.util.Set<String> out = new java.util.LinkedHashSet<>(a);
+		Set<String> out = new java.util.LinkedHashSet<>(a);
 		out.addAll(b);
 		return out;
 	}
@@ -8368,7 +8372,7 @@ class ChroniclePanel extends PluginPanel
 	 * named here the way the teleport destinations are: a closed set the game
 	 * itself fixes, widened by what the record's own thieving counters say.
 	 */
-	private static final java.util.Set<String> PICKPOCKETED = new java.util.HashSet<>(
+	private static final Set<String> PICKPOCKETED = new HashSet<>(
 		java.util.Arrays.asList("man", "woman", "farmer", "master farmer", "hero",
 			"paladin", "knight", "knight of ardougne", "ardougne knight", "watchman",
 			"yanille watchman", "guard", "market guard", "rogue", "bandit",
@@ -8502,7 +8506,7 @@ class ChroniclePanel extends PluginPanel
 	 * demon. These are the pages of it that are something killed; the rest of the
 	 * tab is ground a skill was trained on.
 	 */
-	private static final java.util.Set<String> MONSTER_PAGES = new java.util.HashSet<>(
+	private static final Set<String> MONSTER_PAGES = new HashSet<>(
 		java.util.Arrays.asList("Champion's Challenge", "Chompy Bird Hunting",
 			"Creature Creation", "Cyclopes", "Elder Chaos Druids", "Glough's Experiments",
 			"Revenants", "Slayer", "Tormented Demons", "TzHaar"));
@@ -8641,7 +8645,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return null;
 		}
-		Map<String, Integer> byName = new java.util.HashMap<>();
+		Map<String, Integer> byName = new HashMap<>();
 		for (net.runelite.http.api.item.ItemPrice price : all)
 		{
 			if (price.getName() != null)
@@ -8751,7 +8755,7 @@ class ChroniclePanel extends PluginPanel
 		r.add(figures, BorderLayout.EAST);
 
 		// the line still drills, the way the kill boards always did
-		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		r.addMouseListener(clicker(() -> openSourceLoose(name)));
 		return r;
 	}
@@ -8792,8 +8796,8 @@ class ChroniclePanel extends PluginPanel
 	// "already asked" after its image was dropped would never be asked again and
 	// its row would stay blank for the session. An evicted image simply falls out
 	// of here and the next build asks the new one, once.
-	private final java.util.Set<AsyncBufferedImage> itemAsked =
-		java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+	private final Set<AsyncBufferedImage> itemAsked =
+		Collections.newSetFromMap(new java.util.WeakHashMap<>());
 
 	/**
 	 * An item's image at the size a row wants, shrunk once and kept.
@@ -8808,7 +8812,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private void mountItem(JLabel label, int itemId)
 	{
-		javax.swing.ImageIcon have = scaledIcons.get("item:" + itemId);
+		ImageIcon have = scaledIcons.get("item:" + itemId);
 		if (have != null)
 		{
 			label.setIcon(have);
@@ -8827,7 +8831,7 @@ class ChroniclePanel extends PluginPanel
 		// the image lands on the client thread; the labels are dressed on the EDT
 		img.onLoaded(() -> javax.swing.SwingUtilities.invokeLater(() ->
 		{
-			javax.swing.ImageIcon icon = fit(img, ICON_W, ICON_H);
+			ImageIcon icon = fit(img, ICON_W, ICON_H);
 			scaledIcons.put("item:" + itemId, icon);
 			List<JLabel> waiting = itemWaiting.remove(itemId);
 			if (waiting != null)
@@ -9012,7 +9016,7 @@ class ChroniclePanel extends PluginPanel
 
 	private SkillStand skillStand(HistoryLog.Baseline closing, boolean live)
 	{
-		Map<String, long[]> sheet = live ? plugin.skillSheet() : java.util.Collections.emptyMap();
+		Map<String, long[]> sheet = live ? plugin.skillSheet() : Collections.emptyMap();
 		List<net.runelite.api.Skill> order = skillOrder();
 		List<String> keys = new ArrayList<>();
 		for (net.runelite.api.Skill sk : order)
@@ -9280,7 +9284,7 @@ class ChroniclePanel extends PluginPanel
 				fmt(ca[2]) + " / 6",
 				fmt(c.getOrDefault(chronicle.counters.StatKeys.DAMAGE_DEALT, 0L)),
 				fmt(c.getOrDefault(chronicle.counters.StatKeys.HIGHEST_HIT, 0L))}));
-		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		cell.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		cell.addMouseListener(clicker(() ->
 		{
 			sheetPage = "combat";
@@ -9299,7 +9303,7 @@ class ChroniclePanel extends PluginPanel
 		if (movedTypes == null)
 		{
 			movedTypes = new LinkedHashMap<>();
-			for (JsonObject e : plugin.feedNewest(4000))
+			for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
 			{
 				if (insideWindow(safeLong(e.get("ts"))))
 				{
@@ -9369,7 +9373,7 @@ class ChroniclePanel extends PluginPanel
 			periodCountersAsked = true;
 			buildPeriodCounters = countersForPeriod();
 		}
-		return buildPeriodCounters == null ? java.util.Collections.emptyMap()
+		return buildPeriodCounters == null ? Collections.emptyMap()
 			: buildPeriodCounters;
 	}
 
@@ -9410,7 +9414,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			else
 			{
-				named.add(new java.util.AbstractMap.SimpleEntry<>(key, v));
+				named.add(new AbstractMap.SimpleEntry<>(key, v));
 			}
 		}
 		named.sort(Map.Entry.<String, Long>comparingByValue().reversed());
@@ -9602,7 +9606,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		long possible = 0;
 		long seen = 0;
-		for (JsonObject e : plugin.feedNewest(4000))
+		for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
 		{
 			if (!"COMBAT_ACHIEVEMENT".equals(str(e, "type", "")))
 			{
@@ -9750,7 +9754,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			long n = Math.max(r.kc, r.loots);
 			JPanel line = row(tier, fmt(n) + " \u00b7 " + gp(r.value) + " gp", accent());
-			line.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			line.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			final String open = r.name;
 			line.addMouseListener(clicker(() -> openSource(open)));
 			line.setToolTipText(tip(tier + " clues",
@@ -9769,9 +9773,9 @@ class ChroniclePanel extends PluginPanel
 	 * supplies the rest. Empty for a journal written before this was captured,
 	 * which the board has to handle rather than read as "nothing done".
 	 */
-	private java.util.Set<Integer> caDone()
+	private Set<Integer> caDone()
 	{
-		java.util.Set<Integer> out = new java.util.HashSet<>();
+		Set<Integer> out = new HashSet<>();
 		JsonObject c = achievements().has("combat")
 			&& achievements().get("combat").isJsonObject()
 			? achievements().getAsJsonObject("combat") : null;
@@ -9842,7 +9846,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return;
 		}
-		java.util.Collections.sort(names);
+		Collections.sort(names);
 		String foldKey = "quests:" + heading;
 		boolean open = openFolds.contains(foldKey) != openByDefault;
 		p.add(quietHead(heading, fmt(names.size()), foldKey));
@@ -9982,7 +9986,7 @@ class ChroniclePanel extends PluginPanel
 		head.add(row("Points", c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]),
 			accent()));
 		head.add(row("Tiers unlocked", fmt(c[2]) + " / 6", null));
-		java.util.Set<Integer> headDone = caDone();
+		Set<Integer> headDone = caDone();
 		// The game reports ids; the table names them. Those two populations agree
 		// today and stop agreeing the first time Jagex adds a combat achievement,
 		// because the varps already carry 672 slots and this jar's table will still
@@ -10017,7 +10021,7 @@ class ChroniclePanel extends PluginPanel
 		// the handful this journal happened to watch land. Empty on a journal
 		// written before those bits were captured, and the board then says what each
 		// tier asks for rather than pretending nothing is done.
-		java.util.Set<Integer> done = caDone();
+		Set<Integer> done = caDone();
 		boolean known = !done.isEmpty();
 		if (!known)
 		{
@@ -10033,7 +10037,7 @@ class ChroniclePanel extends PluginPanel
 		// opened; ninety one sources with six tasks apiece is a list a reader can
 		// hold and a fold that costs nothing to open. Each row still names its
 		// own tier, so nothing about them is lost.
-		java.util.Map<String, java.util.List<JsonObject>> bySource = new java.util.TreeMap<>(
+		java.util.Map<String, java.util.List<JsonObject>> bySource = new TreeMap<>(
 			String.CASE_INSENSITIVE_ORDER);
 		for (String id : all.keySet())
 		{
@@ -10233,7 +10237,7 @@ class ChroniclePanel extends PluginPanel
 		cell.setToolTipText(slayer ? slayerTip() : skillTip(craft));
 		// The cell has always carried a tooltip, which is a mouse listener; this
 		// is what makes the hand cursor honest. Its counters had no other way in.
-		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		cell.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		// Slayer opens the board it has rather than a drill of its counters: the
 		// tasks, what each paid and the kills on them are a whole view already,
 		// and a card of slayer counters beside it would be the lesser half.
@@ -10251,7 +10255,7 @@ class ChroniclePanel extends PluginPanel
 		java.awt.image.BufferedImage img = skillIcon(sk);
 		if (img != null)
 		{
-			icon.setIcon(new javax.swing.ImageIcon(img));
+			icon.setIcon(new ImageIcon(img));
 		}
 		else
 		{
@@ -10309,6 +10313,7 @@ class ChroniclePanel extends PluginPanel
 			}
 		});
 	}
+
 	private String histFacet = "Skills";
 	// True while the sheet is drawing its SECOND band, so the head card that
 	// stands over the whole sheet is not drawn again underneath it.
@@ -10327,7 +10332,7 @@ class ChroniclePanel extends PluginPanel
 	private String measuredSince;
 
 	private final Map<Integer, java.awt.image.BufferedImage> facetIcons = new LinkedHashMap<>();
-	private final java.util.Set<Integer> facetAsked = new java.util.HashSet<>();
+	private final Set<Integer> facetAsked = new HashSet<>();
 	// the labels still waiting on a sprite that has been asked for but has not
 	// landed, each with the size it wants it at
 	private final Map<Integer, List<Object[]>> facetWaiting = new LinkedHashMap<>();
@@ -10396,7 +10401,7 @@ class ChroniclePanel extends PluginPanel
 	// is not free and it happens on the event thread: a band redrawn on every
 	// fold click would smooth-scale the same dozen images again each time, which
 	// is per-click work of exactly the kind that made this tab heavy before.
-	private final Map<String, javax.swing.ImageIcon> scaledIcons = new LinkedHashMap<>();
+	private final Map<String, ImageIcon> scaledIcons = new LinkedHashMap<>();
 
 	/**
 	 * An image on a label at the size asked for, its shape kept: a 36x32 item
@@ -10406,23 +10411,23 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private void dress(JLabel label, String key, java.awt.image.BufferedImage img, int w, int h)
 	{
-		javax.swing.ImageIcon icon = scaledIcons.get(key);
+		ImageIcon icon = scaledIcons.get(key);
 		if (icon == null)
 		{
-			icon = w <= 0 || h <= 0 ? new javax.swing.ImageIcon(img) : fit(img, w, h);
+			icon = w <= 0 || h <= 0 ? new ImageIcon(img) : fit(img, w, h);
 			scaledIcons.put(key, icon);
 		}
 		label.setIcon(icon);
 		label.setText("");
 	}
 
-	private static javax.swing.ImageIcon fit(java.awt.image.BufferedImage img, int w, int h)
+	private static ImageIcon fit(java.awt.image.BufferedImage img, int w, int h)
 	{
 		double scale = Math.min(w / (double) img.getWidth(), h / (double) img.getHeight());
-		return new javax.swing.ImageIcon(img.getScaledInstance(
+		return new ImageIcon(img.getScaledInstance(
 			Math.max(1, (int) Math.round(img.getWidth() * scale)),
 			Math.max(1, (int) Math.round(img.getHeight() * scale)),
-			java.awt.Image.SCALE_SMOOTH));
+			Image.SCALE_SMOOTH));
 	}
 
 	// whether the period on show is the whole record, which needs no opening
@@ -10456,12 +10461,12 @@ class ChroniclePanel extends PluginPanel
 	private java.time.LocalDate periodTo;
 
 	// the choices, built fresh so the tick sits on whichever is current
-	private javax.swing.JPopupMenu periodMenu()
+	private JPopupMenu periodMenu()
 	{
-		javax.swing.JPopupMenu menu = new javax.swing.JPopupMenu();
+		JPopupMenu menu = new JPopupMenu();
 		for (String g : PERIODS)
 		{
-			javax.swing.JMenuItem item = new javax.swing.JMenuItem(g);
+			JMenuItem item = new JMenuItem(g);
 			item.setFont(FontManager.getRunescapeSmallFont());
 			if (g.equals(histGranularity) && histFrom == null)
 			{
@@ -10488,7 +10493,7 @@ class ChroniclePanel extends PluginPanel
 		// Any two days, from the same list: at Lifetime there is no dateline to
 		// click, so this is the only way back to a window of one's own choosing.
 		menu.addSeparator();
-		javax.swing.JMenuItem exact = new javax.swing.JMenuItem("Exact dates");
+		JMenuItem exact = new JMenuItem("Exact dates");
 		exact.setFont(FontManager.getRunescapeSmallFont());
 		if (histFrom != null)
 		{
@@ -10506,10 +10511,10 @@ class ChroniclePanel extends PluginPanel
 	 * pills in a panel this wide, and the period control already established how
 	 * this panel asks a question with more answers than it has room for.
 	 */
-	private javax.swing.JPopupMenu taskMenu()
+	private JPopupMenu taskMenu()
 	{
-		javax.swing.JPopupMenu menu = new javax.swing.JPopupMenu();
-		javax.swing.JMenuItem all = new javax.swing.JMenuItem("Every task");
+		JPopupMenu menu = new JPopupMenu();
+		JMenuItem all = new JMenuItem("Every task");
 		all.setFont(FontManager.getRunescapeSmallFont());
 		if (lootTask == null)
 		{
@@ -10525,7 +10530,7 @@ class ChroniclePanel extends PluginPanel
 		menu.addSeparator();
 		for (String task : plugin.taskNames())
 		{
-			javax.swing.JMenuItem item = new javax.swing.JMenuItem(task);
+			JMenuItem item = new JMenuItem(task);
 			item.setFont(FontManager.getRunescapeSmallFont());
 			if (task.equals(lootTask))
 			{
@@ -10558,7 +10563,7 @@ class ChroniclePanel extends PluginPanel
 			.getLayoutComponent(BorderLayout.EAST);
 		pick.setFont(FontManager.getRunescapeSmallFont());
 		pick.setToolTipText("Narrow this board to one task");
-		pick.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		pick.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		// The label needs the listener too, not just the row. Its tooltip registers
 		// it with the ToolTipManager, which adds a mouse listener of its own, and
 		// from then on the label is the deepest listening component under the
@@ -10566,7 +10571,7 @@ class ChroniclePanel extends PluginPanel
 		// row's listener never runs. The task name is the half of this row that
 		// looks most like the control, and it was the half that did nothing.
 		pick.addMouseListener(clicker(() -> taskMenu().show(r, 0, r.getHeight())));
-		r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		r.addMouseListener(clicker(() -> taskMenu().show(r, 0, r.getHeight())));
 		return r;
 	}
@@ -10738,7 +10743,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return closing;
 		}
-		Map<String, Long> out = new java.util.HashMap<>(closing);
+		Map<String, Long> out = new HashMap<>(closing);
 		for (Map.Entry<String, Long> e : live.entrySet())
 		{
 			if (e.getValue() != null)
@@ -10895,7 +10900,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private List<LocalStore.SourceRow> skillGround(String craft)
 	{
-		java.util.Set<String> ownTile = new java.util.HashSet<>();
+		Set<String> ownTile = new HashSet<>();
 		for (String[] a : ACTIVITIES)
 		{
 			if (!a[1].isEmpty())
@@ -11032,7 +11037,7 @@ class ChroniclePanel extends PluginPanel
 			for (LocalStore.SourceRow r : ground)
 			{
 				JPanel line = row(r.name, gp(r.value) + " gp", accent());
-				line.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				line.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String open = r.name;
 				line.addMouseListener(clicker(() -> openSource(open)));
 				p.add(line);
@@ -11089,7 +11094,7 @@ class ChroniclePanel extends PluginPanel
 				arrow.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 6));
 			}
 			back.setForeground(accent());
-			back.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			back.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			back.addMouseListener(clicker(() -> stepPeriod(-1)));
 			// The log has no forward. A reader arrives on the present window and
 			// returns to it every time they pick a period, so this arrow spent
@@ -11103,7 +11108,7 @@ class ChroniclePanel extends PluginPanel
 			fwd.setForeground(ahead ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
 			if (ahead)
 			{
-				fwd.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				fwd.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				fwd.addMouseListener(clicker(() -> stepPeriod(1)));
 			}
 			r.add(back, BorderLayout.WEST);
@@ -11113,7 +11118,7 @@ class ChroniclePanel extends PluginPanel
 		lbl.setFont(FontManager.getRunescapeFont());
 		lbl.setForeground(accent());
 		lbl.setToolTipText("Choose the period");
-		lbl.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		lbl.addMouseListener(clicker(() -> periodMenu().show(r, 0, r.getHeight())));
 		r.add(lbl, BorderLayout.CENTER);
 		return r;
@@ -11197,7 +11202,7 @@ class ChroniclePanel extends PluginPanel
 			p.add(note("Reading your history…"));
 			return p;
 		}
-		java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> hist = historySpine;
+		TreeMap<java.time.LocalDate, HistoryLog.Baseline> hist = historySpine;
 
 		// baselines bounding the period: closing state the day before it began,
 		// and the last close inside it. With nothing closed before the window the
@@ -11273,7 +11278,7 @@ class ChroniclePanel extends PluginPanel
 			Map<String, Long> closesOn = closing.skills;
 			if (!pEnd.isBefore(java.time.LocalDate.now()))
 			{
-				Map<String, Long> nowXp = new java.util.HashMap<>(closing.skills);
+				Map<String, Long> nowXp = new HashMap<>(closing.skills);
 				for (Map.Entry<String, long[]> e : plugin.skillSheet().entrySet())
 				{
 					if (e.getValue() != null && e.getValue().length > 1
@@ -11306,7 +11311,7 @@ class ChroniclePanel extends PluginPanel
 				{
 					if (g.skill != null && g.xp > 0)
 					{
-						gains.add(new java.util.AbstractMap.SimpleEntry<>(
+						gains.add(new AbstractMap.SimpleEntry<>(
 							g.skill.name().toLowerCase(Locale.ROOT), g.xp));
 					}
 				}
@@ -11337,7 +11342,7 @@ class ChroniclePanel extends PluginPanel
 				: pStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			long toMs = sessionPeriod() ? windowMs()[1]
 				: end.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-			Map<String, Long> fromFeed = new java.util.HashMap<>();
+			Map<String, Long> fromFeed = new HashMap<>();
 			Map<String, List<String[]>> named = new LinkedHashMap<>();
 			long[] played = {0, 0};   // minutes, sessions
 			// the sessions' own take: drops, their gp, the stacks left, their gp,
@@ -11388,7 +11393,7 @@ class ChroniclePanel extends PluginPanel
 					}
 				}
 			}
-			Map<String, Long> retro = new java.util.HashMap<>();
+			Map<String, Long> retro = new HashMap<>();
 			boolean[] sessionsHoldTheFloor = {false};
 			boolean[] sessionsSpeak = {false};
 			if (historyJourney != null)
@@ -11568,7 +11573,7 @@ class ChroniclePanel extends PluginPanel
 				whole ? closing.counters
 					: HistoryLog.gained(opening.counters, earliest.counters,
 						closing.counters),
-				null, whole ? new java.util.HashMap<>() : retro, leftDated || whole);
+				null, whole ? new HashMap<>() : retro, leftDated || whole);
 			// The sitting is measured from where the sitting began, which the
 			// spine cannot say: it is written once a day, so its nearest earlier
 			// line is the eve of TODAY. Measured from that, a level gained this
@@ -11584,7 +11589,7 @@ class ChroniclePanel extends PluginPanel
 			HistoryLog.Baseline sittingOpen = null;
 			if (sessionPeriod())
 			{
-				Map<String, Long> openXp = new java.util.HashMap<>(closesOn);
+				Map<String, Long> openXp = new HashMap<>(closesOn);
 				for (ExperienceStatTracker.SkillGain g : plugin.sessionSkillXp())
 				{
 					if (g.skill == null || g.xp <= 0)
@@ -11767,7 +11772,7 @@ class ChroniclePanel extends PluginPanel
 			case "Day":
 				return d.plusDays(1);
 			case "Month":
-				return d.withDayOfMonth(1).plusMonths(1).plusMonths(1).minusDays(1);
+				return d.withDayOfMonth(1).plusMonths(2).minusDays(1);
 			case "Year":
 				return d.withDayOfYear(1).plusYears(2).minusDays(1);
 			case "Week":
@@ -11805,8 +11810,8 @@ class ChroniclePanel extends PluginPanel
 			t.setFont(FontManager.getRunescapeSmallFont());
 			t.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 			t.setForeground(on ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
-			t.setCursor(java.awt.Cursor.getPredefinedCursor(
-				java.awt.Cursor.HAND_CURSOR));
+			t.setCursor(Cursor.getPredefinedCursor(
+				Cursor.HAND_CURSOR));
 			t.addMouseListener(clicker(() ->
 			{
 				journalLens = lens[0];
@@ -11818,7 +11823,7 @@ class ChroniclePanel extends PluginPanel
 		p.add(lenses);
 		p.add(vgap(6));
 
-		java.util.Set<String> wanted = new java.util.HashSet<>();
+		Set<String> wanted = new HashSet<>();
 		for (String[] lens : JOURNAL_LENSES)
 		{
 			if (lens[0].equals(journalLens))
@@ -11905,7 +11910,7 @@ class ChroniclePanel extends PluginPanel
 			? "The journal of " + rsn : "The journal");
 
 		long since = plugin.keptSince();
-		java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> spine = historySpine;
+		TreeMap<java.time.LocalDate, HistoryLog.Baseline> spine = historySpine;
 		if (since > 0)
 		{
 			plate.add(row("Kept since",
@@ -11953,7 +11958,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		if (grindsCache != null)
 		{
-			for (ChronicleApiClient.GrindRow g : grindsCache)
+			for (GrindBook.GrindRow g : grindsCache)
 			{
 				if (g.percentileDry >= 90)
 				{
@@ -11975,8 +11980,6 @@ class ChroniclePanel extends PluginPanel
 		}
 		return null;
 	}
-
-
 
 	/** Ask for a journal file and hand it to the plugin. Reached from settings. */
 	void promptImport()
@@ -12001,7 +12004,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private int searchAchievements(JPanel p, String ql)
 	{
-		java.util.Set<Integer> done = caDone();
+		Set<Integer> done = caDone();
 		bundledCombat = bundle(plugin.gson(), "osrs_combat_achievements.json", bundledCombat);
 		JsonObject tasks = bundledCombat.has("tasks")
 			? bundledCombat.getAsJsonObject("tasks") : new JsonObject();
@@ -12062,7 +12065,7 @@ class ChroniclePanel extends PluginPanel
 			JPanel r = row(t.get("name").getAsString(), t.get("monster").getAsString(),
 				!done.isEmpty() && !has ? ColorScheme.LIGHT_GRAY_COLOR.darker() : null,
 				!done.isEmpty() && !has);
-			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			r.setToolTipText(tip(t.get("name").getAsString(),
 				new String[]{"Tier", "Where", "Task"},
 				new String[]{t.get("tier").getAsString(),
@@ -12078,7 +12081,7 @@ class ChroniclePanel extends PluginPanel
 			// the hit, and a region taking a third of the row cut it to "Purchase
 			// ..." which answers nothing.
 			JPanel r = row(d[0], d[2], null);
-			r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+			r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			r.setToolTipText(tip(d[1] + " " + d[2],
 				new String[]{"Task", "Needs"},
 				new String[]{d[0], d[3].isEmpty() ? "nothing" : d[3]}));
@@ -12115,16 +12118,16 @@ class ChroniclePanel extends PluginPanel
 			if ("info".startsWith(ql))
 			{
 				JPanel open = row("Info", "what the journal holds", null);
-				open.setCursor(java.awt.Cursor.getPredefinedCursor(
-					java.awt.Cursor.HAND_CURSOR));
+				open.setCursor(Cursor.getPredefinedCursor(
+					Cursor.HAND_CURSOR));
 				open.addMouseListener(clicker(this::openInfo));
 				p.add(open);
 			}
 			if ("trackers".startsWith(ql))
 			{
 				JPanel open = row("All trackers", "every counter in one place", null);
-				open.setCursor(java.awt.Cursor.getPredefinedCursor(
-					java.awt.Cursor.HAND_CURSOR));
+				open.setCursor(Cursor.getPredefinedCursor(
+					Cursor.HAND_CURSOR));
 				open.addMouseListener(clicker(this::openAllTrackers));
 				p.add(open);
 			}
@@ -12134,8 +12137,8 @@ class ChroniclePanel extends PluginPanel
 			{
 				final String pick = kind;
 				JPanel open = row(kind, "every one you have had", null);
-				open.setCursor(java.awt.Cursor.getPredefinedCursor(
-					java.awt.Cursor.HAND_CURSOR));
+				open.setCursor(Cursor.getPredefinedCursor(
+					Cursor.HAND_CURSOR));
 				open.addMouseListener(clicker(() -> openLootKind(pick, false)));
 				p.add(open);
 				// The slayer half as its own row rather than as a setting the
@@ -12144,8 +12147,8 @@ class ChroniclePanel extends PluginPanel
 				if (everOnTask() && hasKindOnTask(pick))
 				{
 					JPanel tasks = row(kind, "from slayer tasks", null);
-					tasks.setCursor(java.awt.Cursor.getPredefinedCursor(
-						java.awt.Cursor.HAND_CURSOR));
+					tasks.setCursor(Cursor.getPredefinedCursor(
+						Cursor.HAND_CURSOR));
 					tasks.addMouseListener(clicker(() -> openLootKind(pick, true)));
 					p.add(tasks);
 				}
@@ -12176,7 +12179,7 @@ class ChroniclePanel extends PluginPanel
 				// A door, like the drop and source rows beneath: three of the six
 				// groups drew rows that named a thing and did nothing when pressed.
 				JPanel tr = row(StatRegistry.label(e.getKey()), v, null);
-				tr.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				tr.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				tr.addMouseListener(clicker(this::openAllTrackers));
 				p.add(tr);
 				total++;
@@ -12223,7 +12226,7 @@ class ChroniclePanel extends PluginPanel
 				long[] agg = itemAgg.get(name);
 				JPanel r = row(name + " ×" + fmt(agg[0]),
 					agg[1] > 0 ? gp(agg[1]) + " gp" : "", accent());
-				r.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String itm = name;
 				r.addMouseListener(clicker(() -> openItem(itm)));
 				p.add(r);
@@ -12244,7 +12247,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				LocalStore.SourceRow r = srcHits.get(i);
 				JPanel rr = row(r.name, (r.kc > 0 ? fmt(r.kc) + " kc · " : "") + gp(r.value) + " gp", null);
-				rr.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				rr.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String src = r.name;
 				rr.addMouseListener(clicker(() -> openSource(src)));
 				p.add(rr);
@@ -12299,7 +12302,7 @@ class ChroniclePanel extends PluginPanel
 				// slots the reader HAS.
 				JPanel sr = row(hit.getKey(), hit.getValue(),
 					got ? ACCENT_SESSION : ACCENT_RED, true);
-				sr.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				sr.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				sr.addMouseListener(clicker(() ->
 				{
 					sheetPage = "log";
@@ -12340,7 +12343,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				long ts = e.has("ts") ? e.get("ts").getAsLong() : 0;
 				JPanel jr = row(feedLine(e), ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "", null);
-				jr.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+				jr.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				jr.addMouseListener(clicker(() -> applyTab(View.JOURNAL)));
 				p.add(jr);
 				total++;
@@ -12741,7 +12744,7 @@ class ChroniclePanel extends PluginPanel
 		l.setFont(FontManager.getRunescapeSmallFont());
 		l.setForeground(accent());
 		cell.add(l, BorderLayout.CENTER);
-		cell.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+		cell.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		cell.addMouseListener(clicker(flip));
 		return cell;
 	}
@@ -12837,6 +12840,7 @@ class ChroniclePanel extends PluginPanel
 			private boolean lit;
 			private boolean wasOpaque;
 			private Color wasBackground;
+			private JComponent target;
 
 			@Override
 			public void mousePressed(MouseEvent e)
@@ -12847,13 +12851,13 @@ class ChroniclePanel extends PluginPanel
 			@Override
 			public void mouseEntered(MouseEvent e)
 			{
-				if (lit || !(e.getComponent() instanceof javax.swing.JComponent))
+				if (lit || !(e.getComponent() instanceof JComponent))
 				{
 					return;
 				}
 				// whatever was lit before this is not under the pointer now
 				unlight();
-				javax.swing.JComponent c = (javax.swing.JComponent) e.getComponent();
+				JComponent c = (JComponent) e.getComponent();
 				target = c;
 				wasOpaque = c.isOpaque();
 				wasBackground = c.getBackground();
@@ -12883,13 +12887,11 @@ class ChroniclePanel extends PluginPanel
 				lit = false;
 			}
 
-			private javax.swing.JComponent target;
-
 			@Override
 			public void mouseExited(MouseEvent e)
 			{
 				// see stillUnder
-				if (!lit || !(e.getComponent() instanceof javax.swing.JComponent))
+				if (!lit || !(e.getComponent() instanceof JComponent))
 				{
 					return;
 				}

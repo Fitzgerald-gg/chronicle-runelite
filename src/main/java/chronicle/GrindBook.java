@@ -127,7 +127,7 @@ class GrindBook
 
 	// Reads the stored clog (kcs, clog_items, by_cat) plus the drop sources for a second
 	// kc signal. Called off the client thread; nothing in here may touch the client.
-	List<ChronicleApiClient.GrindRow> grinds(JsonObject clog,
+	List<GrindRow> grinds(JsonObject clog,
 		List<LocalStore.SourceRow> dropSources)
 	{
 		Map<String, Map<String, Integer>> rates = book();
@@ -167,7 +167,7 @@ class GrindBook
 			}
 		}
 
-		List<ChronicleApiClient.GrindRow> out = new ArrayList<>();
+		List<GrindRow> out = new ArrayList<>();
 		for (Map.Entry<String, Map<String, Integer>> boss : rates.entrySet())
 		{
 			Long kc = kcByNorm.get(norm(boss.getKey()));
@@ -186,7 +186,7 @@ class GrindBook
 					continue;
 				}
 				double pct = (1.0 - Math.pow(1.0 - 1.0 / rate, kc)) * 100.0;
-				out.add(new ChronicleApiClient.GrindRow(boss.getKey(), item.getKey(),
+				out.add(new GrindRow(boss.getKey(), item.getKey(),
 					kc, rate, Math.round(pct * 10.0) / 10.0));
 			}
 		}
@@ -910,6 +910,25 @@ class GrindBook
 		catch (RuntimeException ex)
 		{
 			return 0;
+		}
+	}
+
+	/** One dry chase: the journal's own kc weighed against the bundled wiki rate book. */
+	public static final class GrindRow
+	{
+		public final String boss;
+		public final String item;
+		public final long kc;
+		public final long rate;
+		public final double percentileDry;
+
+		GrindRow(String boss, String item, long kc, long rate, double percentileDry)
+		{
+			this.boss = boss;
+			this.item = item;
+			this.kc = kc;
+			this.rate = rate;
+			this.percentileDry = percentileDry;
 		}
 	}
 }

@@ -28,7 +28,6 @@ public class StatRegistryTest
 		// destinations read as place names, punctuation and all
 		assertEquals("Varrock", StatRegistry.label("teleportsVarrock"));
 		assertEquals("Seers' Village", StatRegistry.label("teleportsSeersVillage"));
-		assertEquals("Kourend (Memoirs)", StatRegistry.label("teleportsKharedst"));
 	}
 
 	@Test

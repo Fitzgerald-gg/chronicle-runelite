@@ -144,7 +144,7 @@ public class JournalImportTest
 
 	private int indexOf(String task)
 	{
-		java.util.List<ChronicleApiClient.SlayerTask> t = store.slayerJourney().tasks;
+		java.util.List<LocalStore.SlayerTask> t = store.slayerJourney().tasks;
 		for (int i = 0; i < t.size(); i++)
 		{
 			if (t.get(i).task.equals(task))

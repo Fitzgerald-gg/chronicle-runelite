@@ -63,7 +63,7 @@ public class PanelPreviewTest
 			}
 		}
 
-		renderSet(out, "fix", fixturePlugin());
+		renderSet(out, "fix", fixtureStub());
 
 		// Only when asked. A stranger running the suite should not have their own
 		// journal read, and the fixture set covers every surface anyway.
@@ -361,7 +361,7 @@ public class PanelPreviewTest
 		// out the journey and the feed the fixture grew for this tab, and the
 		// tab reads the plugin again each way, the path a mounted journal
 		// takes; the surfaces before and after draw the fixture's own.
-		ChronicleApiClient.SlayerJourney journey = stub.journey;
+		LocalStore.SlayerJourney journey = stub.journey;
 		List<JsonObject> feed = stub.feed;
 		boolean grown = stub.historyJourney != null || stub.historyFeed != null;
 		if (grown)
@@ -458,11 +458,6 @@ public class PanelPreviewTest
 	 * one draws: a second copy would drift from the one the renders are taken of.
 	 */
 	static StubPlugin fixtureStub() throws Exception
-	{
-		return fixturePlugin();
-	}
-
-	private static StubPlugin fixturePlugin() throws Exception
 	{
 		StubPlugin s = new StubPlugin(mockItems());
 		s.spriteManager = mockSprites();
@@ -696,14 +691,14 @@ public class PanelPreviewTest
 
 		// cloud on so Manage draws its sync section; the journey fills Slayer
 		s.cloud = true;
-		List<ChronicleApiClient.SlayerTask> tasks = new ArrayList<>();
-		tasks.add(new ChronicleApiClient.SlayerTask("Abyssal demons", 121, 184, 4,
+		List<LocalStore.SlayerTask> tasks = new ArrayList<>();
+		tasks.add(new LocalStore.SlayerTask("Abyssal demons", 121, 184, 4,
 			System.currentTimeMillis() / 1000.0, 1_112_400L, true));
-		tasks.add(new ChronicleApiClient.SlayerTask("Nechryael", 167, 0, 0,
+		tasks.add(new LocalStore.SlayerTask("Nechryael", 167, 0, 0,
 			System.currentTimeMillis() / 1000.0 - 400_000, 812_113L, false));
-		tasks.add(new ChronicleApiClient.SlayerTask("Thermonuclear smoke devils", 233, 0, 12,
+		tasks.add(new LocalStore.SlayerTask("Thermonuclear smoke devils", 233, 0, 12,
 			System.currentTimeMillis() / 1000.0 - 900_000, 2_012_113L, false));
-		s.journey = new ChronicleApiClient.SlayerJourney(214, 48_231, 61_204_113L,
+		s.journey = new LocalStore.SlayerJourney(214, 48_231, 61_204_113L,
 			8_204_113L, tasks);
 		s.consumVals.put("sharkEaten", 1_985_000L);
 		s.consumVals.put("potionDoses", 3_204_000L);
@@ -711,7 +706,7 @@ public class PanelPreviewTest
 		// away beside the chases: the log already lights this one.
 		s.petRows.add(new LocalStore.PetRow("Pet kraken", "Kraken", 2_147,
 			java.time.Instant.parse("2024-11-08T20:14:00Z").toEpochMilli()));
-		s.grinds.add(new ChronicleApiClient.GrindRow("Abyssal demons", "Abyssal head",
+		s.grinds.add(new GrindBook.GrindRow("Abyssal demons", "Abyssal head",
 			4_112, 6_000, 51.0));
 		s.clogFinished = 412;
 		s.clogAvailable = 1_568;
@@ -753,26 +748,26 @@ public class PanelPreviewTest
 		// and the feed above, and their pictures stay put.
 		LocalDate day = LocalDate.now();
 		LocalDate priorYear = day.minusYears(1);
-		List<ChronicleApiClient.SlayerTask> grown = new ArrayList<>(tasks);
-		grown.add(1, new ChronicleApiClient.SlayerTask("Gargoyles", 152, 0, 3,
+		List<LocalStore.SlayerTask> grown = new ArrayList<>(tasks);
+		grown.add(1, new LocalStore.SlayerTask("Gargoyles", 152, 0, 3,
 			System.currentTimeMillis() / 1000.0 - 150_000, 612_113L, false));
-		grown.add(2, new ChronicleApiClient.SlayerTask("Bloodvelds", 188, 0, 0,
+		grown.add(2, new LocalStore.SlayerTask("Bloodvelds", 188, 0, 0,
 			System.currentTimeMillis() / 1000.0 - 300_000, 402_113L, false));
 		// two closed today, so the Day shot has its own tasks, and eight through
 		// the year before, so the Year shot's list runs past its cap
-		grown.add(1, new ChronicleApiClient.SlayerTask("Dust devils", 174, 0, 2,
+		grown.add(1, new LocalStore.SlayerTask("Dust devils", 174, 0, 2,
 			noon(day) / 1000.0, 512_004L, false));
-		grown.add(2, new ChronicleApiClient.SlayerTask("Kalphites", 141, 0, 0,
+		grown.add(2, new LocalStore.SlayerTask("Kalphites", 141, 0, 0,
 			(noon(day) - 5_400_000L) / 1000.0, 204_113L, false));
 		String[] older = {"Aberrant spectres", "Black demons", "Dagannoth", "Fire giants",
 			"Greater demons", "Hellhounds", "Kurask", "Smoke devils"};
 		for (int i = 0; i < older.length; i++)
 		{
-			grown.add(new ChronicleApiClient.SlayerTask(older[i], 120 + i * 13L, 0, 0,
+			grown.add(new LocalStore.SlayerTask(older[i], 120 + i * 13L, 0, 0,
 				noon(priorYear.withMonth(2 + i).withDayOfMonth(9 + i)) / 1000.0,
 				180_000L + i * 41_000L, false));
 		}
-		s.historyJourney = new ChronicleApiClient.SlayerJourney(214, 48_231, 61_204_113L,
+		s.historyJourney = new LocalStore.SlayerJourney(214, 48_231, 61_204_113L,
 			8_204_113L, grown);
 
 		// The feed the History tab reads. Every window the tab's shots step to
@@ -1356,13 +1351,13 @@ public class PanelPreviewTest
 		TreeMap<LocalDate, HistoryLog.Baseline> history = new TreeMap<>();
 		LocalStore store;   // set for the real-journal variant
 		boolean cloud;
-		ChronicleApiClient.SlayerJourney journey;
+		LocalStore.SlayerJourney journey;
 		// the journey and the feed the History tab alone reads, when a fixture
 		// grows them past the two above; null to read the same as every surface
-		ChronicleApiClient.SlayerJourney historyJourney;
+		LocalStore.SlayerJourney historyJourney;
 		List<JsonObject> historyFeed;
 		Map<String, Long> consumVals = new LinkedHashMap<>();
-		List<ChronicleApiClient.GrindRow> grinds = new ArrayList<>();
+		List<GrindBook.GrindRow> grinds = new ArrayList<>();
 		List<LocalStore.PetRow> petRows = new ArrayList<>();
 		// a test that needs real item images supplies its own manager
 		ItemManager itemManager;
@@ -1665,13 +1660,13 @@ public class PanelPreviewTest
 
 		@Override
 		void fetchSlayerJourney(
-			java.util.function.Consumer<ChronicleApiClient.SlayerJourney> onDone)
+			java.util.function.Consumer<LocalStore.SlayerJourney> onDone)
 		{
 			onDone.accept(journey);
 		}
 
 		@Override
-		ChronicleApiClient.SlayerJourney slayerJourney()
+		LocalStore.SlayerJourney slayerJourney()
 		{
 			return journey;
 		}
@@ -1690,7 +1685,7 @@ public class PanelPreviewTest
 
 		@Override
 		void fetchGrinds(
-			java.util.function.Consumer<java.util.List<ChronicleApiClient.GrindRow>> onDone)
+			java.util.function.Consumer<java.util.List<GrindBook.GrindRow>> onDone)
 		{
 			onDone.accept(new ArrayList<>(grinds));
 		}

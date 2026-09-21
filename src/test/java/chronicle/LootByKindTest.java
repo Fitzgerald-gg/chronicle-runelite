@@ -194,15 +194,16 @@ public class LootByKindTest
 		Field f = ChroniclePanel.class.getDeclaredField("dropsByKind");
 		f.setAccessible(true);
 		Method common = null;
+		int overloads = 0;
 		for (Method m : ChroniclePanel.class.getDeclaredMethods())
 		{
 			if (m.getName().equals("applyCommon"))
 			{
 				common = m;
+				overloads++;
 			}
 		}
-		assertEquals("applyCommon is gone or has a second overload",
-			1, common == null ? 0 : 1);
+		assertEquals("applyCommon is gone or has a second overload", 1, overloads);
 		final Method call = common;
 		call.setAccessible(true);
 		SwingUtilities.invokeAndWait(() ->

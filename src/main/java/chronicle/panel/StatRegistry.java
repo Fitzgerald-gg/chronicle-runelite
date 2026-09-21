@@ -5,6 +5,7 @@ package chronicle.panel;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -270,7 +271,6 @@ public final class StatRegistry
 		TELE_NAMES.put("teleportsDondakansRock", "Dondakan's Rock");
 		TELE_NAMES.put("teleportsEaglesEyrie", "Eagle's Eyrie");
 		TELE_NAMES.put("teleportsGiantsFoundry", "Giants' Foundry");
-		TELE_NAMES.put("teleportsKharedst", "Kourend (Memoirs)");
 	}
 
 	private StatRegistry()
@@ -293,7 +293,7 @@ public final class StatRegistry
 	// the spine-only summary keys, for the writer that derives them
 	public static Set<String> summaryKeys()
 	{
-		return java.util.Collections.unmodifiableSet(SUMMARY);
+		return Collections.unmodifiableSet(SUMMARY);
 	}
 
 	// a high-water counter whose period delta means nothing
@@ -305,7 +305,7 @@ public final class StatRegistry
 	// the peak keys, for the test that holds them to LocalStore.MAX_KEYS
 	public static Set<String> peakKeys()
 	{
-		return java.util.Collections.unmodifiableSet(PEAK);
+		return Collections.unmodifiableSet(PEAK);
 	}
 
 	// floors are the generic totals (logsChopped, teleportsTotal) that head a
@@ -410,7 +410,7 @@ public final class StatRegistry
 			out.addAll(Arrays.asList(s.keys));
 			return out;
 		}
-		return java.util.Collections.emptyList();
+		return Collections.emptyList();
 	}
 
 	// section within the family; "" means the family's flat top list
@@ -484,13 +484,13 @@ public final class StatRegistry
 			case "Teleports":
 				return Arrays.asList("teleportsTotal", "teleports");
 			case "Food":
-				return java.util.Collections.singletonList("foodEaten");
+				return Collections.singletonList("foodEaten");
 			case "Potions":
-				return java.util.Collections.singletonList("potionDoses");
+				return Collections.singletonList("potionDoses");
 			case "Thralls":
-				return java.util.Collections.singletonList("thrallsSummoned");
+				return Collections.singletonList("thrallsSummoned");
 			default:
-				return java.util.Collections.emptyList();
+				return Collections.emptyList();
 		}
 	}
 
@@ -772,7 +772,7 @@ public final class StatRegistry
 			case "Ledger & Roads":
 				return Arrays.asList("The purse", "On foot", "Teleports", "Destinations", "Odds & ends");
 			default:
-				return new ArrayList<>(java.util.Collections.singletonList(""));
+				return new ArrayList<>(Collections.singletonList(""));
 		}
 	}
 }

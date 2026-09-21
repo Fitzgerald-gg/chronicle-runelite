@@ -101,9 +101,7 @@ public class KillSourcePetChaseTest
 		assertEquals(44.6, c.percentileDry, 0.05);
 		assertEquals(295, c.kc);
 		assertEquals(500, c.sources.get(0).rate);
-		// what a doubled roll would have printed, and deliberately does not
-		double plucked = (1.0 - Math.pow(1.0 - 1.0 / 500, 590)) * 100.0;
-		assertEquals(69.3, plucked, 0.05);
+		// a doubled roll would have printed 69.3, and deliberately does not
 	}
 
 	// Master caskets alone. The other trail tiers are counted by the same ledger under
@@ -229,9 +227,7 @@ public class KillSourcePetChaseTest
 		assertEquals("Tempoross", c.activity);
 		assertEquals("searches", c.unit);
 		assertEquals(1.4, c.percentileDry, 0.05);
-		// what the subdue count would have printed, and deliberately does not
-		double subdued = (1.0 - Math.pow(1.0 - 1.0 / 8_000, 46)) * 100.0;
-		assertEquals(0.6, subdued, 0.05);
+		// the subdue count would have printed 0.6, and deliberately does not
 	}
 
 	// The casket is one of the things a pool search hands over, and its own table
