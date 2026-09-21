@@ -629,6 +629,59 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/**
+	 * When one item landed, off the dated roll: {first day, last day, days it
+	 * landed}, the days as millis at local midnight; zeros where it never did.
+	 */
+	long[] itemDays(String name)
+	{
+		String first = null;
+		String last = null;
+		int days = 0;
+		synchronized (lock)
+		{
+			if (root == null || !root.has("loot_days") || !root.get("loot_days").isJsonObject())
+			{
+				return new long[3];
+			}
+			JsonObject all = root.getAsJsonObject("loot_days");
+			for (String day : all.keySet())
+			{
+				if (!all.get(day).isJsonObject() || !dayHolds(all.getAsJsonObject(day), name))
+				{
+					continue;
+				}
+				days++;
+				first = first == null || day.compareTo(first) < 0 ? day : first;
+				last = last == null || day.compareTo(last) > 0 ? day : last;
+			}
+		}
+		return days == 0 ? new long[3] : new long[]{dayMs(first), dayMs(last), days};
+	}
+
+	private static boolean dayHolds(JsonObject day, String name)
+	{
+		if (!day.has("items") || !day.get("items").isJsonObject())
+		{
+			return false;
+		}
+		for (java.util.Map.Entry<String, JsonElement> it : day.getAsJsonObject("items").entrySet())
+		{
+			if (it.getValue().isJsonObject() && it.getValue().getAsJsonObject().has("n")
+				&& name.equalsIgnoreCase(it.getValue().getAsJsonObject().get("n").getAsString()))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static long dayMs(String key)
+	{
+		return java.time.LocalDate.parse(key, DAY_KEY)
+			.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+	}
+
+	/**
 	 * What THIS sitting has taken and left, ranked, in the same shape the dated
 	 * roll answers a window with.
 	 *

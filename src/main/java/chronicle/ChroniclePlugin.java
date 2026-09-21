@@ -1048,6 +1048,11 @@ public class ChroniclePlugin extends Plugin
 		return localStore.lootBetween(from, to);
 	}
 
+	long[] itemDays(String name)
+	{
+		return localStore.itemDays(name);
+	}
+
 	java.util.List<LocalStore.BagItem> sourceItems(String source)
 	{
 		return localStore.sourceItems(source);

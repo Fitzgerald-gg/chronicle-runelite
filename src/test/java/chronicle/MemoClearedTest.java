@@ -41,12 +41,12 @@ public class MemoClearedTest
 	 * State that outlives a build ON PURPOSE, and would be a defect if cleared.
 	 *
 	 * <p>journeyFetching guards a fetch that is still in the air; cleared on a
-	 * rebuild it would launch a second one over the first. searchJump is the
-	 * board Enter would go to, set while the results are built and read when the
-	 * key is pressed, which is a later pass by definition.
+	 * rebuild it would launch a second one over the first. searchFirst is the
+	 * door Enter opens, set while the results are built and read when the key
+	 * is pressed, which is a later pass by definition.
 	 */
 	private static final Set<String> OUTLIVES_A_BUILD = new LinkedHashSet<>(
-		Arrays.asList("journeyFetching", "searchJump", "lootTask"));
+		Arrays.asList("journeyFetching", "searchFirst", "lootTask"));
 
 	@Test
 	public void everyPerBuildMemoIsForgottenAtTheTopOfTheBuild() throws Exception

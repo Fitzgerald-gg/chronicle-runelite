@@ -1367,6 +1367,23 @@ public class PanelPreviewTest
 			this.itemManager = im;
 		}
 
+		// a sitting in progress, where a test wants Now to know one; unset, the
+		// plugin's own answer stands, which SessionPeriodTest sets by hand
+		long sessionStartMs;
+		long sessionElapsed;
+
+		@Override
+		long sessionStart()
+		{
+			return sessionStartMs != 0 ? sessionStartMs : super.sessionStart();
+		}
+
+		@Override
+		long sessionElapsedMinutes()
+		{
+			return sessionElapsed != 0 ? sessionElapsed : super.sessionElapsedMinutes();
+		}
+
 		@Override
 		String displayRsn()
 		{
@@ -1486,6 +1503,16 @@ public class PanelPreviewTest
 		{
 			return store != null ? store.onTaskAssignments(npc, fromMs, toMs)
 				: new java.util.ArrayList<>();
+		}
+
+		// when an item landed, where a test says so
+		Map<String, long[]> itemDays = new LinkedHashMap<>();
+
+		@Override
+		long[] itemDays(String name)
+		{
+			long[] said = itemDays.get(name);
+			return said != null ? said : store != null ? store.itemDays(name) : new long[3];
 		}
 
 		@Override

@@ -136,7 +136,7 @@ public class ExampleExportTest
 			"resourcesDropped", "buildSources", "buildClog", "buildSpan",
 			"spanAsked", "historySpine", "historyFeed", "historyJourney",
 			"historyDay", "historyFeedTs", "historyEpoch", "skilled",
-			"itemsByName", "periodFrom", "periodTo", "searchJump", "searchJumpPage", "playedIsTheGames",
+			"itemsByName", "periodFrom", "periodTo", "searchFirst", "playedIsTheGames",
 			"taskItemsEver", "taskKillsEverCache", "sheetBandDrawn", "periodTip", "measuredSince", "buildAchievements"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
@@ -777,8 +777,6 @@ public class ExampleExportTest
 				Map<String, Object> tree = node(drawn[0], new ArrayList<>(), new ArrayList<>());
 				Map<String, Object> one = new LinkedHashMap<>();
 				one.put("root", pool.intern(tree));
-				Object jump = field("searchJump") == null ? null : get("searchJump");
-				one.put("jump", jump == null ? null : jump.toString());
 				one.put("enter", pressEnter(q, home));
 				out.put(q, one);
 			}

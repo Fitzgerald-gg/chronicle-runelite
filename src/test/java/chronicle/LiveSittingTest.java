@@ -107,7 +107,7 @@ public class LiveSittingTest
 	public void itReadsAsAnOrdinarySessionLine() throws Exception
 	{
 		List<String> said = journal(sitting());
-		assertTrue(said.toString(), has(said, "Session:"));
+		assertTrue(said.toString(), has(said, "Session · 1h 37m"));
 		assertTrue("it should carry what the sitting has taken", has(said, "41 drops"));
 	}
 
