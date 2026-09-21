@@ -236,7 +236,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	// ------------------------------------------------------------------
 
 	/**
-	 * Bumped on every write to the model. The panel is rebuilt when the record
+	 * Bumped on every call to record(), kept or not, and on every other write to
+	 * the model. The panel is rebuilt when the record
 	 * moves and left alone when it does not; this is how "moved" is known without
 	 * comparing two copies of the whole journal every tick.
 	 */
@@ -1703,7 +1704,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				continue;
 			}
 			JsonObject seg = tasks.get(i).getAsJsonObject();
-			if ((seg.has("ts") ? asLong(seg.get("ts")) : 0) < floor)
+			if (asLong(seg.get("ts")) < floor)
 			{
 				return null;
 			}
@@ -3182,7 +3183,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				continue;
 			}
-			long gap = Math.abs((seg.has("ts") ? asLong(seg.get("ts")) : 0) - ts);
+			long gap = Math.abs(asLong(seg.get("ts")) - ts);
 			if (gap <= SEGMENT_MATCH_SECONDS && gap < bestGap)
 			{
 				bestGap = gap;
@@ -3931,11 +3932,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			loots += r.loots;
 			value += r.value;
 		}
-		// The same reconciliation the Kills list under this headline draws, not the
-		// ledger fold alone: the list reads killCounts, which applies the Kill Log,
-		// the chat line and the anchors on top of the page counters, so a headline
-		// summed from sourceKills was adding a different base than the rows it sat
-		// over and the two could disagree by thousands.
 		// The reconciled FIGURE for each fight, over the ledger's own MEMBERSHIP.
 		//
 		// Two different questions, and the old fold answered both with sourceKills.
@@ -4128,6 +4124,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	// ── anchored kill counts ───────────────────────────────────────────────
 
+	/** chat 3, Kill Log 2, page 1: which statement outranks which. */
+	private static int anchorRank(String src)
+	{
+		return "chat".equals(src) ? 3 : "log".equals(src) ? 2 : 1;
+	}
+
 	/**
 	 * A kill count the game stated, and what this journal had observed of that
 	 * same fight at the moment it was stated.
@@ -4148,11 +4150,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * is a dated reading superseding a dated reading rather than a guess at a
 	 * maximum. A lower rank never displaces a higher one.
 	 */
-	private static int anchorRank(String src)
-	{
-		return "chat".equals(src) ? 3 : "log".equals(src) ? 2 : 1;
-	}
-
 	void anchorKill(String name, long stated, String src, String rsn)
 	{
 		if (name == null || name.isEmpty() || stated <= 0 || !isReadyFor(rsn))

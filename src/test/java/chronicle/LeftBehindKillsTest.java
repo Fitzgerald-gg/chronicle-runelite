@@ -438,7 +438,7 @@ public class LeftBehindKillsTest
 	// the sweep would bank it the moment its time was up -- so going back for your
 	// loot would be recorded as having abandoned it.
 	@Test
-	public void loootFetchedOnASecondTripIsNotAbandoned()
+	public void lootFetchedOnASecondTripIsNotAbandoned()
 	{
 		kill(100, BEAR);
 		TileItem first = spawnAt(101, BONES, HERE);

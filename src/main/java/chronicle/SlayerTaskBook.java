@@ -199,12 +199,13 @@ final class SlayerTaskBook
 		return r;
 	}
 
-	/** How many ids and tasks the table knows; zero for both means it did not load. */
+	/** Ids the table maps; 0 means it did not load. */
 	int idCount()
 	{
 		return npcToTask.size();
 	}
 
+	/** Tasks with a variant list; 0 means it did not load. */
 	int taskCount()
 	{
 		return variants.size();

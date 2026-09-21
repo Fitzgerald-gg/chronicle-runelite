@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -58,7 +57,6 @@ import static chronicle.counters.StatKeys.VIALS_SHATTERED;
  * dose at all, so a teleport, a watering or a waterskin sip in the pairing window is
  * never taken for the potion.
  */
-@Slf4j
 public class FoodStatTracker implements StatTracker
 {
 	// Consumables that heal exactly one hitpoint. A +1 tick straight after one of these
@@ -776,7 +774,6 @@ public class FoodStatTracker implements StatTracker
 			// Drinks read "You drink the <x>.", potions read "You drink some of
 			// the/your <x>.".
 			String drunk = consumableName(message);
-			log.debug("Parsed drunk item: {}", drunk);
 
 			if (drunk.equals("beer"))
 			{

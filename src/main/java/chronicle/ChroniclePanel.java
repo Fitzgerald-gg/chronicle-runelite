@@ -400,8 +400,7 @@ class ChroniclePanel extends PluginPanel
 		homeTicker = new Timer(3000, e ->
 		{
 			// A page opened from Home leaves the view on HOME, and a tick rebuilds
-			// the whole display: the scroll pane is replaced and the bar re-set
-			// under a reader who is in the middle of scrolling it. On the trackers
+			// the whole board every three seconds under a reader. On the trackers
 			// page, which runs to two hundred rows and four thousand pixels, that
 			// reads as the scroll itself lagging. Only the sitting refreshes, and
 			// showingSitting is the one place that knows what the sitting is; this
@@ -585,13 +584,12 @@ class ChroniclePanel extends PluginPanel
 			case SHEET:
 			case HISTORY:
 			case LOG:
+			case STATS:
 				return "";
 			case DROPS:
 				return "Loot";
 			case SLAYER:
 				return "Slayer";
-			case STATS:
-				return "Ledger";
 			case JOURNAL:
 				return "Journal";
 			case HOME:
@@ -689,7 +687,6 @@ class ChroniclePanel extends PluginPanel
 	private Map<String, Long> rolledKcs;
 	// whether any cell on this build was counted off the roll rather than the spine
 	private boolean rollUsed;
-	// which cell has its card open, if any
 
 	/**
 	 * The board is the hiscores roster, which is the list the official plugin
@@ -755,7 +752,7 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 		}
-		catch (Exception ex)   // noqa: a missing resource leaves the board empty
+		catch (Exception ex)   // a missing resource leaves the board empty
 		{
 			// the same silence the taxonomy keeps: an empty board, not a stack trace
 		}
@@ -782,18 +779,6 @@ class ChroniclePanel extends PluginPanel
 		PAYS_OUT.put("The Corrupted Gauntlet", "Corrupted Hunllef");
 	}
 
-	/**
-	 * How many of a boss have been killed. The collection log page's own header
-	 * counter is NOT a kill count and must not be read as one: Wintertodt's line
-	 * counts rewards claimed, so it says 1,078 where 447 were killed, and a page
-	 * not opened in a while is simply stale, which is how Vorkath came to read 19
-	 * against 156.
-	 *
-	 * <p>Two sources are honest, both per encounter and both only growing: the
-	 * game's own Kill Log, and the killCount the game stamped on a loot event.
-	 * Either can be the fresher, so the larger wins. The page counter answers
-	 * only where neither of them has anything to say.
-	 */
 	// Per build: the best kill count known for each KIND, from the chat lines and
 	// the ledger's own sources. Cleared with the other per-build memos.
 	private Map<String, Long> kcByKind;
@@ -817,6 +802,18 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
+	/**
+	 * How many of a boss have been killed. The collection log page's own header
+	 * counter is NOT a kill count and must not be read as one: Wintertodt's line
+	 * counts rewards claimed, so it says 1,078 where 447 were killed, and a page
+	 * not opened in a while is simply stale, which is how Vorkath came to read 19
+	 * against 156.
+	 *
+	 * <p>Two sources are honest, both per encounter and both only growing: the
+	 * game's own Kill Log, and the killCount the game stamped on a loot event.
+	 * Either can be the fresher, so the larger wins. The page counter answers
+	 * only where neither of them has anything to say.
+	 */
 	private long bossKills(String name)
 	{
 		JsonObject cl = clogNow();
@@ -1039,7 +1036,6 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
-	/** The page's lines that are this fight's, as the page wrote them. */
 	/**
 	 * How much of one collection log tab the game says is held.
 	 *
@@ -1162,6 +1158,7 @@ class ChroniclePanel extends PluginPanel
 		return tip(page, labels.toArray(new String[0]), figures.toArray(new String[0]));
 	}
 
+	/** The page's lines that are this fight's, as the page wrote them. */
 	private List<Map.Entry<String, Long>> pageLines(String boss)
 	{
 		List<Map.Entry<String, Long>> out = new ArrayList<>();
@@ -1457,7 +1454,7 @@ class ChroniclePanel extends PluginPanel
 	 * not draw itself.
 	 *
 	 * <p>label, the source it reads, and the page a click opens or "" for a tile
-	 * that is only a figure. Five of these carry a destination, and between them
+	 * that is only a figure. Four of these carry a destination, and between them
 	 * they are why the collection log stopped needing a tab of its own.
 	 */
 	private static final String[][] ACTIVITIES = {
@@ -1476,13 +1473,13 @@ class ChroniclePanel extends PluginPanel
 	 * ledger for the dearest thing that source ever dropped. For a boss that is a
 	 * fair likeness. For an activity it is nonsense: Rifts wore whichever runes
 	 * were priciest that week, Clues wore some hard-clue reward, and the four
-	 * with no drop source behind them at all - Collections, Quests, Diaries and
-	 * Combat - fell through to a generic tab icon and were indistinguishable from
-	 * each other.
+	 * with no drop source behind them at all - Collections, Quests and Diaries -
+	 * fell through to a generic tab icon and were indistinguishable from each
+	 * other.
 	 *
-	 * <p>Four of the seven ARE hiscores rows, so they carry their own art and it
+	 * <p>Four of the six ARE hiscores rows, so they carry their own art and it
 	 * is the same art the official panel draws; taking it from the enum means it
-	 * follows the client rather than a number written down here. The other three
+	 * follows the client rather than a number written down here. The other two
 	 * are not on the hiscores and take the game's own tab icons.
 	 */
 	private static int activitySprite(String label)
@@ -2115,10 +2112,10 @@ class ChroniclePanel extends PluginPanel
 			// it under the reader's cursor mid-choice. The record will still have
 			// moved when they have chosen, and choosing rebuilds anyway.
 			//
-			// Or the reader has hold of the scroll bar. rebuild() throws the whole
-			// scroll pane away and hangs a fresh one, so a redraw landing mid-drag
-			// takes the thumb out from under the mouse. Both are owed and paid by
-			// the timer, which is what that timer is now mostly for.
+			// Or the reader has hold of the scroll bar. The pane is kept, but the
+			// body swap under it can still change the bar's extent under a drag,
+			// so the redraw waits until the thumb is let go. Both are owed and paid
+			// by the timer, which is what that timer is now mostly for.
 			if (popupShowing() || scrollHeld() || beingRead())
 			{
 				staleWhileHidden = true;
@@ -2202,7 +2199,7 @@ class ChroniclePanel extends PluginPanel
 	/** Whether the reader has hold of the scroll bar this instant. */
 	private boolean scrollHeld()
 	{
-		JScrollPane pane = paneIn(display);
+		JScrollPane pane = scrollPane;
 		return pane != null && pane.getVerticalScrollBar().getValueIsAdjusting();
 	}
 
@@ -2253,18 +2250,6 @@ class ChroniclePanel extends PluginPanel
 	// the strip the period, the tabs and the search hang on, kept so the period
 	// changing size can invalidate the layout that has to make room for it
 	private final JPanel north = new JPanel();
-
-	private static JScrollPane paneIn(java.awt.Container c)
-	{
-		for (Component k : c.getComponents())
-		{
-			if (k instanceof JScrollPane)
-			{
-				return (JScrollPane) k;
-			}
-		}
-		return null;
-	}
 
 	// How many boards have actually been drawn. The two guards above exist to
 	// keep this well below the number of times update() is called, and this is
@@ -3139,10 +3124,6 @@ class ChroniclePanel extends PluginPanel
 				.toInstant().toEpochMilli() - 1};
 	}
 
-	// Answered once per rebuild, like the sources and the collection log above.
-	// A board of two hundred rows asks whether each of them has an on-task side,
-	// and the answer is one pass over ninety three tasks.
-
 	// Whether the loot on show is narrowed to what slayer tasks logged. A lens,
 	// like the two beside it, and READ ONLY by a board that also draws the
 	// control: a number that changes with no control on screen to explain why is
@@ -3185,6 +3166,9 @@ class ChroniclePanel extends PluginPanel
 		return !taskItemsEver().isEmpty();
 	}
 
+	// Answered once per rebuild, like the sources and the collection log above.
+	// A board of two hundred rows asks whether each of them has an on-task side,
+	// and the answer is one pass over ninety three tasks.
 	private Map<String, long[]> taskItemsEver;
 
 	private Map<String, long[]> taskItemsEver()
@@ -3873,7 +3857,7 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * The one way this panel says a list goes on, and the one way it opens.
+	 * How this panel says a list goes on, and how it opens.
 	 *
 	 * <p>There were three. A Swing JButton on some boards, which is the only
 	 * heavy chrome in a panel made of rows and reads as a dialog control; a dim
@@ -5784,7 +5768,7 @@ class ChroniclePanel extends PluginPanel
 			// The same figure the board the reader just clicked was showing.
 			// This page used to work one out for itself off the ledger alone and
 			// disagree with it on 42 sources: Nechryael's card said 686 kc and
-			// its page said 686, while the game's own Kill Log says 1,236.
+			// its page said 1,236, which is the game's own Kill Log figure.
 			//
 			// "Tracked" has to go with it. The reconciled count carries kills
 			// from before this plugin was ever installed, so the one word the
@@ -7236,17 +7220,6 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel p = column();
 		consumVals = plugin.consumableValues();
-		// The tab already chose the family's half of the sheet: the Ledger holds
-		// what a life costs and where it went, PvM's fourth board is Combat alone,
-		// and Skilling is reached by opening a cell in the grid rather than by a
-		// pill here. Offering all four would let a reader stand under one tab
-		// reading another tab's board.
-		//
-		// This was tried once before and reverted, because narrowing it orphaned
-		// the Skilling family: the grid carried a tooltip, not a click. Now that
-		// the cell opens, nothing is orphaned, and a test holds the invariant that
-		// makes it safe -- every craft the registry can file under is a skill the
-		// grid draws, so every Skilling counter has a way in.
 		// Record's Ledger keeps the two families that are what a life COSTS. The
 		// Trackers tab holds every family there is, Combat included: it used to
 		// hang off PvM's fourth board, which put damage dealt and deaths one tab
@@ -8420,14 +8393,9 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
-	 * What a counted name is. The collection log's own tabs decide most of it: its
-	 * Bosses and Raids are bosses, its Clues and Minigames are activities, and its
-	 * Other tab is skilling ground but for the pages of it that are something
-	 * killed. A name the log has no page for is a monster unless it is plainly
-	 * something opened or something caught. The pickpocket targets the log has no
-	 * page for at all, so they are named here the way the teleport destinations
-	 * are: a closed set the game itself fixes, widened by what the record's own
-	 * thieving counters say.
+	 * The pickpocket targets, which the log has no page for at all, so they are
+	 * named here the way the teleport destinations are: a closed set the game
+	 * itself fixes, widened by what the record's own thieving counters say.
 	 */
 	private static final java.util.Set<String> PICKPOCKETED = new java.util.HashSet<>(
 		java.util.Arrays.asList("man", "woman", "farmer", "master farmer", "hero",
@@ -8522,6 +8490,13 @@ class ChroniclePanel extends PluginPanel
 		return kind;
 	}
 
+	/**
+	 * What a counted name is. The collection log's own tabs decide most of it: its
+	 * Bosses and Raids are bosses, its Clues and Minigames are activities, and its
+	 * Other tab is skilling ground but for the pages of it that are something
+	 * killed. A name the log has no page for is a monster unless it is plainly
+	 * something opened or something caught.
+	 */
 	private String decideKind(String name)
 	{
 		if (PICKPOCKETED.contains(name.toLowerCase(Locale.ROOT))
@@ -8551,8 +8526,8 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		String low = name.toLowerCase(Locale.ROOT);
-		return has(low, OPENED) ? KIND_ACTIVITY
-			: has(low, GATHERED) ? KIND_SKILLING : KIND_MONSTER;
+		return containsAny(low, OPENED) ? KIND_ACTIVITY
+			: containsAny(low, GATHERED) ? KIND_SKILLING : KIND_MONSTER;
 	}
 
 	/**
@@ -8573,7 +8548,7 @@ class ChroniclePanel extends PluginPanel
 	private static final String[] GATHERED = {"impling", "salvage", "loot sack",
 		"reward pool", "reward cart", "ent trunk", "offerings", "herbiboar", "bird nest"};
 
-	private static boolean has(String low, String[] words)
+	private static boolean containsAny(String low, String[] words)
 	{
 		for (String w : words)
 		{
@@ -9109,8 +9084,8 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	// The headline keys that read straight off the summary, in the order the
-	// strip reads them. The drops line sits between them and carries the loot
-	// value beside its count, one line for the pair.
+	// strip reads them. The drops line follows them, carrying the loot value
+	// beside its count, one line for the pair; deaths closes the card.
 	private static final String[] HEADLINE_KEYS = {"kills", "slayerTasksCompleted"};
 
 	/**
@@ -10190,7 +10165,7 @@ class ChroniclePanel extends PluginPanel
 			|| "N/A".equalsIgnoreCase(monster.trim()) ? "Anywhere" : monster;
 	}
 
-	/** The head card's four figures, as the markup a tooltip takes. */
+	/** The head card's three figures, as the markup a tooltip takes. */
 	private String periodTip(long[] played, List<Map.Entry<String, Long>> gains)
 	{
 		long xp = 0;
@@ -11197,7 +11172,6 @@ class ChroniclePanel extends PluginPanel
 			&& searchQuery().isEmpty();
 	}
 
-	/** Move the window one granule, or one span where exact dates are set. */
 	/**
 	 * Whether there is anywhere forward to go.
 	 *
@@ -11216,6 +11190,7 @@ class ChroniclePanel extends PluginPanel
 		return !stepForward(histCursor).isAfter(java.time.LocalDate.now());
 	}
 
+	/** Move the window one granule, or one span where exact dates are set. */
 	private void stepPeriod(int by)
 	{
 		if (histFrom != null && histTo != null)
@@ -12806,10 +12781,6 @@ class ChroniclePanel extends PluginPanel
 			Math.min(255, ground.getBlue() + HOVER_LIFT));
 	}
 
-	// Everything clickable in the panel is wired through here, so the hover is
-	// too: a row that goes somewhere answers the cursor, and nothing is drawn for
-	// it at rest. The hand cursor alone was a one-pixel tell on a dark panel and
-	// readers were not finding the drills.
 	/**
 	 * One axis of a board, showing the reading it is on. Clicking flips it.
 	 *
@@ -12911,6 +12882,10 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
+	// Everything clickable in the panel is wired through here, so the hover is
+	// too: a row that goes somewhere answers the cursor, and nothing is drawn for
+	// it at rest. The hand cursor alone was a one-pixel tell on a dark panel and
+	// readers were not finding the drills.
 	private static MouseAdapter clicker(Runnable r)
 	{
 		return new MouseAdapter()
@@ -12969,13 +12944,7 @@ class ChroniclePanel extends PluginPanel
 			@Override
 			public void mouseExited(MouseEvent e)
 			{
-				// Crossing onto a child fires an exit on the parent while the
-				// pointer is still inside it, and the row must stay lit. Asked of
-				// Swing rather than of the event: contains(getPoint()) reads the
-				// coordinates the exit was stamped with, which on a fast move off
-				// the edge of a grid can still fall inside, and the cell was then
-				// left lit with nothing to put it back. getMousePosition is null
-				// exactly when the pointer is not over the component.
+				// see stillUnder
 				if (!lit || !(e.getComponent() instanceof javax.swing.JComponent))
 				{
 					return;

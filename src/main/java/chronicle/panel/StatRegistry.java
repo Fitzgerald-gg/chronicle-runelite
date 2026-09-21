@@ -390,7 +390,6 @@ public final class StatRegistry
 		return "Ledger & Roads";
 	}
 
-	// section within the family; "" means the family's flat top list
 	/**
 	 * A craft's TOP-LEVEL counters, in one line each: logs chopped, fish caught,
 	 * food cooked and food burned, pickpockets and stalls and the pickpockets
@@ -417,6 +416,7 @@ public final class StatRegistry
 		return java.util.Collections.emptyList();
 	}
 
+	// section within the family; "" means the family's flat top list
 	public static String subgroup(String key)
 	{
 		String fam = family(key);

@@ -14,7 +14,7 @@ import net.runelite.api.events.MenuOptionClicked;
 import static chronicle.counters.StatKeys.ANIMALS_PETTED;
 
 /**
- * Pet-petting, counted off nearby NPCs.
+ * Pet-petting, counted off the "Pet" menu click and settled a tick later.
  */
 public class NPCStatTracker implements StatTracker
 {

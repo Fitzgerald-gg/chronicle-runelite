@@ -903,7 +903,7 @@ public class MovementTeleportMenuTest
 	}
 
 	@Test
-	public void theMeansIsReadOffTheItemSinceTheClickDoesNotName2It()
+	public void theMeansIsReadOffTheItemSinceTheClickDoesNotNameIt()
 	{
 		// the same shape on a ring names jewellery, not a cape
 		itemOpClick("Castle Wars", 2552, "Ring of dueling(8)");

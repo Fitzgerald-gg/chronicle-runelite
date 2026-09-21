@@ -138,7 +138,7 @@ final class ItemKinds
 		return hit;
 	}
 
-	/** Whether a name is worth offering as a kind: a prefix of one, as typed. */
+	/** The kind a typed query names, by prefix ("run" -> "Runes"), or null when none does. */
 	static synchronized String named(String query)
 	{
 		if (query == null || query.trim().isEmpty())

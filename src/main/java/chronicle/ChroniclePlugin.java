@@ -414,9 +414,9 @@ public class ChroniclePlugin extends Plugin
 		// had happened.
 		//
 		// Gated on a revision rather than a timer. Three stores count their own
-		// writes, and a tick where nothing was written costs one comparison of
-		// three longs; drawing regardless would redraw a still record fifty
-		// thousand times an hour for nothing.
+		// writes and the plugin counts its skill reads, so a tick where nothing
+		// moved costs four comparisons of longs; drawing regardless would redraw
+		// a still record fifty thousand times an hour for nothing.
 		if (client.getGameState() == GameState.LOGGED_IN)
 		{
 			takeLiveSkills();
@@ -627,7 +627,7 @@ public class ChroniclePlugin extends Plugin
 	// Harvest + push
 	// ------------------------------------------------------------------
 
-	// Scheduled on the executor; hops to the client thread to read config.
+	// Scheduled on the executor; the store reads and the push are handed to the client thread.
 	private void scheduledPush()
 	{
 		// The journal refreshes every cycle; the cloud push rides the same cadence.
@@ -865,7 +865,6 @@ public class ChroniclePlugin extends Plugin
 
 	// ── Panel-facing reads ─────────────────────────────────────────────
 
-	// Lifetime counters as the journal knows them (base + session, floored).
 	/**
 	 * Live, not as last flushed. The journal's persisted trackers only move when
 	 * the journal is written, so a board reading them sat still through an hour
@@ -1294,7 +1293,6 @@ public class ChroniclePlugin extends Plugin
 		return out;
 	}
 
-	// Level + xp per skill, as the journal last saw them.
 	/**
 	 * The skill sheet as it stands, not as last written. Falls back to the
 	 * journal's copy before the first tick of a session, and while logged out.

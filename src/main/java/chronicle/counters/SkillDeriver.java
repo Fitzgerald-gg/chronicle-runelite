@@ -295,8 +295,7 @@ public class SkillDeriver
 		"You put the (?:grimy )?([\\w' -]+?)(?: herb)? into your herb sack",
 		Pattern.CASE_INSENSITIVE);
 
-	// the signals no xp drop carries: burns, failed pickpockets, seeds planted
-	// and lap lines. SkillingStatTracker pre-filters before anything reaches here.
+	// the lines that count what no xp drop can: see chatLine and the branches below
 	void applyChat(String msg)
 	{
 		applyChat(msg, "");
@@ -1285,8 +1284,8 @@ public class SkillDeriver
 
 	private String ladder(String skill, String xpStr)
 	{
-		Object v = xpTable().getOrDefault(skill, Collections.emptyMap()).get(xpStr);
-		return v instanceof String ? (String) v : "";
+		String v = xpTable().getOrDefault(skill, Collections.emptyMap()).get(xpStr);
+		return v == null ? "" : v;
 	}
 
 	private static boolean gauntletId(String v)

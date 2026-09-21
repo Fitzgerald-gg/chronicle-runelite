@@ -43,10 +43,9 @@ import static chronicle.counters.StatKeys.VENOM_DAMAGE_TAKEN;
  */
 public class CombatStatTracker implements StatTracker
 {
-	// Every hitsplat colour that is real HP loss on the player, plain and max-hit forms of
-	// each. Poison and venom are counted separately; the rest aren't HP.
-	// Every hitsplat that is damage, plain and max, in all five colours. A max hit
-	// wears a hitsplat of its own, so anything matching only DAMAGE_ME misses it.
+	// Every hitsplat that is damage, plain and max, in all five colours; poison and
+	// venom carry their own types and are tallied separately. A max hit wears a
+	// hitsplat of its own, so anything matching only DAMAGE_ME misses it.
 	private static final Set<Integer> DAMAGE_SPLATS = Set.of(
 		HitsplatID.DAMAGE_ME, HitsplatID.DAMAGE_ME_CYAN, HitsplatID.DAMAGE_ME_ORANGE,
 		HitsplatID.DAMAGE_ME_YELLOW, HitsplatID.DAMAGE_ME_WHITE,
