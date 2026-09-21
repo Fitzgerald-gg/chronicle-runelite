@@ -167,7 +167,7 @@ public class ClickAffordanceTest
 			nf.setAccessible(true);
 			nf.set(panel, null);
 		}
-		for (String f : new String[]{"dropsShown", "slayerShown", "journalShown", "bossesShown"})
+		for (String f : new String[]{"dropsShown", "slayerShown", "journalShown"})
 		{
 			Field nf = ChroniclePanel.class.getDeclaredField(f);
 			nf.setAccessible(true);

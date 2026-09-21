@@ -205,10 +205,6 @@ class ChroniclePanel extends PluginPanel
 	private final java.util.ArrayDeque<String[]> detailStack = new java.util.ArrayDeque<>();
 	private String statsFamily = StatRegistry.FAMILIES[0];
 	private int dropsShown = ROW_CAP;
-	// How many bosses the sheet draws before it offers the rest. Four rows of
-	// three: what a reader fights most, at a glance, and the roster on a click.
-	private static final int BOSS_GLANCE = 12;
-	private int bossesShown = BOSS_GLANCE;
 	private String clogTab = "Bosses";
 	private String clogPageSel;
 
@@ -586,7 +582,6 @@ class ChroniclePanel extends PluginPanel
 			statsFamily = "Ledger & Roads";
 		}
 		dropsShown = ROW_CAP;
-		bossesShown = BOSS_GLANCE;
 		slayerShown = ROW_CAP;
 		lootKind = null;
 		lootTask = null;
@@ -1633,57 +1628,35 @@ class ChroniclePanel extends PluginPanel
 			p.add(noPeriod());
 			return p;
 		}
-		// What the period HOLDS, most fought first, and only a glance of it.
-		//
-		// The roster is seventy one strong. Drawn whole, the sheet ran to twelve
-		// hundred pixels and the Hiscores tab was the one board that did not
-		// fit a sidebar; and nobody fights seventy one things, so most of what
-		// it drew was a dash. Four rows of the bosses this period fought most is
-		// what a reader looks at, and one row beneath offers the rest - the
-		// same control every capped list in the panel uses. Opened, a lifetime
-		// shows the whole roster in the game's own order, dashes and all,
-		// because there it is a checklist of what the account has and has not
-		// met; a narrowed period shows all it held.
-		final List<Boss> whole = roster;
-		List<Boss> held = new ArrayList<>();
-		for (Boss b : roster)
+		// A narrowed period shows what it HOLDS. The roster is seventy strong and
+		// nobody kills seventy things in a week, so every period but the lifetime
+		// drew a handful of counts in a field of dashes, and the dashes were the
+		// board. The lifetime keeps the whole roster: there it is a checklist of
+		// what the account has and has not met, which is a different question.
+		if (!wholeRecord())
 		{
-			if (bossKillsInWindow(b.name) > 0)
+			List<Boss> had = new ArrayList<>();
+			for (Boss b : roster)
 			{
-				held.add(b);
+				if (bossKillsInWindow(b.name) > 0)
+				{
+					had.add(b);
+				}
 			}
-		}
-		if (held.isEmpty() && !wholeRecord())
-		{
-			p.add(note("Nothing on the boss sheet was killed inside "
-				+ periodInSentence() + "."));
-			return p;
-		}
-		held.sort((a, b) -> Long.compare(bossKillsInWindow(b.name), bossKillsInWindow(a.name)));
-		boolean opened = bossesShown >= Integer.MAX_VALUE;
-		List<Boss> draw = opened ? (wholeRecord() ? whole : held)
-			: held.subList(0, Math.min(held.size(), bossesShown));
-		long hidden = opened ? 0
-			: (held.size() - draw.size()) + (wholeRecord() ? whole.size() - held.size() : 0);
-		if (draw.isEmpty())
-		{
-			// A lifetime that has met nothing. Said in one line, with the roster
-			// a click away, rather than seventy one dashes.
-			p.add(note("No boss has reached the record yet."));
-			p.add(moreRow("Show the " + fmt(whole.size()) + " on the sheet", () ->
+			if (had.isEmpty())
 			{
-				bossesShown = Integer.MAX_VALUE;
-				rebuildInPlace();
-			}));
-			p.add(vgap(6));
-			return p;
+				p.add(note("Nothing on the boss sheet was killed inside "
+					+ periodInSentence() + "."));
+				return p;
+			}
+			roster = had;
 		}
 		// One grid, no longer split around an opened cell: what that cell used to
 		// expand into is the hover now, so nothing is inserted mid-sheet and
 		// nothing below it moves when a boss is pressed. Built before anything is
 		// added, because building is what discovers whether a cell had to fall
 		// back to the roll.
-		JPanel opening = bossSheet(draw);
+		JPanel opening = bossSheet(roster);
 		LocalDate shortFrom = rollUsed ? rollShortOf() : null;
 		if (shortFrom != null)
 		{
@@ -1697,14 +1670,6 @@ class ChroniclePanel extends PluginPanel
 			p.add(vgap(4));
 		}
 		p.add(opening);
-		if (hidden > 0)
-		{
-			p.add(moreRow(hidden, () ->
-			{
-				bossesShown = Integer.MAX_VALUE;
-				rebuildInPlace();
-			}));
-		}
 		p.add(vgap(6));
 		return p;
 	}

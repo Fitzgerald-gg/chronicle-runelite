@@ -85,7 +85,7 @@ public class RebuildBenchTest
 						tf.set(panel, tabFor.invoke(panel, view));
 						if (System.getProperty("chronicle.benchExpanded") != null)
 						{
-							for (String big : new String[]{"dropsShown", "slayerShown", "bossesShown",
+							for (String big : new String[]{"dropsShown", "slayerShown",
 								"journalShown"})
 							{
 								Field bf = ChroniclePanel.class.getDeclaredField(big);

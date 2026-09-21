@@ -140,12 +140,6 @@ public class QuietScrollBarTest
 		Field vf = ChroniclePanel.class.getDeclaredField("view");
 		vf.setAccessible(true);
 		vf.set(p, Enum.valueOf((Class) Class.forName("chronicle.ChroniclePanel$View"), view));
-		// The sheet is the "tall" board here, and it was made to fit a sidebar:
-		// the boss grid draws a glance of twelve unless opened. Open it, so the
-		// board is tall enough to scroll and the clamp below has something to do.
-		Field bs = ChroniclePanel.class.getDeclaredField("bossesShown");
-		bs.setAccessible(true);
-		bs.setInt(p, Integer.MAX_VALUE);
 		rebuild(p);
 		final int[] max = {0};
 		SwingUtilities.invokeAndWait(() ->

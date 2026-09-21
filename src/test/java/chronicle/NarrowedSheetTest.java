@@ -124,78 +124,37 @@ public class NarrowedSheetTest
 	@Test
 	public void aNarrowedBossGridDrawsOnlyWhatItHolds() throws Exception
 	{
+		period("Lifetime");
+		int wholeRoster = board("buildKills").size();
+
 		period("Week");
 		List<Component> week = board("buildKills");
+		assertTrue("a narrowed period still mounts the whole roster: "
+			+ week.size() + " components against the lifetime's " + wholeRoster,
+			week.size() < wholeRoster);
 		assertTrue("the narrowed board is still mostly dashes: " + dashes(week),
 			dashes(week) <= 2);
 	}
 
-	private static void expand() throws Exception
-	{
-		Field f = ChroniclePanel.class.getDeclaredField("bossesShown");
-		f.setAccessible(true);
-		f.setInt(panel, Integer.MAX_VALUE);
-	}
-
-	private static void collapse() throws Exception
-	{
-		Field f = ChroniclePanel.class.getDeclaredField("bossesShown");
-		f.setAccessible(true);
-		f.setInt(panel, 12);
-	}
-
 	/**
-	 * The sheet has to fit a sidebar. Seventy one cells did not, and most of
-	 * them were dashes, so the lifetime draws a glance - four rows of what the
-	 * account fights most - and offers the rest on the one control every capped
-	 * list in the panel uses.
+	 * And the lifetime keeps every one of them, dash and all: there the grid is a
+	 * checklist of what this account has and has not met. Whole, not a glance
+	 * with the rest behind a click: the owner did not agree to it collapsing.
 	 */
 	@Test
-	public void theLifetimeDrawsAGlanceAndOffersTheRest() throws Exception
+	public void theLifetimeKeepsTheWholeRoster() throws Exception
 	{
 		period("Lifetime");
-		collapse();
-		List<Component> glance = board("buildKills");
-		int cells = 0;
-		boolean offered = false;
-		for (Component c : glance)
+		assertTrue("the lifetime lost the bosses it has never killed, which is the"
+			+ " half of that board a reader is looking for",
+			dashes(board("buildKills")) > 10);
+		for (Component c : board("buildKills"))
 		{
 			if (c instanceof JLabel && ((JLabel) c).getText() != null)
 			{
-				String t = ((JLabel) c).getText();
-				if (t.matches("[0-9,]+"))
-				{
-					cells++;
-				}
-				if (t.startsWith("Show "))
-				{
-					offered = true;
-				}
+				assertFalse("the roster is collapsed behind " + ((JLabel) c).getText(),
+					((JLabel) c).getText().startsWith("Show "));
 			}
-		}
-		assertTrue("the glance drew more than four rows: " + cells, cells <= 12);
-		assertTrue("the glance drew a never-met boss as a dash", dashes(glance) == 0);
-		assertTrue("nothing offers the rest of the roster", offered);
-	}
-
-	/**
-	 * And opened, the lifetime keeps every one of them, dash and all: there the
-	 * grid is a checklist of what this account has and has not met.
-	 */
-	@Test
-	public void theLifetimeOpenedIsTheWholeRoster() throws Exception
-	{
-		period("Lifetime");
-		expand();
-		try
-		{
-			assertTrue("the lifetime lost the bosses it has never killed, which is the"
-				+ " half of that board a reader opens it for",
-				dashes(board("buildKills")) > 10);
-		}
-		finally
-		{
-			collapse();
 		}
 	}
 
