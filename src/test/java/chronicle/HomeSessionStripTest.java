@@ -60,22 +60,7 @@ public class HomeSessionStripTest
 	// landed, so nothing lands over the render
 	private static List<String> home(PanelPreviewTest.StubPlugin stub) throws Exception
 	{
-		final ChroniclePanel[] holder = new ChroniclePanel[1];
-		edt(() -> holder[0] = new ChroniclePanel(stub));
-		ChroniclePanel p = holder[0];
-		awaitGather(p);
-		final JPanel[] out = new JPanel[1];
-		edt(() ->
-		{
-			Method m = ChroniclePanel.class.getDeclaredMethod("buildHome");
-			m.setAccessible(true);
-			out[0] = (JPanel) m.invoke(p);
-		});
-		List<String> all = new ArrayList<>();
-		collect(out[0], all);
-		int at = all.indexOf("THIS SESSION");
-		assertTrue(all.toString(), at >= 0);
-		return all.subList(at, all.size());
+		return home(stub, new String[0]);
 	}
 
 	private static void awaitGather(ChroniclePanel panel) throws Exception

@@ -1499,7 +1499,7 @@ public class PanelPreviewTest
 		}
 
 		@Override
-		Map<String, Integer> sessionCounters()
+		Map<String, Integer> sessionView()
 		{
 			return session;
 		}

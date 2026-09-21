@@ -140,14 +140,7 @@ class GrindBook
 		// (a unique already looted is owned whether or not the log has caught up: the
 		// unlock notification may be off, or the page not reopened since), or the
 		// boss's own page.
-		Set<String> obtained = new HashSet<>();
-		if (clog != null && clog.has("clog_items") && clog.get("clog_items").isJsonObject())
-		{
-			for (Map.Entry<String, JsonElement> e : clog.getAsJsonObject("clog_items").entrySet())
-			{
-				obtained.add(e.getKey().toLowerCase(Locale.ROOT));
-			}
-		}
+		Set<String> obtained = clogItems(clog);
 		obtained.addAll(looted(dropSources));
 		Map<String, Set<String>> pageItems = new HashMap<>();
 		if (clog != null && clog.has("by_cat") && clog.get("by_cat").isJsonObject())
@@ -849,21 +842,28 @@ class GrindBook
 		return Math.max(0L, n);
 	}
 
-	// Every item the stored log holds, whole-log set and each page's own capture
-	// folded together: a pet is owned wherever the log says so.
-	private static Set<String> allObtained(JsonObject clog)
+	/** The global set's names, lower-cased; empty without one. */
+	private static Set<String> clogItems(JsonObject clog)
 	{
 		Set<String> out = new HashSet<>();
-		if (clog == null)
-		{
-			return out;
-		}
-		if (clog.has("clog_items") && clog.get("clog_items").isJsonObject())
+		if (clog != null && clog.has("clog_items") && clog.get("clog_items").isJsonObject())
 		{
 			for (Map.Entry<String, JsonElement> e : clog.getAsJsonObject("clog_items").entrySet())
 			{
 				out.add(e.getKey().toLowerCase(Locale.ROOT));
 			}
+		}
+		return out;
+	}
+
+	// Every item the stored log holds, whole-log set and each page's own capture
+	// folded together: a pet is owned wherever the log says so.
+	private static Set<String> allObtained(JsonObject clog)
+	{
+		Set<String> out = clogItems(clog);
+		if (clog == null)
+		{
+			return out;
 		}
 		if (clog.has("by_cat") && clog.get("by_cat").isJsonObject())
 		{

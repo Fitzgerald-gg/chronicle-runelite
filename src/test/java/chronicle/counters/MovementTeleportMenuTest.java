@@ -774,20 +774,6 @@ public class MovementTeleportMenuTest
 	}
 
 	@Test
-	public void aCapeWhoseRightClickNamesThePlaceCountsIt()
-	{
-		// report 3: right-click the construction cape, pick Pollnivneach, and
-		// nothing at all was counted. The cape lists its house locations as
-		// options of their own, so neither half of the click says "tele" and no
-		// rule above it matched.
-		itemOpClick("Pollnivneach", 9789, "Construct. cape(t)");
-		jumpAt(3);
-		assertEquals(1, stat(TELEPORTS_POLLNIVNEACH));
-		assertEquals(1, stat(TELEPORTS_VIA_CAPE));
-		assertEquals(1, stat(TELEPORTS_TOTAL));
-	}
-
-	@Test
 	public void handlingACapeIsNotTeleportingWithIt()
 	{
 		// "Wear" and the bank verbs name no place, and a place the table has

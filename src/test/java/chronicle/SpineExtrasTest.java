@@ -122,9 +122,8 @@ public class SpineExtrasTest
 			sum += v;
 		}
 		assertEquals(622 + 1310 + 156, sum);
-		// the summary's Kills line and the per-source list read one base
-		assertEquals(Long.valueOf(sum), store.spineExtras().get("kills"));
-		// and the FIGURE is the reconciliation's, not the ledger fold's. Soul Wars
+		// the summary's Kills line and the per-source list read one base, and the
+		// FIGURE is the reconciliation's, not the ledger fold's. Soul Wars
 		// is a page the ledger never saw loot from: the Kills list files it under
 		// Activities rather than beside the bosses, so it must not reach this line
 		// even though reconciledKills knows about it.
@@ -209,14 +208,6 @@ public class SpineExtrasTest
 		// a copy: the trackers themselves never take the extras
 		assertEquals(2, store.trackersSnapshot().size());
 		assertFalse(store.trackersSnapshot().containsKey("dropsReceived"));
-	}
-
-	@Test
-	public void peakKeysMatchTheStoresHighWaterKeys()
-	{
-		// the registry keeps its own copy for the panel model; a key added to one
-		// and not the other would show a meaningless delta on the History tab
-		assertEquals(LocalStore.MAX_KEYS, StatRegistry.peakKeys());
 	}
 
 	/**

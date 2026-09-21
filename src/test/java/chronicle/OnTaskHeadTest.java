@@ -174,9 +174,7 @@ public class OnTaskHeadTest
 				Method m = ChroniclePanel.class.getDeclaredMethod("kindsPicture",
 					List.class, long.class, long.class, long[].class);
 				m.setAccessible(true);
-				Field sf = ChroniclePanel.class.getDeclaredField("plugin");
-				sf.setAccessible(true);
-				ChroniclePlugin plug = (ChroniclePlugin) sf.get(p);
+				ChroniclePlugin plug = (ChroniclePlugin) pf.get(p);
 				List<LocalStore.BagItem> bag = plug.onTaskLoot(
 					Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, "Abyssal demons", true);
 				List<Component> flat = new ArrayList<>();

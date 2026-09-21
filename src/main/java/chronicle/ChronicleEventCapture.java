@@ -1467,19 +1467,7 @@ public class ChronicleEventCapture
 			// identity comes from the finished line's creature if we caught it, else
 			// from the fallbacks below, so a missing or reworded finished line doesn't
 			// drop the completion.
-			String task = pendingSlayerMonster;
-			if (task == null || task.isEmpty())
-			{
-				task = slayerTaskFromService();   // usually empty: cleared this tick
-			}
-			if (task == null || task.isEmpty())
-			{
-				task = lastSlayerTask;   // captured at kill time, before the clear
-			}
-			if (task == null || task.isEmpty())
-			{
-				task = pendingSlayerTask;   // last resort: the "N creature" blob
-			}
+			String task = pendingSlayerIdentity(true);
 			if (task != null && !task.isEmpty())
 			{
 				JsonObject data = new JsonObject();
@@ -1512,11 +1500,8 @@ public class ChronicleEventCapture
 			{
 				log.debug("slayer streak line but no task identity, dropped: '{}'", msg);
 			}
-			pendingSlayerTask = null;
-			pendingSlayerMonster = null;
-			pendingSlayerKills = null;
+			clearPendingSlayer();
 			slayerPendingTicks = -1;   // the streak line handled it; disarm the flush
-			lastSlayerTask = null;
 			return;
 		}
 
@@ -1545,15 +1530,7 @@ public class ChronicleEventCapture
 	// late streak line finds nothing to re-emit.
 	private void flushPendingSlayer()
 	{
-		String task = pendingSlayerMonster;
-		if (task == null || task.isEmpty())
-		{
-			task = lastSlayerTask;
-		}
-		if (task == null || task.isEmpty())
-		{
-			task = pendingSlayerTask;
-		}
+		String task = pendingSlayerIdentity(false);
 		if (task != null && !task.isEmpty())
 		{
 			JsonObject data = new JsonObject();
@@ -1565,6 +1542,33 @@ public class ChronicleEventCapture
 			}
 			emitSlayerCompletion(data);   // no lifetime "count": the finished line has none
 		}
+		clearPendingSlayer();
+	}
+
+	// Which task a completion belongs to, from the surest source still holding
+	// it: the finished line's creature, the slayer service (usually empty, it
+	// clears this tick), the task captured at kill time, and last the bare
+	// "N creature" blob.
+	private String pendingSlayerIdentity(boolean askService)
+	{
+		String task = pendingSlayerMonster;
+		if ((task == null || task.isEmpty()) && askService)
+		{
+			task = slayerTaskFromService();
+		}
+		if (task == null || task.isEmpty())
+		{
+			task = lastSlayerTask;
+		}
+		if (task == null || task.isEmpty())
+		{
+			task = pendingSlayerTask;
+		}
+		return task;
+	}
+
+	private void clearPendingSlayer()
+	{
 		pendingSlayerTask = null;
 		pendingSlayerMonster = null;
 		pendingSlayerKills = null;

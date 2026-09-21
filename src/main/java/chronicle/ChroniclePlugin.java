@@ -230,7 +230,7 @@ public class ChroniclePlugin extends Plugin
 			// No LOGGED_IN transition will arrive; arm the teardown flag by hand.
 			wasLoggedIn = true;
 			// The clog fraction varps arrived with a LOGGED_IN we missed; read them now.
-			clientThread.invoke(() -> clogCapture.primeFromVarps(client));
+			clientThread.invoke(() -> clogCapture.primeFromVarps());
 		}
 	}
 
@@ -877,12 +877,6 @@ public class ChroniclePlugin extends Plugin
 		return localStore.isReadyFor(localName)
 			? localStore.lifetimeOf(sessionView())
 			: localStore.trackersSnapshot();
-	}
-
-	// This session's own increments (max-type keys as absolutes).
-	Map<String, Integer> sessionCounters()
-	{
-		return sessionView();
 	}
 
 	// ------------------------------------------------------------------

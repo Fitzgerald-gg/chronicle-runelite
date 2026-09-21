@@ -198,11 +198,11 @@ public class FoodStatTracker implements StatTracker
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
 		// Stash what was just consumed so the tick handler can tell a 1 HP heal from a
-		// regen tick. Eat targets arrive with colour tags; Drink targets are cleaned
-		// later, only if we need to look at them.
+		// regen tick. Targets arrive with colour tags, stripped only if we need to
+		// look at them.
 		if ("Eat".equals(event.getMenuOption()))
 		{
-			lastConsumed = Text.removeTags(event.getMenuTarget());
+			lastConsumed = event.getMenuTarget();
 			// Scored only once this exact item id leaves the pack, so an interrupted
 			// click never counts.
 			if (pendingEats.size() < MAX_PENDING_EATS)

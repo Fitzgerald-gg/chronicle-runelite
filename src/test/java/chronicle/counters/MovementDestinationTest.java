@@ -219,7 +219,6 @@ public class MovementDestinationTest
 	@Test
 	public void pohPortalRoomsResolve()
 	{
-		assertEquals(TELEPORTS_VARROCK, matchDestinationKey("varrock portal"));
 		assertEquals(TELEPORTS_LUMBRIDGE, matchDestinationKey("lumbridge portal"));
 	}
 

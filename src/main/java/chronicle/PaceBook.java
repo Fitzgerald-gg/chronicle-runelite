@@ -202,13 +202,13 @@ class PaceBook
 	}
 
 	// the game's own xp formula, evaluated once at class load
-	private static final long[] XP_FOR_LEVEL = curve();
+	private static final long[] XP_FOR_LEVEL = curve(MAX_LEVEL);
 
-	private static long[] curve()
+	private static long[] curve(int top)
 	{
-		long[] table = new long[MAX_LEVEL + 1];
+		long[] table = new long[top + 1];
 		double points = 0;
-		for (int level = 1; level < MAX_LEVEL; level++)
+		for (int level = 1; level < top; level++)
 		{
 			points += Math.floor(level + 300.0 * Math.pow(2.0, level / 7.0));
 			table[level + 1] = (long) Math.floor(points / 4.0);
@@ -225,9 +225,14 @@ class PaceBook
 	/** The level {@code xp} has reached; anything past 99 reads as 99. */
 	static int levelAt(long xp)
 	{
-		for (int level = MAX_LEVEL; level > 1; level--)
+		return levelAt(xp, XP_FOR_LEVEL);
+	}
+
+	private static int levelAt(long xp, long[] table)
+	{
+		for (int level = table.length - 1; level > 1; level--)
 		{
-			if (xp >= XP_FOR_LEVEL[level])
+			if (xp >= table[level])
 			{
 				return level;
 			}
@@ -239,19 +244,7 @@ class PaceBook
 	// game stops naming them at 99 and the formula does not stop.
 	private static final int MAX_VIRTUAL_LEVEL = 126;
 
-	private static final long[] XP_FOR_VIRTUAL = virtualCurve();
-
-	private static long[] virtualCurve()
-	{
-		long[] table = new long[MAX_VIRTUAL_LEVEL + 1];
-		double points = 0;
-		for (int level = 1; level < MAX_VIRTUAL_LEVEL; level++)
-		{
-			points += Math.floor(level + 300.0 * Math.pow(2.0, level / 7.0));
-			table[level + 1] = (long) Math.floor(points / 4.0);
-		}
-		return table;
-	}
+	private static final long[] XP_FOR_VIRTUAL = curve(MAX_VIRTUAL_LEVEL);
 
 	/**
 	 * The level {@code xp} has reached, counting past 99.
@@ -262,13 +255,6 @@ class PaceBook
 	 */
 	static int virtualLevelAt(long xp)
 	{
-		for (int level = MAX_VIRTUAL_LEVEL; level > 1; level--)
-		{
-			if (xp >= XP_FOR_VIRTUAL[level])
-			{
-				return level;
-			}
-		}
-		return 1;
+		return levelAt(xp, XP_FOR_VIRTUAL);
 	}
 }

@@ -103,7 +103,7 @@ public class SessionPeriodTest
 		Map<String, Long> said = countersNow();
 		assertTrue("the sitting answered with nothing at all", said != null);
 
-		Map<String, Integer> raw = PanelPreviewTest.fixtureStub().sessionCounters();
+		Map<String, Integer> raw = PanelPreviewTest.fixtureStub().sessionView();
 		for (Map.Entry<String, Integer> e : raw.entrySet())
 		{
 			if (e.getValue() != null && e.getValue() != 0)

@@ -275,7 +275,7 @@ public class SkillDeriverTest
 	public void plantingIsCountedByThePatchAndByTheCrop()
 	{
 		StatStore store = new StatStore();
-		SkillDeriver cd = new SkillDeriver(Mockito.mock(ItemManager.class), store, new Gson());
+		SkillDeriver cd = chatDeriver(store);
 		// three seeds go in, but the patch was planted once
 		cd.applyChat("You plant 3 potato seeds in the allotment.");
 		assertEquals(1, store.getStat("seedsPlanted"));
@@ -494,7 +494,7 @@ public class SkillDeriverTest
 	public void burnsAreCountedByTheFoodTheLineNames()
 	{
 		StatStore store = new StatStore();
-		SkillDeriver cd = new SkillDeriver(Mockito.mock(ItemManager.class), store, new Gson());
+		SkillDeriver cd = chatDeriver(store);
 		cd.applyChat("You accidentally burn the shark.");
 		cd.applyChat("You accidentally burn the moonlight antelope.");
 		// a cake is no fish: the rule reads the name off the line, not off a list
@@ -569,7 +569,7 @@ public class SkillDeriverTest
 		assertEquals("Guard", SkillDeriver.npcName("Guard level-21"));
 		assertEquals("Master Farmer", SkillDeriver.npcName("Master Farmer"));
 		StatStore store = new StatStore();
-		SkillDeriver cd = new SkillDeriver(Mockito.mock(ItemManager.class), store, new Gson());
+		SkillDeriver cd = chatDeriver(store);
 		cd.applyChat("You fail to pick the Guard's pocket.");
 		assertEquals(1, store.getStat("guardFailedPickpockets"));
 	}

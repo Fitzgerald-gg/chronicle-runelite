@@ -97,18 +97,25 @@ public class ClogCapture
 	private volatile int available;
 	private boolean dirty;
 
-	// Enabled mid-session: no LOGGED_IN transition is coming. Read the varps now.
-	void primeFromVarps(net.runelite.api.Client c)
+	// The completion fraction: free on every login, no interface needed. Moves
+	// the record only when the figures did.
+	private void readCompletion()
 	{
-		int total = c.getVarpValue(VARP_CLOG_TOTAL);
-		int obtained = c.getVarpValue(VARP_CLOG_OBTAINED);
-		if (total > 0)
+		int obtained = client.getVarpValue(VARP_CLOG_OBTAINED);
+		int total = client.getVarpValue(VARP_CLOG_TOTAL);
+		if (total > 0 && (obtained != finished || total != available))
 		{
 			finished = obtained;
 			available = total;
 			dirty = true;
 			revision++;
 		}
+	}
+
+	// Enabled mid-session: no LOGGED_IN transition is coming. Read the varps now.
+	void primeFromVarps()
+	{
+		readCompletion();
 		if (readCategoryCounts())
 		{
 			dirty = true;
@@ -163,16 +170,7 @@ public class ClogCapture
 		GameState state = e.getGameState();
 		if (state == GameState.LOGGED_IN)
 		{
-			// completion fraction: free every login, no interface needed.
-			int obtained = client.getVarpValue(VARP_CLOG_OBTAINED);
-			int total = client.getVarpValue(VARP_CLOG_TOTAL);
-			if (total > 0 && (obtained != finished || total != available))
-			{
-				finished = obtained;
-				available = total;
-				dirty = true;
-				revision++;
-			}
+			readCompletion();
 			if (readCategoryCounts())
 			{
 				dirty = true;
@@ -615,9 +613,7 @@ public class ClogCapture
 		catCounts.clear();
 		finished = 0;
 		available = 0;
-		killLogTicks = -1;
-		clogFlushTick = -1;
-		clogRetrieving = false;
+		dropSceneState();
 		dirty = false;
 	}
 

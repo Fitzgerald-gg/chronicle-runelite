@@ -98,12 +98,7 @@ public class HistoryProgressTest
 
 	private static List<String> sectionNames(HistoryProgress p)
 	{
-		List<String> out = new ArrayList<>();
-		for (HistoryProgress.Section s : p.sections())
-		{
-			out.add(s.name());
-		}
-		return out;
+		return sectionNames(p.sections());
 	}
 
 	// every summary key moved, listed backwards to prove the order is the

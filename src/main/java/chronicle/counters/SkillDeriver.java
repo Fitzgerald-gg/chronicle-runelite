@@ -466,14 +466,7 @@ public class SkillDeriver
 		int qty = 1;
 		if (parts.length >= 5 && !parts[4].isEmpty())
 		{
-			try
-			{
-				qty = Math.max(1, Integer.parseInt(parts[4]));
-			}
-			catch (NumberFormatException ignored)
-			{
-				qty = 1;
-			}
+			qty = Math.max(1, intOr(parts[4], 1));
 		}
 		String target = parts.length >= 6 ? parts[5] : "";
 		String consumedId = parts.length >= 7 ? parts[6] : "";
@@ -482,14 +475,7 @@ public class SkillDeriver
 		int consumedQty = 1;
 		if (parts.length >= 8 && !parts[7].isEmpty())
 		{
-			try
-			{
-				consumedQty = Math.max(1, Integer.parseInt(parts[7]));
-			}
-			catch (NumberFormatException ignored)
-			{
-				consumedQty = 1;
-			}
+			consumedQty = Math.max(1, intOr(parts[7], 1));
 		}
 
 		// XP-windfall consumables (lamps/tomes): reward xp with no action behind it.

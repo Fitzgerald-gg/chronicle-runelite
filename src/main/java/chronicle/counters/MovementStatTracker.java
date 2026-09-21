@@ -530,7 +530,7 @@ public class MovementStatTracker implements StatTracker
 		{
 			return TELEPORTS_VIA_SCROLL;
 		}
-		if (tgtLow.contains("cape") || tgtLow.contains("max hood") || optLow.contains("tele to poh"))
+		if (isTeleportCape(tgtLow) || optLow.contains("tele to poh"))
 		{
 			return TELEPORTS_VIA_CAPE;
 		}

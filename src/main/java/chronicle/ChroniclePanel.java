@@ -11,6 +11,7 @@ package chronicle;
 import chronicle.counters.ExperienceStatTracker;
 import chronicle.panel.HistoryProgress;
 import chronicle.panel.StatRegistry;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -25,6 +26,7 @@ import java.awt.Image;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.AbstractMap;
@@ -227,11 +229,11 @@ class ChroniclePanel extends PluginPanel
 	// the tab opens on the whole record; a window is a narrowing of it
 	private String histGranularity = "Lifetime";
 	// The period's END date (inclusive); the stepper moves it by one granule.
-	private java.time.LocalDate histCursor = java.time.LocalDate.now();
+	private LocalDate histCursor = LocalDate.now();
 	// Exact dates: non-null overrides the granularity pills. Set by clicking the
 	// period label, cleared by any pill.
-	private java.time.LocalDate histFrom;
-	private java.time.LocalDate histTo;
+	private LocalDate histFrom;
+	private LocalDate histTo;
 	// The bundled taxonomy: tab -> page -> ordered slot names. Parsed lazily, the
 	// first time any board asks for it.
 	private static Map<String, Map<String, List<String>>> taxonomy;
@@ -755,7 +757,7 @@ class ChroniclePanel extends PluginPanel
 				com.google.gson.JsonArray arr = gson.fromJson(
 					new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8),
 					com.google.gson.JsonArray.class);
-				for (com.google.gson.JsonElement e : arr)
+				for (JsonElement e : arr)
 				{
 					JsonObject o = e.getAsJsonObject();
 					out.add(new Boss(o.get("name").getAsString(),
@@ -878,20 +880,26 @@ class ChroniclePanel extends PluginPanel
 		{
 			return -1;
 		}
-		JsonObject o = clog.getAsJsonObject(map);
-		com.google.gson.JsonElement v = o.get(key);
+		JsonElement v = getIgnoreCase(clog.getAsJsonObject(map), key);
+		return v == null ? -1 : safeLong(v);
+	}
+
+	/** A member by its key as written, else by its key in any case; null for neither. */
+	private static JsonElement getIgnoreCase(JsonObject o, String key)
+	{
+		JsonElement v = o.get(key);
 		if (v != null)
 		{
-			return safeLong(v);
+			return v;
 		}
-		for (Map.Entry<String, com.google.gson.JsonElement> e : o.entrySet())
+		for (Map.Entry<String, JsonElement> e : o.entrySet())
 		{
 			if (e.getKey().equalsIgnoreCase(key))
 			{
-				return safeLong(e.getValue());
+				return e.getValue();
 			}
 		}
-		return -1;
+		return null;
 	}
 
 	/**
@@ -1009,7 +1017,7 @@ class ChroniclePanel extends PluginPanel
 	 * rather than leave as a number meaning something different from its
 	 * neighbours.
 	 */
-	private java.time.LocalDate rollShortOf()
+	private LocalDate rollShortOf()
 	{
 		long from = plugin.lootRollFrom();
 		if (from <= 0)
@@ -1017,7 +1025,7 @@ class ChroniclePanel extends PluginPanel
 			return null;
 		}
 		Window w = window();
-		java.time.LocalDate began = java.time.Instant.ofEpochMilli(from)
+		LocalDate began = java.time.Instant.ofEpochMilli(from)
 			.atZone(ZoneId.systemDefault()).toLocalDate();
 		return began.isAfter(w.start) ? began : null;
 	}
@@ -1112,7 +1120,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (cl.has("kcs") && cl.get("kcs").isJsonObject())
 		{
-			for (Map.Entry<String, com.google.gson.JsonElement> e
+			for (Map.Entry<String, JsonElement> e
 				: cl.getAsJsonObject("kcs").entrySet())
 			{
 				String key = e.getKey().toLowerCase(Locale.ROOT);
@@ -1144,23 +1152,14 @@ class ChroniclePanel extends PluginPanel
 		{
 			return null;
 		}
-		JsonObject pages = cl.getAsJsonObject("kc_lines");
-		com.google.gson.JsonElement found = null;
-		for (Map.Entry<String, com.google.gson.JsonElement> e : pages.entrySet())
-		{
-			if (e.getKey().equalsIgnoreCase(page))
-			{
-				found = e.getValue();
-				break;
-			}
-		}
+		JsonElement found = getIgnoreCase(cl.getAsJsonObject("kc_lines"), page);
 		if (found == null || !found.isJsonObject() || found.getAsJsonObject().size() == 0)
 		{
 			return null;
 		}
 		List<String> labels = new ArrayList<>();
 		List<String> figures = new ArrayList<>();
-		for (Map.Entry<String, com.google.gson.JsonElement> ln
+		for (Map.Entry<String, JsonElement> ln
 			: found.getAsJsonObject().entrySet())
 		{
 			labels.add(ln.getKey());
@@ -1179,24 +1178,12 @@ class ChroniclePanel extends PluginPanel
 			return out;
 		}
 		String page = LOG_PAGE_FOR.containsKey(boss) ? LOG_PAGE_FOR.get(boss) : boss;
-		JsonObject pages = cl.getAsJsonObject("kc_lines");
-		com.google.gson.JsonElement found = pages.get(page);
-		if (found == null)
-		{
-			for (Map.Entry<String, com.google.gson.JsonElement> e : pages.entrySet())
-			{
-				if (e.getKey().equalsIgnoreCase(page))
-				{
-					found = e.getValue();
-					break;
-				}
-			}
-		}
+		JsonElement found = getIgnoreCase(cl.getAsJsonObject("kc_lines"), page);
 		if (found == null || !found.isJsonObject())
 		{
 			return out;
 		}
-		for (Map.Entry<String, com.google.gson.JsonElement> ln
+		for (Map.Entry<String, JsonElement> ln
 			: found.getAsJsonObject().entrySet())
 		{
 			long n = safeLong(ln.getValue());
@@ -1291,21 +1278,12 @@ class ChroniclePanel extends PluginPanel
 			return out;
 		}
 		String page = LOG_PAGE_FOR.containsKey(boss) ? LOG_PAGE_FOR.get(boss) : boss;
-		com.google.gson.JsonElement found = null;
-		for (Map.Entry<String, com.google.gson.JsonElement> e
-			: cl.getAsJsonObject("pb_lines").entrySet())
-		{
-			if (e.getKey().equalsIgnoreCase(page))
-			{
-				found = e.getValue();
-				break;
-			}
-		}
+		JsonElement found = getIgnoreCase(cl.getAsJsonObject("pb_lines"), page);
 		if (found == null || !found.isJsonObject())
 		{
 			return out;
 		}
-		for (Map.Entry<String, com.google.gson.JsonElement> ln
+		for (Map.Entry<String, JsonElement> ln
 			: found.getAsJsonObject().entrySet())
 		{
 			long secs = safeLong(ln.getValue());
@@ -1771,7 +1749,7 @@ class ChroniclePanel extends PluginPanel
 		// added, because building is what discovers whether a cell had to fall
 		// back to the roll.
 		JPanel opening = bossSheet(draw);
-		java.time.LocalDate shortFrom = rollUsed ? rollShortOf() : null;
+		LocalDate shortFrom = rollUsed ? rollShortOf() : null;
 		if (shortFrom != null)
 		{
 			// A cell the spine cannot date is counted from what the kills
@@ -2055,7 +2033,6 @@ class ChroniclePanel extends PluginPanel
 			case JOURNAL:
 				return (moved & MOVED_RECORD) != 0;
 			case LOG:
-				return (moved & (MOVED_RECORD | MOVED_CLOG)) != 0;
 			case KILLS:
 				return (moved & (MOVED_RECORD | MOVED_CLOG)) != 0;
 			case STATS:
@@ -2660,7 +2637,7 @@ class ChroniclePanel extends PluginPanel
 
 		// The session strip: pinned rows, then whatever else moved, ranked.
 		JPanel strip = card("This session");
-		Map<String, Integer> sess = plugin.sessionCounters();
+		Map<String, Integer> sess = plugin.sessionView();
 		int mounted = 0;
 		Set<String> shownKeys = new HashSet<>();
 		for (String key : HOME_PINNED)
@@ -2983,7 +2960,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (sitting == null && rollFrom > fromMs)
 		{
-			java.time.LocalDate began = java.time.Instant.ofEpochMilli(rollFrom)
+			LocalDate began = java.time.Instant.ofEpochMilli(rollFrom)
 				.atZone(ZoneId.systemDefault()).toLocalDate();
 			p.add(note("The dated loot roll begins " + began.format(FULL_DAY)
 				+ ", which is inside " + periodInSentence() + ". Naming the part it can see "
@@ -3101,7 +3078,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			long began = plugin.sessionStart();
 			return new long[]{began > 0 ? began
-				: java.time.LocalDate.now().atStartOfDay(ZoneId.systemDefault())
+				: LocalDate.now().atStartOfDay(ZoneId.systemDefault())
 					.toInstant().toEpochMilli(),
 				System.currentTimeMillis()};
 		}
@@ -3403,9 +3380,7 @@ class ChroniclePanel extends PluginPanel
 			return kindDrill(p, bag, key);
 		}
 		JPanel head = card(title);
-		head.add(row("Items", fmt(sum[0]), accent()));
-		head.add(row("Worth", gp(sum[1]) + " gp", null));
-		head.add(row("Distinct items", fmt(bag.size()), null));
+		bagRows(head, bag, sum);
 		p.add(head);
 		p.add(vgap(6));
 		java.util.LinkedHashMap<String, java.util.function.BooleanSupplier> ways =
@@ -3456,9 +3431,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel page = column();
 		JPanel head = card(title);
-		head.add(row("Items", fmt(sum[0]), accent()));
-		head.add(row("Worth", gp(sum[1]) + " gp", null));
-		head.add(row("Distinct items", fmt(bag.size()), null));
+		bagRows(head, bag, sum);
 		page.add(head);
 		page.add(vgap(6));
 		for (Kind k : kindsOf(bag))
@@ -3801,9 +3774,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel page = column();
 		JPanel head = card(title);
-		head.add(row("Items", fmt(sum[0]), accent()));
-		head.add(row("Worth", gp(sum[1]) + " gp", null));
-		head.add(row("Distinct items", fmt(bag.size()), null));
+		bagRows(head, bag, sum);
 		page.add(head);
 		page.add(vgap(6));
 		for (LocalStore.BagItem b : bag)
@@ -3928,21 +3899,22 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
+	/** The three rows every bag's head card carries. */
+	private void bagRows(JPanel head, java.util.Collection<?> bag, long[] sum)
+	{
+		head.add(row("Items", fmt(sum[0]), accent()));
+		head.add(row("Worth", gp(sum[1]) + " gp", null));
+		head.add(row("Distinct items", fmt(bag.size()), null));
+	}
+
 	/** The way back out of one kind, and how many distinct items it holds. */
 	private JPanel backToKinds(int held)
 	{
-		JPanel r = row("< All kinds", fmt(held) + (held == 1 ? " item" : " items"), null);
-		JLabel back = (JLabel) ((BorderLayout) r.getLayout())
-			.getLayoutComponent(BorderLayout.CENTER);
-		back.setFont(FontManager.getRunescapeSmallFont());
-		back.setForeground(accent());
-		r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		r.addMouseListener(clicker(() ->
+		return backRow("< All kinds", fmt(held) + (held == 1 ? " item" : " items"), () ->
 		{
 			lootKind = null;
 			rebuildInPlace();
-		}));
-		return r;
+		});
 	}
 
 	/**
@@ -4069,6 +4041,27 @@ class ChroniclePanel extends PluginPanel
 	}
 
 
+	/** The small grey "copy" on a row's right; null where the row has no right. */
+	private static JLabel copyLabel(JPanel r, String tip)
+	{
+		JLabel take = (JLabel) ((BorderLayout) r.getLayout()).getLayoutComponent(BorderLayout.EAST);
+		if (take != null)
+		{
+			take.setFont(FontManager.getRunescapeSmallFont());
+			take.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+			take.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			take.setToolTipText(tip);
+		}
+		return take;
+	}
+
+	/** What the copy label says once pressed. */
+	private void reportCopy(JLabel take, boolean ok)
+	{
+		take.setText(ok ? "copied" : "cannot copy");
+		take.setForeground(ok ? accent() : ColorScheme.PROGRESS_ERROR_COLOR);
+	}
+
 	/**
 	 * A copy pill with more than one thing it could copy.
 	 *
@@ -4085,15 +4078,11 @@ class ChroniclePanel extends PluginPanel
 		JLabel t = (JLabel) layout.getLayoutComponent(BorderLayout.CENTER);
 		t.setFont(FontManager.getRunescapeSmallFont());
 		t.setForeground(accent());
-		JLabel take = (JLabel) layout.getLayoutComponent(BorderLayout.EAST);
+		JLabel take = copyLabel(r, "Copy this board as a picture");
 		if (take == null)
 		{
 			return r;
 		}
-		take.setFont(FontManager.getRunescapeSmallFont());
-		take.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
-		take.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		take.setToolTipText("Copy this board as a picture");
 		take.addMouseListener(clicker(() ->
 		{
 			JPopupMenu menu = new JPopupMenu();
@@ -4102,12 +4091,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				JMenuItem item = new JMenuItem(e.getKey());
 				item.setFont(FontManager.getRunescapeSmallFont());
-				item.addActionListener(a ->
-				{
-					boolean ok = e.getValue().getAsBoolean();
-					take.setText(ok ? "copied" : "cannot copy");
-					take.setForeground(ok ? accent() : ColorScheme.PROGRESS_ERROR_COLOR);
-				});
+				item.addActionListener(a -> reportCopy(take, e.getValue().getAsBoolean()));
 				menu.add(item);
 			}
 			menu.show(take, 0, take.getHeight());
@@ -4126,19 +4110,10 @@ class ChroniclePanel extends PluginPanel
 		JLabel t = (JLabel) layout.getLayoutComponent(BorderLayout.CENTER);
 		t.setFont(FontManager.getRunescapeSmallFont());
 		t.setForeground(accent());
-		JLabel take = (JLabel) layout.getLayoutComponent(BorderLayout.EAST);
+		JLabel take = copyLabel(r, "Copy this board as a picture");
 		if (take != null)
 		{
-			take.setFont(FontManager.getRunescapeSmallFont());
-			take.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
-			take.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-			take.setToolTipText("Copy this board as a picture");
-			take.addMouseListener(clicker(() ->
-			{
-				boolean ok = copy.getAsBoolean();
-				take.setText(ok ? "copied" : "cannot copy");
-				take.setForeground(ok ? accent() : ColorScheme.PROGRESS_ERROR_COLOR);
-			}));
+			take.addMouseListener(clicker(() -> reportCopy(take, copy.getAsBoolean())));
 		}
 		return r;
 	}
@@ -4154,7 +4129,7 @@ class ChroniclePanel extends PluginPanel
 		List<Map.Entry<String, Long>> kcs = new ArrayList<>();
 		if (cl.has("slayer_kcs") && cl.get("slayer_kcs").isJsonObject())
 		{
-			for (Map.Entry<String, com.google.gson.JsonElement> e
+			for (Map.Entry<String, JsonElement> e
 				: cl.getAsJsonObject("slayer_kcs").entrySet())
 			{
 				long v = safeLong(e.getValue());
@@ -4220,17 +4195,11 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildTaskDetail(int index)
 	{
 		JPanel p = column();
-		JPanel back = row("< Back", "", null);
-		JLabel bl = (JLabel) ((BorderLayout) back.getLayout()).getLayoutComponent(BorderLayout.CENTER);
-		bl.setFont(FontManager.getRunescapeSmallFont());
-		bl.setForeground(accent());
-		back.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		back.addMouseListener(clicker(() ->
+		p.add(backRow("< Back", "", () ->
 		{
 			detailTask = -1;
 			rebuild();
 		}));
-		p.add(back);
 		p.add(vgap(4));
 		LocalStore.SlayerJourney j = journeyCache;
 		LocalStore.SlayerTask t = j != null && index >= 0 && index < j.tasks.size()
@@ -4307,18 +4276,12 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildLeftBehindDetail()
 	{
 		JPanel p = column();
-		JPanel back = row("< Back", "", null);
-		JLabel bl = (JLabel) ((BorderLayout) back.getLayout()).getLayoutComponent(BorderLayout.CENTER);
-		bl.setFont(FontManager.getRunescapeSmallFont());
-		bl.setForeground(accent());
-		back.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		back.addMouseListener(clicker(() ->
+		p.add(backRow("< Back", "", () ->
 		{
 			leftBehindSource = null;
 			leftBehindItem = null;
 			rebuild();
 		}));
-		p.add(back);
 		p.add(vgap(4));
 
 		if (leftBehindSource != null)
@@ -4867,6 +4830,18 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
+	/** An accented row that goes somewhere: the way back, or out of a lens. */
+	private JPanel backRow(String label, String right, Runnable go)
+	{
+		JPanel r = row(label, right, null);
+		JLabel l = (JLabel) ((BorderLayout) r.getLayout()).getLayoutComponent(BorderLayout.CENTER);
+		l.setFont(FontManager.getRunescapeSmallFont());
+		l.setForeground(accent());
+		r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		r.addMouseListener(clicker(go));
+		return r;
+	}
+
 	private JPanel backRow()
 	{
 		return backRow(null);
@@ -4884,27 +4859,11 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel backRow(java.util.function.BooleanSupplier copy)
 	{
-		JPanel r = row("< Back", copy == null ? "" : "copy", null);
-		BorderLayout layout = (BorderLayout) r.getLayout();
-		JLabel l = (JLabel) layout.getLayoutComponent(BorderLayout.CENTER);
-		l.setFont(FontManager.getRunescapeSmallFont());
-		l.setForeground(accent());
-		r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		r.addMouseListener(clicker(this::backDetail));
-		JLabel take = copy == null ? null
-			: (JLabel) layout.getLayoutComponent(BorderLayout.EAST);
+		JPanel r = backRow("< Back", copy == null ? "" : "copy", this::backDetail);
+		JLabel take = copy == null ? null : copyLabel(r, "Copy this page as a picture");
 		if (take != null)
 		{
-			take.setFont(FontManager.getRunescapeSmallFont());
-			take.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
-			take.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-			take.setToolTipText("Copy this page as a picture");
-			take.addMouseListener(clicker(() ->
-			{
-				boolean ok = copy.getAsBoolean();
-				take.setText(ok ? "copied" : "cannot copy");
-				take.setForeground(ok ? accent() : ColorScheme.PROGRESS_ERROR_COLOR);
-			}));
+			take.addMouseListener(clicker(() -> reportCopy(take, copy.getAsBoolean())));
 		}
 		return r;
 	}
@@ -6770,7 +6729,7 @@ class ChroniclePanel extends PluginPanel
 		Obtained o = new Obtained();
 		if (cl.has("clog_items") && cl.get("clog_items").isJsonObject())
 		{
-			for (Map.Entry<String, com.google.gson.JsonElement> e
+			for (Map.Entry<String, JsonElement> e
 				: cl.getAsJsonObject("clog_items").entrySet())
 			{
 				o.all.merge(e.getKey().toLowerCase(Locale.ROOT), safeLong(e.getValue()), Math::max);
@@ -6778,7 +6737,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (cl.has("by_cat") && cl.get("by_cat").isJsonObject())
 		{
-			for (Map.Entry<String, com.google.gson.JsonElement> pg
+			for (Map.Entry<String, JsonElement> pg
 				: cl.getAsJsonObject("by_cat").entrySet())
 			{
 				if (!pg.getValue().isJsonObject())
@@ -6786,7 +6745,7 @@ class ChroniclePanel extends PluginPanel
 					continue;
 				}
 				Map<String, Long> items = new LinkedHashMap<>();
-				for (Map.Entry<String, com.google.gson.JsonElement> it
+				for (Map.Entry<String, JsonElement> it
 					: pg.getValue().getAsJsonObject().entrySet())
 				{
 					items.merge(it.getKey().toLowerCase(Locale.ROOT),
@@ -6903,7 +6862,7 @@ class ChroniclePanel extends PluginPanel
 		return false;
 	}
 
-	private static long safeLong(com.google.gson.JsonElement e)
+	private static long safeLong(JsonElement e)
 	{
 		try
 		{
@@ -6931,14 +6890,14 @@ class ChroniclePanel extends PluginPanel
 				JsonObject rootTax = gson.fromJson(
 					new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8),
 					JsonObject.class);
-				for (Map.Entry<String, com.google.gson.JsonElement> tab : rootTax.entrySet())
+				for (Map.Entry<String, JsonElement> tab : rootTax.entrySet())
 				{
 					Map<String, List<String>> pages = new LinkedHashMap<>();
-					for (Map.Entry<String, com.google.gson.JsonElement> pg
+					for (Map.Entry<String, JsonElement> pg
 						: tab.getValue().getAsJsonObject().entrySet())
 					{
 						List<String> slots = new ArrayList<>();
-						for (com.google.gson.JsonElement it : pg.getValue().getAsJsonArray())
+						for (JsonElement it : pg.getValue().getAsJsonArray())
 						{
 							slots.add(it.getAsString());
 						}
@@ -7100,7 +7059,7 @@ class ChroniclePanel extends PluginPanel
 
 	private String rowValue(Map.Entry<String, Long> e)
 	{
-		String base = StatRegistry.isGp(e.getKey()) ? gp(e.getValue()) + " gp" : fmt(e.getValue());
+		String base = value(e);
 		if (e.getKey().equals("resourcesGatheredValue") && resourcesDropped > 0)
 		{
 			return base + " · " + gp(resourcesDropped) + " dropped";
@@ -7593,14 +7552,14 @@ class ChroniclePanel extends PluginPanel
 	// a whole parse of an append-only file and the feed slice is deep-copied under
 	// the store's lock. Both are gathered on a worker thread; on the EDT that cost
 	// lands as a stall on every pill click.
-	private TreeMap<java.time.LocalDate, HistoryLog.Baseline> historySpine;
+	private TreeMap<LocalDate, HistoryLog.Baseline> historySpine;
 	private List<JsonObject> historyFeed = new ArrayList<>();
 	// The slayer journey read beside them: the progress card's tasks-completed
 	// line counts its closed segments by date, which reach back past the spine.
 	private LocalStore.SlayerJourney historyJourney;
 	// What that pair was true of: the day it was read and the newest feed entry
 	// it saw. Either one moving means the cache is stale.
-	private java.time.LocalDate historyDay;
+	private LocalDate historyDay;
 	private long historyFeedTs;
 	private boolean historyGathering;
 	// A gather in flight when a different journal mounts must not land; its
@@ -7610,14 +7569,14 @@ class ChroniclePanel extends PluginPanel
 	// One gathered pass over the journal's calendar spine and its feed.
 	private static final class HistoryData
 	{
-		final TreeMap<java.time.LocalDate, HistoryLog.Baseline> spine;
+		final TreeMap<LocalDate, HistoryLog.Baseline> spine;
 		final List<JsonObject> feed;
 		final LocalStore.SlayerJourney journey;
-		final java.time.LocalDate day;
+		final LocalDate day;
 
-		HistoryData(TreeMap<java.time.LocalDate, HistoryLog.Baseline> spine,
+		HistoryData(TreeMap<LocalDate, HistoryLog.Baseline> spine,
 			List<JsonObject> feed, LocalStore.SlayerJourney journey,
-			java.time.LocalDate day)
+			LocalDate day)
 		{
 			this.spine = spine;
 			this.feed = feed;
@@ -7646,7 +7605,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				return new HistoryData(plugin.historyBaselines(),
 					plugin.feedNewest(HISTORY_FEED_SCAN), plugin.slayerJourney(),
-					java.time.LocalDate.now());
+					LocalDate.now());
 			}
 
 			@Override
@@ -7921,14 +7880,14 @@ class ChroniclePanel extends PluginPanel
 	 * spine is then not their source and its own start date says nothing of them
 	 */
 	private static String countersSince(
-		java.util.SortedMap<java.time.LocalDate, HistoryLog.Baseline> spine,
-		java.time.LocalDate startLine, java.time.LocalDate lootFrom, boolean lootFromSittings)
+		java.util.SortedMap<LocalDate, HistoryLog.Baseline> spine,
+		LocalDate startLine, LocalDate lootFrom, boolean lootFromSittings)
 	{
-		java.time.LocalDate counters = HistoryLog.firstCarrying(spine, null);
-		java.time.LocalDate loot = lootFromSittings
+		LocalDate counters = HistoryLog.firstCarrying(spine, null);
+		LocalDate loot = lootFromSittings
 			? lootFrom : HistoryLog.firstCarrying(spine, "dropsReceived");
 		StringBuilder note = new StringBuilder();
-		java.time.LocalDate since = startLine;
+		LocalDate since = startLine;
 		if (counters != null && (since == null || counters.isAfter(since)))
 		{
 			note.append("Counters since ").append(counters.format(FULL_DAY));
@@ -8160,27 +8119,19 @@ class ChroniclePanel extends PluginPanel
 	// a take, so this is the day from which any loot figure can be drawn at all.
 	private static long oldestSessionTs(List<JsonObject> feed)
 	{
-		long oldest = 0;
-		for (JsonObject e : feed)
-		{
-			if (!e.has("type") || !"SESSION".equals(e.get("type").getAsString()))
-			{
-				continue;
-			}
-			long ts = safeLong(e.get("ts"));
-			if (ts > 0 && (oldest == 0 || ts < oldest))
-			{
-				oldest = ts;
-			}
-		}
-		return oldest;
+		return oldestTs(feed, "SESSION");
 	}
 
-	private static long oldestTs(List<JsonObject> feed)
+	/** The oldest entry of one type, or of any type when null; 0 for none. */
+	private static long oldestTs(List<JsonObject> feed, String type)
 	{
 		long oldest = 0;
 		for (JsonObject e : feed)
 		{
+			if (type != null && !type.equals(str(e, "type", "")))
+			{
+				continue;
+			}
 			long ts = safeLong(e.get("ts"));
 			if (ts > 0 && (oldest == 0 || ts < oldest))
 			{
@@ -8236,8 +8187,8 @@ class ChroniclePanel extends PluginPanel
 	 * a list is what hundreds of anything wants to be.
 	 */
 	private void addKinds(JPanel p, Map<String, Long> beforeKc, Map<String, Long> earliestKc,
-		Map<String, Long> nowKc, boolean live, java.time.LocalDate from,
-		java.time.LocalDate to, String first, String second)
+		Map<String, Long> nowKc, boolean live, LocalDate from,
+		LocalDate to, String first, String second)
 	{
 		boolean whole = wholeRecord();
 		// read once a build: the journal is asked for these whole, and a new
@@ -8329,7 +8280,7 @@ class ChroniclePanel extends PluginPanel
 	 * straight, the two never met and the biggest earner on the record sorted to
 	 * the bottom of the board as though it had paid nothing.
 	 */
-	private Map<String, Long> periodWorth(java.time.LocalDate from, java.time.LocalDate to)
+	private Map<String, Long> periodWorth(LocalDate from, LocalDate to)
 	{
 		Map<String, Long> out = new LinkedHashMap<>();
 		if (wholeRecord())
@@ -9783,7 +9734,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return out;
 		}
-		for (com.google.gson.JsonElement e : c.getAsJsonArray("tasksDone"))
+		for (JsonElement e : c.getAsJsonArray("tasksDone"))
 		{
 			try
 			{
@@ -10021,7 +9972,7 @@ class ChroniclePanel extends PluginPanel
 		// the handful this journal happened to watch land. Empty on a journal
 		// written before those bits were captured, and the board then says what each
 		// tier asks for rather than pretending nothing is done.
-		Set<Integer> done = caDone();
+		Set<Integer> done = headDone;
 		boolean known = !done.isEmpty();
 		if (!known)
 		{
@@ -10457,8 +10408,8 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	// the visible period's own two ends, kept for the menu
-	private java.time.LocalDate periodFrom;
-	private java.time.LocalDate periodTo;
+	private LocalDate periodFrom;
+	private LocalDate periodTo;
 
 	// the choices, built fresh so the tick sits on whichever is current
 	private JPopupMenu periodMenu()
@@ -10480,8 +10431,8 @@ class ChroniclePanel extends PluginPanel
 				// and then picked Week to read the week around it was thrown
 				// back to the present. From Lifetime or the sitting the end is
 				// today anyway, so nothing changes there.
-				java.time.LocalDate keep = window().end;
-				java.time.LocalDate today = java.time.LocalDate.now();
+				LocalDate keep = window().end;
+				LocalDate today = LocalDate.now();
 				histGranularity = g;
 				histFrom = null;
 				histTo = null;
@@ -10500,8 +10451,8 @@ class ChroniclePanel extends PluginPanel
 			exact.setForeground(accent());
 		}
 		exact.addActionListener(e -> onSetExactDates(
-			periodFrom != null ? periodFrom : java.time.LocalDate.now().minusDays(6),
-			periodTo != null ? periodTo : java.time.LocalDate.now()));
+			periodFrom != null ? periodFrom : LocalDate.now().minusDays(6),
+			periodTo != null ? periodTo : LocalDate.now()));
 		menu.add(exact);
 		return menu;
 	}
@@ -10579,11 +10530,11 @@ class ChroniclePanel extends PluginPanel
 	/** The window the period control is on: its two ends, and what to call it. */
 	private static final class Window
 	{
-		final java.time.LocalDate start;
-		final java.time.LocalDate end;
+		final LocalDate start;
+		final LocalDate end;
 		final String label;
 
-		Window(java.time.LocalDate start, java.time.LocalDate end, String label)
+		Window(LocalDate start, LocalDate end, String label)
 		{
 			this.start = start;
 			this.end = end;
@@ -10599,13 +10550,13 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private Window window()
 	{
-		java.time.LocalDate end = histCursor;
-		java.time.LocalDate start;
+		LocalDate end = histCursor;
+		LocalDate start;
 		String label;
 		if (histFrom != null && histTo != null)
 		{
 			start = histFrom;
-			end = histTo.isAfter(java.time.LocalDate.now()) ? java.time.LocalDate.now() : histTo;
+			end = histTo.isAfter(LocalDate.now()) ? LocalDate.now() : histTo;
 			label = start.format(TASK_DAY) + " - " + end.format(TASK_DAY);
 		}
 		else
@@ -10618,8 +10569,8 @@ class ChroniclePanel extends PluginPanel
 					start = began > 0
 						? java.time.Instant.ofEpochMilli(began)
 							.atZone(ZoneId.systemDefault()).toLocalDate()
-						: java.time.LocalDate.now();
-					end = java.time.LocalDate.now();
+						: LocalDate.now();
+					end = LocalDate.now();
 					label = "This session";
 					break;
 				}
@@ -10629,7 +10580,7 @@ class ChroniclePanel extends PluginPanel
 					// account's own beginning, which is what it is.
 					start = historySpine == null || historySpine.isEmpty()
 						? end.minusYears(30) : historySpine.firstKey();
-					end = java.time.LocalDate.now();
+					end = LocalDate.now();
 					label = "Lifetime";
 					break;
 				case "Day":
@@ -10711,9 +10662,9 @@ class ChroniclePanel extends PluginPanel
 			return null;
 		}
 		Window w = window();
-		Map.Entry<java.time.LocalDate, HistoryLog.Baseline> from =
+		Map.Entry<LocalDate, HistoryLog.Baseline> from =
 			HistoryLog.windowStart(historySpine, w.start, w.end);
-		Map.Entry<java.time.LocalDate, HistoryLog.Baseline> at =
+		Map.Entry<LocalDate, HistoryLog.Baseline> at =
 			historySpine.floorEntry(w.end);
 		if (at == null || from == null || at.getKey().equals(from.getKey()))
 		{
@@ -10758,7 +10709,7 @@ class ChroniclePanel extends PluginPanel
 	private boolean periodReachesToday()
 	{
 		Window w = window();
-		return w != null && !w.end.isBefore(java.time.LocalDate.now());
+		return w != null && !w.end.isBefore(LocalDate.now());
 	}
 
 	/**
@@ -10780,7 +10731,7 @@ class ChroniclePanel extends PluginPanel
 		if (sessionPeriod())
 		{
 			Map<String, Long> out = new LinkedHashMap<>();
-			for (Map.Entry<String, Integer> e : plugin.sessionCounters().entrySet())
+			for (Map.Entry<String, Integer> e : plugin.sessionView().entrySet())
 			{
 				if (e.getValue() != null && e.getValue() != 0)
 				{
@@ -11151,9 +11102,9 @@ class ChroniclePanel extends PluginPanel
 	{
 		if (histFrom != null && histTo != null)
 		{
-			return histTo.isBefore(java.time.LocalDate.now());
+			return histTo.isBefore(LocalDate.now());
 		}
-		return !stepForward(histCursor).isAfter(java.time.LocalDate.now());
+		return !stepForward(histCursor).isAfter(LocalDate.now());
 	}
 
 	/** Move the window one granule, or one span where exact dates are set. */
@@ -11171,9 +11122,9 @@ class ChroniclePanel extends PluginPanel
 		}
 		else
 		{
-			java.time.LocalDate next = stepForward(histCursor);
-			histCursor = next.isAfter(java.time.LocalDate.now())
-				? java.time.LocalDate.now() : next;
+			LocalDate next = stepForward(histCursor);
+			histCursor = next.isAfter(LocalDate.now())
+				? LocalDate.now() : next;
 		}
 		rebuild();
 	}
@@ -11185,14 +11136,14 @@ class ChroniclePanel extends PluginPanel
 		// so this builds no controls of its own; it reads the window like anything
 		// else and draws the board the sub-tab asked for.
 		Window periodWin = window();
-		final java.time.LocalDate pStart = periodWin.start;
-		final java.time.LocalDate pEnd = periodWin.end;
-		final java.time.LocalDate end = periodWin.end;
+		final LocalDate pStart = periodWin.start;
+		final LocalDate pEnd = periodWin.end;
+		final boolean live = !pEnd.isBefore(LocalDate.now());
 
 		// Ask for a fresh pass when the day has turned or the feed has grown.
 		// Probing the newest entry costs one copy; the gather costs thousands,
 		// and the stale pair still renders while it runs.
-		if (historySpine == null || !java.time.LocalDate.now().equals(historyDay)
+		if (historySpine == null || !LocalDate.now().equals(historyDay)
 			|| newestTs(plugin.feedNewest(1)) != historyFeedTs)
 		{
 			gatherHistory();
@@ -11202,17 +11153,17 @@ class ChroniclePanel extends PluginPanel
 			p.add(note("Reading your history…"));
 			return p;
 		}
-		TreeMap<java.time.LocalDate, HistoryLog.Baseline> hist = historySpine;
+		TreeMap<LocalDate, HistoryLog.Baseline> hist = historySpine;
 
 		// baselines bounding the period: closing state the day before it began,
 		// and the last close inside it. With nothing closed before the window the
 		// earliest line on record stands in, the way the site measured from its
 		// first snapshot: a fresh record's first week reads from its first day.
-		Map.Entry<java.time.LocalDate, HistoryLog.Baseline> before =
+		Map.Entry<LocalDate, HistoryLog.Baseline> before =
 			hist.floorEntry(pStart.minusDays(1));
-		Map.Entry<java.time.LocalDate, HistoryLog.Baseline> from =
-			HistoryLog.windowStart(hist, pStart, end);
-		Map.Entry<java.time.LocalDate, HistoryLog.Baseline> at = hist.floorEntry(end);
+		Map.Entry<LocalDate, HistoryLog.Baseline> from =
+			HistoryLog.windowStart(hist, pStart, pEnd);
+		Map.Entry<LocalDate, HistoryLog.Baseline> at = hist.floorEntry(pEnd);
 		if (at == null || from == null || at.getKey().equals(from.getKey()))
 		{
 			String empty;
@@ -11276,7 +11227,7 @@ class ChroniclePanel extends PluginPanel
 			// moved on logout: the levels above already read live and the GAIN
 			// did not, which is the half a reader is watching.
 			Map<String, Long> closesOn = closing.skills;
-			if (!pEnd.isBefore(java.time.LocalDate.now()))
+			if (live)
 			{
 				Map<String, Long> nowXp = new HashMap<>(closing.skills);
 				for (Map.Entry<String, long[]> e : plugin.skillSheet().entrySet())
@@ -11321,7 +11272,6 @@ class ChroniclePanel extends PluginPanel
 			// way the site drew every period as a snapshot. Only a period that
 			// reaches today reads the live sheet and ledger: its closing line
 			// is the newest one, and they are that state a few minutes fresher.
-			boolean live = !pEnd.isBefore(java.time.LocalDate.now());
 
 			// The summary lines that read the journal itself rather than the
 			// spine: slayer tasks and slayer kills from the closed segments dated
@@ -11341,7 +11291,7 @@ class ChroniclePanel extends PluginPanel
 			long fromMs = sessionPeriod() ? windowMs()[0]
 				: pStart.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			long toMs = sessionPeriod() ? windowMs()[1]
-				: end.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+				: pEnd.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 			Map<String, Long> fromFeed = new HashMap<>();
 			Map<String, List<String[]>> named = new LinkedHashMap<>();
 			long[] played = {0, 0};   // minutes, sessions
@@ -11406,7 +11356,7 @@ class ChroniclePanel extends PluginPanel
 					named.put("slayerTasksCompleted", tasks);
 				}
 			}
-			long oldest = oldestTs(historyFeed);
+			long oldest = oldestTs(historyFeed, null);
 			boolean reachesBack = oldest > 0 && oldest < fromMs;
 			if (reachesBack)
 			{
@@ -11435,36 +11385,22 @@ class ChroniclePanel extends PluginPanel
 				// the items and sources beside them, so it answers a period
 				// exactly and can say what the loot actually was.
 				long rollFrom = plugin.lootRollFrom();
+				LocalStore.LootWindow dated = null;
 				if (sessionPeriod())
 				{
 					// The roll is dated by DAY, so asked for a sitting it answers
 					// with the day the sitting is in. The sitting keeps its own
 					// entry in the roll's shape instead, written as the drops
 					// land, so it opens the same named lists as any other period.
-					LocalStore.LootWindow w = plugin.sessionLootWindow();
-					sessionsSpeak[0] = true;
-					sessionsHoldTheFloor[0] = true;
-					retro.put("dropsReceived", w.loots);
-					retro.put("lootValue", w.value);
-					retro.put("lootLeftCount", w.left);
-					retro.put("lootLeftValue", w.leftValue);
-					retro.put("lootLeftKills", w.leftKills);
-					if (!w.items.isEmpty())
-					{
-						named.put("lootValue", itemLines(w.items));
-					}
-					if (!w.leftItems.isEmpty())
-					{
-						named.put("lootLeftCount", itemLines(w.leftItems));
-					}
-					if (!w.sources.isEmpty())
-					{
-						named.put("dropsReceived", sourceLines(w.sources));
-					}
+					dated = plugin.sessionLootWindow();
 				}
 				else if (rollFrom > 0 && rollFrom <= fromMs)
 				{
-					LocalStore.LootWindow w = plugin.lootBetween(pStart, pEnd);
+					dated = plugin.lootBetween(pStart, pEnd);
+				}
+				if (dated != null)
+				{
+					LocalStore.LootWindow w = dated;
 					sessionsSpeak[0] = true;
 					sessionsHoldTheFloor[0] = true;   // the roll dates the floor too
 					retro.put("dropsReceived", w.loots);
@@ -11522,7 +11458,7 @@ class ChroniclePanel extends PluginPanel
 			// Counted only where the period reaches today, and zero once logged
 			// out, which is exactly when the closing line exists to be counted
 			// instead - so the two can never both be in the sum.
-			if (!pEnd.isBefore(java.time.LocalDate.now()))
+			if (live)
 			{
 				long running = plugin.sessionElapsedMinutes();
 				if (running > 0)
@@ -11558,7 +11494,7 @@ class ChroniclePanel extends PluginPanel
 			// Whether the record can say what this period left on the floor: the
 			// tally joined the spine partway through the account's life, and a
 			// period that opens before it cannot be told what it kept.
-			java.time.LocalDate leftFrom = HistoryLog.firstCarrying(
+			LocalDate leftFrom = HistoryLog.firstCarrying(
 				hist.headMap(at.getKey(), true), "lootLeftKills");
 			boolean leftDated = sessionsSpeak[0]
 				? sessionsHoldTheFloor[0]
@@ -11568,7 +11504,7 @@ class ChroniclePanel extends PluginPanel
 			// holds reports nothing for every total that joined the spine later:
 			// a board listing 166M of loot sat under a headline reading zero.
 			// So a lifetime is the totals themselves.
-			boolean whole = "Lifetime".equals(histGranularity) && histFrom == null;
+			boolean whole = wholeRecord();
 			HistoryProgress progress = HistoryProgress.of(
 				whole ? closing.counters
 					: HistoryLog.gained(opening.counters, earliest.counters,
@@ -11628,11 +11564,11 @@ class ChroniclePanel extends PluginPanel
 			// the period's start no loot figure was drawn at all, and the note
 			// names the day one could be. Where they do, the figures are theirs
 			// and the spine's own start date says nothing about them.
-			java.time.LocalDate lootSince = null;
+			LocalDate lootSince = null;
 			long lootFromTs = earliestDatedLoot(historyFeed, plugin.lootRollFrom());
 			if (lootFromTs > 0)
 			{
-				java.time.LocalDate sat = Instant.ofEpochMilli(lootFromTs)
+				LocalDate sat = Instant.ofEpochMilli(lootFromTs)
 					.atZone(ZoneId.systemDefault()).toLocalDate();
 				if (sat.isAfter(pStart))
 				{
@@ -11672,7 +11608,7 @@ class ChroniclePanel extends PluginPanel
 				// ends. A lifetime has no earlier end to measure against, and the
 				// figure a reader wants there is the total itself, which is what
 				// the Stats tab carried before it was folded in here.
-				if ("Lifetime".equals(histGranularity) && histFrom == null)
+				if (wholeRecord())
 				{
 					p.add(buildStats());
 				}
@@ -11693,7 +11629,7 @@ class ChroniclePanel extends PluginPanel
 
 	// Any two dates: a small dialog, ISO or d/M/yyyy, prefilled with the
 	// visible period.
-	private void onSetExactDates(java.time.LocalDate from, java.time.LocalDate to)
+	private void onSetExactDates(LocalDate from, LocalDate to)
 	{
 		javax.swing.JTextField fromField = new javax.swing.JTextField(from.toString());
 		javax.swing.JTextField toField = new javax.swing.JTextField(to.toString());
@@ -11708,8 +11644,8 @@ class ChroniclePanel extends PluginPanel
 		{
 			return;
 		}
-		java.time.LocalDate f = parseDate(fromField.getText());
-		java.time.LocalDate t = parseDate(toField.getText());
+		LocalDate f = parseDate(fromField.getText());
+		LocalDate t = parseDate(toField.getText());
 		if (f == null || t == null)
 		{
 			JOptionPane.showMessageDialog(this,
@@ -11718,7 +11654,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (t.isBefore(f))
 		{
-			java.time.LocalDate swap = f;
+			LocalDate swap = f;
 			f = t;
 			t = swap;
 		}
@@ -11727,12 +11663,12 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	private static java.time.LocalDate parseDate(String text)
+	private static LocalDate parseDate(String text)
 	{
 		String s = text == null ? "" : text.trim();
 		try
 		{
-			return java.time.LocalDate.parse(s);
+			return LocalDate.parse(s);
 		}
 		catch (RuntimeException ignored)
 		{
@@ -11740,7 +11676,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		try
 		{
-			return java.time.LocalDate.parse(s,
+			return LocalDate.parse(s,
 				java.time.format.DateTimeFormatter.ofPattern("d/M/yyyy"));
 		}
 		catch (RuntimeException ignored)
@@ -11749,7 +11685,7 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private java.time.LocalDate stepBack(java.time.LocalDate d)
+	private LocalDate stepBack(LocalDate d)
 	{
 		switch (histGranularity)
 		{
@@ -11765,7 +11701,7 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private java.time.LocalDate stepForward(java.time.LocalDate d)
+	private LocalDate stepForward(LocalDate d)
 	{
 		switch (histGranularity)
 		{
@@ -11910,7 +11846,7 @@ class ChroniclePanel extends PluginPanel
 			? "The journal of " + rsn : "The journal");
 
 		long since = plugin.keptSince();
-		TreeMap<java.time.LocalDate, HistoryLog.Baseline> spine = historySpine;
+		TreeMap<LocalDate, HistoryLog.Baseline> spine = historySpine;
 		if (since > 0)
 		{
 			plate.add(row("Kept since",
@@ -12035,7 +11971,7 @@ class ChroniclePanel extends PluginPanel
 			JsonObject tiers = diaries.getAsJsonObject(region);
 			for (String tier : tiers.keySet())
 			{
-				for (com.google.gson.JsonElement e : tiers.getAsJsonArray(tier))
+				for (JsonElement e : tiers.getAsJsonArray(tier))
 				{
 					JsonObject t = e.getAsJsonObject();
 					String task = t.get("task").getAsString();
