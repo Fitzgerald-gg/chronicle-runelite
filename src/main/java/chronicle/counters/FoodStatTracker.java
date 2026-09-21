@@ -38,9 +38,11 @@ import net.runelite.http.api.item.ItemPrice;
 import static chronicle.counters.StatKeys.BEERS_DRUNK;
 import static chronicle.counters.StatKeys.DIVINE_POTION_DAMAGE;
 import static chronicle.counters.StatKeys.CONSUMED_VALUE;
+import static chronicle.counters.StatKeys.FOOD_CONSUMED_VALUE;
 import static chronicle.counters.StatKeys.FOOD_EATEN;
 import static chronicle.counters.StatKeys.HITPOINTS_REGENERATED;
 import static chronicle.counters.StatKeys.POTION_DOSES;
+import static chronicle.counters.StatKeys.POTIONS_CONSUMED_VALUE;
 import static chronicle.counters.StatKeys.VIALS_SHATTERED;
 
 /**
@@ -346,6 +348,7 @@ public class FoodStatTracker implements StatTracker
 				if (price > 0)
 				{
 					store.incrementStatBy(CONSUMED_VALUE, price);
+					store.incrementStatBy(FOOD_CONSUMED_VALUE, price);
 				}
 				String typed = perFoodKey(itemName(before.getKey()));
 				if (!typed.isEmpty())
@@ -542,6 +545,7 @@ public class FoodStatTracker implements StatTracker
 			return;
 		}
 		store.incrementStatBy(CONSUMED_VALUE, perDose);
+		store.incrementStatBy(POTIONS_CONSUMED_VALUE, perDose);
 		if (!typed.isEmpty() && consumableSink != null)
 		{
 			consumableSink.accept(typed, perDose);

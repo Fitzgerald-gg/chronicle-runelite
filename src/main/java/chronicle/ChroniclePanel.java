@@ -118,7 +118,7 @@ class ChroniclePanel extends PluginPanel
 
 	private enum View
 	{
-		HOME, DROPS, SLAYER, LOG, STATS, HISTORY, JOURNAL, KILLS, SHEET
+		HOME, DROPS, SLAYER, LOG, STATS, HISTORY, JOURNAL, KILLS, SHEET, RECAP
 	}
 
 	/**
@@ -140,7 +140,7 @@ class ChroniclePanel extends PluginPanel
 		// Named for what it holds rather than for its first child: two of the
 		// three are lifetime, and a tab called "This session" whose Journal lists
 		// other sittings is a worse lie than the scrolling it was meant to fix.
-		SUBS.put(Tab.RECORD, new String[]{"Now", "Journal", "Ledger"});
+		SUBS.put(Tab.RECORD, new String[]{"Now", "Journal", "Ledger", "Recap"});
 		// The bosses and the skills were two boards built from ONE widget that
 		// behaved in opposite ways on a click: a boss opened a card under its own
 		// grid row, a skill took over the screen. They are one sheet now, in the
@@ -198,10 +198,15 @@ class ChroniclePanel extends PluginPanel
 	// Every tracker in one place, which no tab holds: the stats table is filed by
 	// family and a reader who wants the whole sheet has nowhere to ask for it.
 	private boolean allTrackers;
-	// The counts-of-the-record page. Reached by typing "info" and nothing else:
-	// it answers questions about the JOURNAL rather than about the account, and
-	// a tab for it would be a tab most readers never want.
+	// The counts-of-the-record page, behind the Journal's nameplate: it answers
+	// questions about the JOURNAL rather than about the account, and a tab for
+	// it would be a tab most readers never want.
 	private boolean showInfo;
+	// The two other pages a reader is sent to: the records book behind the
+	// Total level cell, and the calendar behind the nameplate's Days written.
+	private boolean showRecords;
+	private boolean showCalendar;
+	private java.time.YearMonth calendarMonth = java.time.YearMonth.now();
 	private final java.util.ArrayDeque<String[]> detailStack = new java.util.ArrayDeque<>();
 	private String statsFamily = StatRegistry.FAMILIES[0];
 	private int dropsShown = ROW_CAP;
@@ -421,7 +426,7 @@ class ChroniclePanel extends PluginPanel
 		String[] subs = SUBS.get(tab);
 		if (subs == null || subs.length == 0 || !searchQuery().isEmpty()
 			|| detailItem != null || detailSource != null || detailSkill != null
-			|| allTrackers || detailTask >= 0
+			|| allTrackers || showRecords || showCalendar || detailTask >= 0
 			|| leftBehindSource != null || leftBehindItem != null)
 		{
 			return null;
@@ -486,6 +491,8 @@ class ChroniclePanel extends PluginPanel
 						return View.JOURNAL;
 					case "Ledger":
 						return View.STATS;
+					case "Recap":
+						return View.RECAP;
 					case "Now":
 					default:
 						return View.HOME;
@@ -536,6 +543,8 @@ class ChroniclePanel extends PluginPanel
 				return "Slayer";
 			case JOURNAL:
 				return "Journal";
+			case RECAP:
+				return "Recap";
 			case HOME:
 			default:
 				return "Now";
@@ -2189,6 +2198,8 @@ class ChroniclePanel extends PluginPanel
 		milestones = null;
 		landedSlots = null;
 		records = null;
+		daysPlayed = null;
+		dayTotals = null;
 		// Set only by buildStats, but read by the all-trackers board too. Left
 		// standing it carried one period's dropped figure onto another period's
 		// gathered row, and stepping the period never moved it.
@@ -2273,6 +2284,14 @@ class ChroniclePanel extends PluginPanel
 		{
 			body = buildAllTrackers();
 		}
+		else if (showRecords)
+		{
+			body = buildRecords();
+		}
+		else if (showCalendar)
+		{
+			body = buildCalendar();
+		}
 		else if (showInfo)
 		{
 			body = buildInfo();
@@ -2316,6 +2335,9 @@ class ChroniclePanel extends PluginPanel
 					break;
 				case JOURNAL:
 					body = buildJournal();
+					break;
+				case RECAP:
+					body = buildRecap();
 					break;
 				case HOME:
 				default:
@@ -4285,6 +4307,54 @@ class ChroniclePanel extends PluginPanel
 			&& was.tasks.get(0).kills != now.tasks.get(0).kills;
 	}
 
+	/**
+	 * One task read against the account's own record of the same assignment:
+	 * what it usually pays and the best it ever did, from the closed tasks
+	 * before this one. Two figures and a date; nothing about whether it was
+	 * worth doing.
+	 */
+	private void addTaskAgainstRecord(JPanel head, LocalStore.SlayerJourney j, int index,
+		LocalStore.SlayerTask t)
+	{
+		int earlier = 0;
+		long sumValue = 0;
+		long sumKills = 0;
+		int bestAt = -1;
+		for (int i = 0; i < j.tasks.size(); i++)
+		{
+			LocalStore.SlayerTask o = j.tasks.get(i);
+			if (i == index || o.inProgress || o.ts >= t.ts || !o.task.equalsIgnoreCase(t.task))
+			{
+				continue;
+			}
+			earlier++;
+			sumValue += o.totalValue;
+			sumKills += o.kills;
+			if (bestAt < 0 || o.totalValue > j.tasks.get(bestAt).totalValue)
+			{
+				bestAt = i;
+			}
+		}
+		// an average of one is not a usual
+		if (earlier < 2)
+		{
+			return;
+		}
+		head.add(row("Your usual", gp(sumValue / earlier) + " gp · " + fmt(sumKills / earlier)
+			+ " kills · over " + earlier + " tasks", null));
+		LocalStore.SlayerTask best = j.tasks.get(bestAt);
+		JPanel bestRow = row("Your best", gp(best.totalValue) + " gp · "
+			+ TASK_DAY.format(Instant.ofEpochMilli((long) (best.ts * 1000))), null);
+		final int at = bestAt;
+		bestRow.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		bestRow.addMouseListener(clicker(() ->
+		{
+			detailTask = at;
+			rebuild();
+		}));
+		head.add(bestRow);
+	}
+
 	// One task on its own: what it was made of and what it dropped. The
 	// monster's whole lifetime bag is a button away at the bottom.
 	private JPanel buildTaskDetail(int index)
@@ -4318,6 +4388,7 @@ class ChroniclePanel extends PluginPanel
 			head.add(row(t.inProgress ? "Started" : "Finished",
 				TASK_DAY.format(Instant.ofEpochMilli((long) (t.ts * 1000))), null));
 		}
+		addTaskAgainstRecord(head, j, index, t);
 		p.add(head);
 		p.add(vgap(6));
 
@@ -4592,6 +4663,35 @@ class ChroniclePanel extends PluginPanel
 	{
 		allTrackers = false;
 		showInfo = false;
+		showRecords = false;
+		showCalendar = false;
+	}
+
+	/** The account's bests, each with its date. Behind the Total level cell. */
+	void openRecords()
+	{
+		leaveSentPage();
+		showRecords = true;
+		detailItem = null;
+		detailSource = null;
+		detailSkill = null;
+		detailTask = -1;
+		clearSearch();
+		rebuild();
+	}
+
+	/** The days written, as a month. Behind the nameplate's Days written row. */
+	void openCalendar()
+	{
+		leaveSentPage();
+		showCalendar = true;
+		calendarMonth = java.time.YearMonth.from(histCursor);
+		detailItem = null;
+		detailSource = null;
+		detailSkill = null;
+		detailTask = -1;
+		clearSearch();
+		rebuild();
 	}
 
 	void openItem(String name)
@@ -4890,9 +4990,11 @@ class ChroniclePanel extends PluginPanel
 		// drilled into, so neither is on the detail stack and neither can be
 		// left by popping it. Without a branch of its own the back row rebuilds
 		// the page it is standing on and reads as a dead button.
-		if (showInfo)
+		if (showInfo || showRecords || showCalendar)
 		{
 			showInfo = false;
+			showRecords = false;
+			showCalendar = false;
 			rebuild();
 			return;
 		}
@@ -7340,6 +7442,58 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
+	private static final String FOLD_DEATHS = "Combat:deaths";
+
+	/** The Deaths row as a fold: who dealt them, ranked, with the last date each did. */
+	private void addDeathsFold(JPanel p, String figure)
+	{
+		JPanel head = row("Deaths", figure, null);
+		JLabel name = (JLabel) ((BorderLayout) head.getLayout())
+			.getLayoutComponent(BorderLayout.CENTER);
+		boolean open = foldOpen(FOLD_DEATHS);
+		if (open)
+		{
+			name.setForeground(accent());
+		}
+		head.setToolTipText("Who dealt them");
+		head.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		head.addMouseListener(clicker(() -> toggleFold(FOLD_DEATHS)));
+		p.add(head);
+		if (!open)
+		{
+			return;
+		}
+		Map<String, long[]> killers = new LinkedHashMap<>();
+		for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
+		{
+			long ts = safeLong(e.get("ts"));
+			if (!"DEATH".equals(typeOf(e)) || !insideWindow(ts))
+			{
+				continue;
+			}
+			JsonObject d = e.has("data") && e.get("data").isJsonObject()
+				? e.getAsJsonObject("data") : new JsonObject();
+			String who = has(d, "killerName") ? d.get("killerName").getAsString() : "Unknown";
+			long[] t = killers.computeIfAbsent(who, k -> new long[2]);
+			t[0]++;
+			t[1] = Math.max(t[1], ts);
+		}
+		List<Map.Entry<String, long[]>> ranked = new ArrayList<>(killers.entrySet());
+		ranked.sort((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0]));
+		for (Map.Entry<String, long[]> k : ranked)
+		{
+			JPanel r = row(k.getKey(), fmt(k.getValue()[0]) + " · last "
+				+ TASK_DAY.format(Instant.ofEpochMilli(k.getValue()[1])), null);
+			if (!"Unknown".equals(k.getKey()))
+			{
+				final String who = k.getKey();
+				r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+				r.addMouseListener(clicker(() -> openSourceLoose(who)));
+			}
+			p.add(r);
+		}
+	}
+
 	private JPanel buildStats()
 	{
 		JPanel p = column();
@@ -7375,6 +7529,14 @@ class ChroniclePanel extends PluginPanel
 			pills.add(pill);
 		}
 		p.add(pills);
+		if (tab == Tab.TRACKERS && !allTrackers)
+		{
+			// the whole sheet in one place, which was reachable only by typing
+			JPanel every = ghostRow("every counter in one place", "");
+			every.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			every.addMouseListener(clicker(this::openAllTrackers));
+			p.add(every);
+		}
 		p.add(vgap(4));
 
 		// Rows file into sections. Generic floor totals (logsChopped,
@@ -7438,6 +7600,11 @@ class ChroniclePanel extends PluginPanel
 			{
 				for (Map.Entry<String, Long> e : rows)
 				{
+					if ("deaths".equals(e.getKey()) && e.getValue() > 0)
+					{
+						addDeathsFold(p, rowValue(e));
+						continue;
+					}
 					p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e), null));
 				}
 				continue;
@@ -7497,9 +7664,15 @@ class ChroniclePanel extends PluginPanel
 					}
 				}
 			}
-			// The count stands in both states. The gp beside it is lifetime and so
-			// only stands on Lifetime: a collapsed section otherwise paired a
-			// week's count with a career's spend, which reads as one arithmetic.
+			else if (sec.equals("Food") || sec.equals("Potions"))
+			{
+				// the period's own spend, written at the bite and the dose
+				secGp = counters.getOrDefault(
+					sec.equals("Food") ? "foodConsumedValue" : "potionsConsumedValue", 0L);
+			}
+			// The count stands in both states, and the gp beside it is the same
+			// period's: the lifetime priced by the record, a window by the split
+			// the trackers write. A week's count never sits beside a career's spend.
 			p.add(quietHead(sec, fmt(total) + (secGp > 0 ? " · " + gp(secGp) + " gp" : ""),
 				stateKey));
 			if (open)
@@ -9364,6 +9537,9 @@ class ChroniclePanel extends PluginPanel
 		// tiles take a row each instead of overlapping in one.
 		JPanel combat = combatLevelTile(gain, opened);
 		JPanel total = totalLevelTile(stand, opened);
+		// the one cell on the sheet that was not a door
+		total.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		total.addMouseListener(clicker(this::openRecords));
 		if (wholeRecord())
 		{
 			JPanel levels2 = new JPanel(new GridLayout(1, 2, 2, 2));
@@ -12200,6 +12376,855 @@ class ChroniclePanel extends PluginPanel
 		return records;
 	}
 
+	// Every day a sitting was written, off the feed: {minutes, sittings}. Once a
+	// build; the calendar, the day lines and the recap all read it.
+	private Map<LocalDate, long[]> daysPlayed;
+	// and the roll by day, keyed as the roll keys it
+	private Map<String, long[]> dayTotals;
+
+	private Map<LocalDate, long[]> daysPlayed()
+	{
+		if (daysPlayed == null)
+		{
+			daysPlayed = new LinkedHashMap<>();
+			for (JsonObject e : plugin.feedWithSitting(FEED_SCAN_DEEP))
+			{
+				if (!"SESSION".equals(typeOf(e)))
+				{
+					continue;
+				}
+				LocalDate day = Instant.ofEpochMilli(safeLong(e.get("ts")))
+					.atZone(ZoneId.systemDefault()).toLocalDate();
+				long[] t = daysPlayed.computeIfAbsent(day, k -> new long[2]);
+				t[0] += sessionMinutes(e);
+				t[1]++;
+			}
+		}
+		return daysPlayed;
+	}
+
+	private Map<String, long[]> dayTotals()
+	{
+		if (dayTotals == null)
+		{
+			dayTotals = plugin.dayTotals();
+		}
+		return dayTotals;
+	}
+
+	private static final DateTimeFormatter ROLL_DAY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+	/** The xp one day added over the day before it: {total, most} with the skill that moved most. */
+	private Object[] dayXp(LocalDate day)
+	{
+		TreeMap<LocalDate, HistoryLog.Baseline> spine = historySpine;
+		if (spine == null)
+		{
+			return null;
+		}
+		HistoryLog.Baseline at = spine.get(day);
+		Map.Entry<LocalDate, HistoryLog.Baseline> before = spine.lowerEntry(day);
+		if (at == null || before == null)
+		{
+			return null;
+		}
+		long total = 0;
+		long most = 0;
+		String top = null;
+		for (Map.Entry<String, Long> e : at.skills.entrySet())
+		{
+			Long was = before.getValue().skills.get(e.getKey());
+			if ("overall".equals(e.getKey()) || was == null)
+			{
+				continue;
+			}
+			long gained = e.getValue() - was;
+			if (gained <= 0)
+			{
+				continue;
+			}
+			total += gained;
+			if (gained > most)
+			{
+				most = gained;
+				top = e.getKey();
+			}
+		}
+		return total > 0 ? new Object[]{total, StatRegistry.prettify(top)} : null;
+	}
+
+	/**
+	 * One day's line, under its heading in the Journal: sittings and minutes,
+	 * xp and the skill most of it went to, drops and their gp. Figures only,
+	 * each clause present only where the record has one; null for a day with
+	 * none of them.
+	 */
+	private String dayEntry(LocalDate day)
+	{
+		List<String> clauses = new ArrayList<>();
+		long[] sat = daysPlayed().get(day);
+		if (sat != null && sat[1] > 0)
+		{
+			clauses.add(sat[1] + (sat[1] == 1 ? " sitting" : " sittings")
+				+ (sat[0] > 0 ? " · " + hoursMinutes(sat[0]) : ""));
+		}
+		Object[] xp = dayXp(day);
+		if (xp != null)
+		{
+			clauses.add("+" + gp((Long) xp[0]) + " xp, most in " + xp[1]);
+		}
+		long[] loot = dayTotals().get(ROLL_DAY.format(day));
+		if (loot != null && loot[0] > 0)
+		{
+			clauses.add(fmt(loot[0]) + (loot[0] == 1 ? " drop" : " drops")
+				+ (loot[1] > 0 ? " · " + gp(loot[1]) + " gp" : ""));
+		}
+		return clauses.isEmpty() ? null : String.join(" · ", clauses);
+	}
+
+	/**
+	 * The period as one plate. A dozen figures at most, every one a door to
+	 * the board it was read off, and nothing on it that is not a figure: the
+	 * record composed, not described.
+	 */
+	private JPanel buildRecap()
+	{
+		JPanel p = column();
+		p.add(copyHeader("Recap", () -> copyPicture(recapPlate())));
+		p.add(recapPlate());
+		return p;
+	}
+
+	private JPanel recapPlate()
+	{
+		JPanel plate = card(wholeRecord() ? "The whole record" : window().label);
+		int rows = 0;
+
+		// the sittings
+		long minutes = 0;
+		int sittings = 0;
+		LocalDate busiest = null;
+		long busiestMinutes = 0;
+		for (Map.Entry<LocalDate, long[]> d : daysPlayed().entrySet())
+		{
+			if (!insideWindow(d.getKey().atTime(12, 0).atZone(ZoneId.systemDefault())
+				.toInstant().toEpochMilli()))
+			{
+				continue;
+			}
+			minutes += d.getValue()[0];
+			sittings += d.getValue()[1];
+			if (d.getValue()[0] > busiestMinutes)
+			{
+				busiestMinutes = d.getValue()[0];
+				busiest = d.getKey();
+			}
+		}
+		if (sittings > 0)
+		{
+			rows += plateRow(plate, "Played", hoursMinutes(minutes) + " · " + fmt(sittings)
+				+ (sittings == 1 ? " sitting" : " sittings"), () ->
+			{
+				journalLens = "Sessions";
+				applyTab(View.JOURNAL);
+			});
+		}
+		if (busiest != null && sittings > 1)
+		{
+			final LocalDate day = busiest;
+			rows += plateRow(plate, "Busiest day", TASK_DAY.format(day.atStartOfDay(
+				ZoneId.systemDefault()).toInstant()) + " · " + hoursMinutes(busiestMinutes),
+				() -> openJournalOn(day.atTime(12, 0).atZone(ZoneId.systemDefault())
+					.toInstant().toEpochMilli()));
+		}
+
+		// the xp and the levels, off the spine
+		long[] xp = periodXp();
+		if (xp != null && xp[0] > 0)
+		{
+			String most = periodXpMost();
+			rows += plateRow(plate, wholeRecord() ? "Xp" : "Xp gained",
+				(wholeRecord() ? "" : "+") + gp(xp[0]) + (most != null ? " · most in " + most : ""),
+				() -> applyTab(View.SHEET));
+		}
+		long[] levels = periodLevels();
+		if (levels != null)
+		{
+			rows += plateRow(plate, wholeRecord() ? "Total level" : "Levels",
+				wholeRecord() ? fmt(levels[0]) : "+" + fmt(levels[0]) + " · " + fmt(levels[1]) + " now",
+				() -> applyTab(View.SHEET));
+		}
+
+		// the loot, off the roll or the ledger
+		long[] loot = periodLoot();
+		if (loot[0] > 0)
+		{
+			rows += plateRow(plate, "Drops", fmt(loot[0]) + " · " + gp(loot[1]) + " gp",
+				() -> applyTab(View.DROPS));
+		}
+		String[] dearest = periodDearest();
+		if (dearest != null)
+		{
+			final String item = dearest[0];
+			rows += plateRow(plate, "Dearest drop", item + " · " + gp(Long.parseLong(dearest[1])) + " gp",
+				() -> openItem(item));
+		}
+		if (loot[2] > 0)
+		{
+			rows += plateRow(plate, "Left behind", fmt(loot[2]) + " · " + gp(loot[3]) + " gp", () ->
+			{
+				dropsLeftBehind = true;
+				applyTab(View.DROPS);
+			});
+		}
+
+		// what it cost to stay alive
+		Map<String, Long> counters = wholeRecord() ? counters() : periodCounters();
+		long food = counters.getOrDefault("foodEaten", 0L);
+		long doses = counters.getOrDefault("potionDoses", 0L);
+		long spend = counters.getOrDefault("consumedValue", 0L);
+		if (food > 0 || doses > 0)
+		{
+			rows += plateRow(plate, "Eaten & sipped", (food > 0 ? fmt(food) + " food" : "")
+				+ (food > 0 && doses > 0 ? " · " : "") + (doses > 0 ? fmt(doses) + " doses" : "")
+				+ (spend > 0 ? " · " + gp(spend) + " gp" : ""), () ->
+			{
+				statsFamily = "Living";
+				subByTab.put(Tab.RECORD, "Ledger");
+				applyCommon();
+			});
+		}
+
+		// the fights
+		String[] killed = periodKilledMost();
+		if (killed != null)
+		{
+			final String who = killed[0];
+			rows += plateRow(plate, "Killed most", who + " · " + killed[1], () -> openSourceLoose(who));
+		}
+		long[] ms = windowMs();
+		long[] tally = plugin.onTaskTally(ms[0], ms[1], null, wholeRecord());
+		if (tally[2] > 0)
+		{
+			long paid = 0;
+			for (LocalStore.BagItem b : plugin.onTaskLoot(ms[0], ms[1], null, wholeRecord()))
+			{
+				paid += b.value;
+			}
+			rows += plateRow(plate, "Tasks", fmt(tally[2]) + (paid > 0 ? " · " + gp(paid) + " gp" : ""), () ->
+			{
+				slayerLens = "Tasks";
+				applyTab(View.SLAYER);
+			});
+		}
+
+		// the lines the feed dated inside the window
+		Map<String, long[]> lines = new LinkedHashMap<>();
+		Map<String, String> firstNamed = new LinkedHashMap<>();
+		for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
+		{
+			String type = typeOf(e);
+			if (!insideWindow(safeLong(e.get("ts"))))
+			{
+				continue;
+			}
+			lines.computeIfAbsent(type, k -> new long[1])[0]++;
+			String name = feedName(e);
+			if (name != null)
+			{
+				firstNamed.putIfAbsent(type, name);
+			}
+		}
+		rows += feedPlateRow(plate, lines, firstNamed, "COLLECTION", "Log slot", "Log slots", "Log");
+		rows += feedPlateRow(plate, lines, firstNamed, "PET", "Pet", "Pets", "Feats");
+		rows += feedPlateRow(plate, lines, firstNamed, "QUEST", "Quest", "Quests", "Feats");
+		rows += feedPlateRow(plate, lines, firstNamed, "DIARY", "Diary", "Diaries", "Feats");
+		rows += feedPlateRow(plate, lines, firstNamed, "COMBAT_ACHIEVEMENT", "Combat achievement",
+			"Combat achievements", "Feats");
+		rows += feedPlateRow(plate, lines, firstNamed, "DEATH", "Death", "Deaths", "Deaths");
+
+		if (rows == 0)
+		{
+			plate.add(note(wholeRecord() ? "Nothing on the record yet."
+				: "Nothing inside " + periodInSentence() + "."));
+		}
+		return plate;
+	}
+
+	private int plateRow(JPanel plate, String left, String right, Runnable go)
+	{
+		JPanel r = row(left, right, null);
+		r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		r.addMouseListener(clicker(go));
+		plate.add(r);
+		return 1;
+	}
+
+	/** One kind of feed line on the plate: its count and the first one named; a door to its lens. */
+	private int feedPlateRow(JPanel plate, Map<String, long[]> lines, Map<String, String> named,
+		String type, String one, String many, String lens)
+	{
+		long[] n = lines.get(type);
+		if (n == null || n[0] == 0)
+		{
+			return 0;
+		}
+		String name = named.get(type);
+		// a death names who dealt it in the line; the count is the figure
+		String right = fmt(n[0]) + (name != null && !"DEATH".equals(type) ? " · " + name : "");
+		if ("DEATH".equals(type) && name != null)
+		{
+			right = fmt(n[0]) + " · " + name;
+		}
+		return plateRow(plate, n[0] == 1 ? one : many, right, () ->
+		{
+			journalLens = lens;
+			applyTab(View.JOURNAL);
+		});
+	}
+
+	/** The period's xp as {gained}: the whole record's total, or the spine's delta. */
+	private long[] periodXp()
+	{
+		if (wholeRecord())
+		{
+			long[] overall = plugin.skillSheet().get("overall");
+			return overall != null && overall.length > 1 ? new long[]{overall[1]} : null;
+		}
+		Map.Entry<LocalDate, HistoryLog.Baseline>[] ends = periodEnds();
+		if (ends == null)
+		{
+			return null;
+		}
+		long total = 0;
+		for (Map.Entry<String, Long> e : ends[1].getValue().skills.entrySet())
+		{
+			Long was = ends[0].getValue().skills.get(e.getKey());
+			if (!"overall".equals(e.getKey()) && was != null && e.getValue() > was)
+			{
+				total += e.getValue() - was;
+			}
+		}
+		return new long[]{total};
+	}
+
+	/** The skill the period's xp mostly went to. */
+	private String periodXpMost()
+	{
+		Map<String, Long> by = new LinkedHashMap<>();
+		if (wholeRecord())
+		{
+			for (Map.Entry<String, long[]> e : plugin.skillSheet().entrySet())
+			{
+				if (!"overall".equals(e.getKey()) && e.getValue().length > 1)
+				{
+					by.put(e.getKey(), e.getValue()[1]);
+				}
+			}
+		}
+		else
+		{
+			Map.Entry<LocalDate, HistoryLog.Baseline>[] ends = periodEnds();
+			if (ends == null)
+			{
+				return null;
+			}
+			for (Map.Entry<String, Long> e : ends[1].getValue().skills.entrySet())
+			{
+				Long was = ends[0].getValue().skills.get(e.getKey());
+				if (!"overall".equals(e.getKey()) && was != null && e.getValue() > was)
+				{
+					by.put(e.getKey(), e.getValue() - was);
+				}
+			}
+		}
+		String top = null;
+		long most = 0;
+		for (Map.Entry<String, Long> e : by.entrySet())
+		{
+			if (e.getValue() > most)
+			{
+				most = e.getValue();
+				top = e.getKey();
+			}
+		}
+		return top == null ? null : StatRegistry.prettify(top);
+	}
+
+	/** The period's levels as {gained, standing}, or the standing alone on the whole record. */
+	private long[] periodLevels()
+	{
+		if (wholeRecord())
+		{
+			long[] overall = plugin.skillSheet().get("overall");
+			return overall != null && overall[0] > 0 ? new long[]{overall[0], overall[0]} : null;
+		}
+		Map.Entry<LocalDate, HistoryLog.Baseline>[] ends = periodEnds();
+		if (ends == null || !ends[0].getValue().complete || !ends[1].getValue().complete)
+		{
+			return null;
+		}
+		List<String> keys = new ArrayList<>(ends[1].getValue().skills.keySet());
+		keys.remove("overall");
+		HistoryLog.Levels was = HistoryLog.levels(ends[0].getValue(), keys);
+		HistoryLog.Levels now = HistoryLog.levels(ends[1].getValue(), keys);
+		return now.total > was.total ? new long[]{now.total - was.total, now.total} : null;
+	}
+
+	/** The baselines bounding a narrowed period, {opening, closing}; null short of two. */
+	@SuppressWarnings("unchecked")
+	private Map.Entry<LocalDate, HistoryLog.Baseline>[] periodEnds()
+	{
+		TreeMap<LocalDate, HistoryLog.Baseline> spine = historySpine;
+		Window w = window();
+		if (spine == null || w == null)
+		{
+			return null;
+		}
+		Map.Entry<LocalDate, HistoryLog.Baseline> from = HistoryLog.windowStart(spine, w.start, w.end);
+		Map.Entry<LocalDate, HistoryLog.Baseline> at = spine.floorEntry(w.end);
+		if (from == null || at == null || from.getKey().equals(at.getKey()))
+		{
+			return null;
+		}
+		return new Map.Entry[]{from, at};
+	}
+
+	/** The period's loot as {drops, gp, left, leftGp}. */
+	private long[] periodLoot()
+	{
+		if (wholeRecord())
+		{
+			long[] out = new long[4];
+			for (LocalStore.SourceRow r : sources())
+			{
+				out[0] += r.loots;
+				out[1] += r.value;
+			}
+			for (LocalStore.UntakenRow u : plugin.untakenSources())
+			{
+				out[2] += u.qty;
+				out[3] += u.value;
+			}
+			return out;
+		}
+		Window w = window();
+		LocalStore.LootWindow win = sessionPeriod() ? plugin.sessionLootWindow()
+			: plugin.lootBetween(w.start, w.end);
+		return new long[]{win.loots, win.value, win.left, win.leftValue};
+	}
+
+	/** The single item worth most inside a narrowed period, {name, value}; null on the whole record. */
+	private String[] periodDearest()
+	{
+		if (wholeRecord())
+		{
+			return null;
+		}
+		Window w = window();
+		LocalStore.LootWindow win = sessionPeriod() ? plugin.sessionLootWindow()
+			: plugin.lootBetween(w.start, w.end);
+		return win.items.isEmpty() ? null : new String[]{win.items.get(0)[0], win.items.get(0)[2]};
+	}
+
+	/** What was killed most inside the period, {name, count as text}. */
+	private String[] periodKilledMost()
+	{
+		if (wholeRecord())
+		{
+			LocalStore.SourceRow top = null;
+			for (LocalStore.SourceRow r : sources())
+			{
+				if (isKillSource(r.name) && (top == null || standingKills(r) > standingKills(top)))
+				{
+					top = r;
+				}
+			}
+			return top == null ? null : new String[]{top.name, fmt(standingKills(top))};
+		}
+		if (sessionPeriod())
+		{
+			String top = null;
+			long most = 0;
+			for (String[] s : plugin.sessionLootWindow().sources)
+			{
+				long n = safeParse(s[1]);
+				if (n > most)
+				{
+					most = n;
+					top = s[0];
+				}
+			}
+			return top == null ? null : new String[]{top, fmt(most)};
+		}
+		Map.Entry<LocalDate, HistoryLog.Baseline>[] ends = periodEnds();
+		if (ends == null)
+		{
+			return null;
+		}
+		String top = null;
+		long most = 0;
+		for (Map.Entry<String, Long> e : ends[1].getValue().kcs.entrySet())
+		{
+			Long was = ends[0].getValue().kcs.get(e.getKey());
+			long gained = was == null ? 0 : e.getValue() - was;
+			if (gained > most)
+			{
+				most = gained;
+				top = e.getKey();
+			}
+		}
+		return top == null ? null : new String[]{top, fmt(most)};
+	}
+
+	/**
+	 * The account's bests, each with its date and what it beat on hover. Read
+	 * off the record: the sittings, the spine's day-to-day deltas, and the
+	 * roll by day. Nothing here is a goal; every line already happened.
+	 */
+	private JPanel buildRecords()
+	{
+		JPanel p = column();
+		p.add(backRow());
+		p.add(vgap(4));
+		JPanel book = card("Records");
+		int rows = 0;
+
+		// the longest sitting
+		long[] best = {0, 0};
+		long[] then = {0, 0};
+		for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
+		{
+			if (!"SESSION".equals(typeOf(e)))
+			{
+				continue;
+			}
+			long mins = sessionMinutes(e);
+			long ts = safeLong(e.get("ts"));
+			if (mins > best[0])
+			{
+				then = best;
+				best = new long[]{mins, ts};
+			}
+			else if (mins > then[0])
+			{
+				then = new long[]{mins, ts};
+			}
+		}
+		if (best[0] > 0)
+		{
+			rows += recordRow(book, "Longest sitting", hoursMinutes(best[0]), best[1],
+				then[0] > 0 ? "Then " + hoursMinutes(then[0]) + " · " + dated(then[1]) : null);
+		}
+
+		// the spine, day against the day before it
+		TreeMap<LocalDate, HistoryLog.Baseline> spine = historySpine;
+		if (spine != null && spine.size() > 1)
+		{
+			long[] bigXp = {0, 0};
+			long[] thenXp = {0, 0};
+			String bigSkill = null;
+			long[] bigKills = {0, 0};
+			long[] thenKills = {0, 0};
+			int run = 0;
+			int longest = 0;
+			LocalDate runEnd = null;
+			LocalDate prevDay = null;
+			Map.Entry<LocalDate, HistoryLog.Baseline> before = null;
+			for (Map.Entry<LocalDate, HistoryLog.Baseline> day : spine.entrySet())
+			{
+				run = prevDay != null && prevDay.plusDays(1).equals(day.getKey()) ? run + 1 : 1;
+				if (run > longest)
+				{
+					longest = run;
+					runEnd = day.getKey();
+				}
+				prevDay = day.getKey();
+				if (before != null)
+				{
+					long ts = day.getKey().atTime(12, 0).atZone(ZoneId.systemDefault())
+						.toInstant().toEpochMilli();
+					Object[] xp = dayXp(day.getKey());
+					long gained = xp == null ? 0 : (Long) xp[0];
+					if (gained > bigXp[0])
+					{
+						thenXp = bigXp;
+						bigXp = new long[]{gained, ts};
+						bigSkill = (String) xp[1];
+					}
+					else if (gained > thenXp[0])
+					{
+						thenXp = new long[]{gained, ts};
+					}
+					long kills = 0;
+					for (Map.Entry<String, Long> k : day.getValue().kcs.entrySet())
+					{
+						Long was = before.getValue().kcs.get(k.getKey());
+						if (was != null && k.getValue() > was)
+						{
+							kills += k.getValue() - was;
+						}
+					}
+					if (kills > bigKills[0])
+					{
+						thenKills = bigKills;
+						bigKills = new long[]{kills, ts};
+					}
+					else if (kills > thenKills[0])
+					{
+						thenKills = new long[]{kills, ts};
+					}
+				}
+				before = day;
+			}
+			if (bigXp[0] > 0)
+			{
+				rows += recordRow(book, "Biggest day", "+" + gp(bigXp[0]) + " xp", bigXp[1],
+					(bigSkill != null ? "Most in " + bigSkill : "")
+						+ (thenXp[0] > 0 ? (bigSkill != null ? " · " : "") + "then +" + gp(thenXp[0])
+						+ " · " + dated(thenXp[1]) : ""));
+			}
+			if (bigKills[0] > 0)
+			{
+				rows += recordRow(book, "Most kills in a day", fmt(bigKills[0]), bigKills[1],
+					thenKills[0] > 0 ? "Then " + fmt(thenKills[0]) + " · " + dated(thenKills[1]) : null);
+			}
+			if (longest > 1 && runEnd != null)
+			{
+				rows += recordRow(book, "Longest run of days written",
+					fmt(longest) + " days", runEnd.atTime(12, 0).atZone(ZoneId.systemDefault())
+						.toInstant().toEpochMilli(), null);
+			}
+		}
+
+		// the roll by day
+		long[] rich = {0, 0, 0};
+		long[] thenRich = {0, 0};
+		long[] busy = {0, 0, 0};
+		long[] thenBusy = {0, 0};
+		for (Map.Entry<String, long[]> d : dayTotals().entrySet())
+		{
+			long ts;
+			try
+			{
+				ts = LocalDate.parse(d.getKey(), ROLL_DAY).atTime(12, 0)
+					.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+			}
+			catch (RuntimeException e)
+			{
+				continue;
+			}
+			long[] t = d.getValue();
+			if (t[1] > rich[0])
+			{
+				thenRich = new long[]{rich[0], rich[1]};
+				rich = new long[]{t[1], ts, t[0]};
+			}
+			else if (t[1] > thenRich[0])
+			{
+				thenRich = new long[]{t[1], ts};
+			}
+			if (t[0] > busy[0])
+			{
+				thenBusy = new long[]{busy[0], busy[1]};
+				busy = new long[]{t[0], ts, t[1]};
+			}
+			else if (t[0] > thenBusy[0])
+			{
+				thenBusy = new long[]{t[0], ts};
+			}
+		}
+		if (rich[0] > 0)
+		{
+			rows += recordRow(book, "Richest day", gp(rich[0]) + " gp", rich[1],
+				fmt(rich[2]) + " drops" + (thenRich[0] > 0 ? " · then " + gp(thenRich[0]) + " · "
+					+ dated(thenRich[1]) : ""));
+		}
+		if (busy[0] > 0)
+		{
+			rows += recordRow(book, "Most drops in a day", fmt(busy[0]), busy[1],
+				gp(busy[2]) + " gp" + (thenBusy[0] > 0 ? " · then " + fmt(thenBusy[0]) + " · "
+					+ dated(thenBusy[1]) : ""));
+		}
+
+		// the one record the counters keep, undated
+		long hit = counters().getOrDefault("highestHit", 0L);
+		if (hit > 0)
+		{
+			book.add(row("Highest hit", fmt(hit), null));
+			rows++;
+		}
+		if (rows == 0)
+		{
+			book.add(note("No record set yet."));
+		}
+		p.add(book);
+		return p;
+	}
+
+	private static String dated(long ts)
+	{
+		return FULL_DAY.format(Instant.ofEpochMilli(ts));
+	}
+
+	private int recordRow(JPanel book, String left, String figure, long ts, String hover)
+	{
+		JPanel r = row(left, figure + " · " + dated(ts), null);
+		if (hover != null && !hover.isEmpty())
+		{
+			r.setToolTipText(hover);
+		}
+		book.add(r);
+		return 1;
+	}
+
+	/**
+	 * The days written, as one month at a time: a cell for every day, shaded
+	 * by how long the account sat that day, and a door from each written day
+	 * to the Journal on it. Arrows step the month; nothing here scrolls.
+	 */
+	private JPanel buildCalendar()
+	{
+		JPanel p = column();
+		p.add(backRow());
+		p.add(vgap(4));
+		JPanel head = new JPanel(new BorderLayout());
+		head.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		head.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 8));
+		head.setAlignmentX(Component.LEFT_ALIGNMENT);
+		head.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+		JLabel back = new JLabel("<");
+		JLabel fwd = new JLabel(">");
+		for (JLabel arrow : new JLabel[]{back, fwd})
+		{
+			arrow.setFont(FontManager.getRunescapeBoldFont());
+			arrow.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 6));
+		}
+		back.setForeground(accent());
+		back.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		back.addMouseListener(clicker(() ->
+		{
+			calendarMonth = calendarMonth.minusMonths(1);
+			rebuildInPlace();
+		}));
+		boolean ahead = calendarMonth.isBefore(java.time.YearMonth.now());
+		fwd.setForeground(ahead ? accent() : ColorScheme.LIGHT_GRAY_COLOR.darker());
+		if (ahead)
+		{
+			fwd.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			fwd.addMouseListener(clicker(() ->
+			{
+				calendarMonth = calendarMonth.plusMonths(1);
+				rebuildInPlace();
+			}));
+		}
+		JLabel title = new JLabel(MONTH_YEAR.format(calendarMonth.atDay(1)
+			.atStartOfDay(ZoneId.systemDefault()).toInstant()).toUpperCase(Locale.ROOT), JLabel.CENTER);
+		title.setFont(FontManager.getRunescapeFont());
+		title.setForeground(accent());
+		head.add(back, BorderLayout.WEST);
+		head.add(title, BorderLayout.CENTER);
+		head.add(fwd, BorderLayout.EAST);
+		p.add(head);
+		p.add(vgap(4));
+
+		JPanel grid = new JPanel(new GridLayout(0, 7, 2, 2));
+		grid.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+		for (String d : new String[]{"M", "T", "W", "T", "F", "S", "S"})
+		{
+			JLabel l = new JLabel(d, JLabel.CENTER);
+			l.setFont(FontManager.getRunescapeSmallFont());
+			l.setForeground(ColorScheme.LIGHT_GRAY_COLOR.darker());
+			grid.add(l);
+		}
+		Map<LocalDate, long[]> played = daysPlayed();
+		TreeMap<LocalDate, HistoryLog.Baseline> spine = historySpine;
+		long most = 1;
+		for (int d = 1; d <= calendarMonth.lengthOfMonth(); d++)
+		{
+			long[] t = played.get(calendarMonth.atDay(d));
+			most = Math.max(most, t == null ? 0 : t[0]);
+		}
+		int lead = calendarMonth.atDay(1).getDayOfWeek().getValue() - 1;
+		for (int i = 0; i < lead; i++)
+		{
+			grid.add(blankCell());
+		}
+		long monthMinutes = 0;
+		int written = 0;
+		LocalDate today = LocalDate.now();
+		for (int d = 1; d <= calendarMonth.lengthOfMonth(); d++)
+		{
+			LocalDate day = calendarMonth.atDay(d);
+			long[] t = played.get(day);
+			boolean onSpine = spine != null && spine.containsKey(day);
+			boolean future = day.isAfter(today);
+			JPanel cell = new JPanel(new BorderLayout());
+			cell.setPreferredSize(new Dimension(26, 24));
+			JLabel n = new JLabel(String.valueOf(d), JLabel.CENTER);
+			n.setFont(FontManager.getRunescapeSmallFont());
+			if (t != null && t[0] > 0)
+			{
+				monthMinutes += t[0];
+				written++;
+				float weight = 0.25f + 0.75f * Math.min(1f, (float) t[0] / most);
+				cell.setBackground(wash(accent(), weight));
+				n.setForeground(Color.WHITE);
+				cell.setToolTipText(hoursMinutes(t[0]) + " · " + t[1] + (t[1] == 1 ? " sitting" : " sittings"));
+			}
+			else if (onSpine || (t != null && t[1] > 0))
+			{
+				written++;
+				cell.setBackground(wash(accent(), 0.18f));
+				n.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+				cell.setToolTipText("Written");
+			}
+			else
+			{
+				cell.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+				n.setForeground(future ? ColorScheme.DARK_GRAY_COLOR.brighter()
+					: ColorScheme.LIGHT_GRAY_COLOR.darker());
+			}
+			if (!future && (onSpine || t != null))
+			{
+				final long ts = day.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+				cell.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+				cell.addMouseListener(clicker(() -> openJournalOn(ts)));
+			}
+			cell.add(n, BorderLayout.CENTER);
+			grid.add(cell);
+		}
+		while (grid.getComponentCount() % 7 != 0)
+		{
+			grid.add(blankCell());
+		}
+		p.add(grid);
+		p.add(vgap(4));
+		p.add(ghostRow(written == 0 ? "nothing written this month"
+			: fmt(written) + (written == 1 ? " day written" : " days written")
+			+ (monthMinutes > 0 ? " · " + hoursMinutes(monthMinutes) : ""), ""));
+		return p;
+	}
+
+	private static JPanel blankCell()
+	{
+		JPanel c = new JPanel();
+		c.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		c.setPreferredSize(new Dimension(26, 24));
+		return c;
+	}
+
+	/** A colour laid over the panel's dark grey at a weight from 0 to 1. */
+	private static Color wash(Color c, float weight)
+	{
+		Color base = ColorScheme.DARKER_GRAY_COLOR;
+		return new Color(
+			Math.round(base.getRed() + (c.getRed() - base.getRed()) * weight),
+			Math.round(base.getGreen() + (c.getGreen() - base.getGreen()) * weight),
+			Math.round(base.getBlue() + (c.getBlue() - base.getBlue()) * weight));
+	}
+
 	private JPanel buildJournal()
 	{
 		JPanel p = column();
@@ -12288,6 +13313,13 @@ class ChroniclePanel extends PluginPanel
 				g.setAlignmentX(Component.LEFT_ALIGNMENT);
 				g.setBorder(BorderFactory.createEmptyBorder(7, 2, 3, 0));
 				p.add(g);
+				// The day's own line under its heading: its sittings, its xp and
+				// its loot, as figures, each clause only where the record has one.
+				String entry = dayEntry(Instant.ofEpochMilli(ts).atZone(ZoneId.systemDefault()).toLocalDate());
+				if (entry != null)
+				{
+					p.add(ghostRow(entry, ""));
+				}
 			}
 			if ("SESSION".equals(typeOf(e)))
 			{
@@ -12337,7 +13369,11 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (spine != null && !spine.isEmpty())
 		{
-			plate.add(row("Days written", fmt(spine.size()), null));
+			JPanel days = row("Days written", fmt(spine.size()), null);
+			days.setToolTipText("The days, as a calendar");
+			days.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			days.addMouseListener(clicker(this::openCalendar));
+			plate.add(days);
 		}
 		Map<String, long[]> sheet = plugin.skillSheet();
 		long[] overall = sheet.get("overall");
@@ -12368,6 +13404,12 @@ class ChroniclePanel extends PluginPanel
 			plate.add(row("Last milestone", str(last.getAsJsonObject("data"), "text", "")
 				+ " · " + TASK_DAY.format(Instant.ofEpochMilli(safeLong(last.get("ts")))), null));
 		}
+		// The way to what the journal holds: the one page that was reachable
+		// only by typing its name into the search box.
+		JPanel holds = ghostRow("what the journal holds", "");
+		holds.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		holds.addMouseListener(clicker(this::openInfo));
+		plate.add(holds);
 		p.add(plate);
 
 		// One margin note, when the record has something to remark on.
@@ -12941,6 +13983,27 @@ class ChroniclePanel extends PluginPanel
 			right.toString(), feedLine(e)};
 	}
 
+	/** The skill a sitting's xp mostly went to, where the line kept its split. */
+	private static String mostOf(JsonObject d)
+	{
+		if (!d.has("skills") || !d.get("skills").isJsonObject())
+		{
+			return null;
+		}
+		String top = null;
+		long most = 0;
+		for (Map.Entry<String, JsonElement> e : d.getAsJsonObject("skills").entrySet())
+		{
+			long xp = safeLong(e.getValue());
+			if (xp > most)
+			{
+				most = xp;
+				top = e.getKey();
+			}
+		}
+		return top == null ? null : StatRegistry.prettify(top);
+	}
+
 	private static String feedLine(JsonObject e)
 	{
 		String type = e.has("type") ? e.get("type").getAsString() : "";
@@ -12987,6 +14050,11 @@ class ChroniclePanel extends PluginPanel
 				if (xp > 0)
 				{
 					line.append(" · +").append(gp(xp)).append(" xp");
+					String most = mostOf(d);
+					if (most != null)
+					{
+						line.append(", most in ").append(most);
+					}
 				}
 				if (drops > 0)
 				{

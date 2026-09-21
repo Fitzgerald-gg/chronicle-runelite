@@ -1053,6 +1053,11 @@ public class ChroniclePlugin extends Plugin
 		return localStore.itemDays(name);
 	}
 
+	java.util.Map<String, long[]> dayTotals()
+	{
+		return localStore.dayTotals();
+	}
+
 	java.util.List<LocalStore.BagItem> sourceItems(String source)
 	{
 		return localStore.sourceItems(source);
@@ -1524,6 +1529,20 @@ public class ChroniclePlugin extends Plugin
 		data.addProperty("left", left[0]);
 		data.addProperty("leftGp", left[1]);
 		data.addProperty("leftKills", localStore.sessionUntakenKills());
+		// What the xp was: the split never entered the journal, so a closed
+		// sitting could say +412k and never what it was.
+		JsonObject skills = new JsonObject();
+		for (chronicle.counters.ExperienceStatTracker.SkillGain g : sessionSkillXp())
+		{
+			if (g.xp > 0)
+			{
+				skills.addProperty(g.skill.name().toLowerCase(java.util.Locale.ROOT), g.xp);
+			}
+		}
+		if (skills.size() > 0)
+		{
+			data.add("skills", skills);
+		}
 		return data;
 	}
 

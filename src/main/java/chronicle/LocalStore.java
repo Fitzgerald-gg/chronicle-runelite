@@ -669,6 +669,30 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return w;
 	}
 
+	/** Each day the roll holds, keyed yyyy-MM-dd: {loots, value, left, leftValue}. */
+	java.util.Map<String, long[]> dayTotals()
+	{
+		java.util.Map<String, long[]> out = new java.util.TreeMap<>();
+		synchronized (lock)
+		{
+			if (root == null || !root.has("loot_days") || !root.get("loot_days").isJsonObject())
+			{
+				return out;
+			}
+			JsonObject days = root.getAsJsonObject("loot_days");
+			for (String day : days.keySet())
+			{
+				if (days.get(day).isJsonObject())
+				{
+					JsonObject d = days.getAsJsonObject(day);
+					out.put(day, new long[]{asLong(d.get("loots")), asLong(d.get("value")),
+						asLong(d.get("left")), asLong(d.get("leftValue"))});
+				}
+			}
+		}
+		return out;
+	}
+
 	/**
 	 * When one item landed, off the dated roll: {first day, last day, days it
 	 * landed}, the days as millis at local midnight; zeros where it never did.

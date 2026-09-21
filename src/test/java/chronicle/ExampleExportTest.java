@@ -103,7 +103,7 @@ public class ExampleExportTest
 		"tab", "subByTab", "view",
 		"histFacet", "histGranularity", "histCursor", "histFrom", "histTo",
 		"detailSource", "detailItem", "detailSkill", "detailTask",
-		"allTrackers", "showInfo", "sheetPage", "slayerLens",
+		"allTrackers", "showInfo", "showRecords", "showCalendar", "calendarMonth", "sheetPage", "slayerLens",
 		"clogPageSel", "journalLens", "dropsLeftBehind",
 		"dropsByKind", "lootKind", "lootTask", "onTaskOnly",
 		"statsFamily", "leftBehindSource", "leftBehindItem", "clogTab",
@@ -136,7 +136,7 @@ public class ExampleExportTest
 			"resourcesDropped", "buildSources", "buildClog", "buildSpan",
 			"spanAsked", "historySpine", "historyFeed", "historyJourney",
 			"historyDay", "historyFeedTs", "historyEpoch", "skilled",
-			"itemsByName", "periodFrom", "periodTo", "searchFirst", "milestones", "landedSlots", "records", "playedIsTheGames",
+			"itemsByName", "periodFrom", "periodTo", "searchFirst", "milestones", "landedSlots", "records", "daysPlayed", "dayTotals", "playedIsTheGames",
 			"taskItemsEver", "taskKillsEverCache", "sheetBandDrawn", "periodTip", "measuredSince", "buildAchievements"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
@@ -414,7 +414,7 @@ public class ExampleExportTest
 			// order the budget allows and PvM's fourth board never came up at
 			// all; seeding the grid makes the coverage a decision.
 			for (String[] pair : new String[][]{
-				{"RECORD", "Now"}, {"RECORD", "Journal"}, {"RECORD", "Ledger"},
+				{"RECORD", "Now"}, {"RECORD", "Journal"}, {"RECORD", "Ledger"}, {"RECORD", "Recap"},
 				{"PVM", "Kills"}, {"PVM", "Loot"}, {"PVM", "Slayer"}, {"PVM", "Combat"},
 				{"SKILLING", "Skills"}, {"SKILLING", "Activities"}, {"LOG", null}})
 			{

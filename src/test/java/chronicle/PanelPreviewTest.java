@@ -1507,6 +1507,14 @@ public class PanelPreviewTest
 
 		// when an item landed, where a test says so
 		Map<String, long[]> itemDays = new LinkedHashMap<>();
+		// the roll by day, where a test says so
+		Map<String, long[]> dayTotals = new java.util.TreeMap<>();
+
+		@Override
+		Map<String, long[]> dayTotals()
+		{
+			return store != null ? store.dayTotals() : dayTotals;
+		}
 
 		@Override
 		long[] itemDays(String name)

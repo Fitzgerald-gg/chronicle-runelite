@@ -99,6 +99,28 @@ public class JournalSessionRowTest
 		assertTrue(hover, hover.startsWith("Session: 1h 22m") && hover.contains("gp"));
 	}
 
+	/** A closed sitting that kept its split says what the xp mostly was. */
+	@Test
+	public void theSittingSaysWhatTheXpMostlyWas() throws Exception
+	{
+		JsonObject e = new JsonObject();
+		e.addProperty("ts", System.currentTimeMillis());
+		e.addProperty("type", "SESSION");
+		JsonObject d = new JsonObject();
+		d.addProperty("minutes", 82);
+		d.addProperty("xp", 412_000);
+		JsonObject skills = new JsonObject();
+		skills.addProperty("runecraft", 380_000);
+		skills.addProperty("magic", 32_000);
+		d.add("skills", skills);
+		e.add("data", d);
+		Method fl = ChroniclePanel.class.getDeclaredMethod("feedLine", JsonObject.class);
+		fl.setAccessible(true);
+		assertEquals("Session: 1h 22m · +412k xp, most in Runecraft", fl.invoke(null, e));
+		d.remove("skills");
+		assertEquals("Session: 1h 22m · +412k xp", fl.invoke(null, e));
+	}
+
 	private static void flatten(Component c, List<Component> out)
 	{
 		out.add(c);

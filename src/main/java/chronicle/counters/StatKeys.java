@@ -182,6 +182,9 @@ public final class StatKeys
 	public static final String DAMAGE_DEALT_MAGIC = "damageDealtMagic";
 	public static final String DAMAGE_TAKEN = "damageTaken";
 	public static final String CONSUMED_VALUE = "consumedValue";
+	// the same spend split by what it went on
+	public static final String FOOD_CONSUMED_VALUE = "foodConsumedValue";
+	public static final String POTIONS_CONSUMED_VALUE = "potionsConsumedValue";
 	public static final String HIGHEST_HIT = "highestHit";
 	// Biggest single hit taken, across every damage colour and the max-hit variants.
 	public static final String HIGHEST_HIT_TAKEN = "highestHitTaken";

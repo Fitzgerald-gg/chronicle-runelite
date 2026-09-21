@@ -244,6 +244,7 @@ public class FoodStatTrackerTest
 
 		drink(tracker, "super restore potion");
 		assertEquals(2500, store.getStat(CONSUMED_VALUE));
+		assertEquals(2500, store.getStat("potionsConsumedValue"));
 		assertEquals(1, store.getStat("superRestorePotionDoses"));
 		assertEquals(Integer.valueOf(2500), sunk.get("superRestorePotionDoses"));
 
@@ -255,6 +256,7 @@ public class FoodStatTrackerTest
 		drink(tracker, "extended antifire potion");
 		assertEquals(Integer.valueOf(800), sunk.get("extendedAntifirePotionDoses"));
 		assertEquals(2500 + 100 + 500 + 800, store.getStat(CONSUMED_VALUE));
+		assertEquals(2500 + 100 + 500 + 800, store.getStat("potionsConsumedValue"));
 	}
 
 	@Test
@@ -266,6 +268,7 @@ public class FoodStatTrackerTest
 		FoodStatTracker tracker = trackerOver("Stamina potion(4)", 8000);
 		drink(tracker, "stamina");
 		assertEquals(2000, store.getStat(CONSUMED_VALUE));
+		assertEquals(2000, store.getStat("potionsConsumedValue"));
 		assertEquals(Integer.valueOf(2000), sunk.get("staminaDoses"));
 	}
 
@@ -277,6 +280,7 @@ public class FoodStatTrackerTest
 			"Stamina(4)", 400);
 		drink(tracker, "stamina potion");
 		assertEquals(2000, store.getStat(CONSUMED_VALUE));
+		assertEquals(2000, store.getStat("potionsConsumedValue"));
 	}
 
 	@Test
@@ -290,6 +294,7 @@ public class FoodStatTrackerTest
 		drink(tracker, "super restore potion");
 		assertEquals(walked, searches);
 		assertEquals(7500, store.getStat(CONSUMED_VALUE));
+		assertEquals(7500, store.getStat("potionsConsumedValue"));
 	}
 
 	@Test
@@ -302,6 +307,7 @@ public class FoodStatTrackerTest
 		drink(tracker, "super restore potion");
 		assertEquals(4, searches);
 		assertEquals(0, store.getStat(CONSUMED_VALUE));
+		assertEquals(0, store.getStat("foodConsumedValue"));
 		assertEquals(2, store.getStat("superRestorePotionDoses"));
 		assertNull(sunk.get("superRestorePotionDoses"));
 	}
@@ -340,6 +346,7 @@ public class FoodStatTrackerTest
 		pack(tracker, PRAYER_POTION2, 1);
 		drink(tracker, "restore prayer potion");
 		assertEquals(3000, store.getStat(CONSUMED_VALUE));
+		assertEquals(3000, store.getStat("potionsConsumedValue"));
 		assertEquals(1, store.getStat("restorePrayerPotionDoses"));
 		assertEquals(Integer.valueOf(3000), sunk.get("restorePrayerPotionDoses"));
 		assertEquals(List.of("Prayer potion(4)"), queries);
@@ -349,6 +356,7 @@ public class FoodStatTrackerTest
 		pack(tracker, PRAYER_POTION1, 1);
 		drink(tracker, "restore prayer potion");
 		assertEquals(6000, store.getStat(CONSUMED_VALUE));
+		assertEquals(6000, store.getStat("potionsConsumedValue"));
 		assertEquals(1, searches);
 		assertEquals(2, store.getStat("restorePrayerPotionDoses"));
 	}
@@ -362,6 +370,7 @@ public class FoodStatTrackerTest
 		pack(tracker, PRAYER_POTION3, 1);
 		drink(tracker, "restore prayer potion");
 		assertEquals(3000, store.getStat(CONSUMED_VALUE));
+		assertEquals(3000, store.getStat("potionsConsumedValue"));
 		assertEquals(0, searches);
 		Mockito.verify(items).getItemPrice(PRAYER_POTION4);
 	}
@@ -376,10 +385,12 @@ public class FoodStatTrackerTest
 		drink(tracker, "restore prayer potion");
 		assertEquals(1, store.getStat("restorePrayerPotionDoses"));
 		assertEquals(0, store.getStat(CONSUMED_VALUE));
+		assertEquals(0, store.getStat("potionsConsumedValue"));
 		assertNull(sunk.get("restorePrayerPotionDoses"));
 
 		pack(tracker, PRAYER_POTION2, 1);
 		assertEquals(3000, store.getStat(CONSUMED_VALUE));
+		assertEquals(3000, store.getStat("potionsConsumedValue"));
 		assertEquals(Integer.valueOf(3000), sunk.get("restorePrayerPotionDoses"));
 		// The name path was never consulted for it.
 		assertEquals(List.of("Prayer potion(4)"), queries);
@@ -395,13 +406,16 @@ public class FoodStatTrackerTest
 		drink(tracker, "super restore potion");
 		tick(tracker);
 		assertEquals(0, store.getStat(CONSUMED_VALUE));
+		assertEquals(0, store.getStat("potionsConsumedValue"));
 		tick(tracker);
 		assertEquals(2500, store.getStat(CONSUMED_VALUE));
+		assertEquals(2500, store.getStat("potionsConsumedValue"));
 		assertEquals(Integer.valueOf(2500), sunk.get("superRestorePotionDoses"));
 		assertEquals(List.of("super restore potion(4)", "super restore(4)"), queries);
 		// Priced once; the window does not re-run.
 		tick(tracker);
 		assertEquals(2500, store.getStat(CONSUMED_VALUE));
+		assertEquals(2500, store.getStat("potionsConsumedValue"));
 	}
 
 	@Test
@@ -414,12 +428,14 @@ public class FoodStatTrackerTest
 		pack(tracker, VIAL, 1);
 		drink(tracker, "restore prayer potion");
 		assertEquals(3000, store.getStat(CONSUMED_VALUE));
+		assertEquals(3000, store.getStat("potionsConsumedValue"));
 
 		// (1) -> nothing: the vial was smashed on the same tick.
 		pack(tracker, VIAL, 1, PRAYER_POTION1, 1);
 		pack(tracker, VIAL, 1);
 		drink(tracker, "restore prayer potion");
 		assertEquals(6000, store.getStat(CONSUMED_VALUE));
+		assertEquals(6000, store.getStat("potionsConsumedValue"));
 		assertEquals(2, store.getStat("restorePrayerPotionDoses"));
 		assertEquals(Integer.valueOf(3000), sunk.get("restorePrayerPotionDoses"));
 	}
@@ -436,6 +452,7 @@ public class FoodStatTrackerTest
 		tick(tracker);
 		tick(tracker);
 		assertEquals(0, store.getStat(CONSUMED_VALUE));
+		assertEquals(0, store.getStat("potionsConsumedValue"));
 		Mockito.verify(items, Mockito.never()).getItemPrice(PRAYER_POTION4);
 	}
 
@@ -452,11 +469,13 @@ public class FoodStatTrackerTest
 		pack(tracker, PRAYER_POTION2, 1);
 		drink(tracker, "restore prayer potion");
 		assertEquals(0, store.getStat(CONSUMED_VALUE));
+		assertEquals(0, store.getStat("potionsConsumedValue"));
 
 		priced(PRAYER_POTION4, "Prayer potion(4)", 12000);
 		pack(tracker, PRAYER_POTION1, 1);
 		drink(tracker, "restore prayer potion");
 		assertEquals(3000, store.getStat(CONSUMED_VALUE));
+		assertEquals(3000, store.getStat("potionsConsumedValue"));
 	}
 
 	@Test
@@ -473,6 +492,7 @@ public class FoodStatTrackerTest
 		drink(tracker, "overload potion");
 		assertEquals(List.of("Overload (+)(4)"), queries);
 		assertEquals(0, store.getStat(CONSUMED_VALUE));
+		assertEquals(0, store.getStat("potionsConsumedValue"));
 		assertEquals(1, store.getStat("overloadPotionDoses"));
 		assertNull(sunk.get("overloadPotionDoses"));
 	}
@@ -492,6 +512,7 @@ public class FoodStatTrackerTest
 		pack(tracker, COMBAT_POTION2, 1);
 		drink(tracker, "combat potion");
 		assertEquals(250, store.getStat(CONSUMED_VALUE));
+		assertEquals(250, store.getStat("potionsConsumedValue"));
 		Mockito.verify(items).getItemPrice(COMBAT_POTION4);
 		Mockito.verify(items, Mockito.never()).getItemPrice(SUPER_COMBAT4);
 	}
@@ -539,6 +560,7 @@ public class FoodStatTrackerTest
 		drink(tracker, "combat potion");
 		pack(tracker, COMBAT_BRACELET3, 1, COMBAT_POTION2, 1);
 		assertEquals(250, store.getStat(CONSUMED_VALUE));
+		assertEquals(250, store.getStat("potionsConsumedValue"));
 		assertEquals(Integer.valueOf(250), sunk.get("combatPotionDoses"));
 		assertEquals(List.of("Combat potion(4)"), queries);
 		Mockito.verify(items, Mockito.never()).getItemPrice(COMBAT_BRACELET4);
@@ -562,6 +584,7 @@ public class FoodStatTrackerTest
 		pack(tracker, RING_OF_DUELING7, 1, WATERING_CAN7, 1, PRAYER_POTION2, 1);
 		drink(tracker, "restore prayer potion");
 		assertEquals(3000, store.getStat(CONSUMED_VALUE));
+		assertEquals(3000, store.getStat("potionsConsumedValue"));
 		assertEquals(List.of("Prayer potion(4)"), queries);
 		Mockito.verify(items, Mockito.never()).getItemPrice(RING_OF_DUELING4);
 	}
@@ -591,6 +614,7 @@ public class FoodStatTrackerTest
 		drink(tracker, "stamina potion");
 		pack(tracker, WATERSKIN3, 1, STAMINA2, 1);
 		assertEquals(2000, store.getStat(CONSUMED_VALUE));
+		assertEquals(2000, store.getStat("potionsConsumedValue"));
 
 		// the line first: the waterskin's shrink arrives while the line is parked
 		tick(tracker);
@@ -600,6 +624,7 @@ public class FoodStatTrackerTest
 		pack(tracker, WATERSKIN2, 1, STAMINA2, 1);
 		pack(tracker, WATERSKIN2, 1, STAMINA1, 1);
 		assertEquals(4000, store.getStat(CONSUMED_VALUE));
+		assertEquals(4000, store.getStat("potionsConsumedValue"));
 		assertEquals(Integer.valueOf(2000), sunk.get("staminaPotionDoses"));
 		assertEquals(List.of("Stamina potion(4)"), queries);
 		Mockito.verify(items, Mockito.never()).getItemPrice(WATERSKIN4);

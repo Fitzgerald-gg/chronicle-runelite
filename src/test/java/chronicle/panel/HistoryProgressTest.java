@@ -539,13 +539,15 @@ public class HistoryProgressTest
 		assertTrue(section(p, "Woodcutting").summed());
 		assertTrue(section(p, "Destinations").summed());
 
-		// a flat list whose rows are all gp does add up, in gp
-		HistoryProgress gp = of(map("potionsConsumedValue", 700, "foodConsumedValue", 300));
-		assertTrue(section(gp, "Living").summed());
-		assertTrue(section(gp, "Living").gp());
-		assertEquals(1000, section(gp, "Living").total());
+		// a flat list whose rows are all gp does add up, in gp (the Living split
+		// pair is hidden now, carried by the Food and Potions fold heads, so the
+		// purse stands in)
+		HistoryProgress gp = of(map("untakenLootValue", 700));
+		assertTrue(section(gp, "The purse").summed());
+		assertTrue(section(gp, "The purse").gp());
+		assertEquals(700, section(gp, "The purse").total());
 		// and one gp row beside a count is mixed again
-		HistoryProgress mixed = of(map("potionsConsumedValue", 700, "vialsShattered", 3));
+		HistoryProgress mixed = of(map("consumedValue", 700, "vialsShattered", 3));
 		assertFalse(section(mixed, "Living").summed());
 		assertFalse(section(mixed, "Living").gp());
 	}
