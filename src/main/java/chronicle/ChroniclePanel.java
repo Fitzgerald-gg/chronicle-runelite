@@ -1790,6 +1790,14 @@ class ChroniclePanel extends PluginPanel
 			labels.add(pb.getKey());
 			figures.add(clock(pb.getValue()));
 		}
+		// and the ordinary time, over the kills the timer spoke for
+		double[] timed = wholeRecord() && src != null ? new double[]{src.timed, src.timeSum}
+			: sourceTimesInWindow(b.name);
+		if (timed[0] > 0)
+		{
+			labels.add("Average kill");
+			figures.add(pb(timed[1] / timed[0]) + " over " + fmt((long) timed[0]));
+		}
 		// what the page itself counts, which need not be kills at all
 		for (Map.Entry<String, Long> ln : logLines(b.name))
 		{
@@ -2178,6 +2186,9 @@ class ChroniclePanel extends PluginPanel
 		taskKillsEverCache = null;
 		taskItemsEver = null;
 		buildAchievements = null;
+		milestones = null;
+		landedSlots = null;
+		records = null;
 		// Set only by buildStats, but read by the all-trackers board too. Left
 		// standing it carried one period's dropped figure onto another period's
 		// gathered row, and stepping the period never moved it.
@@ -4754,6 +4765,22 @@ class ChroniclePanel extends PluginPanel
 		return new long[]{0, 0};
 	}
 
+	/** The timed kills the roll holds for one source inside the window: {count, seconds}. */
+	private double[] sourceTimesInWindow(String name)
+	{
+		Window w = window();
+		LocalStore.LootWindow win = sessionPeriod() ? plugin.sessionLootWindow()
+			: plugin.lootBetween(w.start, w.end);
+		for (Map.Entry<String, double[]> e : win.times.entrySet())
+		{
+			if (e.getKey().equalsIgnoreCase(name))
+			{
+				return e.getValue();
+			}
+		}
+		return new double[]{0, 0};
+	}
+
 	/**
 	 * What the roll says one source paid inside the window, as {count, worth}.
 	 *
@@ -5872,7 +5899,26 @@ class ChroniclePanel extends PluginPanel
 			}
 			if (sr.pb != null)
 			{
-				head.add(row("Personal best", pb(sr.pb), null));
+				// Dated where the journal watched it fall, the beaten time on hover.
+				JsonObject rec = records().get(sr.name.toLowerCase(Locale.ROOT));
+				JsonObject recData = rec != null ? rec.getAsJsonObject("data") : null;
+				JPanel best = row("Personal best", pb(sr.pb) + (rec != null
+					? " · set " + TASK_DAY.format(Instant.ofEpochMilli(safeLong(rec.get("ts")))) : ""),
+					null);
+				if (recData != null && recData.has("was"))
+				{
+					best.setToolTipText("Beat " + pb(recData.get("was").getAsDouble()));
+				}
+				head.add(best);
+			}
+			// Every timed kill, not the fastest: the period's average over the
+			// kills the boss timer spoke for.
+			double[] timed = inWindow == null ? new double[]{sr.timed, sr.timeSum}
+				: sourceTimesInWindow(sr.name);
+			if (timed[0] > 0)
+			{
+				head.add(row("Average kill", pb(timed[1] / timed[0]) + " · "
+					+ fmt((long) timed[0]) + " timed", null));
 			}
 			// Not on a picture. It is the reader's own bookkeeping rather than
 			// anything about the fight, and on an account whose ledger carries
@@ -6196,6 +6242,7 @@ class ChroniclePanel extends PluginPanel
 						+ "on current level."));
 					drill.add(vgap(3));
 				}
+				Map<String, Long> landed = landedSlots();
 				for (int i = 0; i < slots.size(); i++)
 				{
 					String slot = slots.get(i);
@@ -6204,6 +6251,14 @@ class ChroniclePanel extends PluginPanel
 					JPanel r = row(slot, "",
 						lit[i] || known.get(slot.toLowerCase(Locale.ROOT)) != null
 							? ACCENT_SESSION : ACCENT_RED, true);
+					// A lit slot says when it landed: every slot enters the feed
+					// dated, and only pets were giving the date up.
+					Long when = landed.get(slot.toLowerCase(Locale.ROOT));
+					if (when != null)
+					{
+						r.setToolTipText(tip(slot, new String[]{"Landed"},
+							new String[]{FULL_DAY.format(Instant.ofEpochMilli(when))}));
+					}
 					drill.add(r);
 					List<JPanel> d = detail.get(i);
 					if (d.isEmpty())
@@ -11870,7 +11925,8 @@ class ChroniclePanel extends PluginPanel
 		{"All"},
 		{"Log", "COLLECTION"},
 		{"Slayer", "SLAYER"},
-		{"Feats", "COMBAT_ACHIEVEMENT", "QUEST", "DIARY", "CLUE", "PET", "LEVEL"},
+		{"Feats", "COMBAT_ACHIEVEMENT", "QUEST", "DIARY", "CLUE", "PET", "LEVEL", "RECORD",
+			"MILESTONE"},
 		{"Deaths", "DEATH"},
 		{"Sessions", "SESSION"},
 	};
@@ -11893,6 +11949,255 @@ class ChroniclePanel extends PluginPanel
 			histCursor = Instant.ofEpochMilli(ts).atZone(ZoneId.systemDefault()).toLocalDate();
 		}
 		applyTab(View.JOURNAL);
+	}
+
+	// The thresholds the game never announces, dated to the day the spine first
+	// stood past them. Worked out once a build from the closing baselines,
+	// newest first; lines of the record rather than entries of the feed.
+	private List<JsonObject> milestones;
+
+	private static final long[] TOTAL_LEVELS = {1000, 1500, 2000, 2200, 2277, 2376};
+	private static final int[] NINETY_NINES = {5, 10, 15, 20};
+	private static final int[] COMBAT_LEVELS = {100, 126};
+	private static final long[] SKILL_XP = {10_000_000L, 50_000_000L, 100_000_000L, 200_000_000L};
+	private static final long[] OVERALL_XP = {100_000_000L, 250_000_000L, 500_000_000L, 1_000_000_000L};
+	private static final long[] LOG_SLOTS = {500, 1000, 1500};
+
+	private List<JsonObject> milestones()
+	{
+		if (milestones == null)
+		{
+			milestones = new ArrayList<>();
+			TreeMap<LocalDate, HistoryLog.Baseline> spine = historySpine;
+			if (spine != null && spine.size() > 1)
+			{
+				List<String> keys = new ArrayList<>();
+				for (net.runelite.api.Skill sk : net.runelite.api.Skill.values())
+				{
+					if (sk != net.runelite.api.Skill.OVERALL)
+					{
+						keys.add(sk.name().toLowerCase(Locale.ROOT));
+					}
+				}
+				Map<String, Long> prev = null;
+				for (Map.Entry<LocalDate, HistoryLog.Baseline> day : spine.entrySet())
+				{
+					Map<String, Long> now = standings(day.getValue(), keys);
+					if (prev != null)
+					{
+						long ts = day.getKey().atTime(12, 0).atZone(ZoneId.systemDefault())
+							.toInstant().toEpochMilli();
+						crossings(prev, now, ts, milestones);
+					}
+					// a partial line speaks only for the skills it names, so the
+					// levels it implies are not a standing to measure from
+					prev = now;
+				}
+				Collections.reverse(milestones);
+			}
+		}
+		return milestones;
+	}
+
+	/** What one baseline stands at, on every axis a milestone is drawn on. */
+	private static Map<String, Long> standings(HistoryLog.Baseline b, List<String> keys)
+	{
+		Map<String, Long> out = new LinkedHashMap<>();
+		HistoryLog.Levels lv = HistoryLog.levels(b, keys);
+		if (b.complete)
+		{
+			out.put("total", (long) lv.total);
+			out.put("nines", (long) lv.nines);
+			Integer combat = openingCombat(lv);
+			if (combat != null)
+			{
+				out.put("combat", (long) combat);
+			}
+		}
+		for (String key : keys)
+		{
+			Long xp = b.skills.get(key);
+			if (xp != null)
+			{
+				out.put("xp:" + key, xp);
+			}
+		}
+		Long overall = b.skills.get("overall");
+		if (overall != null)
+		{
+			out.put("overall", overall);
+		}
+		Long slots = b.counters.get("clogSlotsObtained");
+		if (slots != null)
+		{
+			out.put("slots", slots);
+		}
+		return out;
+	}
+
+	/** Every threshold {@code now} stands past that {@code prev} stood short of. */
+	private static void crossings(Map<String, Long> prev, Map<String, Long> now, long ts,
+		List<JsonObject> into)
+	{
+		for (long t : TOTAL_LEVELS)
+		{
+			if (crossed(prev, now, "total", t))
+			{
+				into.add(milestone(ts, "Total level " + fmt(t)));
+			}
+		}
+		for (int t : NINETY_NINES)
+		{
+			if (crossed(prev, now, "nines", t))
+			{
+				into.add(milestone(ts, ordinal(t) + " 99"));
+			}
+		}
+		for (int t : COMBAT_LEVELS)
+		{
+			if (crossed(prev, now, "combat", t))
+			{
+				into.add(milestone(ts, "Combat level " + t));
+			}
+		}
+		for (Map.Entry<String, Long> e : now.entrySet())
+		{
+			if (!e.getKey().startsWith("xp:"))
+			{
+				continue;
+			}
+			for (long t : SKILL_XP)
+			{
+				if (crossed(prev, now, e.getKey(), t))
+				{
+					into.add(milestone(ts, gp(t) + " xp in "
+						+ StatRegistry.prettify(e.getKey().substring(3))));
+				}
+			}
+		}
+		for (long t : OVERALL_XP)
+		{
+			if (crossed(prev, now, "overall", t))
+			{
+				into.add(milestone(ts, gp(t) + " xp overall"));
+			}
+		}
+		for (long t : LOG_SLOTS)
+		{
+			if (crossed(prev, now, "slots", t))
+			{
+				into.add(milestone(ts, fmt(t) + " collection log slots"));
+			}
+		}
+	}
+
+	private static boolean crossed(Map<String, Long> prev, Map<String, Long> now, String key,
+		long threshold)
+	{
+		Long before = prev.get(key);
+		Long after = now.get(key);
+		return before != null && after != null && before < threshold && after >= threshold;
+	}
+
+	private static JsonObject milestone(long ts, String text)
+	{
+		JsonObject e = new JsonObject();
+		e.addProperty("ts", ts);
+		e.addProperty("type", "MILESTONE");
+		JsonObject d = new JsonObject();
+		d.addProperty("text", text);
+		e.add("data", d);
+		return e;
+	}
+
+	private static String ordinal(int n)
+	{
+		int last = n % 10;
+		int tens = n % 100;
+		String suffix = tens >= 11 && tens <= 13 ? "th"
+			: last == 1 ? "st" : last == 2 ? "nd" : last == 3 ? "rd" : "th";
+		return n + suffix;
+	}
+
+	/** The feed with the milestones merged in by date; a live sitting at the head stays there. */
+	private List<JsonObject> withMilestones(List<JsonObject> feed)
+	{
+		List<JsonObject> marks = milestones();
+		if (marks.isEmpty())
+		{
+			return feed;
+		}
+		List<JsonObject> out = new ArrayList<>(feed.size() + marks.size());
+		int m = 0;
+		for (int i = 0; i < feed.size(); i++)
+		{
+			long ts = safeLong(feed.get(i).get("ts"));
+			// the head may be the sitting in progress, which is later than
+			// everything however it is stamped
+			while (i > 0 && m < marks.size() && safeLong(marks.get(m).get("ts")) > ts)
+			{
+				out.add(marks.get(m++));
+			}
+			out.add(feed.get(i));
+		}
+		while (m < marks.size())
+		{
+			out.add(marks.get(m++));
+		}
+		return out;
+	}
+
+	// When each log slot first landed, off the feed: item name (lower) to the
+	// earliest COLLECTION line naming it.
+	private Map<String, Long> landedSlots;
+
+	private Map<String, Long> landedSlots()
+	{
+		if (landedSlots == null)
+		{
+			landedSlots = new LinkedHashMap<>();
+			for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
+			{
+				if (!"COLLECTION".equals(typeOf(e)))
+				{
+					continue;
+				}
+				JsonObject d = e.has("data") && e.get("data").isJsonObject()
+					? e.getAsJsonObject("data") : new JsonObject();
+				if (has(d, "itemName"))
+				{
+					// newest first, so the last write is the first landing
+					landedSlots.put(d.get("itemName").getAsString().toLowerCase(Locale.ROOT),
+						safeLong(e.get("ts")));
+				}
+			}
+		}
+		return landedSlots;
+	}
+
+	// The newest RECORD line per source (lower), for the date a best was set.
+	private Map<String, JsonObject> records;
+
+	private Map<String, JsonObject> records()
+	{
+		if (records == null)
+		{
+			records = new LinkedHashMap<>();
+			for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
+			{
+				if (!"RECORD".equals(typeOf(e)))
+				{
+					continue;
+				}
+				JsonObject d = e.has("data") && e.get("data").isJsonObject()
+					? e.getAsJsonObject("data") : new JsonObject();
+				if (has(d, "source"))
+				{
+					records.putIfAbsent(d.get("source").getAsString().toLowerCase(Locale.ROOT), e);
+				}
+			}
+		}
+		return records;
 	}
 
 	private JPanel buildJournal()
@@ -11936,7 +12241,7 @@ class ChroniclePanel extends PluginPanel
 		// sitting in progress at the head of it: everything else reaches the feed
 		// as it happens, and the sitting was the one thing a reader could watch
 		// go by and not see written down until they logged out.
-		List<JsonObject> all = plugin.feedWithSitting(4000);
+		List<JsonObject> all = withMilestones(plugin.feedWithSitting(4000));
 		List<JsonObject> feed = new ArrayList<>();
 		for (JsonObject e : all)
 		{
@@ -12054,6 +12359,14 @@ class ChroniclePanel extends PluginPanel
 			// Not "412 / 412". Standing the obtained count in for the total read as
 			// a finished collection log on an account that had simply not synced.
 			plate.add(row("Collection log", fmt(fin) + " obtained", null));
+		}
+		// The latest threshold crossed, so it is seen without scrolling for it.
+		List<JsonObject> marks = milestones();
+		if (!marks.isEmpty())
+		{
+			JsonObject last = marks.get(0);
+			plate.add(row("Last milestone", str(last.getAsJsonObject("data"), "text", "")
+				+ " · " + TASK_DAY.format(Instant.ofEpochMilli(safeLong(last.get("ts")))), null));
 		}
 		p.add(plate);
 
@@ -12639,6 +12952,15 @@ class ChroniclePanel extends PluginPanel
 				return "Pet: " + str(d, "petName", "a new companion");
 			case "COLLECTION":
 				return "Log slot: " + str(d, "itemName", "new item");
+			case "RECORD":
+			{
+				double time = d.has("time") ? d.get("time").getAsDouble() : 0;
+				double was = d.has("was") ? d.get("was").getAsDouble() : 0;
+				return "Record: " + str(d, "source", "") + " " + pb(time)
+					+ (was > 0 ? ", was " + pb(was) : "");
+			}
+			case "MILESTONE":
+				return "Milestone: " + str(d, "text", "");
 			case "COMBAT_ACHIEVEMENT":
 				return "CA " + str(d, "tier", "") + ": " + str(d, "task", "task");
 			case "QUEST":

@@ -136,7 +136,7 @@ public class ExampleExportTest
 			"resourcesDropped", "buildSources", "buildClog", "buildSpan",
 			"spanAsked", "historySpine", "historyFeed", "historyJourney",
 			"historyDay", "historyFeedTs", "historyEpoch", "skilled",
-			"itemsByName", "periodFrom", "periodTo", "searchFirst", "playedIsTheGames",
+			"itemsByName", "periodFrom", "periodTo", "searchFirst", "milestones", "landedSlots", "records", "playedIsTheGames",
 			"taskItemsEver", "taskKillsEverCache", "sheetBandDrawn", "periodTip", "measuredSince", "buildAchievements"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");

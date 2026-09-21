@@ -276,21 +276,27 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				recordSlayerCompletion(data);
 			}
-			JsonObject entry = new JsonObject();
-			entry.addProperty("ts", System.currentTimeMillis());
-			entry.addProperty("type", type);
-			entry.add("data", data);
-			synchronized (lock)
+			appendFeed(type, data);
+		}
+	}
+
+	/** One dated line onto the feed, newest last, the cap kept. */
+	private void appendFeed(String type, JsonObject data)
+	{
+		JsonObject entry = new JsonObject();
+		entry.addProperty("ts", System.currentTimeMillis());
+		entry.addProperty("type", type);
+		entry.add("data", data);
+		synchronized (lock)
+		{
+			JsonArray feed = root.getAsJsonArray("feed");
+			feed.add(entry);
+			// index 0 is the oldest; the feed is appended in order
+			while (feed.size() > FEED_CAP)
 			{
-				JsonArray feed = root.getAsJsonArray("feed");
-				feed.add(entry);
-				// index 0 is the oldest; the feed is appended in order
-				while (feed.size() > FEED_CAP)
-				{
-					feed.remove(0);
-				}
-				root.addProperty("updated_at", nowSec());
+				feed.remove(0);
 			}
+			root.addProperty("updated_at", nowSec());
 		}
 	}
 
@@ -343,6 +349,15 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			pbCand = data.get("killTime").getAsDouble();
 		}
+		// This kill's own time, where the boss timer gave one. Kept as a count
+		// and a sum, on the source and on the dated roll, so an average over
+		// any period falls out without a row per kill.
+		Double killTime = data.has("killTime") && !data.get("killTime").isJsonNull()
+			&& data.get("killTime").getAsDouble() > 0 ? data.get("killTime").getAsDouble() : null;
+		// The game flagging THIS kill as the new best; a best merely restated
+		// on the first kill after install was set while nobody was watching.
+		boolean newRecord = data.has("personalBest") && !data.get("personalBest").isJsonNull()
+			&& data.get("personalBest").getAsBoolean();
 
 		synchronized (lock)
 		{
@@ -363,6 +378,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 			src.addProperty("loots", asLong(src.get("loots")) + 1);
 			src.addProperty("value", asLong(src.get("value")) + batchValue);
+			if (killTime != null)
+			{
+				bump(src, "timed", 1);
+				src.addProperty("timeSum", asDouble(src.get("timeSum")) + killTime);
+			}
 			// The chat box speaks BEFORE the drop lands. "Your Sarachnis kill count
 			// is: 52" anchors at 52, and the loot event for that very kill arrives
 			// after it, so counting it as an observation SINCE would read 53. The
@@ -384,7 +404,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				src.addProperty("last_seen", nowMs);
 			}
-			rollTaken(source, batchValue, priced);
+			rollTaken(source, batchValue, priced, killTime);
 			sessionLoots++;
 			sessionLootValue += batchValue;
 			for (JsonElement pe : priced)
@@ -401,6 +421,19 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			if (pbCand != null && pbCand > 0 && (bestPb <= 0 || pbCand < bestPb))
 			{
 				src.addProperty("pb", pbCand);
+				// A record is a dated line of its own: the time it set and the
+				// one it beat.
+				if (newRecord)
+				{
+					JsonObject rec = new JsonObject();
+					rec.addProperty("source", source);
+					rec.addProperty("time", pbCand);
+					if (bestPb > 0)
+					{
+						rec.addProperty("was", bestPb);
+					}
+					appendFeed("RECORD", rec);
+				}
 			}
 
 			if (!src.has("items") || !src.get("items").isJsonObject())
@@ -494,7 +527,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	// one kill's take, against today
-	private void rollTaken(String source, long value, JsonArray priced)
+	private void rollTaken(String source, long value, JsonArray priced, Double killTime)
 	{
 		// Today and this sitting, the same figures into the same shape. Written
 		// here rather than derived later: a drop knows which sitting it landed in
@@ -506,6 +539,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			JsonObject bySource = sub(sub(into, "sources"), source);
 			bump(bySource, "loots", 1);
 			bump(bySource, "value", value);
+			if (killTime != null)
+			{
+				bump(bySource, "timed", 1);
+				bySource.addProperty("timeSum", asDouble(bySource.get("timeSum")) + killTime);
+			}
 			JsonObject items = sub(into, "items");
 			// The SITTING keeps its items per source as well as in total, which
 			// is what lets a source's own page answer for a sitting. The dated
@@ -563,6 +601,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		final java.util.List<String[]> items = new java.util.ArrayList<>();
 		final java.util.List<String[]> sources = new java.util.ArrayList<>();
 		final java.util.List<String[]> leftItems = new java.util.ArrayList<>();
+		// per source: {kills the timer timed, their seconds summed}
+		final java.util.Map<String, double[]> times = new java.util.LinkedHashMap<>();
 	}
 
 	/** The first day the roll holds, as epoch ms, or 0 when it holds none. A
@@ -620,6 +660,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				gather(d, "items", items, true);
 				gather(d, "sources", sources, false);
 				gather(d, "leftItems", left, true);
+				gatherTimes(d, w.times);
 			}
 		}
 		rank(items, w.items);
@@ -707,6 +748,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			gather(d, "items", items, true);
 			gather(d, "sources", sources, false);
 			gather(d, "leftItems", left, true);
+			gatherTimes(d, w.times);
 		}
 		rank(items, w.items);
 		rank(sources, w.sources);
@@ -787,6 +829,26 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			long[] t = into.computeIfAbsent(name, x -> new long[2]);
 			t[0] += asLong(e.get(named ? "q" : "loots"));
 			t[1] += asLong(e.get(named ? "v" : "value"));
+		}
+	}
+
+	// the timed kills a day's source entries hold, summed per source
+	private static void gatherTimes(JsonObject day, java.util.Map<String, double[]> into)
+	{
+		if (!day.has("sources") || !day.get("sources").isJsonObject())
+		{
+			return;
+		}
+		JsonObject o = day.getAsJsonObject("sources");
+		for (String k : o.keySet())
+		{
+			if (!o.get(k).isJsonObject() || asLong(o.getAsJsonObject(k).get("timed")) <= 0)
+			{
+				continue;
+			}
+			double[] t = into.computeIfAbsent(k, x -> new double[2]);
+			t[0] += asLong(o.getAsJsonObject(k).get("timed"));
+			t[1] += asDouble(o.getAsJsonObject(k).get("timeSum"));
 		}
 	}
 
@@ -1096,15 +1158,24 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		// reads it as obtained: a unique already looted is never a chase, whatever the
 		// stored log says.
 		final java.util.Set<String> looted;
+		// kills the boss timer gave a time for, and those times summed in seconds
+		final long timed;
+		final double timeSum;
 
 		SourceRow(String name, int kc, int loots, long value, Double pb,
 			long firstMs, long lastMs)
 		{
-			this(name, kc, loots, value, pb, firstMs, lastMs, java.util.Collections.emptySet());
+			this(name, kc, loots, value, pb, firstMs, lastMs, java.util.Collections.emptySet(), 0, 0);
 		}
 
 		SourceRow(String name, int kc, int loots, long value, Double pb,
 			long firstMs, long lastMs, java.util.Set<String> looted)
+		{
+			this(name, kc, loots, value, pb, firstMs, lastMs, looted, 0, 0);
+		}
+
+		SourceRow(String name, int kc, int loots, long value, Double pb,
+			long firstMs, long lastMs, java.util.Set<String> looted, long timed, double timeSum)
 		{
 			this.name = name;
 			this.kc = kc;
@@ -1114,6 +1185,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			this.firstMs = firstMs;
 			this.lastMs = lastMs;
 			this.looted = looted;
+			this.timed = timed;
+			this.timeSum = timeSum;
 		}
 	}
 
@@ -1142,7 +1215,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					src.has("pb") ? src.get("pb").getAsDouble() : null,
 					src.has("first_seen") ? src.get("first_seen").getAsLong() : 0,
 					src.has("last_seen") ? src.get("last_seen").getAsLong() : 0,
-					lootedNames(src)));
+					lootedNames(src), asLong(src.get("timed")), asDouble(src.get("timeSum"))));
 			}
 		}
 		return out;
