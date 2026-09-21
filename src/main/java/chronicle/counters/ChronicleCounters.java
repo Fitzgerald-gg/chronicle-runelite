@@ -103,6 +103,7 @@ public class ChronicleCounters
 				new MagicStatTracker(store, client),
 				new RangedStatTracker(store, client),
 				new CombatStatTracker(store, client),
+				new TimeStatTracker(store, client),
 			};
 			// Published before the array, so nothing can see the new trackers counting
 			// into an experience tracker that is still the last session's.

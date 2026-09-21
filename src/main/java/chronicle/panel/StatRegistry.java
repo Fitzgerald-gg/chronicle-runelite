@@ -282,7 +282,9 @@ public final class StatRegistry
 	// summary keys hide too: no Stats family lists them.
 	public static boolean hidden(String key)
 	{
-		return key.startsWith("_") || HIDE.contains(key) || SUMMARY.contains(key);
+		// the minutes keys are read by the pages that divide them, never as rows
+		return key.startsWith("_") || HIDE.contains(key) || SUMMARY.contains(key)
+			|| chronicle.counters.StatKeys.isTime(key);
 	}
 
 	// a spine-only total the History summary reads by name

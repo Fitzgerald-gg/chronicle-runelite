@@ -182,6 +182,39 @@ public final class StatKeys
 	public static final String DAMAGE_DEALT_MAGIC = "damageDealtMagic";
 	public static final String DAMAGE_TAKEN = "damageTaken";
 	public static final String CONSUMED_VALUE = "consumedValue";
+	// Minutes filed under the activity that owned them, one key per thing:
+	// timeVorkath, timeFishing, and timeIdle for the minutes nothing claimed.
+	public static final String TIME_PREFIX = "time";
+	public static final String TIME_IDLE = "timeIdle";
+
+	/** The minutes key for one activity, by its name as the game gives it. */
+	public static String timeKey(String name)
+	{
+		StringBuilder out = new StringBuilder(TIME_PREFIX);
+		boolean up = true;
+		for (char c : name.toCharArray())
+		{
+			if (c == '\'')
+			{
+				continue;   // K'ril is one word
+			}
+			if (!Character.isLetterOrDigit(c))
+			{
+				up = true;
+				continue;
+			}
+			out.append(up ? Character.toUpperCase(c) : Character.toLowerCase(c));
+			up = false;
+		}
+		return out.toString();
+	}
+
+	/** Whether a key is one of the minutes keys. */
+	public static boolean isTime(String key)
+	{
+		return key.startsWith(TIME_PREFIX) && key.length() > TIME_PREFIX.length()
+			&& Character.isUpperCase(key.charAt(TIME_PREFIX.length()));
+	}
 	// the same spend split by what it went on
 	public static final String FOOD_CONSUMED_VALUE = "foodConsumedValue";
 	public static final String POTIONS_CONSUMED_VALUE = "potionsConsumedValue";

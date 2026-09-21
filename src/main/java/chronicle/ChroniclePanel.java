@@ -1807,6 +1807,13 @@ class ChroniclePanel extends PluginPanel
 			labels.add("Average kill");
 			figures.add(pb(timed[1] / timed[0]) + " over " + fmt((long) timed[0]));
 		}
+		long here = (wholeRecord() ? counters() : periodCounters())
+			.getOrDefault(chronicle.counters.StatKeys.timeKey(b.name), 0L);
+		if (here > 0)
+		{
+			labels.add("Time here");
+			figures.add(hoursMinutes(here));
+		}
 		// what the page itself counts, which need not be kills at all
 		for (Map.Entry<String, Long> ln : logLines(b.name))
 		{
@@ -6022,6 +6029,16 @@ class ChroniclePanel extends PluginPanel
 				head.add(row("Average kill", pb(timed[1] / timed[0]) + " · "
 					+ fmt((long) timed[0]) + " timed", null));
 			}
+			// How long was spent here, off the minutes the trackers file under
+			// the fight; the period's, like every figure above it, and the
+			// kills an hour it comes to once there is half an hour to divide.
+			long here = (inWindow == null ? counters() : periodCounters())
+				.getOrDefault(chronicle.counters.StatKeys.timeKey(sr.name), 0L);
+			if (here > 0)
+			{
+				head.add(row("Time here", hoursMinutes(here) + (killed && shown > 0 && here >= 30
+					? " · " + rateText(shown * 60.0 / here) + " kills an hour" : ""), null));
+			}
 			// Not on a picture. It is the reader's own bookkeeping rather than
 			// anything about the fight, and on an account whose ledger carries
 			// imported rows it can name a day before the account existed, which
@@ -9493,6 +9510,12 @@ class ChroniclePanel extends PluginPanel
 		return null;
 	}
 
+	/** A rate as a figure: one decimal under ten, whole above. */
+	private static String rateText(double perHour)
+	{
+		return perHour >= 10 ? fmt(Math.round(perHour)) : String.format(Locale.UK, "%.1f", perHour);
+	}
+
 	private static String hoursMinutes(long minutes)
 	{
 		return minutes >= 60 ? (minutes / 60) + "h " + (minutes % 60) + "m" : minutes + "m";
@@ -11306,6 +11329,16 @@ class ChroniclePanel extends PluginPanel
 		else
 		{
 			head.add(row("Level", "-", null));
+		}
+		// the minutes the trackers filed under this craft, and the xp an hour
+		// they come to where the period's gain is known
+		long minutes = (wholeRecord() ? counters() : periodCounters())
+			.getOrDefault(chronicle.counters.StatKeys.timeKey(craft), 0L);
+		if (minutes > 0)
+		{
+			long gained = !wholeRecord() && was != null && now != null && now > was ? now - was : 0;
+			head.add(row("Time", hoursMinutes(minutes) + (gained > 0 && minutes >= 30
+				? " · " + gp(Math.round(gained * 60.0 / minutes)) + " xp an hour" : ""), null));
 		}
 		p.add(head);
 		p.add(vgap(6));
