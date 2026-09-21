@@ -1708,11 +1708,9 @@ class ChroniclePanel extends PluginPanel
 		JLabel icon = new JLabel();
 		if (b.sprite > 0)
 		{
-			// The activity tiles' size, not the sprite's own 25: one icon size
-			// for the two grids on the sheet, and a boss row stands at the
-			// Combat row's height, which is what lets seventy one of them and
-			// the skills share one pane without a scrollbar.
-			wearSprite(icon, b.sprite, ICON_H, ICON_H);
+			// 24, not the sprite's own 25: a cell leaves about 32px beside the
+			// icon and a five figure count needs 32 of them.
+			wearSprite(icon, b.sprite, 24, 24);
 		}
 		cell.add(icon, BorderLayout.WEST);
 
