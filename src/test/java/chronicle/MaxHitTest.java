@@ -26,8 +26,8 @@ public class MaxHitTest
 		HitsplatID.DAMAGE_MAX_ME_ORANGE, HitsplatID.DAMAGE_MAX_ME_YELLOW,
 		HitsplatID.DAMAGE_MAX_ME_WHITE};
 
-	/** A tracker whose local player is one actor and whose target is another. */
-	private static CombatStatTracker tracker(StatStore store, Actor target)
+	/** A tracker whose local player is null, so every splat lands on somebody else. */
+	private static CombatStatTracker tracker(StatStore store)
 	{
 		Client client = Mockito.mock(Client.class);
 		Mockito.when(client.getLocalPlayer()).thenReturn(null);   // the splat is never on us
@@ -60,7 +60,7 @@ public class MaxHitTest
 		{
 			StatStore store = new StatStore();
 			Actor on = target();
-			CombatStatTracker t = tracker(store, on);
+			CombatStatTracker t = tracker(store);
 			hit(t, on, HitsplatID.DAMAGE_ME, 30);
 			hit(t, on, splat, 71);
 			assertEquals("splat " + splat + ": a max hit is still a hit",
@@ -73,7 +73,7 @@ public class MaxHitTest
 	{
 		StatStore store = new StatStore();
 		Actor on = target();
-		CombatStatTracker t = tracker(store, on);
+		CombatStatTracker t = tracker(store);
 		hit(t, on, HitsplatID.DAMAGE_ME, 42);
 		assertEquals(42, store.getStat(StatKeys.HIGHEST_HIT));
 	}
@@ -87,7 +87,7 @@ public class MaxHitTest
 	{
 		StatStore store = new StatStore();
 		Actor on = target();
-		CombatStatTracker t = tracker(store, on);
+		CombatStatTracker t = tracker(store);
 		hit(t, on, HitsplatID.DAMAGE_ME, 30);
 		hit(t, on, HitsplatID.DAMAGE_MAX_ME, 71);
 		assertEquals("every hit we dealt is damage we dealt",
@@ -104,7 +104,6 @@ public class MaxHitTest
 	{
 		StatStore store = new StatStore();
 		Client client = Mockito.mock(Client.class);
-		Actor me = Mockito.mock(NPC.class);
 		Mockito.when(client.getLocalPlayer()).thenReturn(null);
 		CombatStatTracker t = new CombatStatTracker(store, client);
 		// a splat on us, of the max family

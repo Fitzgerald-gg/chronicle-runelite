@@ -16,9 +16,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 /**
  * The kill count the game announces on the kill itself. It is the only reading

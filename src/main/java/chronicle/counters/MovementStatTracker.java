@@ -409,7 +409,7 @@ public class MovementStatTracker implements StatTracker
 		// "Home" is the cape's first destination and names the player's house.
 		String place = isHomeRow(optLow) ? "house" : optLow;
 		if (matchDestinationKey(place) != null
-			&& !isWearHandling(optLow) && !isInventoryManagement(optLow)
+			&& !isWearHandling(optLow)
 			&& (tgtLow.isEmpty() || event.isItemOp() || isTeleportCape(tgtLow)))
 		{
 			// The target is what this must NOT lean on. isItemOp() is not it

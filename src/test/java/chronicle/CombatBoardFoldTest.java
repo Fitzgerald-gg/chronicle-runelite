@@ -155,15 +155,7 @@ public class CombatBoardFoldTest
 	@Test
 	public void noSingleSourceIsAWall() throws Exception
 	{
-		com.google.gson.JsonObject all;
-		try (java.io.InputStreamReader r = new java.io.InputStreamReader(
-			ChroniclePanel.class.getResourceAsStream(
-				"/chronicle/osrs_combat_achievements.json"),
-			java.nio.charset.StandardCharsets.UTF_8))
-		{
-			all = new com.google.gson.Gson()
-				.fromJson(r, com.google.gson.JsonObject.class).getAsJsonObject("tasks");
-		}
+		com.google.gson.JsonObject all = CombatAchievementsTest.tasks();
 		java.util.Map<String, Integer> per = new java.util.HashMap<>();
 		for (String id : all.keySet())
 		{

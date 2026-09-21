@@ -3,17 +3,13 @@
  */
 package chronicle;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import java.io.InputStreamReader;
 import java.lang.reflect.Field;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import net.runelite.api.Client;
-import net.runelite.api.gameval.VarPlayerID;
 import org.junit.Test;
 import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
@@ -40,16 +36,7 @@ public class CombatTaskBitsTest
 
 	private static JsonObject tasks()
 	{
-		try (InputStreamReader r = new InputStreamReader(
-			ChroniclePanel.class.getResourceAsStream(
-				"/chronicle/osrs_combat_achievements.json"), StandardCharsets.UTF_8))
-		{
-			return new Gson().fromJson(r, JsonObject.class).getAsJsonObject("tasks");
-		}
-		catch (Exception e)
-		{
-			throw new AssertionError(e);
-		}
+		return CombatAchievementsTest.tasks();
 	}
 
 	/**
@@ -184,40 +171,5 @@ public class CombatTaskBitsTest
 			.getAsJsonArray("tasksDone").forEach(e -> ids.add(e.getAsInt()));
 		assertEquals(32, ids.size());
 		assertTrue("bit 31 is the sign bit and is still a task", ids.contains(31));
-	}
-
-	/**
-	 * The denominator on the head card, when the journal has never watched a
-	 * combat achievement land.
-	 *
-	 * <p>The game states its own total on every completion and that total moves
-	 * with each release, so it wins where it has spoken. Where it has not, the
-	 * javadoc has always said the table is the fallback; the code said
-	 * `if (possible == 0) { possible = 0; }`, so a new account read as a bare
-	 * number of points over nothing at all.
-	 */
-	@Test
-	public void withNoWitnessedCompletionTheTableSuppliesTheTotal() throws Exception
-	{
-		JsonObject meta = new Gson().fromJson(
-			new InputStreamReader(ChroniclePanel.class.getResourceAsStream(
-				"/chronicle/osrs_combat_achievements.json"), StandardCharsets.UTF_8),
-			JsonObject.class).getAsJsonObject("_meta").getAsJsonObject("totals");
-		assertTrue("the bundled table has no points total to fall back to",
-			meta.has("points") && meta.get("points").getAsLong() > 0);
-
-		// and it has to be the sum of the tiers, or the fallback is a made up number
-		JsonObject points = new Gson().fromJson(
-			new InputStreamReader(ChroniclePanel.class.getResourceAsStream(
-				"/chronicle/osrs_combat_achievements.json"), StandardCharsets.UTF_8),
-			JsonObject.class).getAsJsonObject("_meta").getAsJsonObject("points");
-		long sum = 0;
-		JsonObject all = tasks();
-		for (String id : all.keySet())
-		{
-			sum += points.get(all.getAsJsonObject(id).get("tier").getAsString()).getAsLong();
-		}
-		assertEquals("the total does not match the tasks it is a total of",
-			meta.get("points").getAsLong(), sum);
 	}
 }

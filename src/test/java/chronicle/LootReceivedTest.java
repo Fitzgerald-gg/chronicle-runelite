@@ -11,7 +11,6 @@ package chronicle;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Player;

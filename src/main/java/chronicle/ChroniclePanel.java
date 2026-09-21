@@ -1243,19 +1243,6 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/** One source's takings, openable. */
-	private JPanel dropsRow(String label, LocalStore.SourceRow r)
-	{
-		long qty = 0;
-		for (LocalStore.BagItem it : plugin.sourceItems(r.name))
-		{
-			qty += it.qty;
-		}
-		JPanel row = row(label, fmt(qty) + " \u00b7 " + gp(r.value) + " gp", null);
-		row.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
-		final String open = r.name;
-		row.addMouseListener(clicker(() -> openSource(open)));
-		return row;
-	}
 
 	/** "Reward cart (Wintertodt)" is Wintertodt's, and is not a boss of its own. */
 	private static boolean namesInBrackets(String source, String boss)
@@ -1632,16 +1619,6 @@ class ChroniclePanel extends PluginPanel
 			hover = tip("Achievement diaries",
 				new String[]{"Tiers done", "Regions finished", "Regions"},
 				new String[]{d[0] + " / " + d[1], fmt(d[2]), fmt(d[3])});
-			wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
-		}
-		else if ("Combat".equals(label))
-		{
-			long[] c = combatStanding();
-			figure = c[0];
-			hover = tip("Combat achievements",
-				new String[]{"Points", "Tiers unlocked", "Seen by name"},
-				new String[]{c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]),
-					fmt(c[2]) + " / 6", fmt(c[3])});
 			wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
 		}
 		else
@@ -3748,7 +3725,6 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel addOnTaskLoot(JPanel p)
 	{
-		Window w = window();
 		// windowMs, not a second copy of it: this had its own pair of midnights
 		// and so reported the whole day's task loot under the sitting.
 		long[] ms = windowMs();
@@ -5435,7 +5411,7 @@ class ChroniclePanel extends PluginPanel
 			img.addTo(slot);
 			head.add(slot);
 		}
-		long[] mine = taskItemsEver().get(properName(name, srcs));
+		long[] mine = taskItemsEver().get(properName(name));
 		final boolean hasTask = mine != null;
 		if (hasTask && onTaskOnly)
 		{
@@ -5494,7 +5470,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (hasTask && onTaskOnly)
 		{
-			return byTaskRows(p, properName(name, srcs));
+			return byTaskRows(p, properName(name));
 		}
 		p.add(group("From"));
 		int mounted = 0;
@@ -5522,7 +5498,7 @@ class ChroniclePanel extends PluginPanel
 	 * can be opened from a search box where the reader typed it in any case at
 	 * all. Matching on the bag's own key is what makes "fire rune" find it.
 	 */
-	private String properName(String typed, List<Object[]> srcs)
+	private String properName(String typed)
 	{
 		for (String key : taskItemsEver().keySet())
 		{
@@ -5948,7 +5924,6 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel logInWindow(JPanel p)
 	{
-		Window w = window();
 		List<JsonObject> got = new ArrayList<>();
 		for (JsonObject e : plugin.feedNewest(4000))
 		{
@@ -7250,12 +7225,8 @@ class ChroniclePanel extends PluginPanel
 			}));
 			pills.add(pill);
 		}
-		if (families.length > 1)
-		{
-			p.add(pills);
-			p.add(vgap(4));
-		}
-
+		p.add(pills);
+		p.add(vgap(4));
 
 		// Rows file into sections. Generic floor totals (logsChopped,
 		// teleportsTotal) head their section instead of listing as a row, and the
@@ -8504,26 +8475,22 @@ class ChroniclePanel extends PluginPanel
 		{
 			return KIND_SKILLING;
 		}
-		Map<String, Map<String, List<String>>> tax = taxonomy(plugin.gson());
-		if (tax != null)
+		for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
 		{
-			for (Map.Entry<String, Map<String, List<String>>> tab : tax.entrySet())
+			if (!tab.getValue().containsKey(name))
 			{
-				if (!tab.getValue().containsKey(name))
-				{
-					continue;
-				}
-				String t = tab.getKey().toLowerCase(Locale.ROOT);
-				if (t.contains("boss") || t.contains("raid"))
-				{
-					return KIND_BOSS;
-				}
-				if (t.contains("clue") || t.contains("minigame"))
-				{
-					return KIND_ACTIVITY;
-				}
-				return MONSTER_PAGES.contains(name) ? KIND_MONSTER : KIND_SKILLING;
+				continue;
 			}
+			String t = tab.getKey().toLowerCase(Locale.ROOT);
+			if (t.contains("boss") || t.contains("raid"))
+			{
+				return KIND_BOSS;
+			}
+			if (t.contains("clue") || t.contains("minigame"))
+			{
+				return KIND_ACTIVITY;
+			}
+			return MONSTER_PAGES.contains(name) ? KIND_MONSTER : KIND_SKILLING;
 		}
 		String low = name.toLowerCase(Locale.ROOT);
 		return containsAny(low, OPENED) ? KIND_ACTIVITY
@@ -8614,12 +8581,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private int pagedItem(String page)
 	{
-		Map<String, Map<String, List<String>>> tax = taxonomy(plugin.gson());
-		if (tax == null)
-		{
-			return 0;
-		}
-		for (Map<String, List<String>> pages : tax.values())
+		for (Map<String, List<String>> pages : taxonomy(plugin.gson()).values())
 		{
 			List<String> slots = pages.get(page);
 			if (slots == null)
@@ -10339,8 +10301,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			try
 			{
-				java.awt.image.BufferedImage img = plugin.skillIcons().getSkillImage(s, true);
-				return img;
+				return plugin.skillIcons().getSkillImage(s, true);
 			}
 			catch (Throwable e)   // noqa: no icon is worth the tab it sits on
 			{
@@ -11256,7 +11217,7 @@ class ChroniclePanel extends PluginPanel
 					+ "day rollover and logout, and a period is the distance "
 					+ "between two of them.";
 			}
-			else if (!hist.isEmpty() && hist.firstKey().isBefore(pStart)
+			else if (hist.firstKey().isBefore(pStart)
 				&& ("Day".equals(histGranularity) || "Week".equals(histGranularity)))
 			{
 				// The imported past resolves by month; day and week windows inside
@@ -11384,9 +11345,6 @@ class ChroniclePanel extends PluginPanel
 			// floor at all. The floor is only an account of this period when
 			// every one of them did.
 			long[] took = {0, 0, 0, 0, 0, 0};
-			// the first sitting the period holds, which is as far back as a
-			// figure read off the sittings can reach
-			long[] firstSitting = {0};
 			for (JsonObject e : historyFeed)
 			{
 				long ts = safeLong(e.get("ts"));
@@ -11408,10 +11366,6 @@ class ChroniclePanel extends PluginPanel
 					{
 						played[0] += sessionMinutes(e);
 						played[1]++;
-						if (firstSitting[0] == 0 || ts < firstSitting[0])
-						{
-							firstSitting[0] = ts;
-						}
 						// A session closes with what it took: the loot events it
 						// saw and what they were worth. Dated, one line per
 						// sitting, and the only account of the take that reaches
@@ -12535,16 +12489,6 @@ class ChroniclePanel extends PluginPanel
 		};
 		p.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		return p;
-	}
-
-	private static JPanel wrapTop(JPanel body)
-	{
-		// Scrollable that tracks the viewport width. A long label can't widen the
-		// view past the panel. Height stays free for vertical scrolling.
-		JPanel wrap = new ScrollColumn();
-		wrap.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		wrap.add(body, BorderLayout.NORTH);
-		return wrap;
 	}
 
 	private static final class ScrollColumn extends JPanel implements javax.swing.Scrollable

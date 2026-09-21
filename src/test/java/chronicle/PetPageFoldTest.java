@@ -40,8 +40,6 @@ public class PetPageFoldTest
 {
 	private static final String NOTE =
 		"Click pet to see odds. Skilling odds are based on current level.";
-	// what the note wraps to, since a note is drawn as one label a line
-	private static final String NOTE_HEAD = "Click pet to see odds. Skilling odds are";
 
 	@BeforeClass
 	public static void headless()
@@ -372,7 +370,7 @@ public class PetPageFoldTest
 			{
 				continue;
 			}
-			if (t.startsWith(NOTE_HEAD.substring(0, 12)) || sb.length() > 0)
+			if (t.startsWith(NOTE.substring(0, 12)) || sb.length() > 0)
 			{
 				if (sb.length() > 0)
 				{

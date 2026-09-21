@@ -437,10 +437,6 @@ public class ExampleExportTest
 			{
 				for (String fold : new String[]{null, fam[1]})
 				{
-					if (fold == null && fam[1] != null && false)
-					{
-						continue;
-					}
 					restore(home);
 					final Object stats = Enum.valueOf((Class) viewType, "STATS");
 					edt(() -> applyTab.invoke(panel, stats));
@@ -453,10 +449,6 @@ public class ExampleExportTest
 						folds.add(fam[0] + ":" + fold);
 					}
 					remember();
-					if (fold == null && fam[1] == null)
-					{
-						break;
-					}
 				}
 			}
 			// both readings of the Skilling tab
@@ -504,12 +496,9 @@ public class ExampleExportTest
 			}
 			// The on-task board narrowed to one assignment, which is the other
 			// half of the task picker.
-			for (String task : new String[]{null, firstTaskName()})
+			String task = firstTaskName();
+			if (task != null)
 			{
-				if (task == null)
-				{
-					continue;
-				}
 				restore(home);
 				final Object sl = Enum.valueOf((Class) viewType, "SLAYER");
 				edt(() -> applyTab.invoke(panel, sl));
@@ -1239,25 +1228,6 @@ public class ExampleExportTest
 			return "s";
 		}
 		return f.isBold() ? "b" : "n";
-	}
-
-	// where a child sits among the ones that are drawn
-	private static int shownIndexIn(Container parent, Component child)
-	{
-		int shown = 0;
-		for (int i = 0; i < parent.getComponentCount(); i++)
-		{
-			Component k = parent.getComponent(i);
-			if (k == child)
-			{
-				return shown;
-			}
-			if (k.isVisible())
-			{
-				shown++;
-			}
-		}
-		return 0;
 	}
 
 	/**

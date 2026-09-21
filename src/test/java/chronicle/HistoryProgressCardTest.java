@@ -411,13 +411,6 @@ public class HistoryProgressCardTest
 		return (Set<String>) f.get(panel);
 	}
 
-	private static JPanel skills(PanelPreviewTest.StubPlugin stub) throws Exception
-	{
-		ChroniclePanel p = panel(stub);
-		set(p, "histFacet", "Skills");
-		return history(p);
-	}
-
 	// the tab read on its PvM facet, for tests that want the kills, the deaths
 	// or the slayer tasks the headline used to carry for every facet at once
 	private static JPanel pvm(PanelPreviewTest.StubPlugin stub) throws Exception
@@ -3342,26 +3335,6 @@ public class HistoryProgressCardTest
 		List<String> exact = periodLabels(p);
 		assertTrue("exact dates are unnamed: " + exact,
 			exact.toString().contains("-"));
-	}
-
-	private static JLabel labelNamed(Container c, String text)
-	{
-		for (Component k : c.getComponents())
-		{
-			if (k instanceof JLabel && text.equals(((JLabel) k).getText()))
-			{
-				return (JLabel) k;
-			}
-			if (k instanceof Container)
-			{
-				JLabel hit = labelNamed((Container) k, text);
-				if (hit != null)
-				{
-					return hit;
-				}
-			}
-		}
-		return null;
 	}
 
 	@Test

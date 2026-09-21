@@ -30,7 +30,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class CombatAchievementsTest
 {
-	private static JsonObject table()
+	/** The bundled table, for every test that reads it. */
+	static JsonObject table()
 	{
 		try (InputStreamReader r = new InputStreamReader(
 			ChroniclePanel.class.getResourceAsStream(
@@ -44,7 +45,7 @@ public class CombatAchievementsTest
 		}
 	}
 
-	private static JsonObject tasks()
+	static JsonObject tasks()
 	{
 		return table().getAsJsonObject("tasks");
 	}
@@ -88,6 +89,46 @@ public class CombatAchievementsTest
 			sum += points.get(tasks().getAsJsonObject(id).get("tier").getAsString()).getAsLong();
 		}
 		assertEquals(meta().getAsJsonObject("totals").get("points").getAsLong(), sum);
+	}
+
+	/**
+	 * The denominator on the head card, when the journal has never watched a
+	 * combat achievement land.
+	 *
+	 * <p>The game states its own total on every completion and that total moves
+	 * with each release, so it wins where it has spoken. Where it has not, the
+	 * table is the fallback: the code once read `if (possible == 0) { possible
+	 * = 0; }`, so a new account showed a bare number of points over nothing.
+	 */
+	@Test
+	public void withNoWitnessedCompletionTheTableSuppliesTheTotal() throws Exception
+	{
+		long table = meta().getAsJsonObject("totals").get("points").getAsLong();
+		assertTrue("the bundled table has no points total to fall back to", table > 0);
+
+		PanelPreviewTest.StubPlugin stub = new PanelPreviewTest.StubPlugin(null);
+		assertEquals("a journal that has seen nothing reads the table",
+			table, standing(stub)[1]);
+
+		// and the game's own figure wins the moment it has spoken
+		JsonObject data = new JsonObject();
+		data.addProperty("totalPossiblePoints", 2624);
+		JsonObject seen = new JsonObject();
+		seen.addProperty("type", "COMBAT_ACHIEVEMENT");
+		seen.add("data", data);
+		stub.feed.add(seen);
+		assertEquals(2624, standing(stub)[1]);
+	}
+
+	/** points, points there are, tiers, seen: what the head card is built from. */
+	private static long[] standing(PanelPreviewTest.StubPlugin stub) throws Exception
+	{
+		System.setProperty("java.awt.headless", "true");
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		javax.swing.SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
+		java.lang.reflect.Method m = ChroniclePanel.class.getDeclaredMethod("combatStanding");
+		m.setAccessible(true);
+		return (long[]) m.invoke(hold[0]);
 	}
 
 	/**

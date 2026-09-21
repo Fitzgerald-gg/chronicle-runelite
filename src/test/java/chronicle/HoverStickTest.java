@@ -7,7 +7,6 @@ import java.awt.Color;
 import java.awt.event.MouseEvent;
 import java.lang.reflect.Method;
 import javax.swing.JPanel;
-import javax.swing.event.MouseInputListener;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;

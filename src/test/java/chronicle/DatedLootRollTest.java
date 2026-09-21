@@ -14,7 +14,6 @@ import com.google.gson.JsonObject;
 import java.io.File;
 import java.time.LocalDate;
 import net.runelite.client.game.ItemManager;
-import net.runelite.http.api.item.ItemPrice;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -40,9 +39,6 @@ public class DatedLootRollTest
 	public void setUp() throws Exception
 	{
 		ItemManager items = Mockito.mock(ItemManager.class);
-		ItemPrice price = Mockito.mock(ItemPrice.class);
-		Mockito.when(price.getPrice()).thenReturn(100);
-		Mockito.when(price.getName()).thenReturn("Thing");
 		Mockito.when(items.getItemPrice(Mockito.anyInt())).thenReturn(100);
 		store = new LocalStore(items, new Gson());
 		store.load(dir.getRoot(), "Tester");

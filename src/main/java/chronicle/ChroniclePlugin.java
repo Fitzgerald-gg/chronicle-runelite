@@ -1907,15 +1907,11 @@ public class ChroniclePlugin extends Plugin
 		// Long: the "overall" entry is total xp, past Integer.MAX_VALUE well before a
 		// maxed account, and it would wrap negative into a stream nothing rewrites.
 		final Map<String, Long> skills = new java.util.HashMap<>();
-		JsonObject sk = harvestSkills();
-		if (sk != null)
+		for (Map.Entry<String, com.google.gson.JsonElement> e : harvestSkills().entrySet())
 		{
-			for (Map.Entry<String, com.google.gson.JsonElement> e : sk.entrySet())
+			if (e.getValue().isJsonObject() && e.getValue().getAsJsonObject().has("xp"))
 			{
-				if (e.getValue().isJsonObject() && e.getValue().getAsJsonObject().has("xp"))
-				{
-					skills.put(e.getKey(), e.getValue().getAsJsonObject().get("xp").getAsLong());
-				}
+				skills.put(e.getKey(), e.getValue().getAsJsonObject().get("xp").getAsLong());
 			}
 		}
 		// A copy of the trackers with the journal's own totals (loot events, loot
@@ -2042,11 +2038,6 @@ public class ChroniclePlugin extends Plugin
 		java.util.Collections.emptyMap();
 
 	private volatile long skillRevision;
-
-	long skillRevision()
-	{
-		return skillRevision;
-	}
 
 	// Client thread only.
 	private void takeLiveSkills()

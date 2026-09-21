@@ -382,11 +382,8 @@ public final class StatRegistry
 		{
 			return "Living";
 		}
-		if (key.startsWith("teleports") || key.startsWith("tiles") || key.startsWith("distance"))
-		{
-			return "Ledger & Roads";
-		}
-		// anything unclaimed lands here rather than dropping out of the panel
+		// teleports, tiles and distance land here with everything unclaimed,
+		// rather than dropping out of the panel
 		return "Ledger & Roads";
 	}
 

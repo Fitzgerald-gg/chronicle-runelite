@@ -933,12 +933,7 @@ public class SkillDeriver
 		if (low.endsWith(" ashes") || low.equals("ashes"))
 		{
 			String tok = stripCamel(low, new String[]{" ashes"}, "");
-			Double base = PRAYER_BASE_XP.get(tok);
-			if (base == null && tok.isEmpty())
-			{
-				base = 10.0;
-			}
-			int[] verb = prayerVerb(xp, base);
+			int[] verb = prayerVerb(xp, PRAYER_BASE_XP.get(tok));
 			if (verb[0] == 2)
 			{
 				return tok.isEmpty() ? new ArrayList<>()

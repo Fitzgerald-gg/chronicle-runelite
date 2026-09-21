@@ -41,6 +41,11 @@ public class StatRegistryTest
 			assertTrue(key, StatRegistry.isSummary(key));
 			assertTrue(key, StatRegistry.hidden(key));
 		}
+	}
+
+	@Test
+	public void summaryAndDerivedKeysAreNamed()
+	{
 		assertEquals("Drops received", StatRegistry.label("dropsReceived"));
 		assertEquals("Loot value", StatRegistry.label("lootValue"));
 		assertEquals("Slayer tasks completed", StatRegistry.label("slayerTasksCompleted"));
