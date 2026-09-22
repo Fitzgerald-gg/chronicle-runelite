@@ -1621,6 +1621,19 @@ public class PanelPreviewTest
 			return new ArrayList<>(bags.getOrDefault(source, new ArrayList<>()));
 		}
 
+		// Read off the store where there is one, the bag otherwise. Left to the
+		// plugin, this asked a store the stub never injects and threw on every
+		// source page opened under the sitting.
+		@Override
+		java.util.List<LocalStore.BagItem> sessionSourceItems(String source)
+		{
+			if (store != null)
+			{
+				return store.sessionSourceItems(source);
+			}
+			return new ArrayList<>(bags.getOrDefault(source, new ArrayList<>()));
+		}
+
 		@Override
 		java.util.List<LocalStore.UntakenRow> untakenSources()
 		{
