@@ -248,6 +248,54 @@ public class SearchDoorsTest
 		assertNull(field("histFrom"));
 	}
 
+	/**
+	 * A collection log hit opens the log on the page it names. It used to name
+	 * the page and then open the sheet, and opening the sheet puts its page back
+	 * to none: every log hit landed on the top of the skills.
+	 */
+	@Test
+	public void aLogHitOpensTheLogOnItsPage() throws Exception
+	{
+		JPanel board = search("fire cape");
+		JPanel hit = null;
+		List<Component> flat = new ArrayList<>();
+		flatten(board, flat);
+		for (Component c : flat)
+		{
+			if (c instanceof JPanel && ((JPanel) c).getLayout() instanceof BorderLayout
+				&& "Fire cape".equals(left((JPanel) c)))
+			{
+				hit = (JPanel) c;
+			}
+		}
+		assertNotNull("the slot is not on the board", hit);
+		press(hit);
+		assertEquals("the hit did not open the log", "log", field("sheetPage"));
+		assertEquals("Bosses", field("clogTab"));
+		assertEquals("The Fight Caves", field("clogPageSel"));
+	}
+
+	/**
+	 * Achievement and diary rows are doors like the rest. They listened for a
+	 * click and never registered with Enter, so a search that found only them
+	 * said "enter opens the first row" over a key that did nothing.
+	 */
+	@Test
+	public void enterOpensAnAchievementOrADiaryHit() throws Exception
+	{
+		search("noxious foe");
+		Runnable enter = (Runnable) field("searchFirst");
+		assertNotNull("Enter has nowhere to go on a combat achievement", enter);
+		SwingUtilities.invokeAndWait(enter);
+		assertEquals("combat", field("sheetPage"));
+
+		search("golden warbler");
+		enter = (Runnable) field("searchFirst");
+		assertNotNull("Enter has nowhere to go on a diary entry", enter);
+		SwingUtilities.invokeAndWait(enter);
+		assertEquals("diaries", field("sheetPage"));
+	}
+
 	private static void flatten(Component c, List<Component> out)
 	{
 		out.add(c);

@@ -1535,22 +1535,32 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private void openActivity(String source)
 	{
-		if (resolveSourceNamed(source) == null)
+		if (resolveSourceNamed(source) == null && openLogPage(source))
 		{
-			for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
-			{
-				if (tab.getValue().containsKey(source))
-				{
-					applyTab(Tab.STANDING);
-					sheetPage = "log";
-					clogTab = tab.getKey();
-					clogPageSel = source;
-					rebuild();
-					return;
-				}
-			}
+			return;
 		}
 		openSourceLoose(source);
+	}
+
+	/**
+	 * The collection log, opened on one of its pages under the tab that holds
+	 * it; false, and nothing opened, when no tab has a page of that name.
+	 */
+	private boolean openLogPage(String page)
+	{
+		for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
+		{
+			if (tab.getValue().containsKey(page))
+			{
+				applyTab(Tab.STANDING);
+				sheetPage = "log";
+				clogTab = tab.getKey();
+				clogPageSel = page;
+				rebuild();
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private JPanel activityCell(String label, String source, String page)
@@ -1644,7 +1654,12 @@ class ChroniclePanel extends PluginPanel
 		}
 		else
 		{
-			figure = bossKills(source);
+			// The tile says what it is named for. The Rift's page opens on rifts
+			// searched, which is the count the log keeps for the page, and a
+			// tile wearing the hiscores' Rifts closed read that number: 5,218
+			// beside a page that says 2,073 were closed.
+			long named = namedLine(source, label);
+			figure = named > 0 ? named : bossKills(source);
 			hover = tip(label, new String[]{"Count"}, new String[]{fmt(figure)});
 			wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
 		}
@@ -4353,6 +4368,29 @@ class ChroniclePanel extends PluginPanel
 			}
 			menu.show(take, 0, take.getHeight());
 		}));
+		return r;
+	}
+
+	/**
+	 * A copy that answers later: the label says it is at work, and the copier
+	 * writes the outcome back when it has one.
+	 */
+	private JPanel copyHeaderLater(String title, java.util.function.Consumer<JLabel> copy)
+	{
+		JPanel r = row(title, "copy", null);
+		BorderLayout layout = (BorderLayout) r.getLayout();
+		JLabel t = (JLabel) layout.getLayoutComponent(BorderLayout.CENTER);
+		t.setFont(FontManager.getRunescapeSmallFont());
+		t.setForeground(accent());
+		JLabel take = copyLabel(r, "Copy this board as a picture");
+		if (take != null)
+		{
+			take.addMouseListener(clicker(() ->
+			{
+				take.setText("copying");
+				copy.accept(take);
+			}));
+		}
 		return r;
 	}
 
@@ -9918,7 +9956,24 @@ class ChroniclePanel extends PluginPanel
 		if (!source.isEmpty())
 		{
 			Long n = rolledKills(source);
-			return n == null ? 0 : n;
+			long rolled = n == null ? 0 : n;
+			// The roll counts what paid out, which is not what a tile reading one
+			// of its page's own lines counts: a period can say THAT the rift was
+			// played, never how many of the searches closed one.
+			return rolled > 0 && namedLine(source, label) > 0 ? -1 : rolled;
+		}
+		return 0;
+	}
+
+	/** The source's log page line named exactly as the tile is, or 0. */
+	private long namedLine(String source, String label)
+	{
+		for (Map.Entry<String, Long> ln : pageLines(source))
+		{
+			if (ln.getKey().equalsIgnoreCase(label))
+			{
+				return ln.getValue();
+			}
 		}
 		return 0;
 	}
@@ -12766,6 +12821,43 @@ class ChroniclePanel extends PluginPanel
 		return total > 0 ? new Object[]{total, StatRegistry.prettify(top)} : null;
 	}
 
+	/** How wide a row's text can run on a board, outside any card. */
+	static int boardRowRoom()
+	{
+		return PluginPanel.PANEL_WIDTH + PluginPanel.SCROLLBAR_WIDTH
+			- 2 * PANEL_INSET - scrollbarWidth() - 2 * ROW_INSET;
+	}
+
+	/**
+	 * Clauses joined by " · ", packed into as few lines as fit {@code room}. A
+	 * line breaks only between clauses, so no figure is ever split from its
+	 * unit.
+	 */
+	static List<String> wrapClauses(String text, int room)
+	{
+		FontMetrics fm = rowMetrics();
+		List<String> out = new ArrayList<>();
+		String line = null;
+		for (String clause : text.split(" \u00b7 "))
+		{
+			String tried = line == null ? clause : line + " \u00b7 " + clause;
+			if (line != null && fm.stringWidth(tried) > room)
+			{
+				out.add(line);
+				line = clause;
+			}
+			else
+			{
+				line = tried;
+			}
+		}
+		if (line != null)
+		{
+			out.add(line);
+		}
+		return out;
+	}
+
 	/**
 	 * One day's line, under its heading in the Journal: sittings and minutes,
 	 * xp and the skill most of it went to, drops and their gp. Figures only,
@@ -12803,9 +12895,852 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildRecap()
 	{
 		JPanel p = column();
-		p.add(copyHeader("Recap", () -> copyPicture(recapPlate())));
+		p.add(copyHeaderLater("Recap", this::copyRecapPicture));
 		p.add(recapPlate());
 		return p;
+	}
+
+	/**
+	 * The Recap's copy, which is not a picture of the card: the whole period on
+	 * one sheet, up to 1920 by 1080. The card is a dozen doors; a picture has
+	 * none, so it carries what they open onto.
+	 *
+	 * <p>The boss icons are the game's sprites, fetched on the client thread,
+	 * and a sheet that has not drawn the bosses yet has not asked for them. So
+	 * the ones it lacks are asked for and the picture is taken when they have
+	 * landed, or after a moment and a half without them: a name with no icon
+	 * beside it is worth more than a copy that never arrives.
+	 */
+	private void copyRecapPicture(JLabel take)
+	{
+		RecapPicture.Facts facts;
+		try
+		{
+			facts = recapFacts();
+		}
+		catch (Throwable t)   // noqa: a picture is never worth the panel
+		{
+			reportCopy(take, false);
+			return;
+		}
+		Set<Integer> want = new java.util.LinkedHashSet<>();
+		for (RecapPicture.BossLine b : facts.bosses)
+		{
+			if (b.sprite > 0 && !facetIcons.containsKey(b.sprite))
+			{
+				want.add(b.sprite);
+			}
+		}
+		for (int id : want)
+		{
+			wearSprite(new JLabel(), id, 22, 22);
+		}
+		long deadline = System.currentTimeMillis() + 1500;
+		Timer wait = new Timer(100, null);
+		wait.addActionListener(e ->
+		{
+			boolean all = true;
+			for (int id : want)
+			{
+				all &= facetIcons.containsKey(id);
+			}
+			if (all || System.currentTimeMillis() > deadline)
+			{
+				wait.stop();
+				reportCopy(take, toClipboard(recapImage(facts)));
+			}
+		});
+		wait.setInitialDelay(want.isEmpty() ? 0 : 100);
+		wait.start();
+	}
+
+	/** The picture itself, so that a preview can be drawn without a clipboard. */
+	java.awt.image.BufferedImage recapImage(RecapPicture.Facts facts)
+	{
+		try
+		{
+			return RecapPicture.paint(facts, this::skillIcon, facetIcons::get);
+		}
+		catch (Throwable t)   // noqa: a picture is never worth the panel
+		{
+			return null;
+		}
+	}
+
+	/**
+	 * Everything the Recap's picture says, each figure read the way the board it
+	 * belongs to reads it and over the same window: the skills as the sheet
+	 * measures them, the bosses as their cells count them, the loot off the
+	 * roll the Loot board reads, the counters off the Trackers' own period.
+	 */
+	RecapPicture.Facts recapFacts()
+	{
+		RecapPicture.Facts f = new RecapPicture.Facts();
+		f.whole = wholeRecord();
+		f.session = sessionPeriod();
+		f.title = f.whole ? "The whole record" : window().label;
+		Span s = f.whole || f.session ? null : span();
+		recapSkills(f, s);
+		recapBosses(f, s);
+		recapMonsters(f, s);
+		recapLoot(f);
+		recapSlayerAndClues(f);
+		recapTrackers(f);
+		recapFeats(f);
+		recapTiles(f);
+		return f;
+	}
+
+	/**
+	 * Every skill at both ends of the period. The end is the sheet's close,
+	 * the live figures where the period reaches today; the start is the base
+	 * the sheet's own gain is measured from, and is left blank where the record
+	 * holds none. Levels past 99 are for the whole record only, as on the sheet.
+	 */
+	private void recapSkills(RecapPicture.Facts f, Span s)
+	{
+		Map<String, long[]> sheet = plugin.skillSheet();
+		Map<String, Long> closing = null;
+		if (!f.whole && !f.session)
+		{
+			if (s == null)
+			{
+				f.skillsNote = notCounting(false) != null
+					? "The record keeps no experience this far back."
+					: "Nothing closed inside " + periodInSentence()
+						+ ": a period is the distance between two baselines, and this one holds fewer than two.";
+				return;
+			}
+			closing = closingSkills(s);
+		}
+		Map<String, Integer> startLevels = new LinkedHashMap<>();
+		Map<String, Integer> endLevels = new LinkedHashMap<>();
+		long startXp = 0;
+		long endXp = 0;
+		boolean startsKnown = true;
+		for (net.runelite.api.Skill sk : net.runelite.api.Skill.values())
+		{
+			if (sk == net.runelite.api.Skill.OVERALL)
+			{
+				continue;
+			}
+			String key = sk.name().toLowerCase(Locale.ROOT);
+			Long end;
+			Long start = null;
+			if (closing != null)
+			{
+				end = closing.get(key);
+				Long base = s.opening.skills.get(key);
+				if (base == null)
+				{
+					base = s.opening.complete ? Long.valueOf(0L) : s.earliest.skills.get(key);
+				}
+				start = base == null || end == null ? null : Math.min(base, end);
+			}
+			else
+			{
+				long[] cur = sheet.get(key);
+				end = cur != null && cur.length > 1 ? cur[1] : null;
+				if (f.session && end != null)
+				{
+					start = Math.max(0, end - sessionXp(key));
+				}
+			}
+			if (end == null)
+			{
+				continue;
+			}
+			int lEnd = f.whole ? PaceBook.virtualLevelAt(end) : PaceBook.levelAt(end);
+			Integer lStart = start == null ? null : PaceBook.levelAt(start);
+			if (sk == net.runelite.api.Skill.HITPOINTS)
+			{
+				lEnd = Math.max(10, lEnd);
+				lStart = lStart == null ? null : Math.max(10, lStart);
+			}
+			f.skills.add(new RecapPicture.SkillLine(sk, StatRegistry.prettify(key), lStart, lEnd,
+				start, end));
+			endLevels.put(key, Math.min(99, lEnd));
+			endXp += end;
+			if (start == null)
+			{
+				startsKnown = false;
+			}
+			else
+			{
+				startLevels.put(key, lStart);
+				startXp += start;
+			}
+		}
+		if (f.skills.isEmpty())
+		{
+			return;
+		}
+		long[] overall = sheet.get("overall");
+		long totalEnd = f.whole && overall != null && overall[0] > 0 ? overall[0] : sum(endLevels);
+		f.totalLevel = new Long[]{startsKnown ? sum(startLevels) : null, totalEnd};
+		f.totalXp = new Long[]{startsKnown ? startXp : null,
+			f.whole && overall != null && overall.length > 1 && overall[1] > 0 ? overall[1] : endXp};
+		Integer cEnd = combatOf(endLevels);
+		if (f.whole && plugin.combatLevel() > 0)
+		{
+			cEnd = plugin.combatLevel();
+		}
+		Integer cStart = startsKnown ? combatOf(startLevels) : null;
+		f.combat = cEnd == null ? null : new Long[]{cStart == null ? null : (long) cStart, (long) cEnd};
+	}
+
+	private static long sum(Map<String, Integer> levels)
+	{
+		long t = 0;
+		for (int l : levels.values())
+		{
+			t += l;
+		}
+		return t;
+	}
+
+	/** A combat level from real levels by skill key, or null without all seven. */
+	private static Integer combatOf(Map<String, Integer> levels)
+	{
+		HistoryLog.Levels l = new HistoryLog.Levels();
+		l.of.putAll(levels);
+		return openingCombat(l);
+	}
+
+	/**
+	 * The bosses: on the whole record every one killed, in the hiscores' order;
+	 * over a period every one the period moved, most first, with both ends where
+	 * the record's two lines subtract to the cell's own figure.
+	 */
+	private void recapBosses(RecapPicture.Facts f, Span s)
+	{
+		List<Boss> roster = bossRoster(plugin.gson());
+		Map<String, Long> closing = s == null ? null : closingNow(s.closing.kcs, plugin.killCounts());
+		for (Boss b : roster)
+		{
+			if (f.whole)
+			{
+				long k = bossKills(b.name);
+				if (k > 0)
+				{
+					f.bosses.add(new RecapPicture.BossLine(b.name, b.sprite, null, k, k));
+				}
+				continue;
+			}
+			long moved = bossKillsInWindow(b.name);
+			if (moved <= 0)
+			{
+				continue;
+			}
+			Long start = null;
+			Long end = null;
+			String key = closing == null || movedKcs == null ? null : keyIgnoringCase(movedKcs, b.name);
+			if (key != null)
+			{
+				end = closing.get(key);
+				start = s.opening.kcs.containsKey(key) ? s.opening.kcs.get(key) : s.earliest.kcs.get(key);
+				if (start == null || end == null || end - start != moved)
+				{
+					start = null;
+					end = null;
+				}
+			}
+			f.bosses.add(new RecapPicture.BossLine(b.name, b.sprite, start, end, moved));
+		}
+		if (!f.whole)
+		{
+			f.bosses.sort((a, b) -> Long.compare(b.gained, a.gained));
+		}
+		if (rollUsed)
+		{
+			f.notes.add("Kill counts without a start and an end are read from loot, and count only the kills that dropped something.");
+		}
+		if (f.bosses.isEmpty() && !f.whole)
+		{
+			f.bossesNote = notCounting(true) != null
+				? "The record keeps no kill counts this far back."
+				: "No boss was killed inside " + periodInSentence() + ".";
+		}
+	}
+
+	private static String keyIgnoringCase(Map<String, Long> map, String name)
+	{
+		if (map.containsKey(name))
+		{
+			return name;
+		}
+		for (String k : map.keySet())
+		{
+			if (k.equalsIgnoreCase(name))
+			{
+				return k;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * The ten monsters killed most that are not a boss, nor a part of a boss's
+	 * fight, nor something opened or caught: what the Kills board would call a
+	 * monster, with what each paid over the same window.
+	 */
+	private void recapMonsters(RecapPicture.Facts f, Span s)
+	{
+		Map<String, Long> by = new LinkedHashMap<>();
+		Map<String, Long> worth = new LinkedHashMap<>();
+		if (f.whole)
+		{
+			by.putAll(plugin.killCounts());
+			for (LocalStore.SourceRow r : sources())
+			{
+				worth.merge(r.name, r.value, Long::sum);
+			}
+		}
+		else if (f.session)
+		{
+			for (String[] r : plugin.sessionLootWindow().sources)
+			{
+				by.merge(r[0], safeParse(r[1]), Long::sum);
+				worth.merge(r[0], safeParse(r[2]), Long::sum);
+			}
+		}
+		else
+		{
+			if (s == null)
+			{
+				return;
+			}
+			by.putAll(HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
+				closingNow(s.closing.kcs, plugin.killCounts())));
+			Window w = window();
+			worth.putAll(periodWorth(w.start, w.end));
+		}
+		Map<String, Long> loose = loosely(worth);
+		List<Map.Entry<String, Long>> kept = new ArrayList<>();
+		for (Map.Entry<String, Long> e : by.entrySet())
+		{
+			if (e.getValue() > 0 && recapMonster(e.getKey()))
+			{
+				kept.add(e);
+			}
+		}
+		kept.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
+		for (Map.Entry<String, Long> e : kept.subList(0, Math.min(10, kept.size())))
+		{
+			long paid = paidFor(worth, loose, e.getKey());
+			f.monsters.add(new RecapPicture.Named(e.getKey(), fmt(e.getValue()),
+				paid > 0 ? gp(paid) + " gp" : null));
+		}
+		if (f.session && !f.monsters.isEmpty())
+		{
+			f.monstersNote = "A sitting counts the kills that dropped something.";
+		}
+	}
+
+	/** A monster in the Kills board's sense, and no part of any boss's fight. */
+	private boolean recapMonster(String name)
+	{
+		if (!KIND_MONSTER.equals(sourceKind(name)))
+		{
+			return false;
+		}
+		String kind = LocalStore.kindOf(name);
+		for (Boss b : bossRoster(plugin.gson()))
+		{
+			if (LocalStore.kindOf(b.name).equals(kind) || namesInBrackets(name, b.name)
+				|| paysOutThrough(b.name, name))
+			{
+				return false;
+			}
+		}
+		for (List<String> npcs : FOUGHT_AS.values())
+		{
+			for (String npc : npcs)
+			{
+				if (LocalStore.kindOf(npc).equals(kind))
+				{
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * The loot: the ledger on the whole record, the sitting's own roll, and
+	 * over a period the dated roll, which answers only a window it reaches all
+	 * the way back into. Naming the part it can see as the whole would be
+	 * worse than saying nothing, and the day it begins is left off: a shared
+	 * picture does not say when anybody started keeping a record.
+	 */
+	private void recapLoot(RecapPicture.Facts f)
+	{
+		if (f.whole)
+		{
+			long[] loot = periodLoot();
+			if (loot[0] > 0)
+			{
+				f.loot.add(new RecapPicture.Named("Drops", fmt(loot[0]), gp(loot[1]) + " gp"));
+			}
+			if (loot[2] > 0)
+			{
+				f.loot.add(new RecapPicture.Named("Left behind", fmt(loot[2]), gp(loot[3]) + " gp"));
+			}
+			List<LocalStore.SourceRow> rows = new ArrayList<>(sources());
+			rows.sort((a, b) -> Long.compare(b.value, a.value));
+			for (LocalStore.SourceRow r : rows.subList(0, Math.min(8, rows.size())))
+			{
+				if (r.value > 0)
+				{
+					f.sources.add(new RecapPicture.Named(r.name, null, gp(r.value) + " gp"));
+				}
+			}
+			List<LocalStore.BagItem> bag = new ArrayList<>(plugin.allLoot());
+			bag.sort((a, b) -> Long.compare(b.value, a.value));
+			for (LocalStore.BagItem b : bag.subList(0, Math.min(6, bag.size())))
+			{
+				if (b.value > 0)
+				{
+					f.items.add(new RecapPicture.Named(b.name + " ×" + fmt(b.qty), null,
+						gp(b.value) + " gp"));
+				}
+			}
+			return;
+		}
+		LocalStore.LootWindow win;
+		if (f.session)
+		{
+			win = plugin.sessionLootWindow();
+		}
+		else
+		{
+			long from = plugin.lootRollFrom();
+			if (from <= 0 || from > windowMs()[0])
+			{
+				f.lootNote = "Loot is not dated this far back, so this period's cannot be told from the rest.";
+				return;
+			}
+			Window w = window();
+			win = plugin.lootBetween(w.start, w.end);
+		}
+		if (win.loots > 0)
+		{
+			f.loot.add(new RecapPicture.Named("Drops", fmt(win.loots), gp(win.value) + " gp"));
+		}
+		if (win.left > 0)
+		{
+			f.loot.add(new RecapPicture.Named("Left behind", fmt(win.left), gp(win.leftValue) + " gp"));
+		}
+		for (String[] r : win.sources.subList(0, Math.min(8, win.sources.size())))
+		{
+			long v = safeParse(r[2]);
+			if (v > 0)
+			{
+				f.sources.add(new RecapPicture.Named(r[0], null, gp(v) + " gp"));
+			}
+		}
+		for (String[] r : win.items.subList(0, Math.min(6, win.items.size())))
+		{
+			long v = safeParse(r[2]);
+			if (v > 0)
+			{
+				f.items.add(new RecapPicture.Named(r[0] + " ×" + fmt(safeParse(r[1])), null,
+					gp(v) + " gp"));
+			}
+		}
+		if (f.loot.isEmpty())
+		{
+			f.lootNote = "Nothing dropped inside " + periodInSentence() + ".";
+		}
+	}
+
+	/** Slayer as the Recap's card counts it, and the clue caskets by tier. */
+	private void recapSlayerAndClues(RecapPicture.Facts f)
+	{
+		long[] ms = windowMs();
+		long[] tally = plugin.onTaskTally(ms[0], ms[1], null, f.whole);
+		if (tally[2] > 0)
+		{
+			long paid = 0;
+			for (LocalStore.BagItem b : plugin.onTaskLoot(ms[0], ms[1], null, f.whole))
+			{
+				paid += b.value;
+			}
+			f.slayer.add(new RecapPicture.Named("Tasks", fmt(tally[2]), null));
+			if (tally[1] > 0)
+			{
+				f.slayer.add(new RecapPicture.Named("Superiors", fmt(tally[1]), null));
+			}
+			if (paid > 0)
+			{
+				f.slayer.add(new RecapPicture.Named("On-task loot", null, gp(paid) + " gp"));
+			}
+		}
+		for (String tier : CLUE_TIERS)
+		{
+			String source = "Clue Scroll (" + tier + ")";
+			long n = 0;
+			long v = 0;
+			if (f.whole)
+			{
+				for (LocalStore.SourceRow r : sources())
+				{
+					if (r.name.equalsIgnoreCase(source))
+					{
+						n = Math.max(r.kc, r.loots);
+						v = r.value;
+					}
+				}
+			}
+			else
+			{
+				Long rolled = rolledKills(source);
+				n = rolled == null ? 0 : rolled;
+				v = sourceInWindow(source)[1];
+			}
+			if (n > 0)
+			{
+				f.clues.add(new RecapPicture.Named(tier, fmt(n), v > 0 ? gp(v) + " gp" : null));
+			}
+		}
+	}
+
+	// how many rows each family carries on the picture
+	private static final Map<String, Integer> RECAP_TRACKER_ROWS = new LinkedHashMap<>();
+
+	static
+	{
+		RECAP_TRACKER_ROWS.put("Combat", 8);
+		RECAP_TRACKER_ROWS.put("Skilling", 10);
+		RECAP_TRACKER_ROWS.put("Living", 6);
+		RECAP_TRACKER_ROWS.put("Ledger & Roads", 10);
+	}
+
+	/**
+	 * The counters by family, off the Trackers' own period: the totals a family
+	 * heads with rather than every typed row under them, since a picture has
+	 * room for what a skill did and not for every log it did it to.
+	 */
+	private void recapTrackers(RecapPicture.Facts f)
+	{
+		Map<String, Long> counters = f.whole ? counters() : countersForPeriod();
+		if (counters == null)
+		{
+			f.trackersNote = notCounting(false) != null
+				? "The record keeps no counters this far back."
+				: "Nothing closed inside " + periodInSentence() + ".";
+			return;
+		}
+		for (Map.Entry<String, Integer> fam : RECAP_TRACKER_ROWS.entrySet())
+		{
+			List<String> order = StatRegistry.fixedSections(fam.getKey());
+			List<Map.Entry<String, Long>> rows = new ArrayList<>();
+			for (Map.Entry<String, Long> e : counters.entrySet())
+			{
+				String key = e.getKey();
+				if (e.getValue() == null || e.getValue() <= 0 || StatRegistry.hidden(key)
+					|| !fam.getKey().equals(StatRegistry.family(key)) || StatRegistry.typed(key)
+					|| "Destinations".equals(StatRegistry.subgroup(key))
+					|| StatRegistry.label(key).startsWith("·"))
+				{
+					continue;
+				}
+				rows.add(e);
+			}
+			rows.sort((a, b) ->
+			{
+				int sa = order.indexOf(StatRegistry.subgroup(a.getKey()));
+				int sb = order.indexOf(StatRegistry.subgroup(b.getKey()));
+				if (sa != sb)
+				{
+					return Integer.compare(sa < 0 ? order.size() : sa, sb < 0 ? order.size() : sb);
+				}
+				return Long.compare(b.getValue(), a.getValue());
+			});
+			List<RecapPicture.Named> out = new ArrayList<>();
+			for (Map.Entry<String, Long> e : rows.subList(0, Math.min(fam.getValue(), rows.size())))
+			{
+				String key = e.getKey();
+				boolean money = StatRegistry.isGp(key);
+				out.add(new RecapPicture.Named(StatRegistry.label(key),
+					money ? null : fmt(e.getValue()), money ? gp(e.getValue()) + " gp" : null));
+			}
+			if (!out.isEmpty())
+			{
+				f.trackers.put(fam.getKey(), out);
+			}
+		}
+	}
+
+	/**
+	 * What the period achieved, by name: on the whole record the pets, the
+	 * milestones and the bests; over a period every level, log slot, pet,
+	 * quest, diary, task and death the journal dated inside it.
+	 */
+	private void recapFeats(RecapPicture.Facts f)
+	{
+		Map<String, List<String>> named = new LinkedHashMap<>();
+		Map<String, Long> deaths = new LinkedHashMap<>();
+		for (String k : new String[]{"Milestones", "Collection log", "Pets", "Personal bests",
+			"Quests", "Diaries", "Combat achievements"})
+		{
+			named.put(k, new ArrayList<>());
+		}
+		for (JsonObject m : milestones())
+		{
+			if (insideWindow(safeLong(m.get("ts"))) && m.has("data"))
+			{
+				named.get("Milestones").add(m.getAsJsonObject("data").get("text").getAsString());
+			}
+		}
+		Set<String> bests = new HashSet<>();
+		for (JsonObject e : plugin.feedNewest(20_000))
+		{
+			if (!insideWindow(safeLong(e.get("ts"))))
+			{
+				continue;
+			}
+			String type = typeOf(e);
+			JsonObject d = e.has("data") && e.get("data").isJsonObject()
+				? e.getAsJsonObject("data") : new JsonObject();
+			switch (type)
+			{
+				case "COMBAT_ACHIEVEMENT":
+					// the task alone: "Master · Vorkath Master · Easy · ..." ran the
+					// tiers and the names together
+					if (!f.whole && d.has("task"))
+					{
+						named.get("Combat achievements").add(d.get("task").getAsString());
+					}
+					break;
+				case "COLLECTION":
+				case "QUEST":
+				case "DIARY":
+					if (!f.whole)
+					{
+						String n = feedName(e);
+						if (n != null)
+						{
+							named.get(featOf(type)).add(n);
+						}
+					}
+					break;
+				case "PET":
+					if (d.has("petName"))
+					{
+						named.get("Pets").add(d.get("petName").getAsString());
+					}
+					break;
+				case "RECORD":
+					if (d.has("source") && d.has("time")
+						&& bests.add(d.get("source").getAsString().toLowerCase(Locale.ROOT)))
+					{
+						named.get("Personal bests").add(d.get("source").getAsString() + " "
+							+ pb(d.get("time").getAsDouble()));
+					}
+					break;
+				case "DEATH":
+					if (!f.whole)
+					{
+						deaths.merge(d.has("killerName") ? d.get("killerName").getAsString() : "Unknown",
+							1L, Long::sum);
+					}
+					break;
+				default:
+					break;
+			}
+		}
+		// The levels off the skills above them rather than off the journal's
+		// level lines, which began with the plugin: a year that took Cooking
+		// from 91 to 98 named three levels and not one of those.
+		if (!f.whole)
+		{
+			List<String> out = new ArrayList<>();
+			for (RecapPicture.SkillLine l : f.skills)
+			{
+				if (l.levelStart != null && l.levelStart < l.levelEnd)
+				{
+					out.add(l.name + " " + l.levelEnd);
+				}
+			}
+			if (!out.isEmpty())
+			{
+				f.feats.put("Levels", out);
+			}
+		}
+		if (f.whole && plugin.clogAvailable() > 0)
+		{
+			f.feats.put("Collection log", java.util.Collections.singletonList(
+				fmt(plugin.clogFinished()) + " of " + fmt(plugin.clogAvailable()) + " slots"));
+			named.remove("Collection log");
+		}
+		for (Map.Entry<String, List<String>> e : named.entrySet())
+		{
+			if (!e.getValue().isEmpty())
+			{
+				f.feats.put(e.getKey(), counted(e.getValue()));
+			}
+		}
+		if (!deaths.isEmpty())
+		{
+			List<String> out = new ArrayList<>();
+			for (Map.Entry<String, Long> e : deaths.entrySet())
+			{
+				out.add(e.getKey() + (e.getValue() > 1 ? " ×" + e.getValue() : ""));
+			}
+			f.feats.put("Deaths", out);
+		}
+	}
+
+	/** A list with each repeat folded into its first: six hats read "Chompy bird hat ×6". */
+	private static List<String> counted(List<String> names)
+	{
+		Map<String, Integer> n = new LinkedHashMap<>();
+		for (String s : names)
+		{
+			n.merge(s, 1, Integer::sum);
+		}
+		List<String> out = new ArrayList<>();
+		for (Map.Entry<String, Integer> e : n.entrySet())
+		{
+			out.add(e.getKey() + (e.getValue() > 1 ? " ×" + e.getValue() : ""));
+		}
+		return out;
+	}
+
+	private static String featOf(String type)
+	{
+		switch (type)
+		{
+			case "COLLECTION":
+				return "Collection log";
+			case "QUEST":
+				return "Quests";
+			case "DIARY":
+				return "Diaries";
+			default:
+				return "Combat achievements";
+		}
+	}
+
+	/**
+	 * The figures across the top, each the same figure the card beneath the
+	 * copy prints, so the card and the picture never disagree.
+	 */
+	private void recapTiles(RecapPicture.Facts f)
+	{
+		long minutes = 0;
+		int sittings = 0;
+		if (f.session)
+		{
+			minutes = plugin.sessionElapsedMinutes();
+			sittings = minutes > 0 ? 1 : 0;
+		}
+		else
+		{
+			for (Map.Entry<LocalDate, long[]> d : daysPlayed().entrySet())
+			{
+				if (insideWindow(d.getKey().atTime(12, 0).atZone(ZoneId.systemDefault())
+					.toInstant().toEpochMilli()))
+				{
+					minutes += d.getValue()[0];
+					sittings += d.getValue()[1];
+				}
+			}
+		}
+		// The whole record's time is the game's own count where that is the
+		// larger, as on the sheet: the sittings are only the hours this record
+		// has watched, and 88 hours beside 256M xp reads as a mistake.
+		long games = f.whole ? plugin.gamePlaytimeMinutes() : 0;
+		if (games > minutes)
+		{
+			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(games), "the game's own count"));
+		}
+		else if (sittings > 0)
+		{
+			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(minutes),
+				fmt(sittings) + (sittings == 1 ? " sitting" : " sittings")));
+		}
+		long[] xp = periodXp();
+		if (xp != null && xp[0] > 0)
+		{
+			String most = periodXpMost();
+			f.tiles.add(new RecapPicture.Tile("Experience", (f.whole ? "" : "+") + gp(xp[0]),
+				most == null ? null : "most in " + most));
+		}
+		if (f.totalLevel != null && f.totalLevel[1] != null)
+		{
+			Long a = f.totalLevel[0];
+			long b = f.totalLevel[1];
+			if (f.whole)
+			{
+				f.tiles.add(new RecapPicture.Tile("Total level", fmt(b),
+					f.combat != null && f.combat[1] != null ? "combat " + f.combat[1] : null));
+			}
+			else if (a != null && b > a)
+			{
+				f.tiles.add(new RecapPicture.Tile("Levels", "+" + fmt(b - a),
+					fmt(a) + " to " + fmt(b) + " total"));
+			}
+		}
+		for (RecapPicture.Named n : f.loot)
+		{
+			if ("Drops".equals(n.name))
+			{
+				f.tiles.add(new RecapPicture.Tile("Loot", n.gp, n.figure + " drops"));
+			}
+		}
+		long bossKills = 0;
+		RecapPicture.BossLine top = null;
+		for (RecapPicture.BossLine b : f.bosses)
+		{
+			bossKills += b.gained;
+			if (top == null || b.gained > top.gained)
+			{
+				top = b;
+			}
+		}
+		if (bossKills > 0)
+		{
+			f.tiles.add(new RecapPicture.Tile("Boss kills", (f.whole ? "" : "+") + fmt(bossKills),
+				"most " + top.name));
+		}
+		for (RecapPicture.Named n : f.slayer)
+		{
+			if ("Tasks".equals(n.name))
+			{
+				String paid = null;
+				for (RecapPicture.Named m : f.slayer)
+				{
+					if (m.gp != null)
+					{
+						paid = m.gp + " on task";
+					}
+				}
+				f.tiles.add(new RecapPicture.Tile("Slayer tasks", n.figure, paid));
+			}
+		}
+		List<String> slots = f.feats.get("Collection log");
+		if (f.whole && plugin.clogAvailable() > 0)
+		{
+			f.tiles.add(new RecapPicture.Tile("Collection log", fmt(plugin.clogFinished()),
+				"of " + fmt(plugin.clogAvailable())));
+		}
+		else if (!f.whole && slots != null)
+		{
+			f.tiles.add(new RecapPicture.Tile("Log slots", "+" + fmt(slots.size()),
+				"latest " + slots.get(0)));
+		}
+		List<String> pets = f.feats.get("Pets");
+		if (pets != null && f.tiles.size() < 8)
+		{
+			f.tiles.add(new RecapPicture.Tile("Pets", (f.whole ? "" : "+") + fmt(pets.size()),
+				"latest " + pets.get(0)));
+		}
+		while (f.tiles.size() > 8)
+		{
+			f.tiles.remove(f.tiles.size() - 1);
+		}
 	}
 
 	private JPanel recapPlate()
@@ -12891,8 +13826,10 @@ class ChroniclePanel extends PluginPanel
 		if (dearest != null)
 		{
 			final String item = dearest[0];
-			rows += plateRow(plate, "Dearest drop", item + " · " + gp(Long.parseLong(dearest[1])) + " gp",
-				() -> openItem(item));
+			Line said = new Line();
+			said.name(item);
+			said.fixed(" · " + gp(Long.parseLong(dearest[1])) + " gp");
+			rows += plateRow(plate, "Dearest drop", said, () -> openItem(item));
 		}
 		if (loot[2] > 0)
 		{
@@ -12930,7 +13867,10 @@ class ChroniclePanel extends PluginPanel
 		if (killed != null)
 		{
 			final String who = killed[0];
-			rows += plateRow(plate, "Killed most", who + " · " + killed[1], () -> openSourceLoose(who));
+			Line said = new Line();
+			said.name(who);
+			said.fixed(" · " + killed[1]);
+			rows += plateRow(plate, "Killed most", said, () -> openSourceLoose(who));
 		}
 		long[] ms = windowMs();
 		long[] tally = plugin.onTaskTally(ms[0], ms[1], null, wholeRecord());
@@ -13007,6 +13947,26 @@ class ChroniclePanel extends PluginPanel
 		return 1;
 	}
 
+	/**
+	 * A plate row whose figure carries a name, the name giving way first. The
+	 * row's label is the one word saying what the figure is, and a long quest
+	 * or task name squeezed it to "Comb..." beside a figure nobody could then
+	 * place. The hover keeps the whole line.
+	 */
+	private int plateRow(JPanel plate, String left, Line right, Runnable go)
+	{
+		String whole = right.whole();
+		String fitted = fitLine(right, right.names, NAME_FLOOR, rowMetrics(),
+			chaseRoom(left, rowMetrics()));
+		plateRow(plate, left, fitted != null ? fitted : whole, go);
+		if (fitted != null && !fitted.equals(whole))
+		{
+			((JPanel) plate.getComponent(plate.getComponentCount() - 1))
+				.setToolTipText(left + ": " + whole);
+		}
+		return 1;
+	}
+
 	/** One kind of feed line on the plate: its count and the first one named; a door to its lens. */
 	private int feedPlateRow(JPanel plate, Map<String, long[]> lines, Map<String, String> named,
 		String type, String one, String many, String lens)
@@ -13017,11 +13977,13 @@ class ChroniclePanel extends PluginPanel
 			return 0;
 		}
 		String name = named.get(type);
-		// a death names who dealt it in the line; the count is the figure
-		String right = fmt(n[0]) + (name != null && !"DEATH".equals(type) ? " · " + name : "");
-		if ("DEATH".equals(type) && name != null)
+		// the count, and the first one the period named, or for a death who dealt it
+		Line right = new Line();
+		right.fixed(fmt(n[0]));
+		if (name != null)
 		{
-			right = fmt(n[0]) + " · " + name;
+			right.fixed(" · ");
+			right.name(name);
 		}
 		return plateRow(plate, n[0] == 1 ? one : many, right, () ->
 		{
@@ -13723,7 +14685,12 @@ class ChroniclePanel extends PluginPanel
 				String entry = dayEntry(Instant.ofEpochMilli(ts).atZone(ZoneId.systemDefault()).toLocalDate());
 				if (entry != null)
 				{
-					p.add(ghostRow(entry, ""));
+					// A long day wraps at its clauses. As one label it ran off the
+					// column at "most i..." and the drops never showed at all.
+					for (String line : wrapClauses(entry, boardRowRoom()))
+					{
+						p.add(ghostRow(line, ""));
+					}
 				}
 			}
 			if ("SESSION".equals(typeOf(e)))
@@ -14040,12 +15007,12 @@ class ChroniclePanel extends PluginPanel
 			JPanel r = row(t.get("name").getAsString(), t.get("monster").getAsString(),
 				!done.isEmpty() && !has ? ColorScheme.LIGHT_GRAY_COLOR.darker() : null,
 				!done.isEmpty() && !has);
-			r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			r.setToolTipText(tip(t.get("name").getAsString(),
 				new String[]{"Tier", "Where", "Task"},
 				new String[]{t.get("tier").getAsString(),
 					t.get("monster").getAsString(), t.get("task").getAsString()}));
-			r.addMouseListener(clicker(() -> openSheetPage("combat")));
+			// a door like every other search row, or Enter skips it
+			door(r, () -> openSheetPage("combat"));
 			p.add(r);
 			p.add(ghostRow(t.get("task").getAsString(), ""));
 		}
@@ -14056,11 +15023,10 @@ class ChroniclePanel extends PluginPanel
 			// the hit, and a region taking a third of the row cut it to "Purchase
 			// ..." which answers nothing.
 			JPanel r = row(d[0], d[2], null);
-			r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			r.setToolTipText(tip(d[1] + " " + d[2],
 				new String[]{"Task", "Needs"},
 				new String[]{d[0], d[3].isEmpty() ? "nothing" : d[3]}));
-			r.addMouseListener(clicker(() -> openSheetPage("diaries")));
+			door(r, () -> openSheetPage("diaries"));
 			p.add(r);
 			p.add(ghostRow(d[3].isEmpty() ? d[1] : d[1] + " \u00b7 " + d[3], ""));
 		}
@@ -14080,7 +15046,6 @@ class ChroniclePanel extends PluginPanel
 		JPanel p = column();
 		String ql = q.toLowerCase(Locale.ROOT);
 		int total = 0;
-		searchFirst = null;
 		searchFirst = null;
 
 		// The queries that name a VIEW rather than a thing in the record.
@@ -14258,8 +15223,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (!slotFirstPage.isEmpty())
 		{
-			// The log is a page WITHIN the sheet, so naming the view alone landed
-			// the reader on the top of the sheet with their query cleared.
+			// The log is a page WITHIN the sheet, and opening the sheet puts its
+			// page back to none, so a hit that named the page and then the sheet
+			// landed the reader on the top of the skills. The page is opened
+			// after the tab, on the page the slot was found on.
 			p.add(group("Collection log"));
 			for (Map.Entry<String, String> hit : slotFirstPage.entrySet())
 			{
@@ -14272,10 +15239,13 @@ class ChroniclePanel extends PluginPanel
 				// slots the reader HAS.
 				JPanel sr = row(hit.getKey(), hit.getValue(),
 					got ? ACCENT_SESSION : ACCENT_RED, true);
-					door(sr, () ->
+				final String page = hit.getValue();
+				door(sr, () ->
 				{
-					sheetPage = "log";
-					applyTab(View.SHEET);
+					if (!openLogPage(page))
+					{
+						openSheetPage("log");
+					}
 				});
 				p.add(sr);
 				total++;

@@ -97,7 +97,11 @@ public class DayEntryTest
 		String heading = DateTimeFormatter.ofPattern("d MMM", Locale.UK).format(day).toUpperCase(Locale.ROOT);
 		int at = said.indexOf(heading);
 		assertTrue(said.toString(), at >= 0);
-		assertEquals("2 sittings · 2h 50m · +271k xp, most in Hunter · 98 drops · 1.1M gp", said.get(at + 1));
+		// wrapped at its clauses where the column is too narrow for it
+		List<String> lines = ChroniclePanel.wrapClauses(
+			"2 sittings · 2h 50m · +271k xp, most in Hunter · 98 drops · 1.1M gp",
+			ChroniclePanel.boardRowRoom());
+		assertEquals(lines, said.subList(at + 1, at + 1 + lines.size()));
 		String before = DateTimeFormatter.ofPattern("d MMM", Locale.UK).format(day.minusDays(1)).toUpperCase(Locale.ROOT);
 		int b = said.indexOf(before);
 		assertTrue(said.toString(), b >= 0);
@@ -139,6 +143,30 @@ public class DayEntryTest
 		int at = said.indexOf(heading);
 		assertTrue(said.toString(), at >= 0);
 		assertEquals("1 sitting · 1h 0m", said.get(at + 1));
+	}
+
+	/**
+	 * A long day wraps rather than running off the column. As one label it cut
+	 * at "most i..." and the drops were never on screen.
+	 */
+	@Test
+	public void aLongDayWrapsAtItsClauses() throws Exception
+	{
+		String day = "3 sittings · 1h 12m · +162k xp, most in Hunter · 61 drops · 1.2M gp";
+		int room = ChroniclePanel.boardRowRoom();
+		java.awt.FontMetrics fm = ChroniclePanel.rowMetrics();
+		assertTrue("the fixture line fits anyway, so this proves nothing",
+			fm.stringWidth(day) > room);
+		List<String> lines = ChroniclePanel.wrapClauses(day, room);
+		assertTrue(lines.toString(), lines.size() >= 2);
+		for (String l : lines)
+		{
+			assertTrue("a wrapped line still runs off: " + l, fm.stringWidth(l) <= room);
+		}
+		assertEquals("a clause was lost or split", day, String.join(" · ", lines));
+		// and a short one stays one line
+		assertEquals(java.util.Collections.singletonList("1 sitting · 45m"),
+			ChroniclePanel.wrapClauses("1 sitting · 45m", room));
 	}
 
 	private static void collect(Component c, List<String> out)

@@ -95,7 +95,39 @@ public class ActivityTileTest
 			sprite("Collections"));
 	}
 
+	/**
+	 * The Rift tile wears the hiscores' Rifts closed and says rifts closed. The
+	 * log keeps the page's first line, rifts searched, as its count, and the
+	 * tile read that: 5,218 beside a page saying 2,073 were closed.
+	 */
+	@Test
+	public void theRiftTileSaysRiftsClosedNotRiftsSearched() throws Exception
+	{
+		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
+		com.google.gson.JsonObject kcs = stub.clog.has("kcs")
+			? stub.clog.getAsJsonObject("kcs") : new com.google.gson.JsonObject();
+		kcs.addProperty("Guardians of the Rift", 5218);
+		stub.clog.add("kcs", kcs);
+		com.google.gson.JsonObject page = new com.google.gson.JsonObject();
+		page.addProperty("Rifts searches", 5218);
+		page.addProperty("Rifts closed", 2073);
+		com.google.gson.JsonObject lines = new com.google.gson.JsonObject();
+		lines.add("Guardians of the Rift", page);
+		stub.clog.add("kc_lines", lines);
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
+		JPanel tile = tileSaying(hold[0], "Rifts closed");
+		assertNotNull("no Rifts closed tile", tile);
+		assertTrue(tile.getToolTipText(), tile.getToolTipText().contains("2,073"));
+		assertTrue(tile.getToolTipText(), !tile.getToolTipText().contains("5,218"));
+	}
+
 	private static JPanel tileSaying(String needle) throws Exception
+	{
+		return tileSaying(panel, needle);
+	}
+
+	private static JPanel tileSaying(ChroniclePanel panel, String needle) throws Exception
 	{
 		final JPanel[] found = {null};
 		SwingUtilities.invokeAndWait(() ->

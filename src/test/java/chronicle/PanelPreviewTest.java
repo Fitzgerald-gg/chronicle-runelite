@@ -1041,7 +1041,7 @@ public class PanelPreviewTest
 		return s;
 	}
 
-	private static JsonObject feedEntry(long ts, String type, String key, String val)
+	static JsonObject feedEntry(long ts, String type, String key, String val)
 	{
 		JsonObject e = new JsonObject();
 		e.addProperty("ts", ts);

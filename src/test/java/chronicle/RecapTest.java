@@ -127,7 +127,8 @@ public class RecapTest
 		}
 		// The plate, whole and exact. A shape test passed on any sentence that
 		// happened to start with a digit; this is the only assertion that can
-		// actually catch prose arriving on the plate.
+		// actually catch prose arriving on the plate. The two shortened names are
+		// the rows that are wider than the plate: whole, they squeezed the label.
 		List<String> pairs = new ArrayList<>();
 		for (JPanel r : rows)
 		{
@@ -137,13 +138,39 @@ public class RecapTest
 			"Drops | 8,732 · 214.0M gp",
 			"Left behind | 1,704 · 757k gp",
 			"Potions | 8,442 doses",
-			"Killed most | Abyssal demons · 4,425",
+			"Killed most | Abyssal demo… · 4,425",
 			"Log slot | 1 · Abyssal head",
 			"Pet | 1 · Abyssal orphan",
 			"Quest | 1 · Dragon Slayer II",
 			"Diary | 1 · Karamja",
-			"Combat achievement | 1 · Perfect Zulrah",
+			"Combat achievement | 1 · Perfect Z…",
 			"Death | 1"), pairs);
+	}
+
+	/**
+	 * A row's label stays whole and the name beside it gives way. Nineteen
+	 * combat achievements with a long task read "Comb..." on the plate: the
+	 * one word saying what the figure was is the one that went.
+	 */
+	@Test
+	public void aLongNameGivesWayAndTheLabelStaysWhole() throws Exception
+	{
+		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
+		long now = System.currentTimeMillis();
+		stub.feed.add(0, PanelPreviewTest.feedEntry(now - 1_000L, "COMBAT_ACHIEVEMENT",
+			"task", "Defeat one of each elemental impling in a single trip"));
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
+		PanelPreviewTest.regatherHistory(hold[0]);
+		JPanel plate = recap(hold[0], "Lifetime");
+		JPanel r = rowNamed(plate, "Combat achievements");
+		assertNotNull("the label did not survive whole", r);
+		java.awt.FontMetrics fm = ChroniclePanel.rowMetrics();
+		assertTrue("the row is wider than the plate: " + right(r),
+			fm.stringWidth(right(r)) <= ChroniclePanel.chaseRoom("Combat achievements", fm));
+		assertTrue(right(r), right(r).startsWith("2 · "));
+		assertTrue("the hover lost the whole line: " + r.getToolTipText(),
+			r.getToolTipText() != null && r.getToolTipText().contains("single trip"));
 	}
 
 	@Test
