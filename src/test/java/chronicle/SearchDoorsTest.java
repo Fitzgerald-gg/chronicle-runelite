@@ -423,4 +423,247 @@ public class SearchDoorsTest
 			}
 		}
 	}
+
+	/** The rows under one group's heading, as panels, to press. */
+	private static List<JPanel> groupRows(Component board, String title)
+	{
+		List<Component> flat = new ArrayList<>();
+		flatten(board, flat);
+		List<JPanel> out = new ArrayList<>();
+		boolean in = false;
+		for (Component k : flat)
+		{
+			if (k instanceof JLabel && ((JLabel) k).getText() != null
+				&& ((JLabel) k).getText().equals(((JLabel) k).getText().toUpperCase(java.util.Locale.ROOT))
+				&& ((JLabel) k).getText().length() > 3 && !(k.getParent() instanceof JPanel
+				&& ((JPanel) k.getParent()).getLayout() instanceof BorderLayout))
+			{
+				in = ((JLabel) k).getText().equals(title.toUpperCase(java.util.Locale.ROOT));
+				continue;
+			}
+			if (in && k instanceof JPanel && ((JPanel) k).getLayout() instanceof BorderLayout
+				&& left((JPanel) k) != null)
+			{
+				out.add((JPanel) k);
+			}
+		}
+		return out;
+	}
+
+	private static List<LocalStore.SlayerTask> nechryaelTwice()
+	{
+		double now = System.currentTimeMillis() / 1000.0;
+		List<LocalStore.SlayerTask> tasks = new ArrayList<>();
+		tasks.add(new LocalStore.SlayerTask("Nechryael", 1, 200, 0, now, 0L, true));
+		tasks.add(new LocalStore.SlayerTask("Abyssal demons", 150, 150, 0, now - 100_000, 0L, false));
+		tasks.add(new LocalStore.SlayerTask("Nechryael", 135, 135, 0, now - 900_000, 0L, false));
+		return tasks;
+	}
+
+	/**
+	 * The slayer tasks are there without the Slayer board having been opened,
+	 * and a task given more than once opens its newest assignment, as its hover
+	 * says: it opened the oldest, a finished task from May, not the one in hand.
+	 */
+	@Test
+	public void aTaskIsFoundUnvisitedAndOpensItsNewest() throws Exception
+	{
+		stub.journey = new LocalStore.SlayerJourney(2, 286, 0L, 0L, nechryaelTwice());
+		SwingUtilities.invokeAndWait(() -> panel = new ChroniclePanel(stub));
+		search("nechryael");
+		SwingUtilities.invokeAndWait(() -> { });   // the journey read lands
+		List<JPanel> tasks = groupRows(search("nechryael"), "Slayer tasks");
+		assertEquals(1, tasks.size());
+		assertEquals("Nechryael", left(tasks.get(0)));
+		press(tasks.get(0));
+		assertEquals(0, field("detailTask"));
+	}
+
+	/** The initials players type for a fight find it. */
+	@Test
+	public void initialsFindAFight()
+	{
+		assertEquals(2, ChroniclePanel.matchScore("cox", "Chambers of Xeric"));
+		assertEquals(2, ChroniclePanel.matchScore("tob", "Theatre of Blood"));
+		assertEquals(2, ChroniclePanel.matchScore("kbd", "King Black Dragon"));
+		assertEquals(2, ChroniclePanel.matchScore("cg", "The Corrupted Gauntlet"));
+		assertEquals(2, ChroniclePanel.matchScore("gg", "Grotesque Guardians"));
+		assertEquals(-1, ChroniclePanel.matchScore("gg", "Zulrah"));
+		// and apostrophes alone ask for nothing
+		assertEquals(-1, ChroniclePanel.matchScore("''", "Zulrah"));
+	}
+
+	/**
+	 * Go to keeps its close answers only: "king" found inside Cooking took Enter
+	 * from the King Black Dragon, which it names outright.
+	 */
+	@Test
+	public void aNameInsideASkillDoesNotTakeEnter() throws Exception
+	{
+		JPanel board = search("king");
+		assertFalse(group(board, "Go to").contains("Cooking"));
+		assertEquals("King Black Dragon", left(firstDoor(board)));
+	}
+
+	/** Another name for a page answers only as typed whole: "logs" is the item kind. */
+	@Test
+	public void aPagesNicknameIsNotPluralised() throws Exception
+	{
+		assertFalse(group(search("logs"), "Go to").contains("Collection log"));
+		assertTrue(group(search("clog"), "Go to").contains("Collection log"));
+	}
+
+	/** A boss is listed once, not again under the reward it pays out through. */
+	@Test
+	public void aBossIsListedOnceNotAgainUnderItsReward() throws Exception
+	{
+		stub.sources.add(new LocalStore.SourceRow("Reward pool (Tempoross)", 0, 455, 3_000_000L, null, 0, 0));
+		SwingUtilities.invokeAndWait(() -> panel = new ChroniclePanel(stub));
+		List<String> fights = group(search("tempoross"), "Bosses and monsters");
+		assertEquals(fights.toString(), "Tempoross", fights.get(0));
+		assertFalse(fights.toString(), fights.contains("Reward pool (Tempoross)"));
+	}
+
+	/** Copies of one name on a page are held one by one, as the Log tab lights them. */
+	@Test
+	public void aPageOfOneNameCountsItsCopies() throws Exception
+	{
+		JsonObject notes = new JsonObject();
+		notes.addProperty("Ancient page", 1);
+		JsonObject byCat = new JsonObject();
+		byCat.add("My Notes", notes);
+		stub.clog.add("by_cat", byCat);
+		SwingUtilities.invokeAndWait(() -> panel = new ChroniclePanel(stub));
+		assertEquals("1 / 26", beside(search("my notes"), "My Notes"));
+	}
+
+	/** A diary task's first sentence does not end at an abbreviation. */
+	@Test
+	public void aDiaryTaskIsNotCutAtAnAbbreviation()
+	{
+		assertEquals("Enter the Combat Training Camp north of W. Ardougne.",
+			ChroniclePanel.firstSentence("Enter the Combat Training Camp north of W. Ardougne."));
+		assertEquals("Enter the H.A.M. Hideout.", ChroniclePanel.firstSentence("Enter the H.A.M. Hideout."));
+		assertEquals("Kill the Crazy Arc. [sic], Chaos Fanatic & Scorpia.",
+			ChroniclePanel.firstSentence("Kill the Crazy Arc. [sic], Chaos Fanatic & Scorpia. "
+				+ "Note: While these bosses can be killed in any order."));
+		assertEquals("Mine some iron.", ChroniclePanel.firstSentence("Mine some iron. Then smelt it."));
+	}
+
+	/** A long hover wraps in a column instead of running off the screen. */
+	@Test
+	public void aLongHoverWraps()
+	{
+		assertEquals("Held", ChroniclePanel.wrappedTip("Held"));
+		String task = "Ardougne hard: Craft some Death runes from Essence. Needs: 65 Runecraft & "
+			+ "completion of Mourning's End Part II";
+		String got = ChroniclePanel.wrappedTip(task);
+		assertTrue(got, got.startsWith("<html><body style='width:"));
+		assertTrue(got, got.contains("65 Runecraft &amp; completion"));
+	}
+
+	/** The journal forgives an apostrophe, as every other group does. */
+	@Test
+	public void theJournalForgivesAnApostrophe() throws Exception
+	{
+		JsonObject e = new JsonObject();
+		e.addProperty("ts", System.currentTimeMillis() - 60_000L);
+		e.addProperty("type", "DEATH");
+		JsonObject d = new JsonObject();
+		d.addProperty("killerName", "K'ril Tsutsaroth");
+		e.add("data", d);
+		stub.feed.add(0, e);
+		SwingUtilities.invokeAndWait(() -> panel = new ChroniclePanel(stub));
+		for (String q : new String[]{"kril tsut", "k'ril tsut"})
+		{
+			List<String> journal = group(search(q), "Journal");
+			assertTrue(q + ": " + journal, journal.stream().anyMatch(l -> l.contains("K'ril")));
+		}
+	}
+
+	/** A journal hit opens its day with every kind of line, whatever lens was left on. */
+	@Test
+	public void aJournalHitOpensOnEveryLens() throws Exception
+	{
+		Field lens = ChroniclePanel.class.getDeclaredField("journalLens");
+		lens.setAccessible(true);
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				lens.set(panel, "Deaths");
+				Method m = ChroniclePanel.class.getDeclaredMethod("openJournalOn", long.class);
+				m.setAccessible(true);
+				m.invoke(panel, System.currentTimeMillis());
+			}
+			catch (Exception ex)
+			{
+				throw new RuntimeException(ex);
+			}
+		});
+		assertEquals("All", lens.get(panel));
+	}
+
+	/** A slip on any name search answers to is caught, not only on loot. */
+	@Test
+	public void aSlipOnABossNeverLootedIsCaught() throws Exception
+	{
+		assertEquals("Grotesque Guardians", beside(search("grotesqe guardians"), "Did you mean"));
+		// the sheet's own bosses, where the log keeps no page of that name
+		assertEquals("Dagannoth Supreme", beside(search("dagannoth supreem"), "Did you mean"));
+	}
+
+	/**
+	 * A hit older than the Journal's newest four thousand lines still opens on
+	 * a day that shows it: search reads the whole journal, and the board read
+	 * only those, so such a hit opened on "Nothing in" its own day.
+	 */
+	@Test
+	public void anOldHitOpensOnADayThatShowsIt() throws Exception
+	{
+		long now = System.currentTimeMillis();
+		stub.feed.clear();
+		for (int i = 0; i < 4_100; i++)
+		{
+			JsonObject e = new JsonObject();
+			e.addProperty("ts", now - i * 60_000L);
+			e.addProperty("type", "LEVEL");
+			JsonObject d = new JsonObject();
+			d.addProperty("skill", "Attack");
+			d.addProperty("level", 2);
+			e.add("data", d);
+			stub.feed.add(e);
+		}
+		long ts = now - 30L * 24 * 60 * 60_000L;
+		JsonObject pet = new JsonObject();
+		pet.addProperty("ts", ts);
+		pet.addProperty("type", "PET");
+		JsonObject d = new JsonObject();
+		d.addProperty("petName", "Phoenix");
+		pet.add("data", d);
+		stub.feed.add(pet);
+		SwingUtilities.invokeAndWait(() -> panel = new ChroniclePanel(stub));
+		final JPanel[] board = new JPanel[1];
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method open = ChroniclePanel.class.getDeclaredMethod("openJournalOn", long.class);
+				open.setAccessible(true);
+				open.invoke(panel, ts);
+				Method m = ChroniclePanel.class.getDeclaredMethod("buildJournal");
+				m.setAccessible(true);
+				board[0] = (JPanel) m.invoke(panel);
+			}
+			catch (Exception ex)
+			{
+				throw new RuntimeException(ex);
+			}
+		});
+		List<Component> flat = new ArrayList<>();
+		flatten(board[0], flat);
+		assertTrue("the day opened without its line", flat.stream().anyMatch(c ->
+			c instanceof JLabel && ((JLabel) c).getText() != null
+				&& ((JLabel) c).getText().contains("Phoenix")));
+	}
 }

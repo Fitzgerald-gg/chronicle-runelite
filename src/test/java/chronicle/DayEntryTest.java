@@ -214,6 +214,76 @@ public class DayEntryTest
 		assertEquals(next, said.subList(a + 1, a + 1 + next.size()));
 	}
 
+	private static List<String> journal(PanelPreviewTest.StubPlugin s) throws Exception
+	{
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(s));
+		PanelPreviewTest.regatherHistory(hold[0]);
+		final List<String> said = new ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = ChroniclePanel.class.getDeclaredMethod("buildJournal");
+				m.setAccessible(true);
+				collect((Component) m.invoke(hold[0]), said);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		return said;
+	}
+
+	/**
+	 * A day no sitting crossed into or out of reads the spine and the roll, as
+	 * History and Records do: a sitting the client closed without writing is
+	 * in those and in no sitting.
+	 */
+	@Test
+	public void anOrdinaryDayReadsTheSpineNotTheWrittenSittings() throws Exception
+	{
+		LocalDate day = LocalDate.now().minusDays(2);
+		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
+		s.feed.add(sitting(day.atTime(15, 0), 60, 10_000, 2, 1_000, "hunter"));
+		s.history.put(day.minusDays(1), line(1_000_000L, 500_000L));
+		s.history.put(day, line(1_090_000L, 500_000L));   // +90k: a sitting went unwritten
+		s.dayTotals.put(DateTimeFormatter.ofPattern("yyyy-MM-dd").format(day), new long[]{9, 40_000L, 0, 0});
+		List<String> said = journal(s);
+		String heading = DateTimeFormatter.ofPattern("d MMM", Locale.UK).format(day).toUpperCase(Locale.ROOT);
+		int at = said.indexOf(heading);
+		assertTrue(said.toString(), at >= 0);
+		String entry = String.join(" · ", said.subList(at + 1, Math.min(said.size(), at + 4)));
+		assertTrue(entry, entry.contains("+90k xp, most in Hunter"));
+		assertTrue(entry, entry.contains("9 drops · 40k gp"));
+	}
+
+	/**
+	 * A sitting in which nothing gained xp still says where the day's went: it
+	 * wrote no skills because none moved. Read as silent, it sent "most in"
+	 * back to the spine's midnight day, which named the evening before's skill.
+	 */
+	@Test
+	public void aSittingWithNoXpStillLetsTheDayNameItsSkill() throws Exception
+	{
+		LocalDate day = LocalDate.now().minusDays(3);
+		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
+		JsonObject idle = sitting(day.atTime(20, 0), 6, 0, 0, 0, "hunter");
+		idle.getAsJsonObject("data").remove("skills");
+		s.feed.add(idle);
+		s.feed.add(sitting(day.plusDays(1).atTime(0, 30), 120, 300_000, 0, 0, "hunter"));
+		// the spine's own midnight day went to fishing
+		s.history.put(day, line(1_000_000L, 500_000L));
+		s.history.put(day.plusDays(1), line(1_050_000L, 900_000L));
+		List<String> said = journal(s);
+		String heading = DateTimeFormatter.ofPattern("d MMM", Locale.UK).format(day).toUpperCase(Locale.ROOT);
+		int at = said.indexOf(heading);
+		assertTrue(said.toString(), at >= 0);
+		String entry = String.join(" · ", said.subList(at + 1, Math.min(said.size(), at + 4)));
+		assertTrue(entry, entry.contains("most in Hunter"));
+	}
+
 	/**
 	 * A long day wraps rather than running off the column. As one label it cut
 	 * at "most i..." and the drops were never on screen.

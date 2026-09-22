@@ -88,6 +88,23 @@ public class TimeRowsTest
 		assertNull(beside(out[0], "Time"));
 	}
 
+	/**
+	 * Nor where the spine began with the minutes already on it, as it does for
+	 * a player who installed and imported nothing: the first line carries the
+	 * time keys, but the lifetime's kills are the career's, not the spine's.
+	 */
+	@Test
+	public void aLifetimeFromAnInstallDaySpineSaysNoTime() throws Exception
+	{
+		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
+		LocalDate installed = LocalDate.now().minusDays(9);
+		stub.history.clear();
+		stub.history.put(installed, era(0L));
+		stub.history.put(installed.plusDays(8), era(45L));
+		stub.lifetime.put("timeAbyssalDemons", 45L);
+		assertNull(beside(page(stub, "Lifetime"), "Time here"));
+	}
+
 	/** A window whose opening line already carried the minutes can divide. */
 	@Test
 	public void aWindowInsideTheMinutesEraReadsItsRate() throws Exception

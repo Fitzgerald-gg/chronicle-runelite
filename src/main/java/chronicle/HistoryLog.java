@@ -93,13 +93,20 @@ class HistoryLog
 	 * process last appended under an earlier date, nothing has closed that day
 	 * since, so the state is written under it first (its close) and then under
 	 * {@code today} (today's opening baseline, to be replaced as the day goes).
+	 *
+	 * @return null once every line is written; otherwise whatever adjustment is
+	 *     now on no line of the file, {@code adj} and anything a cut line was
+	 *     carrying, for the caller to lay by again. Empty when the failure came
+	 *     after the adjustment had landed.
 	 */
-	synchronized boolean append(File dir, String rsn, Map<String, Long> skills,
+	synchronized Adjust append(File dir, String rsn, Map<String, Long> skills,
 		Map<String, Long> counters, Map<String, Long> kcs, int kv, Adjust adj, LocalDate today)
 	{
+		Adjust unwritten = new Adjust();
+		unwritten.add(adj);
 		if (rsn == null || rsn.isEmpty() || today == null)
 		{
-			return false;
+			return unwritten;
 		}
 		String slug = LocalStore.slug(rsn);
 		String date = today.toString();
@@ -129,7 +136,7 @@ class HistoryLog
 			if (!dir.isDirectory() && !dir.mkdirs())
 			{
 				log.debug("could not create history dir {}", dir);
-				return false;
+				return unwritten;
 			}
 			File f = new File(dir, slug + SPINE_SUFFIX);
 			// The day turned since this process last wrote: that day's line still
@@ -141,6 +148,9 @@ class HistoryLog
 			if (previous != null && previous.compareTo(date) < 0)
 			{
 				writeLine(f, previous, state, adj);
+				// On that line now. A retry closes the same day again and carries
+				// it from there, so handing it back as well would lay it twice.
+				unwritten = new Adjust();
 				writeLine(f, date, state, null);
 			}
 			else
@@ -148,12 +158,30 @@ class HistoryLog
 				writeLine(f, date, state, adj);
 			}
 			lastAppendedDate.put(slug, date);
-			return true;
+			return null;
+		}
+		catch (Unwritten e)   // the line was cut and not replaced
+		{
+			log.debug("history append failed", e);
+			return e.adj;
 		}
 		catch (Exception e)   // best-effort; the next append retries
 		{
 			log.debug("history append failed", e);
-			return false;
+			return unwritten;
+		}
+	}
+
+	/** A line that could not be written after the one it replaces was cut. */
+	private static final class Unwritten extends IOException
+	{
+		// what the cut line carried, with the adjustment meant for its successor
+		final transient Adjust adj;
+
+		Unwritten(Adjust adj, IOException cause)
+		{
+			super(cause);
+			this.adj = adj;
 		}
 	}
 
@@ -177,10 +205,37 @@ class HistoryLog
 		{
 			line.add("adj", carried.toJson());
 		}
-		try (Writer w = new OutputStreamWriter(new FileOutputStream(f, true), StandardCharsets.UTF_8))
+		try
 		{
-			w.write(gson.toJson(line));
-			w.write('\n');
+			// A tail torn mid-line would have this line run on from it, and the
+			// reader skips the pair as one unreadable line.
+			boolean open = endsMidLine(f);
+			try (Writer w = new OutputStreamWriter(new FileOutputStream(f, true), StandardCharsets.UTF_8))
+			{
+				if (open)
+				{
+					w.write('\n');
+				}
+				w.write(gson.toJson(line));
+				w.write('\n');
+			}
+		}
+		catch (IOException e)
+		{
+			throw new Unwritten(carried, e);
+		}
+	}
+
+	private static boolean endsMidLine(File f) throws IOException
+	{
+		if (!f.isFile() || f.length() == 0)
+		{
+			return false;
+		}
+		try (RandomAccessFile raf = new RandomAccessFile(f, "r"))
+		{
+			raf.seek(raf.length() - 1);
+			return raf.read() != '\n';
 		}
 	}
 
@@ -547,6 +602,7 @@ class HistoryLog
 			return carried;
 		}
 		String needle = "\"date\":\"" + date + "\"";
+		boolean found = false;
 		try (RandomAccessFile raf = new RandomAccessFile(f, "rw"))
 		{
 			long keep = raf.length();
@@ -561,19 +617,16 @@ class HistoryLog
 				{
 					break;
 				}
-				if (!line.isEmpty())
+				// The newest of them only: every writer carries the line it replaces
+				// forward, so the last line already holds the whole day's. Two can
+				// survive when a cut failed, and summing them would count one twice.
+				if (!line.isEmpty() && !found)
 				{
-					try
+					JsonObject o = parseLine(line, needle);
+					if (o != null)
 					{
-						JsonObject o = gson.fromJson(line, JsonObject.class);
-						if (o != null)
-						{
-							carried.add(Adjust.from(o.get("adj")));
-						}
-					}
-					catch (RuntimeException torn)
-					{
-						// a torn line carried nothing it can hand on
+						carried.add(Adjust.from(o.get("adj")));
+						found = true;
 					}
 				}
 				keep = start;
@@ -588,6 +641,31 @@ class HistoryLog
 			log.debug("history tail trim failed", e);
 		}
 		return carried;
+	}
+
+	/**
+	 * A line of the day, or null. A line torn by a crash can have the next one
+	 * run on from it, so an unreadable line is read again from the last place
+	 * the day's own line starts.
+	 */
+	private JsonObject parseLine(String line, String needle)
+	{
+		for (String text : new String[]{line, line.substring(Math.max(0, line.lastIndexOf("{" + needle)))})
+		{
+			try
+			{
+				JsonObject o = gson.fromJson(text, JsonObject.class);
+				if (o != null)
+				{
+					return o;
+				}
+			}
+			catch (RuntimeException torn)
+			{
+				// tried again from the day's own start, then given up on
+			}
+		}
+		return null;
 	}
 
 	// Offset just past the newline before `end`, i.e. where that last line begins.
@@ -606,6 +684,54 @@ class HistoryLog
 		return 0;
 	}
 
+	/**
+	 * The kill-count reckoning the spine's last line was written under: null
+	 * with no line at all, 0 for a line from before lines said, which only the
+	 * Plugin Hub's build to 7bd5812 wrote. Reads the tail, not the whole spine;
+	 * appends are in date order, so the last readable line is the newest.
+	 */
+	static Integer newestKv(Gson gson, File dir, String rsn)
+	{
+		File f = new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX);
+		if (!f.isFile())
+		{
+			return null;
+		}
+		try (RandomAccessFile raf = new RandomAccessFile(f, "r"))
+		{
+			long end = raf.length();
+			while (end > 0)
+			{
+				long start = lineStart(raf, end);
+				raf.seek(start);
+				byte[] buf = new byte[(int) (end - start)];
+				raf.readFully(buf);
+				end = start;
+				String line = new String(buf, StandardCharsets.UTF_8).trim();
+				if (line.isEmpty())
+				{
+					continue;
+				}
+				try
+				{
+					JsonObject o = gson.fromJson(line, JsonObject.class);
+					if (o != null && o.has("date"))
+					{
+						return o.has("kv") ? o.get("kv").getAsInt() : 0;
+					}
+				}
+				catch (RuntimeException torn)
+				{
+					// the line before it, then
+				}
+			}
+		}
+		catch (IOException e)
+		{
+			log.debug("history tail unreadable", e);
+		}
+		return null;
+	}
 	/**
 	 * Rewrite the spine keeping one line per date, the last, in date order. Only
 	 * touches a file that repeats a date, which older builds produced by
@@ -890,5 +1016,17 @@ class HistoryLog
 		}
 		String today = LocalDate.now(ZoneId.systemDefault()).toString();
 		return !today.equals(lastAppendedDate.get(LocalStore.slug(rsn)));
+	}
+
+	/**
+	 * Whether midnight has passed since this process last wrote a line for the
+	 * account: the day it wrote under is over and nothing has closed it. False
+	 * before the first line of a login, which the login's own write makes.
+	 */
+	boolean dayTurned(String rsn)
+	{
+		String previous = rsn == null ? null : lastAppendedDate.get(LocalStore.slug(rsn));
+		return previous != null
+			&& previous.compareTo(LocalDate.now(ZoneId.systemDefault()).toString()) < 0;
 	}
 }

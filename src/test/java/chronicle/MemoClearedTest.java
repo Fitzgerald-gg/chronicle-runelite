@@ -43,10 +43,14 @@ public class MemoClearedTest
 	 * <p>journeyFetching guards a fetch that is still in the air; cleared on a
 	 * rebuild it would launch a second one over the first. searchFirst is the
 	 * door Enter opens, set while the results are built and read when the key
-	 * is pressed, which is a later pass by definition.
+	 * is pressed, which is a later pass by definition. journeyCache is the
+	 * whole record's slayer journey, answering no period: the Tasks board
+	 * paints from it without a flicker while the next read is in the air, and
+	 * a search's task door keeps the list its index was read from. The account
+	 * change clears it.
 	 */
 	private static final Set<String> OUTLIVES_A_BUILD = new LinkedHashSet<>(
-		Arrays.asList("journeyFetching", "searchFirst", "lootTask"));
+		Arrays.asList("journeyFetching", "searchFirst", "lootTask", "journeyCache"));
 
 	@Test
 	public void everyPerBuildMemoIsForgottenAtTheTopOfTheBuild() throws Exception

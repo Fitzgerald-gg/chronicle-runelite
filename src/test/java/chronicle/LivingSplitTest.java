@@ -4,6 +4,7 @@
 package chronicle;
 
 import java.awt.BorderLayout;
+import chronicle.panel.StatRegistry;
 import java.awt.Component;
 import java.awt.Container;
 import java.lang.reflect.Field;
@@ -17,6 +18,7 @@ import javax.swing.SwingUtilities;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * The Food and Potions folds carry the period's gp beside their counts, from
@@ -122,6 +124,95 @@ public class LivingSplitTest
 		assertEquals(said.toString(), "1,479 · 861k gp", after(said, "POTIONS"));
 		assertEquals("meals stand beside the head that counts them: " + said,
 			-1, said.indexOf("Meals eaten"));
+	}
+
+	private static PanelPreviewTest.StubPlugin wholeSpend()
+	{
+		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
+		s.lifetime.put("foodEaten", 2_420L);
+		s.lifetime.put("sharkEaten", 2_410L);
+		s.lifetime.put("potionDoses", 1_479L);
+		s.lifetime.put("prayerPotionDoses", 747L);
+		s.lifetime.put("consumedValue", 638_206L);
+		s.consumVals.put("sharkEaten", 1_299_422L);
+		s.consumVals.put("prayerPotionDoses", 861_495L);
+		return s;
+	}
+
+	/**
+	 * The picture and search say the spend the board says. The picture's
+	 * Living block led with the trackers' 638k beside a Recap card of 2.16M,
+	 * and search's row read 638k and opened a board reading 2.16M.
+	 */
+	@Test
+	public void thePictureAndSearchSayTheBoardsSpend() throws Exception
+	{
+		PanelPreviewTest.StubPlugin s = wholeSpend();
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(s));
+		PanelPreviewTest.regatherHistory(hold[0]);
+		final Object[] facts = new Object[1];
+		final List<String> found = new ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Field g = ChroniclePanel.class.getDeclaredField("histGranularity");
+				g.setAccessible(true);
+				g.set(hold[0], "Lifetime");
+				Method m = ChroniclePanel.class.getDeclaredMethod("recapFacts");
+				m.setAccessible(true);
+				facts[0] = m.invoke(hold[0]);
+				Method q = ChroniclePanel.class.getDeclaredMethod("buildSearch", String.class);
+				q.setAccessible(true);
+				collect((Component) q.invoke(hold[0], "consumed value"), found);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		String figure = null;
+		for (List<RecapPicture.Named> block : ((RecapPicture.Facts) facts[0]).trackers.values())
+		{
+			for (RecapPicture.Named n : block)
+			{
+				if ("Consumed value".equals(n.name))
+				{
+					figure = n.gp;
+				}
+			}
+		}
+		assertEquals("2.2M gp", figure);
+		assertEquals(found.toString(), "2.2M gp", after(found, "Consumed value"));
+	}
+
+	/** All trackers files meals and doses under the sections they head everywhere else. */
+	@Test
+	public void allTrackersFilesMealsUnderFood() throws Exception
+	{
+		PanelPreviewTest.StubPlugin s = wholeSpend();
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(s));
+		PanelPreviewTest.regatherHistory(hold[0]);
+		final List<String> said = new ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = ChroniclePanel.class.getDeclaredMethod("buildAllTrackers");
+				m.setAccessible(true);
+				collect((Component) m.invoke(hold[0]), said);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		int meals = said.indexOf(StatRegistry.rowLabel("foodEaten"));
+		assertTrue(said.toString(), meals > said.indexOf("Food") && said.indexOf("Food") >= 0);
+		assertEquals("meals stand with the food they count: " + said,
+			StatRegistry.rowLabel("sharkEaten"), said.get(meals + 2));
 	}
 
 	/** The Living board for one month, as its labels and figures. */

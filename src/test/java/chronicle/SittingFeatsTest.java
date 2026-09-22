@@ -142,6 +142,9 @@ public class SittingFeatsTest
 		long now = System.currentTimeMillis();
 		stub.sessionStartMs = now - 60 * 60_000L;
 		stub.sessionElapsed = 60;
+		// The fixture's own feed has a log slot kept on today, which between
+		// midnight and two in the morning falls inside this sitting.
+		stub.feed.clear();
 		JsonObject hunter = entry(now - 30 * 60_000L, "LEVEL", "skill", "hunter");
 		hunter.getAsJsonObject("data").addProperty("level", "90");
 		JsonObject fletch = entry(now - 20 * 60_000L, "LEVEL", "skill", "fletching");

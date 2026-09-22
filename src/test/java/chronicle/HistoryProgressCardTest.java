@@ -125,6 +125,14 @@ public class HistoryProgressCardTest
 		return s;
 	}
 
+	// Noon on a day some days back: a sitting is filed by when it began, and one
+	// closing "forty days ago" at ten past midnight began on the day before.
+	private static long noonDaysAgo(int days)
+	{
+		return LocalDate.now().minusDays(days).atTime(12, 0)
+			.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+	}
+
 	private static void put(HistoryLog.Baseline a, HistoryLog.Baseline b, String key,
 		long from, long to)
 	{
@@ -2522,7 +2530,7 @@ public class HistoryProgressCardTest
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
 		// the record has been keeping sittings since well before this window
-		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(noonDaysAgo(40), 15, 0, 0, 0, 0, 0));
 		for (int i = 0; i < 8; i++)
 		{
 			s.feed.add(session(now - DAY_MS - i * 60_000L, 30));
@@ -2571,7 +2579,7 @@ public class HistoryProgressCardTest
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
 		// the record has been keeping sittings since well before this window
-		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(noonDaysAgo(40), 15, 0, 0, 0, 0, 0));
 		s.feed.add(entry(now - DAY_MS, "QUEST", "questName",
 			"You have completed Fallen From Grace!"));
 		ChroniclePanel p = panel(s);
@@ -2603,7 +2611,7 @@ public class HistoryProgressCardTest
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
 		// the record has been keeping sittings since well before this window
-		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(noonDaysAgo(40), 15, 0, 0, 0, 0, 0));
 		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
 		s.feed.add(session(now - 2 * DAY_MS, 30, 286, 1_000_000, 5, 20_000, 3));
 		ChroniclePanel p = panel(s);
@@ -2626,7 +2634,7 @@ public class HistoryProgressCardTest
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
 		// the record has been keeping sittings since well before this window
-		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(noonDaysAgo(40), 15, 0, 0, 0, 0, 0));
 		JsonObject older = session(now - DAY_MS, 60);
 		older.getAsJsonObject("data").addProperty("drops", 400);
 		older.getAsJsonObject("data").addProperty("dropsGp", 2_000_000);
@@ -2659,7 +2667,7 @@ public class HistoryProgressCardTest
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
 		// the record has been keeping sittings since well before this window
-		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(noonDaysAgo(40), 15, 0, 0, 0, 0, 0));
 		JsonObject sat = session(now - DAY_MS, 60);
 		sat.getAsJsonObject("data").addProperty("drops", 400);
 		sat.getAsJsonObject("data").addProperty("dropsGp", 2_000_000);
@@ -2686,7 +2694,7 @@ public class HistoryProgressCardTest
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
 		// the record has been keeping sittings since well before this window
-		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(noonDaysAgo(40), 15, 0, 0, 0, 0, 0));
 		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
 		JsonObject older = session(now - 2 * DAY_MS, 30);
 		older.getAsJsonObject("data").addProperty("drops", 286);
@@ -2712,7 +2720,7 @@ public class HistoryProgressCardTest
 		PanelPreviewTest.StubPlugin s = stub(true);
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
 		// the record has been keeping sittings since well before this window
-		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(noonDaysAgo(40), 15, 0, 0, 0, 0, 0));
 		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
 		s.feed.add(session(now - 2 * DAY_MS, 30, 286, 1_000_000, 5, 20_000, 3));
 		ChroniclePanel p = panel(s);
@@ -3051,7 +3059,7 @@ public class HistoryProgressCardTest
 		}
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
 		// the record has been keeping sittings since well before this window
-		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(noonDaysAgo(40), 15, 0, 0, 0, 0, 0));
 		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
 		ChroniclePanel p = panel(s);
 		set(p, "histGranularity", "Year");
@@ -3075,7 +3083,7 @@ public class HistoryProgressCardTest
 		}
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
 		// the record has been keeping sittings since well before this window
-		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(noonDaysAgo(40), 15, 0, 0, 0, 0, 0));
 		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
 		ChroniclePanel p = panel(s);
 		List<String> card = card(labels(history(p)));
@@ -3099,7 +3107,7 @@ public class HistoryProgressCardTest
 		}
 		s.feed.add(entry(now - 400 * DAY_MS, "COLLECTION", "itemName", "Older than the window"));
 		// a sitting says 400 drops; the roll, which reaches back further, says 981
-		s.feed.add(session(now - 40 * DAY_MS, 15, 0, 0, 0, 0, 0));
+		s.feed.add(session(noonDaysAgo(40), 15, 0, 0, 0, 0, 0));
 		s.feed.add(session(now - DAY_MS, 60, 400, 2_000_000, 9, 44_000, 5));
 		s.lootRollDay = today.minusDays(300);
 		LocalStore.LootWindow w = new LocalStore.LootWindow();
@@ -4293,6 +4301,37 @@ public class HistoryProgressCardTest
 		List<String> all = labels(history(p));
 		assertEquals(all.toString(), "1h 35m", beside(all, "Time played"));
 		assertEquals(all.toString(), "1", beside(all, "Sessions"));
+	}
+
+	/**
+	 * A sitting still running after midnight counts in the day it began, where
+	 * its closing line will be filed, and where the Recap, the Calendar and the
+	 * Journal already put it. Gated on the period reaching today, it was in no
+	 * History board at all until logout.
+	 */
+	@Test
+	public void aRunningSittingPastMidnightCountsInTheDayItBegan() throws Exception
+	{
+		LocalDate yesterday = LocalDate.now().minusDays(1);
+		PanelPreviewTest.StubPlugin s = stub(true);
+		s.sessionStartMs = yesterday.atTime(23, 0).atZone(java.time.ZoneId.systemDefault())
+			.toInstant().toEpochMilli();
+		s.sessionElapsed = 90;
+		for (int back = 2; back >= 1; back--)
+		{
+			HistoryLog.Baseline b = new HistoryLog.Baseline();
+			b.skills.put("attack", 1_050_000L - back);
+			s.history.put(LocalDate.now().minusDays(back), b);
+		}
+		ChroniclePanel p = panel(s);
+		set(p, "histFacet", "Skills");
+		set(p, "histGranularity", "Day");
+		set(p, "histCursor", yesterday);
+		List<String> day = labels(history(p));
+		assertEquals(day.toString(), "1h 30m", beside(day, "Time played"));
+		// and today, which it did not begin in, leaves it out
+		set(p, "histCursor", LocalDate.now());
+		assertEquals("0m", beside(labels(history(p)), "Time played"));
 	}
 
 	@Test

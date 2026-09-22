@@ -579,4 +579,87 @@ public class HistoryLogTest
 		// bounded to a head map, the lookup stops where the period does
 		assertNull(HistoryLog.firstCarrying(spine.headMap(D.minusDays(5), false), null));
 	}
+
+	/**
+	 * Each line of a day already holds the whole day's correction, so when two
+	 * survive (a cut that failed), the next line takes the newest's and does
+	 * not add the older one in again.
+	 */
+	@Test
+	public void twoLinesOfADayHandOnTheNewestCorrectionOnly() throws Exception
+	{
+		rawLine(RSN, "{\"date\":\"2026-09-14\",\"kcs\":{\"Tempoross\":455},"
+			+ "\"adj\":{\"kcs\":{\"Tempoross\":409}}}", true);
+		rawLine(RSN, "{\"date\":\"2026-09-14\",\"kcs\":{\"Tempoross\":455,\"Kurask\":1624},"
+			+ "\"adj\":{\"kcs\":{\"Tempoross\":409,\"Kurask\":468}}}", true);
+		log.append(dir, RSN, map("attack", 1L), map("kills", 1L), map("Tempoross", 456L), 1, null,
+			LocalDate.parse("2026-09-14"));
+		HistoryLog.Baseline b = log.read(dir, RSN).get(LocalDate.parse("2026-09-14"));
+		assertEquals(409L, (long) b.adj.kcs.get("Tempoross"));
+		assertEquals(468L, (long) b.adj.kcs.get("Kurask"));
+	}
+
+	/** A tail torn mid-line does not swallow the next line. */
+	@Test
+	public void aLineAfterATornTailStandsOnItsOwn() throws Exception
+	{
+		rawLine(RSN, "{\"date\":\"2026-01-01\",\"skills\":{\"attack\":50},\"counters\":{}}", true);
+		rawLine(RSN, "{\"date\":\"2026-01-02\",\"skills\":{", false);
+		log.append(dir, RSN, map("attack", 70L), map("tilesWalked", 1L), none(), LocalDate.parse("2026-01-03"));
+		assertEquals(70L, (long) log.read(dir, RSN).get(LocalDate.parse("2026-01-03")).skills.get("attack"));
+	}
+
+	/** And a day's line that ran on from a torn one still hands its correction on. */
+	@Test
+	public void aDaysLineRunOnFromATornOneKeepsItsCorrection() throws Exception
+	{
+		rawLine(RSN, "{\"date\":\"2026-09-13\",\"skills\":{"
+			+ "{\"date\":\"2026-09-14\",\"kcs\":{\"Tempoross\":455},"
+			+ "\"adj\":{\"kcs\":{\"Tempoross\":409}}}", true);
+		log.append(dir, RSN, map("attack", 1L), map("kills", 1L), map("Tempoross", 456L), 1, null,
+			LocalDate.parse("2026-09-14"));
+		assertEquals(409L, (long) log.read(dir, RSN).get(LocalDate.parse("2026-09-14"))
+			.adj.kcs.get("Tempoross"));
+	}
+
+	/** A line that could not be written hands its correction back; one that was, nothing. */
+	@Test
+	public void aFailedLineHandsBackItsCorrection() throws Exception
+	{
+		HistoryLog.Adjust adj = new HistoryLog.Adjust();
+		adj.kcs.put("Tempoross", 409L);
+		assertNull(log.append(dir, RSN, map("attack", 1L), none(), none(), 1, adj, D));
+		File blocked = Files.createTempDirectory("chronicle-blocked").toFile();
+		// the spine's own name taken by a directory: no line can be opened there
+		assertTrue(new File(blocked, LocalStore.slug(RSN) + HistoryLog.SPINE_SUFFIX).mkdir());
+		HistoryLog.Adjust back = new HistoryLog(new Gson()).append(blocked, RSN, map("attack", 1L),
+			none(), none(), 1, adj, D);
+		assertEquals(409L, (long) back.kcs.get("Tempoross"));
+	}
+
+	/** The reckoning of the newest line, read off the tail: unstamped is the Hub's 0. */
+	@Test
+	public void theNewestLineSaysItsReckoning() throws Exception
+	{
+		Gson gson = new Gson();
+		assertNull(HistoryLog.newestKv(gson, dir, RSN));
+		rawLine(RSN, "{\"date\":\"2026-09-13\",\"kv\":1}", true);
+		rawLine(RSN, "{\"date\":\"2026-09-14\"}", true);
+		assertEquals(Integer.valueOf(0), HistoryLog.newestKv(gson, dir, RSN));
+		rawLine(RSN, "{\"date\":\"2026-09-15\",\"kv\":1}", true);
+		rawLine(RSN, "{\"date\":\"2026-09-16\",\"sk", false);
+		assertEquals(Integer.valueOf(1), HistoryLog.newestKv(gson, dir, RSN));
+	}
+
+	/** Midnight is noticed from the day this process last wrote under, and only then. */
+	@Test
+	public void theDayTurnsOnlyAfterALineUnderAnEarlierDay()
+	{
+		assertFalse("before the login's first line", log.dayTurned(RSN));
+		log.append(dir, RSN, map("attack", 1L), none(), none(), LocalDate.now().minusDays(1));
+		assertTrue(log.dayTurned(RSN));
+		log.append(dir, RSN, map("attack", 2L), none(), none(), LocalDate.now());
+		assertFalse(log.dayTurned(RSN));
+		assertFalse(log.dayTurned(null));
+	}
 }

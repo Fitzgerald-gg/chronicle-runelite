@@ -422,11 +422,26 @@ public class ChroniclePlugin extends Plugin
 			takeLiveSkills();
 			watchPlaytime();
 			// A chat line that was a fight's first word on its count laid a
-			// correction by: onto the spine within the tick, not at the next write,
-			// which a client closed without logging out never reaches.
-			if (localName != null && localStore.isReadyFor(localName) && localStore.hasPendingAdjust())
+			// correction by: onto the spine within the tick, and the journal
+			// straight after it on the same thread. A spine line carrying the
+			// correction beside a journal on disk that never heard the statement
+			// would lay it again when the statement came back, and a correction
+			// laid twice takes two real kills off the record for good.
+			// And the day's close on the tick midnight passes. Left to the write
+			// interval, the new day measured from the old day's opening line for
+			// up to five minutes, and showed a sitting's whole evening as its own.
+			// A write that fails is not retried every tick: once a minute.
+			boolean turned = localName != null && historyLog.dayTurned(localName)
+				&& System.currentTimeMillis() - lastRollAttempt >= 60_000L;
+			if (localName != null && localStore.isReadyFor(localName)
+				&& (localStore.hasFreshAdjust() || turned))
 			{
+				if (turned)
+				{
+					lastRollAttempt = System.currentTimeMillis();
+				}
 				appendHistoryBaseline();
+				executor.submit(() -> localStore.flush(localDir()));
 			}
 		}
 		// WHICH store moved, not merely that one did. A board is redrawn when the
@@ -512,7 +527,6 @@ public class ChroniclePlugin extends Plugin
 			}
 			configManager.setRSProfileConfiguration(GROUP, KEY_JOURNAL_NAME, who);
 			localStore.load(localDir(), who);
-			settleKillsVersion(who);
 			// Same off-thread mount as the journal, so the History tab opens from memory.
 			reloadHistory(who);
 			// A different journal is mounted now; drop the panel views built on the last one.
@@ -1931,28 +1945,8 @@ public class ChroniclePlugin extends Plugin
 		}
 	}
 
-	/**
-	 * The first login under a newer way of reckoning kill counts: lay by the
-	 * difference it makes over this journal, for the line about to be written,
-	 * so the spine reads the change as no kills. Once a line says this version
-	 * wrote it, this finds nothing to do. Executor, after the journal loads.
-	 */
-	private void settleKillsVersion(String who)
-	{
-		Map.Entry<java.time.LocalDate, HistoryLog.Baseline> newest =
-			historyLog.read(localDir(), who).lastEntry();
-		if (newest == null)
-		{
-			return;   // a first line has nothing before it to shift
-		}
-		HistoryLog.Baseline line = newest.getValue();
-		int from = line.kv >= 0 ? line.kv
-			: localStore.inferKillsVersion(line.kcs, line.counters.get("kills"));
-		if (from < LocalStore.KILLS_VERSION)
-		{
-			localStore.addPendingAdjust(localStore.definitionShift(from));
-		}
-	}
+	// When the tick path last tried to close a day that had turned.
+	private long lastRollAttempt;
 
 	// Client thread. Appends today's closing skills+counters baseline.
 	private void appendHistoryBaseline()
@@ -1990,15 +1984,17 @@ public class ChroniclePlugin extends Plugin
 		}
 		log.debug("day rolled over: sitting began {} min ago, {} skills / {} xp counted so far",
 			sessionElapsedMinutes(), sessionSkillXp().size(), sittingXp);
-		// What the counts moved that was not play goes on with this line, and back
-		// on the pile if the line could not be written.
+		// What the counts moved that was not play goes on with this line, and
+		// whatever of it the file did not take goes back on the pile, where the
+		// next write interval retries it.
 		final HistoryLog.Adjust adj = localStore.takePendingAdjust();
 		executor.submit(() ->
 		{
-			if (!historyLog.append(localDir(), rsn, skills, counters, kcs,
-				LocalStore.KILLS_VERSION, adj, java.time.LocalDate.now()))
+			HistoryLog.Adjust unwritten = historyLog.append(localDir(), rsn, skills, counters, kcs,
+				LocalStore.KILLS_VERSION, adj, java.time.LocalDate.now());
+			if (unwritten != null)
 			{
-				localStore.addPendingAdjust(adj);
+				localStore.restorePendingAdjust(rsn, unwritten);
 			}
 			// The panel reads the spine from memory, so the line just written has to reach
 			// the cache or the closed day stays invisible until the next mount.
