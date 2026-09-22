@@ -421,6 +421,13 @@ public class ChroniclePlugin extends Plugin
 		{
 			takeLiveSkills();
 			watchPlaytime();
+			// A chat line that was a fight's first word on its count laid a
+			// correction by: onto the spine within the tick, not at the next write,
+			// which a client closed without logging out never reaches.
+			if (localName != null && localStore.isReadyFor(localName) && localStore.hasPendingAdjust())
+			{
+				appendHistoryBaseline();
+			}
 		}
 		// WHICH store moved, not merely that one did. A board is redrawn when the
 		// thing it shows has changed and left alone otherwise: an hour of
@@ -505,6 +512,7 @@ public class ChroniclePlugin extends Plugin
 			}
 			configManager.setRSProfileConfiguration(GROUP, KEY_JOURNAL_NAME, who);
 			localStore.load(localDir(), who);
+			settleKillsVersion(who);
 			// Same off-thread mount as the journal, so the History tab opens from memory.
 			reloadHistory(who);
 			// A different journal is mounted now; drop the panel views built on the last one.
@@ -1692,8 +1700,11 @@ public class ChroniclePlugin extends Plugin
 		{
 			localStore.setTrackers(sessionView(), localName);
 			// One closing baseline per day; the History tab and year cards subtract over it.
+			// And a line as soon as the counts moved by something other than play,
+			// which gatherCharacter above may just have found: the change must sit on
+			// the line whose counts first carry it, not on one written a day later.
 			checkDependencies();
-			if (historyLog.dayRolledOver(localName))
+			if (historyLog.dayRolledOver(localName) || localStore.hasPendingAdjust())
 			{
 				appendHistoryBaseline();
 			}
@@ -1920,6 +1931,29 @@ public class ChroniclePlugin extends Plugin
 		}
 	}
 
+	/**
+	 * The first login under a newer way of reckoning kill counts: lay by the
+	 * difference it makes over this journal, for the line about to be written,
+	 * so the spine reads the change as no kills. Once a line says this version
+	 * wrote it, this finds nothing to do. Executor, after the journal loads.
+	 */
+	private void settleKillsVersion(String who)
+	{
+		Map.Entry<java.time.LocalDate, HistoryLog.Baseline> newest =
+			historyLog.read(localDir(), who).lastEntry();
+		if (newest == null)
+		{
+			return;   // a first line has nothing before it to shift
+		}
+		HistoryLog.Baseline line = newest.getValue();
+		int from = line.kv >= 0 ? line.kv
+			: localStore.inferKillsVersion(line.kcs, line.counters.get("kills"));
+		if (from < LocalStore.KILLS_VERSION)
+		{
+			localStore.addPendingAdjust(localStore.definitionShift(from));
+		}
+	}
+
 	// Client thread. Appends today's closing skills+counters baseline.
 	private void appendHistoryBaseline()
 	{
@@ -1956,9 +1990,16 @@ public class ChroniclePlugin extends Plugin
 		}
 		log.debug("day rolled over: sitting began {} min ago, {} skills / {} xp counted so far",
 			sessionElapsedMinutes(), sessionSkillXp().size(), sittingXp);
+		// What the counts moved that was not play goes on with this line, and back
+		// on the pile if the line could not be written.
+		final HistoryLog.Adjust adj = localStore.takePendingAdjust();
 		executor.submit(() ->
 		{
-			historyLog.append(localDir(), rsn, skills, counters, kcs);
+			if (!historyLog.append(localDir(), rsn, skills, counters, kcs,
+				LocalStore.KILLS_VERSION, adj, java.time.LocalDate.now()))
+			{
+				localStore.addPendingAdjust(adj);
+			}
 			// The panel reads the spine from memory, so the line just written has to reach
 			// the cache or the closed day stays invisible until the next mount.
 			reloadHistory(rsn);

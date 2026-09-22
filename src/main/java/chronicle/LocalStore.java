@@ -39,6 +39,23 @@ import net.runelite.client.game.ItemManager;
 class LocalStore implements chronicle.counters.GatheredLedger
 {
 	static final int SCHEMA = 1;
+	/**
+	 * Which way of reckoning kill counts this build writes to the spine. Each
+	 * spine line says the version that wrote it, and on the first login under
+	 * a newer one the difference between the two, taken over the same journal,
+	 * is written beside the next line so the change never reads as kills.
+	 *
+	 * <p>Bump it whenever {@link #reconciledKills} or {@link #spineKills} would
+	 * give a different figure for the same journal, and keep the old version's
+	 * branch: the shift is worked out by running both. KillsVersionTest pins
+	 * what the current version gives, and fails on a change that did not bump.
+	 *
+	 * <p>0: the Plugin Hub's build to 7bd5812, the ledger raised to the page
+	 * counter as the floor, and the kills sum over the ledger's own figures.
+	 * 1: the page's labelled line and the ledger's own figure as the floor
+	 * (56acd70), and the kills sum over the reconciled figures (ff053e5).
+	 */
+	static final int KILLS_VERSION = 1;
 	// runaway guard
 	private static final int FEED_CAP = 20000;
 	// peak counters: lifetime is max(base, session) rather than base + session.
@@ -55,6 +72,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private final Gson gson;
 
 	private final Object lock = new Object();
+	// What the counts moved since the spine's last line that was not play, laid
+	// by for the next one. Guarded by lock.
+	private final HistoryLog.Adjust pendingAdjust = new HistoryLog.Adjust();
 	private JsonObject root;          // the current account's model (guarded by lock)
 	private JsonObject trackersBase;  // lifetime counters frozen at load; +session = lifetime
 	private String currentRsn;        // whose model root holds
@@ -118,6 +138,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 *  per login, before anything records. */
 	void load(File dir, String rsn)
 	{
+		synchronized (lock)
+		{
+			// the last account's, and nothing of this one's
+			pendingAdjust.kcs.clear();
+			pendingAdjust.counters.clear();
+		}
 		JsonObject loaded = null;
 		mountedDir = dir;
 		File f = jsonPath(dir, rsn);
@@ -223,6 +249,38 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			recentDrops.clear();
 			// Account-scoped. load() reads it back from the record.
 			gatheredItems.clear();
+			pendingAdjust.kcs.clear();
+			pendingAdjust.counters.clear();
+		}
+	}
+
+	/** Lay a change that was not play by, for the next line of the spine. */
+	void addPendingAdjust(HistoryLog.Adjust adj)
+	{
+		synchronized (lock)
+		{
+			pendingAdjust.add(adj);
+		}
+	}
+
+	/** The change laid by, handed to the line about to be written, and cleared. */
+	HistoryLog.Adjust takePendingAdjust()
+	{
+		synchronized (lock)
+		{
+			HistoryLog.Adjust out = new HistoryLog.Adjust();
+			out.add(pendingAdjust);
+			pendingAdjust.kcs.clear();
+			pendingAdjust.counters.clear();
+			return out;
+		}
+	}
+
+	boolean hasPendingAdjust()
+	{
+		synchronized (lock)
+		{
+			return !pendingAdjust.isEmpty();
 		}
 	}
 
@@ -911,6 +969,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				root.addProperty("combat_level", combatLevel);
 			}
+			// What the counts were before this reading, so what it moved that was
+			// not play can be laid by (noteArrival).
+			Counts before = collectionLog != null ? countsNow() : null;
 			if (collectionLog != null)
 			{
 				// Anchor from what has just been READ, not from the merged result:
@@ -941,7 +1002,94 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				root.add("achievements", achievements);
 			}
 			root.addProperty("updated_at", nowSec());
+			if (before != null)
+			{
+				noteArrival(before, 0);
+			}
 		}
+	}
+
+	/** The counts as they stand, and the fights that already rest on something the game said. */
+	private static final class Counts
+	{
+		final java.util.Map<String, Long> kills;
+		final java.util.Set<String> stated;
+
+		Counts(java.util.Map<String, Long> kills, java.util.Set<String> stated)
+		{
+			this.kills = kills;
+			this.stated = stated;
+		}
+	}
+
+	private Counts countsNow()
+	{
+		JsonObject cl = clogSnapshot();
+		java.util.Map<String, Long> kills = reconciledKills(cl, dropSources(), chatKillCounts(),
+			anchoredKills());
+		java.util.Set<String> stated = new java.util.HashSet<>();
+		for (String map : new String[]{"kcs", "kc_lines", "slayer_kcs"})
+		{
+			if (cl.has(map) && cl.get(map).isJsonObject())
+			{
+				for (String name : cl.getAsJsonObject(map).keySet())
+				{
+					stated.add(chatKind(name));
+				}
+			}
+		}
+		synchronized (lock)
+		{
+			for (String map : new String[]{"kc_anchors", "chat_kcs"})
+			{
+				if (root != null && root.has(map) && root.get(map).isJsonObject())
+				{
+					for (String name : root.getAsJsonObject(map).keySet())
+					{
+						stated.add(chatKind(name));
+					}
+				}
+			}
+		}
+		return new Counts(kills, stated);
+	}
+
+	/**
+	 * What a reading just moved that was not play, laid by for the spine.
+	 *
+	 * <p>A fight's FIRST statement brings its whole past with it: the Kill Log
+	 * opened for the first time said Tempoross 455 where the record had 46, and
+	 * the day it was read claimed 409 kills. So the first word the game says
+	 * about a fight is a correction, and so is any count that falls. A fight
+	 * already resting on a statement moves by play, kills the ledger did not see
+	 * (no drop, another device), and those stay kills. {@code announced} is the
+	 * kill a chat line announces with its count: that one was played.
+	 */
+	private void noteArrival(Counts before, long announced)
+	{
+		Counts after = countsNow();
+		java.util.Set<String> counted = sourceKills(clogSnapshot(), dropSources()).keySet();
+		HistoryLog.Adjust adj = new HistoryLog.Adjust();
+		for (java.util.Map.Entry<String, Long> e : after.kills.entrySet())
+		{
+			Long was = before.kills.get(e.getKey());
+			if (was == null)
+			{
+				continue;   // a fight new to the record measures from its first figure
+			}
+			long moved = e.getValue() - was;
+			long notPlay = moved < 0 ? moved
+				: !before.stated.contains(chatKind(e.getKey())) ? Math.max(0, moved - announced) : 0;
+			if (notPlay != 0)
+			{
+				adj.kcs.merge(e.getKey(), notPlay, Long::sum);
+				if (counted.contains(e.getKey()))
+				{
+					adj.counters.merge("kills", notPlay, Long::sum);
+				}
+			}
+		}
+		addPendingAdjust(adj);
 	}
 
 	/**
@@ -4038,11 +4186,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		JsonObject cl = clogSnapshot();
 		java.util.Map<String, Long> reconciled =
 			reconciledKills(cl, sources, chatKillCounts(), anchoredKills());
-		long kills = 0;
-		for (String name : sourceKills(cl, sources).keySet())
-		{
-			kills += reconciled.getOrDefault(name, 0L);
-		}
+		long kills = spineKills(cl, sources, reconciled, KILLS_VERSION);
 		long left = 0;
 		long leftValue = 0;
 		long leftKills = 0;
@@ -4107,6 +4251,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		java.util.List<SourceRow> sources, java.util.Map<String, Long> chat,
 		java.util.Map<String, Long> anchored)
 	{
+		return reconciledKills(clog, sources, chat, anchored, KILLS_VERSION);
+	}
+
+	/** The same, as the given {@link #KILLS_VERSION} reckoned it. */
+	static java.util.Map<String, Long> reconciledKills(JsonObject clog,
+		java.util.List<SourceRow> sources, java.util.Map<String, Long> chat,
+		java.util.Map<String, Long> anchored, int version)
+	{
 		java.util.Map<String, Long> out = clogKillCounts(clog);
 		// What the game itself says about the encounter: the Kill Log, and the
 		// chat line it prints on the kill. The Kill Log only moves when the
@@ -4120,6 +4272,13 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		// kills at all: Wintertodt's page counts rewards claimed and says 1,078
 		// where 448 were killed, and the larger of those two is the lie.
 		placeByKind(out, stated, false);
+		if (version < 1)
+		{
+			// Version 0: the ledger, raised to the page counter, as the floor.
+			placeByKind(out, sourceKills(clog, sources), true);
+			placeByKind(out, anchored, false);
+			return out;
+		}
 		// The page's own LABELLED line is a statement too, and the step above just
 		// overwrote it. clogKillCounts lets that line replace the raw counter
 		// precisely because a named line is not a guess; handing the result to a
@@ -4148,6 +4307,104 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		java.util.List<SourceRow> sources)
 	{
 		return sourceKills(clog, sources, true);
+	}
+
+	/**
+	 * The spine's kills sum as the given version reckoned it: version 0 summed
+	 * the ledger's own figures, 1 the reconciled figure of each fight the
+	 * ledger has seen loot from.
+	 */
+	static long spineKills(JsonObject clog, java.util.List<SourceRow> sources,
+		java.util.Map<String, Long> reconciled, int version)
+	{
+		long kills = 0;
+		if (version < 1)
+		{
+			for (long k : sourceKills(clog, sources).values())
+			{
+				kills += k;
+			}
+			return kills;
+		}
+		for (String name : sourceKills(clog, sources).keySet())
+		{
+			kills += reconciled.getOrDefault(name, 0L);
+		}
+		return kills;
+	}
+
+	/**
+	 * What moving from version {@code from} to this build's changes, fight by
+	 * fight and in the kills sum, worked out over the same journal: the whole
+	 * of the step the spine would otherwise read as a day's kills. A fight only
+	 * one version knows needs nothing; the spine measures it from its first
+	 * figure either way.
+	 */
+	HistoryLog.Adjust definitionShift(int from)
+	{
+		HistoryLog.Adjust adj = new HistoryLog.Adjust();
+		if (from >= KILLS_VERSION)
+		{
+			return adj;
+		}
+		JsonObject cl = clogSnapshot();
+		java.util.List<SourceRow> sources = dropSources();
+		java.util.Map<String, Long> chat = chatKillCounts();
+		java.util.Map<String, Long> anchored = anchoredKills();
+		java.util.Map<String, Long> was = reconciledKills(cl, sources, chat, anchored, from);
+		java.util.Map<String, Long> now = reconciledKills(cl, sources, chat, anchored, KILLS_VERSION);
+		for (java.util.Map.Entry<String, Long> e : now.entrySet())
+		{
+			Long w = was.get(e.getKey());
+			if (w != null && w.longValue() != e.getValue())
+			{
+				adj.kcs.put(e.getKey(), e.getValue() - w);
+			}
+		}
+		long sum = spineKills(cl, sources, now, KILLS_VERSION) - spineKills(cl, sources, was, from);
+		if (sum != 0)
+		{
+			adj.counters.put("kills", sum);
+		}
+		return adj;
+	}
+
+	/**
+	 * The version a line that does not say which wrote it most likely came
+	 * from: the one whose figures over the journal as it stands lie closest to
+	 * the line's. A tie is the older, which shifts nothing where the two agree.
+	 */
+	int inferKillsVersion(java.util.Map<String, Long> lineKcs, Long lineKills)
+	{
+		JsonObject cl = clogSnapshot();
+		java.util.List<SourceRow> sources = dropSources();
+		java.util.Map<String, Long> chat = chatKillCounts();
+		java.util.Map<String, Long> anchored = anchoredKills();
+		int best = 0;
+		long nearest = Long.MAX_VALUE;
+		for (int v = 0; v <= KILLS_VERSION; v++)
+		{
+			java.util.Map<String, Long> r = reconciledKills(cl, sources, chat, anchored, v);
+			long off = 0;
+			for (java.util.Map.Entry<String, Long> e : lineKcs.entrySet())
+			{
+				Long mine = r.get(e.getKey());
+				if (mine != null && e.getValue() != null)
+				{
+					off += Math.abs(mine - e.getValue());
+				}
+			}
+			if (lineKills != null)
+			{
+				off += Math.abs(spineKills(cl, sources, r, v) - lineKills);
+			}
+			if (off < nearest)
+			{
+				nearest = off;
+				best = v;
+			}
+		}
+		return best;
 	}
 
 	/**
@@ -4409,6 +4666,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
+		Counts before = countsNow();
 		revision++;
 		synchronized (lock)
 		{
@@ -4427,6 +4685,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 		// and as an anchor, so the count keeps moving between announcements
 		anchorKill(subject, tally, "chat", rsn);
+		noteArrival(before, 1);
 	}
 
 	/** Every count the chat box has announced, by the name the game used. */

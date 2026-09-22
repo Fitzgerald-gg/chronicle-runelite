@@ -86,6 +86,111 @@ public class HistoryLogTest
 		assertNull(b.counters.get("logsChopped"));
 	}
 
+	/**
+	 * TRAP: a count that moved for any reason but play. The Kill Log opened for
+	 * the first time said Tempoross 455 where the record had 46, and the day it
+	 * was read claimed 409 kills. The line that first carries the new figure
+	 * says how much of the step was not play, and every line before it is read
+	 * shifted by that: the step reads as no kills, and the days before it keep
+	 * their own changes.
+	 */
+	@Test
+	public void anAdjustmentCarriesNoKillsAcrossItsLine() throws Exception
+	{
+		rawLine(RSN, "{\"date\":\"2026-09-12\",\"kcs\":{\"Tempoross\":40,\"Vorkath\":150}}", true);
+		rawLine(RSN, "{\"date\":\"2026-09-13\",\"kcs\":{\"Tempoross\":46,\"Vorkath\":156}}", true);
+		rawLine(RSN, "{\"date\":\"2026-09-14\",\"kv\":1,\"kcs\":{\"Tempoross\":455,"
+			+ "\"Vorkath\":157},\"adj\":{\"kcs\":{\"Tempoross\":409}}}", true);
+
+		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
+		HistoryLog.Baseline a = got.get(LocalDate.parse("2026-09-12"));
+		HistoryLog.Baseline b = got.get(LocalDate.parse("2026-09-13"));
+		HistoryLog.Baseline c = got.get(LocalDate.parse("2026-09-14"));
+		assertEquals("the line carrying the change is read as written", 455L, (long) c.kcs.get("Tempoross"));
+		assertEquals(1, c.kv);
+		assertEquals(449L, (long) a.kcs.get("Tempoross"));
+		assertEquals(455L, (long) b.kcs.get("Tempoross"));
+		// the day across the step: no Tempoross at all, Vorkath's one kill
+		Map<String, Long> moved = HistoryLog.gained(b.kcs, b.kcs, c.kcs);
+		assertNull("the first reading read as kills: " + moved, moved.get("Tempoross"));
+		assertEquals(1L, (long) moved.get("Vorkath"));
+		// and the day before the step keeps its six
+		assertEquals(6L, (long) HistoryLog.gained(a.kcs, a.kcs, b.kcs).get("Tempoross"));
+	}
+
+	/** A count that falls is the same: Wintertodt's page said rewards claimed. */
+	@Test
+	public void aFallIsShiftedToo() throws Exception
+	{
+		rawLine(RSN, "{\"date\":\"2026-09-13\",\"kcs\":{\"Wintertodt\":1078}}", true);
+		rawLine(RSN, "{\"date\":\"2026-09-14\",\"kcs\":{\"Wintertodt\":450},"
+			+ "\"adj\":{\"kcs\":{\"Wintertodt\":-631}}}", true);
+		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
+		assertEquals(447L, (long) got.get(LocalDate.parse("2026-09-13")).kcs.get("Wintertodt"));
+		// three real kills across the step, where the raw lines read a fall
+		assertEquals(3L, (long) HistoryLog.gained(got.get(LocalDate.parse("2026-09-13")).kcs,
+			new HashMap<>(), got.get(LocalDate.parse("2026-09-14")).kcs).get("Wintertodt"));
+	}
+
+	/** A line without the key keeps without it: a shift never mints a figure. */
+	@Test
+	public void aShiftNeverAddsAKeyALineLacks() throws Exception
+	{
+		rawLine(RSN, "{\"date\":\"2026-09-13\",\"kcs\":{\"Vorkath\":156}}", true);
+		rawLine(RSN, "{\"date\":\"2026-09-14\",\"kcs\":{\"Tempoross\":455},"
+			+ "\"adj\":{\"kcs\":{\"Tempoross\":409}}}", true);
+		assertNull(log.read(dir, RSN).get(LocalDate.parse("2026-09-13")).kcs.get("Tempoross"));
+	}
+
+	/**
+	 * The day's line is replaced as the day goes, and a correction laid on an
+	 * earlier line of the same day goes on with the day rather than with the
+	 * line: it is a fact about the counts, not about that write.
+	 */
+	@Test
+	public void aDaysCorrectionsSurviveItsLaterLines()
+	{
+		LocalDate day = LocalDate.parse("2026-09-14");
+		HistoryLog.Adjust first = new HistoryLog.Adjust();
+		first.kcs.put("Tempoross", 409L);
+		HistoryLog.Adjust second = new HistoryLog.Adjust();
+		second.kcs.put("Kurask", 468L);
+		second.counters.put("kills", 468L);
+		log.append(dir, RSN, map("attack", 1L), map("kills", 10L), map("Tempoross", 455L), 1, first, day);
+		log.append(dir, RSN, map("attack", 2L), map("kills", 480L), map("Tempoross", 455L), 1, second, day);
+		log.append(dir, RSN, map("attack", 3L), map("kills", 481L), map("Tempoross", 456L), 1, null, day);
+		HistoryLog.Baseline b = log.read(dir, RSN).get(day);
+		assertEquals(409L, (long) b.adj.kcs.get("Tempoross"));
+		assertEquals(468L, (long) b.adj.kcs.get("Kurask"));
+		assertEquals(468L, (long) b.adj.counters.get("kills"));
+	}
+
+	/** On a rollover the correction goes on the day the state closes: the day just ended. */
+	@Test
+	public void aRolloverPutsTheCorrectionOnTheDayItCloses()
+	{
+		LocalDate monday = LocalDate.parse("2026-09-14");
+		LocalDate tuesday = monday.plusDays(1);
+		log.append(dir, RSN, map("attack", 1L), new HashMap<>(), map("Tempoross", 46L), 1, null, monday);
+		HistoryLog.Adjust adj = new HistoryLog.Adjust();
+		adj.kcs.put("Tempoross", 409L);
+		log.append(dir, RSN, map("attack", 1L), new HashMap<>(), map("Tempoross", 455L), 1, adj, tuesday);
+		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
+		assertEquals(409L, (long) got.get(monday).adj.kcs.get("Tempoross"));
+		assertTrue(got.get(tuesday).adj.isEmpty());
+	}
+
+	/** Compaction moves lines and never touches one, their corrections included. */
+	@Test
+	public void compactionKeepsACorrection() throws Exception
+	{
+		rawLine(RSN, "{\"date\":\"2026-09-14\",\"kcs\":{\"Tempoross\":455},"
+			+ "\"adj\":{\"kcs\":{\"Tempoross\":409}}}", true);
+		rawLine(RSN, "{\"date\":\"2026-09-13\",\"kcs\":{\"Tempoross\":46}}", true);
+		log.compact(dir, RSN);
+		assertEquals(455L, (long) log.read(dir, RSN).get(LocalDate.parse("2026-09-13")).kcs.get("Tempoross"));
+	}
+
 	@Test
 	public void aTornFinalLineCostsOnlyItself() throws Exception
 	{

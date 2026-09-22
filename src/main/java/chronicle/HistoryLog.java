@@ -46,6 +46,15 @@ import lombok.extern.slf4j.Slf4j;
  * state it finds (the nearest thing to a midnight close the plugin has), and
  * only then opens today's line from it. A session run past midnight therefore
  * leaves its evening on the day it was played rather than on the day after.
+ *
+ * <p>A line also carries {@code "kv"}, the version of the kill-count reckoning
+ * that wrote it, and where the counts moved for any reason but play, an
+ * {@code "adj"}: how much of the step from the day before was not kills. A
+ * newer way of reconciling the counts is one such reason, the game stating a
+ * count for the first time (the Kill Log opened, a log page read, a chat line
+ * after a gap) is the other. Read back, every line before an adjustment is
+ * shifted by it, so the step reads as no kills at all while every day-to-day
+ * change before it keeps its size. Nothing already written is ever rewritten.
  */
 @Slf4j
 class HistoryLog
@@ -72,18 +81,25 @@ class HistoryLog
 		append(dir, rsn, skills, counters, kcs, LocalDate.now(ZoneId.systemDefault()));
 	}
 
+	/** The same, with no adjustment to carry. */
+	synchronized void append(File dir, String rsn, Map<String, Long> skills,
+		Map<String, Long> counters, Map<String, Long> kcs, LocalDate today)
+	{
+		append(dir, rsn, skills, counters, kcs, LocalStore.KILLS_VERSION, null, today);
+	}
+
 	/**
 	 * The dated form: {@code today} is the day this state belongs to. When this
 	 * process last appended under an earlier date, nothing has closed that day
 	 * since, so the state is written under it first (its close) and then under
 	 * {@code today} (today's opening baseline, to be replaced as the day goes).
 	 */
-	synchronized void append(File dir, String rsn, Map<String, Long> skills,
-		Map<String, Long> counters, Map<String, Long> kcs, LocalDate today)
+	synchronized boolean append(File dir, String rsn, Map<String, Long> skills,
+		Map<String, Long> counters, Map<String, Long> kcs, int kv, Adjust adj, LocalDate today)
 	{
 		if (rsn == null || rsn.isEmpty() || today == null)
 		{
-			return;
+			return false;
 		}
 		String slug = LocalStore.slug(rsn);
 		String date = today.toString();
@@ -107,34 +123,43 @@ class HistoryLog
 			kcs.forEach(kc::addProperty);
 		}
 		state.add("kcs", kc);
+		state.addProperty("kv", kv);
 		try
 		{
 			if (!dir.isDirectory() && !dir.mkdirs())
 			{
 				log.debug("could not create history dir {}", dir);
-				return;
+				return false;
 			}
 			File f = new File(dir, slug + SPINE_SUFFIX);
 			// The day turned since this process last wrote: that day's line still
 			// holds its login-time state, so close it at the state in hand before
 			// today's line starts from the same point.
+			// An adjustment belongs to the day the state it describes closes,
+			// which on a rollover is the day just ended.
 			String previous = lastAppendedDate.get(slug);
 			if (previous != null && previous.compareTo(date) < 0)
 			{
-				writeLine(f, previous, state);
+				writeLine(f, previous, state, adj);
+				writeLine(f, date, state, null);
 			}
-			writeLine(f, date, state);
+			else
+			{
+				writeLine(f, date, state, adj);
+			}
 			lastAppendedDate.put(slug, date);
+			return true;
 		}
 		catch (Exception e)   // best-effort; the next append retries
 		{
 			log.debug("history append failed", e);
+			return false;
 		}
 	}
 
 	// One line for `date` carrying `state`, in place of any line the tail already
-	// holds for that date.
-	private void writeLine(File f, String date, JsonObject state) throws IOException
+	// holds for that date, and carrying forward whatever adjustment that line had.
+	private void writeLine(File f, String date, JsonObject state, Adjust adj) throws IOException
 	{
 		JsonObject line = new JsonObject();
 		line.addProperty("date", date);
@@ -144,8 +169,14 @@ class HistoryLog
 		}
 		// Appends are chronological, so any line already bearing this date is at
 		// the tail. Cut it and let this one stand in its place: the reader would
-		// have taken the last of them anyway.
-		dropTrailingDate(f, date);
+		// have taken the last of them anyway. Its adjustment is not the day's
+		// counts but a fact about them, and goes on with the day.
+		Adjust carried = dropTrailingDate(f, date);
+		carried.add(adj);
+		if (!carried.isEmpty())
+		{
+			line.add("adj", carried.toJson());
+		}
 		try (Writer w = new OutputStreamWriter(new FileOutputStream(f, true), StandardCharsets.UTF_8))
 		{
 			w.write(gson.toJson(line));
@@ -166,6 +197,68 @@ class HistoryLog
 		 * as the line is parsed; the stored format carries no such field.
 		 */
 		boolean complete;
+		// the kill-count reckoning that wrote the line, -1 for a line from before
+		// lines said
+		int kv = -1;
+		// what of the step from the day before was not play; applied on read
+		final Adjust adj = new Adjust();
+	}
+
+	/**
+	 * How much of a day's change in the counts was not play, per key: a kill
+	 * count in {@link #kcs}, a counter (the kills sum) in {@link #counters}.
+	 */
+	static final class Adjust
+	{
+		final Map<String, Long> kcs = new HashMap<>();
+		final Map<String, Long> counters = new HashMap<>();
+
+		/** Fold another adjustment into this one; null folds nothing. */
+		void add(Adjust other)
+		{
+			if (other == null)
+			{
+				return;
+			}
+			other.kcs.forEach((k, v) -> kcs.merge(k, v, Long::sum));
+			other.counters.forEach((k, v) -> counters.merge(k, v, Long::sum));
+			kcs.values().removeIf(v -> v == 0);
+			counters.values().removeIf(v -> v == 0);
+		}
+
+		boolean isEmpty()
+		{
+			return kcs.isEmpty() && counters.isEmpty();
+		}
+
+		JsonObject toJson()
+		{
+			JsonObject o = new JsonObject();
+			if (!kcs.isEmpty())
+			{
+				JsonObject k = new JsonObject();
+				kcs.forEach(k::addProperty);
+				o.add("kcs", k);
+			}
+			if (!counters.isEmpty())
+			{
+				JsonObject c = new JsonObject();
+				counters.forEach(c::addProperty);
+				o.add("counters", c);
+			}
+			return o;
+		}
+
+		static Adjust from(JsonElement e)
+		{
+			Adjust a = new Adjust();
+			if (e != null && e.isJsonObject())
+			{
+				fill(e.getAsJsonObject(), "kcs", a.kcs);
+				fill(e.getAsJsonObject(), "counters", a.counters);
+			}
+			return a;
+		}
 	}
 
 	// Whether the skills a line lists account for the overall it carries.
@@ -446,11 +539,12 @@ class HistoryLog
 	 * are in date order. Leaves the file untouched if the tail is a different day,
 	 * and gives up quietly on anything it cannot read.
 	 */
-	private static void dropTrailingDate(File f, String date)
+	private Adjust dropTrailingDate(File f, String date)
 	{
+		Adjust carried = new Adjust();
 		if (!f.isFile())
 		{
-			return;
+			return carried;
 		}
 		String needle = "\"date\":\"" + date + "\"";
 		try (RandomAccessFile raf = new RandomAccessFile(f, "rw"))
@@ -467,6 +561,21 @@ class HistoryLog
 				{
 					break;
 				}
+				if (!line.isEmpty())
+				{
+					try
+					{
+						JsonObject o = gson.fromJson(line, JsonObject.class);
+						if (o != null)
+						{
+							carried.add(Adjust.from(o.get("adj")));
+						}
+					}
+					catch (RuntimeException torn)
+					{
+						// a torn line carried nothing it can hand on
+					}
+				}
 				keep = start;
 			}
 			if (keep < raf.length())
@@ -478,6 +587,7 @@ class HistoryLog
 		{
 			log.debug("history tail trim failed", e);
 		}
+		return carried;
 	}
 
 	// Offset just past the newline before `end`, i.e. where that last line begins.
@@ -639,6 +749,11 @@ class HistoryLog
 					fill(o, "counters", b.counters);
 					fill(o, "kcs", b.kcs);
 					b.complete = whole(b.skills);
+					if (o.has("kv"))
+					{
+						b.kv = o.get("kv").getAsInt();
+					}
+					b.adj.add(Adjust.from(o.get("adj")));
 					out.put(date, b);   // later lines for a date overwrite: last wins
 				}
 				catch (RuntimeException torn)
@@ -651,7 +766,31 @@ class HistoryLog
 		{
 			log.debug("history read failed", e);
 		}
+		settle(out);
 		return out;
+	}
+
+	/**
+	 * Apply every adjustment to the lines before it, newest first: a line is
+	 * shifted by the sum of the adjustments on every line after it, on the keys
+	 * it already carries and no others. The newest line stays as it was
+	 * written, so it still agrees with the live counts it closes on.
+	 */
+	static void settle(TreeMap<LocalDate, Baseline> spine)
+	{
+		Map<String, Long> kcs = new HashMap<>();
+		Map<String, Long> counters = new HashMap<>();
+		for (Baseline b : spine.descendingMap().values())
+		{
+			if (b == null)
+			{
+				continue;
+			}
+			kcs.forEach((k, d) -> b.kcs.computeIfPresent(k, (key, v) -> v + d));
+			counters.forEach((k, d) -> b.counters.computeIfPresent(k, (key, v) -> v + d));
+			b.adj.kcs.forEach((k, d) -> kcs.merge(k, d, Long::sum));
+			b.adj.counters.forEach((k, d) -> counters.merge(k, d, Long::sum));
+		}
 	}
 
 	private static void fill(JsonObject o, String key, Map<String, Long> into)
