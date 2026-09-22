@@ -166,6 +166,34 @@ public class TimeStatTrackerTest
 		assertEquals(2, store.getStat(StatKeys.TIME_IDLE));
 	}
 
+	/**
+	 * A craft done on the side does not take the minutes of the one it is done
+	 * beside: herbiboar pays a few thousand hunter xp a harvest, darts a few
+	 * dozen fletching xp every few seconds, and the hunt is what the time was.
+	 */
+	@Test
+	public void theSkillEarningMostOwnsTheTickNotTheLastToDrop()
+	{
+		int hunter = 1_000_000;
+		int fletching = 2_000_000;
+		xp(Skill.HUNTER, hunter);
+		xp(Skill.FLETCHING, fletching);
+		for (int harvest = 0; harvest < 10; harvest++)
+		{
+			hunter += 2_400;
+			xp(Skill.HUNTER, hunter);
+			for (int dart = 0; dart < 12; dart++)
+			{
+				fletching += 30;
+				xp(Skill.FLETCHING, fletching);
+				ticks(10);
+			}
+		}
+		// 1,200 ticks: twelve minutes, every one of them the hunt's
+		assertEquals(12, store.getStat("timeHunter"));
+		assertEquals(0, store.getStat("timeFletching"));
+	}
+
 	@Test
 	public void aFightOutranksACraft()
 	{

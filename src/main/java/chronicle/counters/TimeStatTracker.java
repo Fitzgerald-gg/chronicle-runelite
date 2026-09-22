@@ -3,6 +3,8 @@
  */
 package chronicle.counters;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
@@ -22,8 +24,9 @@ import net.runelite.api.events.StatChanged;
  *
  * <p>Every tick goes to exactly one of: the NPC the player is fighting, held
  * for a short grace after the last hit so the walk between kills stays with
- * the boss; else the skill of the last xp drop, held for a longer grace so a
- * slow craft keeps its minutes between drops; else idle. A hundred ticks is a
+ * the boss; else the skill that earned the most xp in the last three minutes,
+ * so a slow craft keeps its minutes between drops and a craft done on the
+ * side does not take them; else idle. A hundred ticks is a
  * minute, and a minute is written as a counter (timeVorkath, timeFishing,
  * timeIdle), which is what lets the spine carry it and any period answer
  * "how long here". Nothing here is a rate: the pages divide.
@@ -33,15 +36,15 @@ public class TimeStatTracker implements StatTracker
 	static final int TICKS_A_MINUTE = 100;
 	/** After the last hit or the last look at a monster, how long it still owns the tick. */
 	static final int FIGHT_GRACE = 50;
-	/** After the last xp drop, how long the skill still owns the tick. */
+	/** How far back the xp drops are weighed to decide which skill owns the tick. */
 	static final int SKILL_GRACE = 300;
 
 	private final StatStore store;
 	private final Client client;
 	private final Map<Skill, Integer> xpSeen = new EnumMap<>(Skill.class);
 	private final Map<String, Integer> pending = new HashMap<>();
-	private Skill lastSkill;
-	private int lastSkillTick = Integer.MIN_VALUE / 2;
+	// the xp drops of the last SKILL_GRACE ticks, oldest first: {tick, skill ordinal, xp}
+	private final Deque<int[]> drops = new ArrayDeque<>();
 	private String lastNpc;
 	private int lastNpcTick = Integer.MIN_VALUE / 2;
 
@@ -72,8 +75,38 @@ public class TimeStatTracker implements StatTracker
 		{
 			return;
 		}
-		lastSkill = skill;
-		lastSkillTick = client.getTickCount();
+		drops.addLast(new int[]{client.getTickCount(), skill.ordinal(), event.getXp() - prev});
+	}
+
+	/**
+	 * The skill that earned the most in the window, or null for none.
+	 *
+	 * <p>Not the last to drop. A player hunting herbiboar while fletching darts
+	 * between tunnels earns twenty nine thousand hunter xp and three thousand
+	 * fletching, and the darts drop every few seconds: the last-drop rule filed
+	 * twelve of the twenty minutes under Fletching and three under Hunter.
+	 */
+	private Skill leading(int now)
+	{
+		while (!drops.isEmpty() && now - drops.peekFirst()[0] > SKILL_GRACE)
+		{
+			drops.removeFirst();
+		}
+		if (drops.isEmpty())
+		{
+			return null;
+		}
+		long[] by = new long[Skill.values().length];
+		int top = -1;
+		for (int[] d : drops)
+		{
+			by[d[1]] += d[2];
+			if (top < 0 || by[d[1]] > by[top])
+			{
+				top = d[1];
+			}
+		}
+		return Skill.values()[top];
 	}
 
 	/** Whether a fight still owns the tick. */
@@ -126,9 +159,9 @@ public class TimeStatTracker implements StatTracker
 		{
 			key = StatKeys.timeKey(lastNpc);
 		}
-		else if (lastSkill != null && now - lastSkillTick <= SKILL_GRACE)
+		else if (leading(now) != null)
 		{
-			key = StatKeys.timeKey(lastSkill.getName());
+			key = StatKeys.timeKey(leading(now).getName());
 		}
 		else
 		{
@@ -151,7 +184,7 @@ public class TimeStatTracker implements StatTracker
 		{
 			xpSeen.clear();
 			pending.clear();
-			lastSkill = null;
+			drops.clear();
 			lastNpc = null;
 		}
 	}

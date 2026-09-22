@@ -119,6 +119,10 @@ public class JournalSessionRowTest
 		assertEquals("Session: 1h 22m · +412k xp, most in Runecraft", fl.invoke(null, e));
 		d.remove("skills");
 		assertEquals("Session: 1h 22m · +412k xp", fl.invoke(null, e));
+		// one drop is a drop
+		d.addProperty("drops", 1);
+		d.addProperty("dropsGp", 46);
+		assertEquals("Session: 1h 22m · +412k xp · 1 drop (46 gp)", fl.invoke(null, e));
 	}
 
 	private static void flatten(Component c, List<Component> out)

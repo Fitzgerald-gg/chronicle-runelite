@@ -132,6 +132,44 @@ public class QuietScrollBarTest
 			0f, alpha(pane), 0.001f);
 	}
 
+	/**
+	 * The record moving in the background is a redraw the reader did not ask
+	 * for, and keeps their place: the history read lands whenever the feed
+	 * grows, a level or a log slot, and it redrew with a plain rebuild, so a
+	 * reader halfway down the sheet was sent to its top a moment after they
+	 * levelled. This test above failed now and then for exactly that reason,
+	 * whenever the read happened to land between its scroll and its check.
+	 */
+	@Test
+	public void theHistoryReadLandingKeepsThePlace() throws Exception
+	{
+		ChroniclePanel p = panel();
+		JScrollPane pane = pane(p);
+		SwingUtilities.invokeAndWait(() ->
+		{
+			p.setSize(242, 400);
+			layoutAll(p);
+		});
+		PanelPreviewTest.awaitHistory(p);
+		draw(p, pane, "SHEET");
+		final int[] parked = {0};
+		SwingUtilities.invokeAndWait(() ->
+		{
+			pane.getVerticalScrollBar().setValue(120);
+			parked[0] = pane.getVerticalScrollBar().getValue();
+		});
+		assertTrue("the board does not scroll at this size", parked[0] > 0);
+		// a fresh read of the spine, landing as it does when the feed grows
+		PanelPreviewTest.regatherHistory(p);
+		final int[] after = {0};
+		SwingUtilities.invokeAndWait(() ->
+		{
+			layoutAll(p);
+			after[0] = pane.getVerticalScrollBar().getValue();
+		});
+		assertEquals("the history read sent the reader back to the top", parked[0], after[0]);
+	}
+
 	/** Draw one board and answer the bar's range afterwards. */
 	@SuppressWarnings("unchecked")
 	private static int draw(ChroniclePanel p, JScrollPane pane, String view)

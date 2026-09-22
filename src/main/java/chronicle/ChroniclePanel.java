@@ -714,7 +714,7 @@ class ChroniclePanel extends PluginPanel
 
 	/** Where the hiscores and the collection log name one fight differently. */
 	private static final Map<String, String> LOG_PAGE_FOR = new LinkedHashMap<>();
-	private static final Map<String, String> PAYS_OUT = new LinkedHashMap<>();
+	private static final Map<String, List<String>> PAYS_OUT = new LinkedHashMap<>();
 	// A fight keyed by kind, against the NPC names its minutes are filed under.
 	private static final Map<String, List<String>> FOUGHT_AS = new LinkedHashMap<>();
 
@@ -728,9 +728,16 @@ class ChroniclePanel extends PluginPanel
 		// Where a fight's takings are filed under another name entirely. NOT the
 		// creatures inside it -- a crystalline bear's shards are not the
 		// Gauntlet's loot -- but the payout at the end of it, which the ledger
-		// files against the fight that hands it over.
-		PAYS_OUT.put("The Gauntlet", "Crystalline Hunllef");
-		PAYS_OUT.put("The Corrupted Gauntlet", "Corrupted Hunllef");
+		// files against the fight that hands it over. The loot tracker names the
+		// NPC that dropped it rather than the encounter, so the Guardians' loot
+		// sits under Dusk and the Titans' under whichever king fell last.
+		PAYS_OUT.put("The Gauntlet", java.util.Arrays.asList("Crystalline Hunllef"));
+		PAYS_OUT.put("The Corrupted Gauntlet", java.util.Arrays.asList("Corrupted Hunllef"));
+		PAYS_OUT.put("Grotesque Guardians", java.util.Arrays.asList("Dusk", "Dawn"));
+		PAYS_OUT.put("The Royal Titans",
+			java.util.Arrays.asList("Eldric the Ice King", "Branda the Fire Queen"));
+		PAYS_OUT.put("Nightmare", java.util.Arrays.asList("The Nightmare"));
+		PAYS_OUT.put("Barrows Chests", java.util.Arrays.asList("Barrows"));
 
 		// The minutes are filed under the NPC the hit landed on, and half the
 		// roster is not named after one: a raid is named for the place, Barrows
@@ -1518,6 +1525,32 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
+	/**
+	 * An activity tile's door: its loot, where the ledger holds any, else its
+	 * page of the collection log. Soul Wars pays in zeal, which is spent rather
+	 * than dropped, so its tile opened a loot page saying the journal had no
+	 * drops from it; the page that says what it has given is the log's.
+	 */
+	private void openActivity(String source)
+	{
+		if (resolveSourceNamed(source) == null)
+		{
+			for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
+			{
+				if (tab.getValue().containsKey(source))
+				{
+					applyTab(Tab.HISCORES);
+					sheetPage = "log";
+					clogTab = tab.getKey();
+					clogPageSel = source;
+					rebuild();
+					return;
+				}
+			}
+		}
+		openSourceLoose(source);
+	}
+
 	private JPanel activityCell(String label, String source, String page)
 	{
 		JPanel cell = new JPanel(new BorderLayout(3, 0));
@@ -1632,7 +1665,7 @@ class ChroniclePanel extends PluginPanel
 			// sheet that say a number and do nothing when you press them.
 			final String open = source;
 			cell.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-			cell.addMouseListener(clicker(() -> openSourceLoose(open)));
+			cell.addMouseListener(clicker(() -> openActivity(open)));
 		}
 		cell.add(icon, BorderLayout.WEST);
 		long moved = activityMoved(label, source);
@@ -1661,6 +1694,35 @@ class ChroniclePanel extends PluginPanel
 		}
 		cell.add(text, BorderLayout.CENTER);
 		return cell;
+	}
+
+	/**
+	 * The note for a window that closes before the record began keeping kill
+	 * counts, or counters: null where it was keeping them.
+	 *
+	 * <p>The imported past carries skills and nothing else. A board reading a
+	 * window inside it found no kill moved and said nothing was killed, which
+	 * is a claim about the account the record cannot make: it was not counting.
+	 */
+	private String notCounting(boolean kills)
+	{
+		TreeMap<LocalDate, HistoryLog.Baseline> spine = historySpine;
+		Window w = window();
+		if (wholeRecord() || sessionPeriod() || spine == null || w == null)
+		{
+			return null;
+		}
+		for (Map.Entry<LocalDate, HistoryLog.Baseline> e : spine.entrySet())
+		{
+			if (!(kills ? e.getValue().kcs : e.getValue().counters).isEmpty())
+			{
+				return w.end.isBefore(e.getKey())
+					? "The record keeps no " + (kills ? "kill counts" : "counters")
+					+ " before " + e.getKey().format(FULL_DAY) + "."
+					: null;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -1712,7 +1774,8 @@ class ChroniclePanel extends PluginPanel
 			}
 			if (had.isEmpty())
 			{
-				p.add(note("Nothing on the boss sheet was killed inside "
+				String unkept = notCounting(true);
+				p.add(note(unkept != null ? unkept : "Nothing on the boss sheet was killed inside "
 					+ periodInSentence() + "."));
 				return p;
 			}
@@ -1833,7 +1896,7 @@ class ChroniclePanel extends PluginPanel
 				continue;
 			}
 			if (namesInBrackets(r.name, b.name)
-				|| r.name.equalsIgnoreCase(PAYS_OUT.get(b.name)))
+				|| paysOutThrough(b.name, r.name))
 			{
 				paidOut.add(r);
 			}
@@ -1845,7 +1908,7 @@ class ChroniclePanel extends PluginPanel
 			long inWin = bossKillsInWindow(b.name);
 			long[] paid = sourceInWindow(b.name);
 			labels.add(window().label);
-			figures.add((inWin < 0 ? "-" : fmt(inWin) + " kills")
+			figures.add((inWin < 0 ? "-" : count(inWin, "kill"))
 				+ (paid[1] > 0 ? " · " + gp(paid[1]) + " gp" : ""));
 		}
 		long known = bossKills(b.name);
@@ -1922,15 +1985,30 @@ class ChroniclePanel extends PluginPanel
 				return r.name;
 			}
 		}
+		// the dearest of the names it pays out through
+		LocalStore.SourceRow best = null;
 		for (LocalStore.SourceRow r : sources())
 		{
-			if (namesInBrackets(r.name, b.name)
-				|| r.name.equalsIgnoreCase(PAYS_OUT.get(b.name)))
+			if ((namesInBrackets(r.name, b.name) || paysOutThrough(b.name, r.name))
+				&& (best == null || r.value > best.value))
 			{
-				return r.name;
+				best = r;
 			}
 		}
-		return b.name;
+		return best != null ? best.name : b.name;
+	}
+
+	/** Whether a fight's takings are filed under {@code source}, a name of its own NPC. */
+	private static boolean paysOutThrough(String fight, String source)
+	{
+		for (String name : PAYS_OUT.getOrDefault(fight, Collections.emptyList()))
+		{
+			if (name.equalsIgnoreCase(source))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// ------------------------------------------------------------------
@@ -3388,7 +3466,7 @@ class ChroniclePanel extends PluginPanel
 			// "kc" is a kill count, and the Rift is searched rather than killed.
 			boolean killed = isKillSource(r.name);
 			String sub = (killed ? fmt(standingKills(r)) + " kc"
-				: fmt(r.loots) + " drops")
+				: count(r.loots, "drop"))
 				+ (r.pb != null ? " · PB " + pb(r.pb) : "");
 			card.add(row(sub, r.loots > 0
 				? gp(r.value / Math.max(1, r.loots))
@@ -3849,7 +3927,7 @@ class ChroniclePanel extends PluginPanel
 				// over the kill log and throw a reader back to the top of it.
 				if (moved && view == View.SLAYER && "Tasks".equals(slayerLens))
 				{
-					rebuild();
+					rebuildInPlace();   // the record moved; the reader did not
 				}
 			}));
 		}
@@ -4531,7 +4609,7 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 			JPanel head = card(leftBehindSource.toUpperCase(Locale.ROOT));
-			head.add(row("Left on the floor", fmt(qty) + " items", ACCENT_RED));
+			head.add(row("Left on the floor", count(qty, "item"), ACCENT_RED));
 			head.add(row("Worth", gp(val) + " gp", null));
 			p.add(head);
 			p.add(vgap(6));
@@ -4680,7 +4758,7 @@ class ChroniclePanel extends PluginPanel
 				accent(), t.inProgress));
 			String kills = t.inProgress && t.assignment > t.kills
 				? fmt(t.kills) + " / " + fmt(t.assignment)
-				: fmt(t.kills) + " kills";
+				: count(t.kills, "kill");
 			if (t.noLootKills > 0)
 			{
 				kills += " · " + fmt(t.noLootKills) + " no-drop";
@@ -5978,7 +6056,7 @@ class ChroniclePanel extends PluginPanel
 			if (u.qty > 0 && u.name.equalsIgnoreCase(name))
 			{
 				JPanel r = row("Left behind", fmt(u.qty) + " · " + gp(u.value) + " gp"
-					+ (u.kills > 0 ? " · " + fmt(u.kills) + " kills" : ""), null);
+					+ (u.kills > 0 ? " · " + count(u.kills, "kill") : ""), null);
 				r.setToolTipText("Open what was left on the floor");
 				r.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				r.addMouseListener(clicker(() ->
@@ -6187,7 +6265,7 @@ class ChroniclePanel extends PluginPanel
 					grindsCache = rows2;
 					if (src.equals(detailSource))
 					{
-						rebuild();
+						rebuildInPlace();   // the record moved; the reader did not
 					}
 				}));
 			}
@@ -7710,7 +7788,8 @@ class ChroniclePanel extends PluginPanel
 			// four under one period of six, and "here" named neither, so a
 			// reader on Living for a week that ate nothing was told the record
 			// held nothing at all.
-			p.add(note(wholeRecord()
+			String unkept = notCounting(false);
+			p.add(note(unkept != null ? unkept : wholeRecord()
 				? "Nothing under " + statsFamily + " yet."
 				: "Nothing under " + statsFamily + " inside " + periodInSentence() + "."));
 			return p;
@@ -8157,7 +8236,11 @@ class ChroniclePanel extends PluginPanel
 				// skills sheet, Now and the Journal's frontispiece, and rebuild()
 				// already declines to run while the panel is hidden, so there is
 				// nothing for a view test to save here.
-				rebuild();
+				//
+				// In place: the read lands whenever the feed grows, a level or a
+				// log slot, and a plain rebuild sent a reader halfway down the
+				// sheet back to its top a moment after they levelled.
+				rebuildInPlace();
 			}
 		}.execute();
 	}
@@ -9642,6 +9725,12 @@ class ChroniclePanel extends PluginPanel
 	private static String rateText(double perHour)
 	{
 		return perHour >= 10 ? fmt(Math.round(perHour)) : String.format(Locale.UK, "%.1f", perHour);
+	}
+
+	/** A count and its noun, the noun made plural where the count is not one. */
+	private static String count(long n, String one)
+	{
+		return fmt(n) + " " + (n == 1 ? one : one + "s");
 	}
 
 	private static String hoursMinutes(long minutes)
@@ -11531,7 +11620,8 @@ class ChroniclePanel extends PluginPanel
 			// Seven of the grid's skills file no counters at all: Attack, Strength,
 			// Defence, Hitpoints, Ranged, Magic and Slayer. A skill that tracks
 			// nothing should say so rather than open on a blank.
-			p.add(note("Nothing is tracked under " + craft
+			String unkept = notCounting(false);
+			p.add(note(unkept != null ? unkept : "Nothing is tracked under " + craft
 				+ (wholeRecord() ? "." : " in " + periodInSentence() + ".")));
 			return p;
 		}
@@ -12829,7 +12919,7 @@ class ChroniclePanel extends PluginPanel
 		long doses = counters.getOrDefault("potionDoses", 0L);
 		if (doses > 0)
 		{
-			rows += plateRow(plate, "Potions", fmt(doses) + " doses"
+			rows += plateRow(plate, "Potions", count(doses, "dose")
 				+ splitSpend("potionsConsumedValue", counters), toLiving);
 		}
 
@@ -12957,19 +13047,15 @@ class ChroniclePanel extends PluginPanel
 			}
 			return new long[]{xp};
 		}
-		Map.Entry<LocalDate, HistoryLog.Baseline>[] ends = periodEnds();
-		if (ends == null)
+		Map<String, Long> gains = periodSkillGains();
+		if (gains == null)
 		{
 			return null;
 		}
 		long total = 0;
-		for (Map.Entry<String, Long> e : ends[1].getValue().skills.entrySet())
+		for (long g : gains.values())
 		{
-			Long was = ends[0].getValue().skills.get(e.getKey());
-			if (!"overall".equals(e.getKey()) && was != null && e.getValue() > was)
-			{
-				total += e.getValue() - was;
-			}
+			total += Math.max(0, g);
 		}
 		return new long[]{total};
 	}
@@ -13003,19 +13089,12 @@ class ChroniclePanel extends PluginPanel
 		}
 		else
 		{
-			Map.Entry<LocalDate, HistoryLog.Baseline>[] ends = periodEnds();
-			if (ends == null)
+			Map<String, Long> gains = periodSkillGains();
+			if (gains == null)
 			{
 				return null;
 			}
-			for (Map.Entry<String, Long> e : ends[1].getValue().skills.entrySet())
-			{
-				Long was = ends[0].getValue().skills.get(e.getKey());
-				if (!"overall".equals(e.getKey()) && was != null && e.getValue() > was)
-				{
-					by.put(e.getKey(), e.getValue() - was);
-				}
-			}
+			by.putAll(gains);
 		}
 		String top = null;
 		long most = 0;
@@ -13053,35 +13132,62 @@ class ChroniclePanel extends PluginPanel
 			}
 			return gained > 0 && overall != null ? new long[]{gained, overall[0]} : null;
 		}
-		Map.Entry<LocalDate, HistoryLog.Baseline>[] ends = periodEnds();
-		if (ends == null || !ends[0].getValue().complete || !ends[1].getValue().complete)
+		Span s = span();
+		if (s == null || !s.opening.complete || !s.closing.complete)
 		{
 			return null;
 		}
-		List<String> keys = new ArrayList<>(ends[1].getValue().skills.keySet());
-		keys.remove("overall");
-		HistoryLog.Levels was = HistoryLog.levels(ends[0].getValue(), keys);
-		HistoryLog.Levels now = HistoryLog.levels(ends[1].getValue(), keys);
+		List<String> keys = new ArrayList<>();
+		for (net.runelite.api.Skill sk : net.runelite.api.Skill.values())
+		{
+			if (sk != net.runelite.api.Skill.OVERALL)
+			{
+				keys.add(sk.name().toLowerCase(Locale.ROOT));
+			}
+		}
+		HistoryLog.Baseline shut = new HistoryLog.Baseline();
+		shut.skills.putAll(closingSkills(s));
+		shut.complete = true;
+		HistoryLog.Levels was = HistoryLog.levels(s.opening, keys);
+		HistoryLog.Levels now = HistoryLog.levels(shut, keys);
 		return now.total > was.total ? new long[]{now.total - was.total, now.total} : null;
 	}
 
-	/** The baselines bounding a narrowed period, {opening, closing}; null short of two. */
-	@SuppressWarnings("unchecked")
-	private Map.Entry<LocalDate, HistoryLog.Baseline>[] periodEnds()
+	/**
+	 * A dated period's xp per skill, measured the way the sheet measures it:
+	 * between the folded states at its two ends, a skill the opening lacks
+	 * taken from its earliest recorded value, and a period reaching today
+	 * closed on the live sheet. The Recap read two bare lines instead and
+	 * disagreed with the sheet by four million on a year of imported months.
+	 */
+	private Map<String, Long> periodSkillGains()
 	{
-		TreeMap<LocalDate, HistoryLog.Baseline> spine = historySpine;
-		Window w = window();
-		if (spine == null || w == null)
+		Span s = span();
+		if (s == null)
 		{
 			return null;
 		}
-		Map.Entry<LocalDate, HistoryLog.Baseline> from = HistoryLog.windowStart(spine, w.start, w.end);
-		Map.Entry<LocalDate, HistoryLog.Baseline> at = spine.floorEntry(w.end);
-		if (from == null || at == null || from.getKey().equals(at.getKey()))
+		Map<String, Long> out = new LinkedHashMap<>(HistoryLog.gained(s.opening.skills,
+			s.earliest.skills, closingSkills(s), s.opening.complete));
+		out.remove("overall");
+		return out;
+	}
+
+	/** The xp a period closes on: its last state, or the live sheet where it reaches today. */
+	private Map<String, Long> closingSkills(Span s)
+	{
+		Map<String, Long> close = new HashMap<>(s.closing.skills);
+		if (periodReachesToday())
 		{
-			return null;
+			for (Map.Entry<String, long[]> e : plugin.skillSheet().entrySet())
+			{
+				if (e.getValue() != null && e.getValue().length > 1 && e.getValue()[1] > 0)
+				{
+					close.merge(e.getKey(), e.getValue()[1], Math::max);
+				}
+			}
 		}
-		return new Map.Entry[]{from, at};
+		return close;
 	}
 
 	/** The period's loot as {drops, gp, left, leftGp}. */
@@ -13334,7 +13440,7 @@ class ChroniclePanel extends PluginPanel
 		if (rich[0] > 0)
 		{
 			rows += recordRow(book, "Richest day", gp(rich[0]) + " gp", rich[1],
-				fmt(rich[2]) + " drops" + (thenRich[0] > 0 ? " · was " + gp(thenRich[0]) + " · "
+				count(rich[2], "drop") + (thenRich[0] > 0 ? " · was " + gp(thenRich[0]) + " · "
 					+ dated(thenRich[1]) : ""));
 		}
 		if (busy[0] > 0)
@@ -14274,7 +14380,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (drops > 0)
 		{
-			right.append(right.length() > 0 ? " · " : "").append(fmt(drops)).append(" drops");
+			right.append(right.length() > 0 ? " · " : "").append(count(drops, "drop"));
 		}
 		return new String[]{"Session · " + hoursMinutes(safeLong(d.get("minutes"))),
 			right.toString(), feedLine(e)};
@@ -14355,7 +14461,7 @@ class ChroniclePanel extends PluginPanel
 				}
 				if (drops > 0)
 				{
-					line.append(" · ").append(fmt(drops)).append(" drops");
+					line.append(" · ").append(count(drops, "drop"));
 					if (dropsGp > 0)
 					{
 						line.append(" (").append(gp(dropsGp)).append(" gp)");
