@@ -18,6 +18,7 @@ import javax.swing.SwingUtilities;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -143,6 +144,74 @@ public class DayEntryTest
 		int at = said.indexOf(heading);
 		assertTrue(said.toString(), at >= 0);
 		assertEquals("1 sitting · 1h 0m", said.get(at + 1));
+	}
+
+	/** A sitting that says what it took, closing at {@code closed}. */
+	private static JsonObject sitting(java.time.LocalDateTime closed, long minutes, long xp,
+		long drops, long dropsGp, String skill)
+	{
+		JsonObject e = new JsonObject();
+		e.addProperty("ts", closed.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+		e.addProperty("type", "SESSION");
+		JsonObject d = new JsonObject();
+		d.addProperty("minutes", minutes);
+		d.addProperty("xp", xp);
+		d.addProperty("drops", drops);
+		d.addProperty("dropsGp", dropsGp);
+		JsonObject sk = new JsonObject();
+		sk.addProperty(skill, xp);
+		d.add("skills", sk);
+		e.add("data", d);
+		return e;
+	}
+
+	/**
+	 * TRAP: a sitting across midnight. Two and a half hours from half nine
+	 * closed at two past twelve: the next day's line counted its time and the
+	 * day before kept its xp, so neither line added up to the rows under it. A
+	 * sitting belongs to the day it began, its row, its time, its xp and its
+	 * drops together.
+	 */
+	@Test
+	public void aSittingAcrossMidnightBelongsToTheDayItBegan() throws Exception
+	{
+		LocalDate day = LocalDate.now().minusDays(3);
+		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
+		s.feed.add(sitting(day.plusDays(1).atTime(17, 0), 8, 2_540, 1, 4_000, "fletching"));
+		s.feed.add(sitting(day.plusDays(1).atTime(0, 2), 152, 354_610, 129, 554_521, "hunter"));
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(s));
+		PanelPreviewTest.regatherHistory(hold[0]);
+		final List<String> said = new ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = ChroniclePanel.class.getDeclaredMethod("buildJournal");
+				m.setAccessible(true);
+				collect((Component) m.invoke(hold[0]), said);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		String began = DateTimeFormatter.ofPattern("d MMM", Locale.UK).format(day).toUpperCase(Locale.ROOT);
+		String after = DateTimeFormatter.ofPattern("d MMM", Locale.UK).format(day.plusDays(1))
+			.toUpperCase(Locale.ROOT);
+		int b = said.indexOf(began);
+		int a = said.indexOf(after);
+		assertTrue(said.toString(), b >= 0 && a >= 0 && a < b);
+		String beganLine = String.join(" · ", said.subList(b + 1, said.size()));
+		assertTrue(said.toString(), beganLine.startsWith("1 sitting · 2h 32m · +354k xp, most in Hunter"
+			+ " · 129 drops · 554k gp"));
+		// the row itself under the day it began, not under the day it closed
+		assertTrue(said.toString(), said.subList(b, said.size()).contains("Session · 2h 32m"));
+		assertFalse(said.toString(), said.subList(a, b).contains("Session · 2h 32m"));
+		List<String> next = ChroniclePanel.wrapClauses(
+			"1 sitting · 8m · +2,540 xp, most in Fletching · 1 drop · 4,000 gp",
+			ChroniclePanel.boardRowRoom());
+		assertEquals(next, said.subList(a + 1, a + 1 + next.size()));
 	}
 
 	/**

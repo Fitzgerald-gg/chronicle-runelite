@@ -296,6 +296,122 @@ public class SearchDoorsTest
 		assertEquals("diaries", field("sheetPage"));
 	}
 
+	private static boolean said(Component c, String text)
+	{
+		List<Component> flat = new ArrayList<>();
+		flatten(c, flat);
+		for (Component k : flat)
+		{
+			if (k instanceof JLabel && text.equals(((JLabel) k).getText()))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** The rows' names under one group's heading, up to the next heading. */
+	private static List<String> group(Component board, String title)
+	{
+		List<Component> flat = new ArrayList<>();
+		flatten(board, flat);
+		List<String> out = new ArrayList<>();
+		boolean in = false;
+		for (Component k : flat)
+		{
+			if (k instanceof JLabel && ((JLabel) k).getText() != null
+				&& ((JLabel) k).getText().equals(((JLabel) k).getText().toUpperCase(java.util.Locale.ROOT))
+				&& ((JLabel) k).getText().length() > 3 && !(k.getParent() instanceof JPanel
+				&& ((JPanel) k.getParent()).getLayout() instanceof BorderLayout))
+			{
+				in = ((JLabel) k).getText().equals(title.toUpperCase(java.util.Locale.ROOT));
+				continue;
+			}
+			if (in && k instanceof JPanel && ((JPanel) k).getLayout() instanceof BorderLayout
+				&& left((JPanel) k) != null)
+			{
+				out.add(left((JPanel) k));
+			}
+		}
+		return out;
+	}
+
+	/** A skill answers to its own name, ahead of anything named after it. */
+	@Test
+	public void aSkillAnswersItsName() throws Exception
+	{
+		assertEquals("Hunter", left(firstDoor(search("hunter"))));
+		SwingUtilities.invokeAndWait((Runnable) field("searchFirst"));
+		assertEquals("Hunter", field("detailSkill"));
+	}
+
+	/**
+	 * The fight named exactly comes first, whatever the bigger ones named like
+	 * it paid: "kraken" drew Vampyre kraken and Armoured kraken, and never
+	 * Kraken, and Enter opened the vampyre.
+	 */
+	@Test
+	public void theFightNamedExactlyComesFirst() throws Exception
+	{
+		stub.sources.add(new LocalStore.SourceRow("Vampyre kraken", 0, 424, 19_800_000L, null, 0, 0));
+		stub.sources.add(new LocalStore.SourceRow("Kraken", 117, 117, 1_000_000L, null, 0, 0));
+		SwingUtilities.invokeAndWait(() -> panel = new ChroniclePanel(stub));
+		assertEquals("Kraken", left(firstDoor(search("kraken"))));
+	}
+
+	/** A boss the loot keeps under another name is still found by its own. */
+	@Test
+	public void aBossIsFoundByItsOwnName() throws Exception
+	{
+		List<String> fights = group(search("grotesque"), "Bosses and monsters");
+		assertTrue(fights.toString(), fights.contains("Grotesque Guardians"));
+	}
+
+	/**
+	 * The whole journal, not its newest five hundred lines: an account with an
+	 * imported past found its first pets drop out of search after a few weeks.
+	 */
+	@Test
+	public void theWholeJournalIsSearched() throws Exception
+	{
+		long now = System.currentTimeMillis();
+		for (int i = 0; i < 700; i++)
+		{
+			JsonObject e = new JsonObject();
+			e.addProperty("ts", now - i * 60_000L);
+			e.addProperty("type", "LEVEL");
+			JsonObject d = new JsonObject();
+			d.addProperty("skill", "Attack");
+			d.addProperty("level", 2);
+			e.add("data", d);
+			stub.feed.add(e);
+		}
+		JsonObject oldest = new JsonObject();
+		oldest.addProperty("ts", now - 800 * 60_000L);
+		oldest.addProperty("type", "PET");
+		JsonObject d = new JsonObject();
+		d.addProperty("petName", "Phoenix");
+		oldest.add("data", d);
+		stub.feed.add(oldest);
+		SwingUtilities.invokeAndWait(() -> panel = new ChroniclePanel(stub));
+		List<String> journal = group(search("phoenix"), "Journal");
+		assertTrue("the oldest line in the journal was out of reach: " + journal,
+			journal.stream().anyMatch(l -> l.contains("Phoenix")));
+	}
+
+	/** A group longer than its first rows says how many more it holds, and opens them. */
+	@Test
+	public void aLongGroupSaysHowManyMore() throws Exception
+	{
+		for (int i = 1; i <= 10; i++)
+		{
+			stub.lifetime.put("zzqStep" + i, (long) i);
+		}
+		SwingUtilities.invokeAndWait(() -> panel = new ChroniclePanel(stub));
+		JPanel board = search("zzq");
+		assertTrue("ten trackers and no way to the other six", said(board, "Show 6 more"));
+	}
+
 	private static void flatten(Component c, List<Component> out)
 	{
 		out.add(c);

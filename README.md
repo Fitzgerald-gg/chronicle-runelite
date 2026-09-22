@@ -66,7 +66,7 @@ Every counter the record keeps, filed by family. Combat is damage dealt and take
   <img src="docs/img/search.png" width="242" alt="Searching the record">
 </p>
 
-The box searches the record as you type: drops, collection log slots, journal lines, counters, kinds of item, and every combat achievement and diary entry, done or not. Enter opens the first row, and a search that finds nothing offers the nearest name it knows.
+The box searches the whole record as you type: skills and pages to go to, bosses and monsters, slayer tasks, items, the collection log, quests, every combat achievement and diary task, trackers and every journal line. The best match comes first and Enter opens it, and a search that finds nothing offers the nearest name it knows.
 
 ## Dependencies
 

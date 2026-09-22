@@ -64,6 +64,12 @@ public class SearchAchievementsTest
 					{
 						out.add(((JLabel) c).getText());
 					}
+					// what a row asks for and where is its hover: one line a row
+					if (c instanceof javax.swing.JComponent
+						&& ((javax.swing.JComponent) c).getToolTipText() != null)
+					{
+						out.add(((javax.swing.JComponent) c).getToolTipText());
+					}
 				}
 			}
 			catch (Exception e)

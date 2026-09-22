@@ -137,7 +137,7 @@ public class RecapTest
 		assertEquals(Arrays.asList(
 			"Drops | 8,732 · 214.0M gp",
 			"Left behind | 1,704 · 757k gp",
-			"Potions | 8,442 doses",
+			"Potions | 8,442 doses · 3.2M gp",
 			"Killed most | Abyssal demo… · 4,425",
 			"Log slot | 1 · Abyssal head",
 			"Pet | 1 · Abyssal orphan",

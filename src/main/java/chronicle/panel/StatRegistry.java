@@ -473,6 +473,24 @@ public final class StatRegistry
 	}
 
 	// the floor keys whose sum heads a section; empty when it has none
+	/**
+	 * The section of {@code family} that {@code key} heads as its floor, or null
+	 * when none of the family's fixed sections is headed by it. Meals eaten and
+	 * doses drunk are flat keys that head Food and Potions: counted from before
+	 * the per-item keys existed, they carry what no item row can.
+	 */
+	public static String headOf(String family, String key)
+	{
+		for (String sec : fixedSections(family))
+		{
+			if (!sec.isEmpty() && floorKeys(sec).contains(key))
+			{
+				return sec;
+			}
+		}
+		return null;
+	}
+
 	public static List<String> floorKeys(String subgroup)
 	{
 		for (SkillSpec s : SKILLS)

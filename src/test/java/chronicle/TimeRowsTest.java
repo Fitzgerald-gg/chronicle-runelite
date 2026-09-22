@@ -49,15 +49,43 @@ public class TimeRowsTest
 
 
 	/**
-	 * And on the whole record it says the hours and no rate: the minutes began
-	 * the day the tracker did, and the kills beside them are a career's.
+	 * And on the whole record it says no time at all: the minutes began the day
+	 * the tracker did, and beside a career's kills they read as the career's
+	 * time. A lifetime of "19m" on a level 93 skill looked broken, because as a
+	 * lifetime's time it is.
 	 */
 	@Test
-	public void aLifetimeHasNoRateToDivide() throws Exception
+	public void aLifetimeSaysNoTime() throws Exception
 	{
 		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
 		stub.lifetime.put("timeAbyssalDemons", 860L);
-		assertEquals("14h 20m", beside(page(stub, "Lifetime"), "Time here"));
+		assertNull(beside(page(stub, "Lifetime"), "Time here"));
+	}
+
+	/** The skill page the same: no lifetime "Time 19m" beside a level 93. */
+	@Test
+	public void aLifetimeSkillPageSaysNoTime() throws Exception
+	{
+		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
+		stub.lifetime.put("timeHunter", 19L);
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
+		PanelPreviewTest.regatherHistory(hold[0]);
+		final JPanel[] out = new JPanel[1];
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = ChroniclePanel.class.getDeclaredMethod("buildSkillDetail", String.class);
+				m.setAccessible(true);
+				out[0] = (JPanel) m.invoke(hold[0], "Hunter");
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		assertNull(beside(out[0], "Time"));
 	}
 
 	/** A window whose opening line already carried the minutes can divide. */

@@ -41,7 +41,11 @@ public class BossHoverPeriodTest
 	/** The card, and the window's own label after it. */
 	private static String[] tip(String granularity) throws Exception
 	{
-		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
+		return tip(granularity, PanelPreviewTest.fixtureStub());
+	}
+
+	private static String[] tip(String granularity, PanelPreviewTest.StubPlugin stub) throws Exception
+	{
 		final String[] out = new String[2];
 		SwingUtilities.invokeAndWait(() ->
 		{
@@ -81,6 +85,20 @@ public class BossHoverPeriodTest
 		int lifetime = tip.indexOf("Kills tracked:");
 		assertTrue("the period is not on the card: " + tip, period >= 0);
 		assertTrue("the lifetime comes before the period: " + tip, period < lifetime);
+	}
+
+	/**
+	 * No time on the whole record's card, as on the page it opens: the
+	 * minutes began the day the tracker did, and beside a career's kills they
+	 * read as a career's time.
+	 */
+	@Test
+	public void theWholeRecordsCardSaysNoTime() throws Exception
+	{
+		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
+		stub.lifetime.put("timeCommanderZilyana", 95L);
+		String tip = tip("Lifetime", stub)[0];
+		assertFalse(tip, tip.contains("Time here"));
 	}
 
 	@Test

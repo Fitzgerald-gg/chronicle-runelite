@@ -1945,8 +1945,9 @@ class ChroniclePanel extends PluginPanel
 			labels.add("Average kill");
 			figures.add(pb(timed[1] / timed[0]) + " · " + fmt((long) timed[0]) + " timed");
 		}
+		// Only where the minutes cover the whole period, as on the page it opens.
 		long here = minutesAt(b.name, wholeRecord() ? counters() : periodCounters());
-		if (here > 0)
+		if (here > 0 && minutesCoverPeriod())
 		{
 			labels.add("Time here");
 			figures.add(hoursMinutes(here));
@@ -2555,6 +2556,8 @@ class ChroniclePanel extends PluginPanel
 
 	private void onSearchChanged()
 	{
+		// a group opened for one query is closed for the next
+		drillShown.keySet().removeIf(k -> k.startsWith("search:"));
 		rebuild();
 	}
 
@@ -6269,12 +6272,14 @@ class ChroniclePanel extends PluginPanel
 			}
 			// How long was spent here, off the minutes the trackers file under
 			// the fight; the period's, like every figure above it, and the
-			// kills an hour once there is half an hour to divide and both
-			// figures cover the same span.
+			// kills an hour once there is half an hour to divide. Only where
+			// the minutes cover the whole period: they began the day the
+			// tracker did, so a lifetime read "19m" beside two thousand kills,
+			// which looks broken because as a lifetime's time it is.
 			long here = minutesAt(sr.name, inWindow == null ? counters() : periodCounters());
-			if (here > 0)
+			if (here > 0 && minutesCoverPeriod())
 			{
-				boolean rate = killed && shown > 0 && here >= 30 && minutesCoverPeriod();
+				boolean rate = killed && shown > 0 && here >= 30;
 				head.add(row("Time here", hoursMinutes(here)
 					+ (rate ? " · " + rateText(shown * 60.0 / here) + " kills/h" : ""), null));
 			}
@@ -7605,6 +7610,51 @@ class ChroniclePanel extends PluginPanel
 	// margin. Subtract one from the other and a miner's career reads as zero.
 	private long resourcesDropped;
 
+	/**
+	 * The whole record's spend on food and potions, off the ledger that prices
+	 * every meal and dose the record holds. The trackers' own spend began when
+	 * the plugin started writing it, and the ledger also carries everything
+	 * eaten and drunk before that: the Living board said "Consumed value 632k"
+	 * over Food and Potions heads adding to 2.16M. Whole record only. A window
+	 * is the spine's own difference, and closingNow folds counters() into
+	 * every window reaching today, so this never goes into counters() itself.
+	 */
+	private Map<String, Long> withLedgerSpend(Map<String, Long> base)
+	{
+		Map<String, Long> out = new LinkedHashMap<>(base);
+		long food = 0;
+		long potions = 0;
+		for (Map.Entry<String, Long> e : plugin.consumableValues().entrySet())
+		{
+			long v = e.getValue() == null ? 0 : e.getValue();
+			if (v <= 0)
+			{
+				continue;
+			}
+			if (e.getKey().endsWith("Eaten"))
+			{
+				food += v;
+			}
+			else if (e.getKey().endsWith("Doses"))
+			{
+				potions += v;
+			}
+		}
+		if (food > 0)
+		{
+			out.merge("foodConsumedValue", food, Math::max);
+		}
+		if (potions > 0)
+		{
+			out.merge("potionsConsumedValue", potions, Math::max);
+		}
+		if (food + potions > 0)
+		{
+			out.merge("consumedValue", food + potions, Math::max);
+		}
+		return out;
+	}
+
 	private String rowValue(Map.Entry<String, Long> e)
 	{
 		String base = value(e);
@@ -7815,9 +7865,14 @@ class ChroniclePanel extends PluginPanel
 				continue;
 			}
 			String sec = StatRegistry.subgroup(e.getKey());
-			if (StatRegistry.isFloor(e.getKey()))
+			// Meals eaten and doses drunk head Food and Potions rather than
+			// standing beside them: they were counted before the per-item keys
+			// were, so the heads read 2,410 and 741 under rows of 2,420 and 1,479,
+			// and what no item can claim is the heads' "Other".
+			String heads = sec.isEmpty() ? StatRegistry.headOf(statsFamily, e.getKey()) : null;
+			if (StatRegistry.isFloor(e.getKey()) || heads != null)
 			{
-				floorTotals.merge(sec, e.getValue(), Long::sum);
+				floorTotals.merge(heads != null ? heads : sec, e.getValue(), Long::sum);
 				continue;
 			}
 			rowsBySection.computeIfAbsent(sec, k -> new ArrayList<>()).add(e);
@@ -8673,6 +8728,40 @@ class ChroniclePanel extends PluginPanel
 		return Math.max(0, safeLong(d.get("minutes")));
 	}
 
+	/**
+	 * When a sitting began: the line's own start where it carries one, else
+	 * the moment it closed less its minutes. The minutes are whole, so a start
+	 * worked out this way is up to a minute late and never early.
+	 */
+	static long sittingStart(JsonObject e)
+	{
+		JsonObject d = e.has("data") && e.get("data").isJsonObject()
+			? e.getAsJsonObject("data") : new JsonObject();
+		long start = safeLong(d.get("start"));
+		if (start > 0)
+		{
+			return start;
+		}
+		long ts = safeLong(e.get("ts"));
+		return ts > 0 ? ts - sessionMinutes(e) * 60_000L : ts;
+	}
+
+	/**
+	 * The moment a line is filed under. A sitting belongs to the day it began,
+	 * everywhere: two and a half hours played from half nine closed at two
+	 * minutes past midnight, and the next day's line counted its time while
+	 * the day before kept its xp. Everything else is filed when it happened.
+	 */
+	static long filedAt(JsonObject e)
+	{
+		return "SESSION".equals(typeOf(e)) ? sittingStart(e) : safeLong(e.get("ts"));
+	}
+
+	private static LocalDate dayOf(long ms)
+	{
+		return Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).toLocalDate();
+	}
+
 	// The feed's dated entry types the progress card counts, each under the
 	// summary key its line reads. Where the spine carries the key too (deaths,
 	// collection log slots) the feed's count lays over its delta; the rest
@@ -8750,7 +8839,16 @@ class ChroniclePanel extends PluginPanel
 	// a take, so this is the day from which any loot figure can be drawn at all.
 	private static long oldestSessionTs(List<JsonObject> feed)
 	{
-		return oldestTs(feed, "SESSION");
+		long oldest = 0;
+		for (JsonObject e : feed)
+		{
+			long began = "SESSION".equals(typeOf(e)) ? sittingStart(e) : 0;
+			if (began > 0 && (oldest == 0 || began < oldest))
+			{
+				oldest = began;
+			}
+		}
+		return oldest;
 	}
 
 	/** The oldest entry of one type, or of any type when null; 0 for none. */
@@ -11421,7 +11519,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		if (wholeRecord())
 		{
-			return counters();
+			return withLedgerSpend(counters());
 		}
 		// The sitting is counted, not measured. Every other period is the distance
 		// between two of the spine's closed baselines; this one has no closing
@@ -11640,14 +11738,14 @@ class ChroniclePanel extends PluginPanel
 		{
 			head.add(row("Level", "-", null));
 		}
-		// the minutes the trackers filed under this craft, and the xp per hour
-		// they come to where the period's gain is known and the minutes cover it
+		// the minutes the trackers filed under this craft, where they cover the
+		// whole period, and the xp per hour they come to where the gain is known
 		long minutes = (wholeRecord() ? counters() : periodCounters())
 			.getOrDefault(chronicle.counters.StatKeys.timeKey(craft), 0L);
-		if (minutes > 0)
+		if (minutes > 0 && minutesCoverPeriod())
 		{
 			long gained = !wholeRecord() && was != null && now != null && now > was ? now - was : 0;
-			boolean rate = gained > 0 && minutes >= 30 && minutesCoverPeriod();
+			boolean rate = gained > 0 && minutes >= 30;
 			head.add(row("Time", hoursMinutes(minutes)
 				+ (rate ? " · " + gp(Math.round(gained * 60.0 / minutes)) + " xp/h" : ""), null));
 		}
@@ -12027,7 +12125,8 @@ class ChroniclePanel extends PluginPanel
 			for (JsonObject e : historyFeed)
 			{
 				long ts = safeLong(e.get("ts"));
-				if (ts >= fromMs && ts < toMs)
+				long filed = filedAt(e);
+				if (filed >= fromMs && filed < toMs)
 				{
 					String type = e.has("type") ? e.get("type").getAsString() : "";
 					String key = FEED_SUMMARY_KEYS.get(type);
@@ -12182,7 +12281,8 @@ class ChroniclePanel extends PluginPanel
 			// Counted only where the period reaches today, and zero once logged
 			// out, which is exactly when the closing line exists to be counted
 			// instead - so the two can never both be in the sum.
-			if (live)
+			long began = plugin.sessionStart();
+			if (live && (sessionPeriod() || (began > 0 && began >= fromMs && began < toMs)))
 			{
 				long running = plugin.sessionElapsedMinutes();
 				if (running > 0)
@@ -12230,7 +12330,7 @@ class ChroniclePanel extends PluginPanel
 			// So a lifetime is the totals themselves.
 			boolean whole = wholeRecord();
 			HistoryProgress progress = HistoryProgress.of(
-				whole ? closing.counters
+				whole ? withLedgerSpend(closing.counters)
 					: HistoryLog.gained(opening.counters, earliest.counters,
 						closing.counters),
 				null, whole ? new HashMap<>() : retro, leftDated || whole);
@@ -12747,6 +12847,7 @@ class ChroniclePanel extends PluginPanel
 		if (daysPlayed == null)
 		{
 			daysPlayed = new LinkedHashMap<>();
+			daySkills = new LinkedHashMap<>();
 			for (JsonObject e : plugin.feedWithSitting(FEED_SCAN_DEEP))
 			{
 				if (!"SESSION".equals(typeOf(e)))
@@ -12755,18 +12856,41 @@ class ChroniclePanel extends PluginPanel
 				}
 				JsonObject d = e.has("data") && e.get("data").isJsonObject()
 					? e.getAsJsonObject("data") : new JsonObject();
-				// the day it BEGAN, where the line says; older lines carry only
-				// the moment they closed
-				long began = safeLong(d.get("start"));
-				LocalDate day = Instant.ofEpochMilli(began > 0 ? began : safeLong(e.get("ts")))
+				// the day it BEGAN (sittingStart)
+				LocalDate day = Instant.ofEpochMilli(sittingStart(e))
 					.atZone(ZoneId.systemDefault()).toLocalDate();
-				long[] t = daysPlayed.computeIfAbsent(day, k -> new long[2]);
+				// {minutes, sittings, xp, sittings saying their xp, drops, their
+				// gp, sittings saying their drops, sittings saying their skills}
+				long[] t = daysPlayed.computeIfAbsent(day, k -> new long[8]);
 				t[0] += sessionMinutes(e);
 				t[1]++;
+				if (d.has("xp"))
+				{
+					t[2] += safeLong(d.get("xp"));
+					t[3]++;
+				}
+				if (d.has("drops"))
+				{
+					t[4] += safeLong(d.get("drops"));
+					t[5] += safeLong(d.get("dropsGp"));
+					t[6]++;
+				}
+				if (d.has("skills") && d.get("skills").isJsonObject())
+				{
+					t[7]++;
+					Map<String, Long> by = daySkills.computeIfAbsent(day, k -> new LinkedHashMap<>());
+					for (Map.Entry<String, JsonElement> sk : d.getAsJsonObject("skills").entrySet())
+					{
+						by.merge(sk.getKey(), safeLong(sk.getValue()), Long::sum);
+					}
+				}
 			}
 		}
 		return daysPlayed;
 	}
+
+	// each day's xp by skill, off the sittings that began on it; filled with daysPlayed
+	private Map<LocalDate, Map<String, Long>> daySkills;
 
 	private Map<String, long[]> dayTotals()
 	{
@@ -12873,12 +12997,40 @@ class ChroniclePanel extends PluginPanel
 			clauses.add(sat[1] + (sat[1] == 1 ? " sitting" : " sittings")
 				+ (sat[0] > 0 ? " · " + hoursMinutes(sat[0]) : ""));
 		}
-		Object[] xp = dayXp(day);
-		if (xp != null)
+		// The xp and the drops of the sittings filed under the day, where every
+		// one of them says its own, so the line adds up to the rows beneath it.
+		// The spine's day and the loot record's day are midnight to midnight
+		// and part a sitting that crosses one; they stand in only where the
+		// sittings do not say.
+		boolean saysXp = sat != null && sat[1] > 0 && sat[3] == sat[1];
+		Object[] xp = saysXp ? null : dayXp(day);
+		if (saysXp && sat[2] > 0)
+		{
+			String most = null;
+			long top = 0;
+			Map<String, Long> by = sat[7] == sat[1] && daySkills != null ? daySkills.get(day) : null;
+			for (Map.Entry<String, Long> e : by == null ? new LinkedHashMap<String, Long>().entrySet()
+				: by.entrySet())
+			{
+				if (e.getValue() > top)
+				{
+					top = e.getValue();
+					most = StatRegistry.prettify(e.getKey());
+				}
+			}
+			if (most == null)
+			{
+				Object[] spine = dayXp(day);
+				most = spine != null ? (String) spine[1] : null;
+			}
+			clauses.add("+" + gp(sat[2]) + " xp" + (most != null ? ", most in " + most : ""));
+		}
+		else if (xp != null)
 		{
 			clauses.add("+" + gp((Long) xp[0]) + " xp, most in " + xp[1]);
 		}
-		long[] loot = dayTotals().get(ROLL_DAY.format(day));
+		long[] loot = sat != null && sat[1] > 0 && sat[6] == sat[1]
+			? new long[]{sat[4], sat[5]} : dayTotals().get(ROLL_DAY.format(day));
 		if (loot != null && loot[0] > 0)
 		{
 			clauses.add(fmt(loot[0]) + (loot[0] == 1 ? " drop" : " drops")
@@ -13842,7 +13994,7 @@ class ChroniclePanel extends PluginPanel
 
 		// What it cost to stay alive, in the Ledger's own two sections and its
 		// own words, since that is the board these open onto.
-		Map<String, Long> counters = wholeRecord() ? counters() : periodCounters();
+		Map<String, Long> counters = wholeRecord() ? withLedgerSpend(counters()) : periodCounters();
 		Runnable toLiving = () ->
 		{
 			statsFamily = "Living";
@@ -13929,8 +14081,9 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private String splitSpend(String key, Map<String, Long> counters)
 	{
+		// the whole record's is the ledger's, which prices every meal it holds
 		Span s = span();
-		if (!sessionPeriod() && (s == null || !s.opening.counters.containsKey(key)))
+		if (!wholeRecord() && !sessionPeriod() && (s == null || !s.opening.counters.containsKey(key)))
 		{
 			return "";
 		}
@@ -14267,7 +14420,7 @@ class ChroniclePanel extends PluginPanel
 				continue;
 			}
 			long mins = sessionMinutes(e);
-			long ts = safeLong(e.get("ts"));
+			long ts = sittingStart(e);
 			if (mins > best[0])
 			{
 				then = best;
@@ -14641,11 +14794,15 @@ class ChroniclePanel extends PluginPanel
 				&& wanted.contains(e.get("type").getAsString()));
 			// The period governs this board too: a dated feed read under a
 			// month's heading must list that month and not everything.
-			if (kind && insideWindow(safeLong(e.get("ts"))))
+			if (kind && insideWindow(filedAt(e)))
 			{
 				feed.add(e);
 			}
 		}
+		// A sitting that crossed midnight sits under the day it began, at the top
+		// of it: it is the last thing to have closed on that day. Stable, so a
+		// day keeps its own newest-first order.
+		feed.sort((a, b) -> dayOf(filedAt(b)).compareTo(dayOf(filedAt(a))));
 		if (feed.isEmpty() && !wholeRecord())
 		{
 			p.add(nothingInWindow("All".equals(journalLens)
@@ -14669,7 +14826,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				break;
 			}
-			long ts = e.has("ts") ? e.get("ts").getAsLong() : 0;
+			long ts = filedAt(e);
 			String day = ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "";
 			if (!day.equals(lastDay))
 			{
@@ -14925,112 +15082,164 @@ class ChroniclePanel extends PluginPanel
 			|| (q.endsWith("s") && name.equalsIgnoreCase(q.substring(0, q.length() - 1)));
 	}
 
-	private void addSourceHits(JPanel p, List<LocalStore.SourceRow> srcHits)
+	/** One thing a search found: its row, where it goes, and how well it answered. */
+	private static final class Hit
 	{
-		for (int i = 0; i < Math.min(2, srcHits.size()); i++)
+		final String name;
+		final String figure;
+		final Color color;
+		final String tip;
+		final Runnable go;
+		final int score;
+		final long weight;
+
+		Hit(String name, String figure, Color color, String tip, Runnable go, int score, long weight)
 		{
-			LocalStore.SourceRow r = srcHits.get(i);
-			JPanel rr = row(r.name, (r.kc > 0 ? fmt(r.kc) + " kc · " : "") + gp(r.value) + " gp", null);
-			final String src = r.name;
-			door(rr, () -> openSource(src));
-			p.add(rr);
+			this.name = name;
+			this.figure = figure == null ? "" : figure;
+			this.color = color;
+			this.tip = tip;
+			this.go = go;
+			this.score = score;
+			this.weight = weight;
 		}
 	}
 
-	/**
-	 * Combat achievements and diary entries, from the bundled tables rather than
-	 * from the record: these are the two things the reader can ask about before
-	 * having done them. Short queries are left out by the caller: both halves stop
-	 * at two hits, so a two letter prefix cannot flood the panel, but it can put
-	 * four arbitrary achievements above the drops and journal lines the reader was
-	 * actually typing towards.
-	 */
-	private int searchAchievements(JPanel p, String ql)
+	// Rows a group shows before its "Show N more".
+	private static final int SEARCH_CAP = 4;
+
+	// Other names the reader types for a skill.
+	private static final Map<String, String[]> SKILL_ALIASES = new LinkedHashMap<>();
+
+	static
 	{
-		Set<Integer> done = caDone();
-		bundledCombat = bundle(plugin.gson(), "osrs_combat_achievements.json", bundledCombat);
-		JsonObject tasks = bundledCombat.has("tasks")
-			? bundledCombat.getAsJsonObject("tasks") : new JsonObject();
-		List<JsonObject> caHits = new ArrayList<>();
-		for (String id : tasks.keySet())
-		{
-			JsonObject t = tasks.getAsJsonObject(id);
-			if (t.get("name").getAsString().toLowerCase(Locale.ROOT).contains(ql)
-				|| t.get("task").getAsString().toLowerCase(Locale.ROOT).contains(ql))
-			{
-				JsonObject hit = t.deepCopy();
-				hit.addProperty("id", Integer.parseInt(id));
-				caHits.add(hit);
-				if (caHits.size() >= 2)
-				{
-					break;
-				}
-			}
-		}
+		SKILL_ALIASES.put("runecraft", new String[]{"runecrafting", "rc"});
+		SKILL_ALIASES.put("hitpoints", new String[]{"hp"});
+		SKILL_ALIASES.put("woodcutting", new String[]{"wc"});
+		SKILL_ALIASES.put("firemaking", new String[]{"fm"});
+		SKILL_ALIASES.put("construction", new String[]{"con"});
+	}
 
-		bundledDiaries = bundle(plugin.gson(), "osrs_achievement_diaries.json", bundledDiaries);
-		JsonObject diaries = bundledDiaries.has("diaries")
-			? bundledDiaries.getAsJsonObject("diaries") : new JsonObject();
-		List<String[]> diaryHits = new ArrayList<>();   // {task, region, tier, requirements}
-		diarySearch:
-		for (String region : diaries.keySet())
+	/**
+	 * How well a name answers a query: 0 the name itself (or its singular), 1
+	 * the name begins with it, 2 every word of the query begins a word of the
+	 * name, in any order ("hard clue" finds Clue Scroll (Hard)), 3 anywhere
+	 * inside it, -1 not at all. Apostrophes are nobody's to type.
+	 */
+	static int matchScore(String ql, String name)
+	{
+		if (name == null || ql.isEmpty())
 		{
-			JsonObject tiers = diaries.getAsJsonObject(region);
-			for (String tier : tiers.keySet())
-			{
-				for (JsonElement e : tiers.getAsJsonArray(tier))
-				{
-					JsonObject t = e.getAsJsonObject();
-					String task = t.get("task").getAsString();
-					if (!task.toLowerCase(Locale.ROOT).contains(ql))
-					{
-						continue;
-					}
-					diaryHits.add(new String[]{task, region, tier,
-						t.has("requirements") ? t.get("requirements").getAsString() : ""});
-					if (diaryHits.size() >= 2)
-					{
-						break diarySearch;
-					}
-				}
-			}
+			return -1;
 		}
-
-		if (caHits.isEmpty() && diaryHits.isEmpty())
+		// Exact on the letters typed, apostrophe and all: "zulrah's" names the
+		// scales, and read without it, it named Zulrah in the plural.
+		String raw = name.toLowerCase(Locale.ROOT);
+		if (raw.equals(ql) || (ql.endsWith("s") && raw.equals(ql.substring(0, ql.length() - 1)))
+			|| (raw.endsWith("s") && raw.substring(0, raw.length() - 1).equals(ql)))
 		{
 			return 0;
 		}
-		p.add(group("Achievements"));
-		for (JsonObject t : caHits)
+		String n = raw.replace("'", "");
+		String q = ql.replace("'", "");
+		if (n.equals(q))
 		{
-			boolean has = !done.isEmpty() && done.contains(t.get("id").getAsInt());
-			JPanel r = row(t.get("name").getAsString(), t.get("monster").getAsString(),
-				!done.isEmpty() && !has ? ColorScheme.LIGHT_GRAY_COLOR.darker() : null,
-				!done.isEmpty() && !has);
-			r.setToolTipText(tip(t.get("name").getAsString(),
-				new String[]{"Tier", "Where", "Task"},
-				new String[]{t.get("tier").getAsString(),
-					t.get("monster").getAsString(), t.get("task").getAsString()}));
-			// a door like every other search row, or Enter skips it
-			door(r, () -> openSheetPage("combat"));
-			p.add(r);
-			p.add(ghostRow(t.get("task").getAsString(), ""));
+			return 0;
 		}
-		for (String[] d : diaryHits)
+		if (n.startsWith(q))
 		{
-			// The tier alone on the right, and the region down on the ghost line
-			// with the requirement: a diary entry has no name, so the task text IS
-			// the hit, and a region taking a third of the row cut it to "Purchase
-			// ..." which answers nothing.
-			JPanel r = row(d[0], d[2], null);
-			r.setToolTipText(tip(d[1] + " " + d[2],
-				new String[]{"Task", "Needs"},
-				new String[]{d[0], d[3].isEmpty() ? "nothing" : d[3]}));
-			door(r, () -> openSheetPage("diaries"));
-			p.add(r);
-			p.add(ghostRow(d[3].isEmpty() ? d[1] : d[1] + " \u00b7 " + d[3], ""));
+			return 1;
 		}
-		return caHits.size() + diaryHits.size();
+		String[] words = n.split("[^a-z0-9]+");
+		boolean every = true;
+		for (String w : q.split("\\s+"))
+		{
+			if (w.isEmpty())
+			{
+				continue;
+			}
+			boolean begins = false;
+			for (String x : words)
+			{
+				begins |= x.startsWith(w);
+			}
+			every &= begins;
+		}
+		if (every)
+		{
+			return 2;
+		}
+		return n.contains(q) ? 3 : -1;
+	}
+
+	/** The best of several names' answers; -1 when none answers. */
+	private static int bestScore(String ql, String... names)
+	{
+		int best = -1;
+		for (String n : names)
+		{
+			int s = matchScore(ql, n);
+			if (s >= 0 && (best < 0 || s < best))
+			{
+				best = s;
+			}
+		}
+		return best;
+	}
+
+	/**
+	 * One group: its heading, its best answers first, and a "Show N more" for
+	 * the rest. Every row is one line in one shape, the name on the left and
+	 * one short figure on the right; anything more is the hover. Returns how
+	 * many it found.
+	 */
+	private int searchGroup(JPanel p, String title, List<Hit> hits)
+	{
+		if (hits.isEmpty())
+		{
+			return 0;
+		}
+		hits.sort((a, b) -> a.score != b.score ? Integer.compare(a.score, b.score)
+			: Long.compare(b.weight, a.weight));
+		p.add(group(title));
+		String key = "search:" + title;
+		int cap = drillShown.getOrDefault(key, SEARCH_CAP);
+		FontMetrics fm = rowMetrics();
+		for (int i = 0; i < hits.size(); i++)
+		{
+			if (i >= cap)
+			{
+				p.add(expander(key, cap, hits.size()));
+				break;
+			}
+			Hit h = hits.get(i);
+			// the name gives way to the figure, in the font's own ellipsis, and
+			// the hover keeps it whole
+			int room = boardRowRoom() - ROW_GAP - (h.figure.isEmpty() ? 0 : fm.stringWidth(h.figure));
+			String shown = h.name;
+			for (int keep = shown.length() - 1; fm.stringWidth(shown) > room && keep >= NAME_FLOOR; keep--)
+			{
+				shown = stub(h.name, keep);
+			}
+			JPanel r = row(shown, h.figure, null, false);
+			if (h.color != null)
+			{
+				((JLabel) ((BorderLayout) r.getLayout()).getLayoutComponent(BorderLayout.CENTER))
+					.setForeground(h.color);
+			}
+			String tip = h.tip;
+			if (!shown.equals(h.name))
+			{
+				tip = tip == null ? h.name : h.name + ": " + tip;
+			}
+			if (tip != null)
+			{
+				r.setToolTipText(tip);
+			}
+			door(r, h.go);
+			p.add(r);
+		}
+		return hits.size();
 	}
 
 	/** The sheet, opened straight onto one of its pages. */
@@ -15041,6 +15250,41 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
+	// The journal as search reads it, lowered once: {lowered, line, filed ms}.
+	// Rebuilt when the feed's newest line moves, not per keystroke.
+	private List<Object[]> searchFeed;
+	private long searchFeedTs = -1;
+
+	private List<Object[]> searchFeed()
+	{
+		long newest = newestTs(plugin.feedNewest(1));
+		if (searchFeed == null || newest != searchFeedTs)
+		{
+			List<Object[]> out = new ArrayList<>();
+			List<JsonObject> all = new ArrayList<>(plugin.feedNewest(20_000));
+			all.addAll(milestones());
+			for (JsonObject e : all)
+			{
+				String line = feedLine(e);
+				if (line != null && !line.isEmpty())
+				{
+					out.add(new Object[]{line.toLowerCase(Locale.ROOT), line, filedAt(e)});
+				}
+			}
+			searchFeed = out;
+			searchFeedTs = newest;
+		}
+		return searchFeed;
+	}
+
+	/**
+	 * Search, over the whole record and the bundled tables, one group of
+	 * answers under the next: where to go, the fights, the slayer tasks, the
+	 * items, the collection log, the quests, the combat achievements, the diary
+	 * tasks, the trackers and the journal. Named things come before what is
+	 * inside them, so "hunter" opens the skill and "kraken" opens Kraken, and
+	 * Enter opens the first row drawn.
+	 */
 	private JPanel buildSearch(String q)
 	{
 		JPanel p = column();
@@ -15048,245 +15292,376 @@ class ChroniclePanel extends PluginPanel
 		int total = 0;
 		searchFirst = null;
 
-		// The queries that name a VIEW rather than a thing in the record.
-		// Offered while they are being typed, so they are found rather than known.
-		String kind = ItemKinds.named(q);
-		if (!ql.isEmpty() && ("trackers".startsWith(ql) || "info".startsWith(ql)
-			|| kind != null))
+		// Where to go: the skills, the pages, the kinds of item.
+		List<Hit> go = new ArrayList<>();
+		Map<String, long[]> sheet = plugin.skillSheet();
+		for (net.runelite.api.Skill sk : skillOrder())
 		{
-			p.add(group("Views"));
-			if ("info".startsWith(ql))
+			String key = sk.name().toLowerCase(Locale.ROOT);
+			String name = StatRegistry.prettify(key);
+			String[] also = SKILL_ALIASES.getOrDefault(key, new String[0]);
+			int sc = bestScore(ql, name);
+			for (String a : also)
 			{
-				JPanel open = row("Info", "what the journal holds", null);
-				door(open, this::openInfo);
-				p.add(open);
-			}
-			if ("trackers".startsWith(ql))
-			{
-				JPanel open = row("All trackers", "every counter in one place", null);
-				door(open, this::openAllTrackers);
-				p.add(open);
-			}
-			// A kind is a question about the LOOT, so it opens the board that
-			// holds the loot, already narrowed. Typing "run" is enough.
-			if (kind != null)
-			{
-				final String pick = kind;
-				JPanel open = row(kind, "every one you have had", null);
-				door(open, () -> openLootKind(pick, false));
-				p.add(open);
-				// The slayer half as its own row rather than as a setting the
-				// reader has to find, and only where the tasks actually paid
-				// some of this kind.
-				if (everOnTask() && hasKindOnTask(pick))
+				if (a.equals(ql))
 				{
-					JPanel tasks = row(kind, "from slayer tasks", null);
-					door(tasks, () -> openLootKind(pick, true));
-					p.add(tasks);
+					sc = 0;
 				}
 			}
-			p.add(vgap(6));
-		}
-
-		// Trackers, via the registry: every counter is findable by label or key.
-		List<Map.Entry<String, Long>> statHits = new ArrayList<>();
-		for (Map.Entry<String, Long> e : counters().entrySet())
-		{
-			if (e.getValue() != 0 && !StatRegistry.hidden(e.getKey())
-				&& (e.getKey().toLowerCase(Locale.ROOT).contains(ql)
-				|| StatRegistry.label(e.getKey()).toLowerCase(Locale.ROOT).contains(ql)))
+			if (sc < 0)
 			{
-				statHits.add(e);
+				continue;
+			}
+			long[] cur = sheet.get(key);
+			Runnable to = sk == net.runelite.api.Skill.SLAYER ? () ->
+			{
+				slayerLens = "Tasks";
+				applyTab(View.SLAYER);
+			} : () -> openSkill(name);
+			go.add(new Hit(name, cur != null && cur[0] > 0 ? "level " + cur[0] : "", null, null, to, sc, 2));
+		}
+		JsonObject quests = achievements().has("quests") && achievements().get("quests").isJsonObject()
+			? achievements().getAsJsonObject("quests") : new JsonObject();
+		long questsDone = 0;
+		for (String name : quests.keySet())
+		{
+			questsDone += "FINISHED".equals(quests.get(name).getAsString()) ? 1 : 0;
+		}
+		Object[][] pages = {
+			{"Quests", quests.size() > 0 ? fmt(questsDone) + " / " + fmt(quests.size()) : "",
+				(Runnable) () -> openSheetPage("quests"), new String[]{"quest"}},
+			{"Collection log", plugin.clogAvailable() > 0
+				? fmt(plugin.clogFinished()) + " / " + fmt(plugin.clogAvailable()) : "",
+				(Runnable) () -> openSheetPage("log"), new String[]{"clog", "log"}},
+			{"Achievement diaries", "", (Runnable) () -> openSheetPage("diaries"),
+				new String[]{"diary", "diaries"}},
+			{"Combat achievements", "", (Runnable) () -> openSheetPage("combat"),
+				new String[]{"ca", "cas", "combat tasks"}},
+			{"Clues", "", (Runnable) () -> openSheetPage("clues"),
+				new String[]{"clue", "clue scrolls", "caskets", "treasure trails"}},
+			{"Records", "", (Runnable) this::openRecords,
+				new String[]{"record", "best", "bests", "pb", "personal best"}},
+			{"Calendar", "", (Runnable) this::openCalendar, new String[]{"days", "days written"}},
+			{"Recap", "", (Runnable) () ->
+			{
+				subByTab.put(Tab.RECORD, "Recap");
+				applyTab(Tab.RECORD);
+				rebuild();
+			}, new String[]{"summary"}},
+			{"All trackers", "", (Runnable) this::openAllTrackers, new String[]{"trackers", "counters"}},
+			{"Kill log", "", (Runnable) () ->
+			{
+				slayerLens = "Monsters";
+				applyTab(View.SLAYER);
+			}, new String[]{"killlog", "kill count", "kc"}},
+			{"Left behind", "", (Runnable) () ->
+			{
+				applyTab(View.DROPS);
+				dropsLeftBehind = true;
+				rebuild();
+			}, new String[]{"untaken", "left on the floor"}},
+			{"Info", "what the journal holds", (Runnable) this::openInfo, new String[]{"journal holds"}},
+		};
+		for (Object[] pg : pages)
+		{
+			String[] also = (String[]) pg[3];
+			String[] names = new String[also.length + 1];
+			names[0] = (String) pg[0];
+			System.arraycopy(also, 0, names, 1, also.length);
+			int sc = bestScore(ql, names);
+			if (sc >= 0)
+			{
+				go.add(new Hit((String) pg[0], (String) pg[1], null, null, (Runnable) pg[2], sc, 1));
 			}
 		}
-		statHits.sort(Map.Entry.<String, Long>comparingByValue().reversed());
-		if (!statHits.isEmpty())
+		String kind = ItemKinds.named(q);
+		if (kind != null && !ql.isEmpty())
 		{
-			p.add(group("Trackers"));
-			for (int i = 0; i < Math.min(4, statHits.size()); i++)
+			final String pick = kind;
+			go.add(new Hit(kind, "every one you have had", null, null,
+				() -> openLootKind(pick, false), 1, 0));
+			if (everOnTask() && hasKindOnTask(pick))
 			{
-				Map.Entry<String, Long> e = statHits.get(i);
-				String v = StatRegistry.isGp(e.getKey()) ? gp(e.getValue()) + " gp" : fmt(e.getValue());
-				// A door, like the drop and source rows beneath: three of the six
-				// groups drew rows that named a thing and did nothing when pressed.
-				JPanel tr = row(StatRegistry.label(e.getKey()), v, null);
-				door(tr, this::openAllTrackers);
-				p.add(tr);
-				total++;
+				go.add(new Hit(kind, "from slayer tasks", null, null, () -> openLootKind(pick, true), 1, -1));
 			}
 		}
+		total += searchGroup(p, "Go to", go);
 
-		// Drops: the item aggregates across every source, with its own sources
-		// listed underneath it.
+		// The fights: the ledger's sources, the bosses the sheet lists, and the
+		// Kill Log's monsters, once each however many of those name it.
+		List<Hit> fights = new ArrayList<>();
+		Set<String> kinds = new HashSet<>();
+		for (LocalStore.SourceRow r : sources())
+		{
+			int sc = matchScore(ql, r.name);
+			if (sc < 0 || !kinds.add(LocalStore.kindOf(r.name)))
+			{
+				continue;
+			}
+			boolean killed = isKillSource(r.name);
+			long n = killed ? standingKills(r) : r.loots;
+			final String src = r.name;
+			fights.add(new Hit(r.name, killed ? fmt(n) + " kc" : count(r.loots, "drop"), null,
+				gp(r.value) + " gp" + (r.pb != null ? " · PB " + pb(r.pb) : ""),
+				() -> openSource(src), sc, n));
+		}
+		for (Boss b : bossRoster(plugin.gson()))
+		{
+			int sc = matchScore(ql, b.name);
+			if (sc < 0 || !kinds.add(LocalStore.kindOf(b.name)))
+			{
+				continue;
+			}
+			long n = bossKills(b.name);
+			final String open = bossLootSource(b);
+			fights.add(new Hit(b.name, n > 0 ? fmt(n) + " kc" : "-", null, null,
+				() -> openSourceLoose(open), sc, n));
+		}
+		JsonObject cl = clogNow();
+		if (cl.has("slayer_kcs") && cl.get("slayer_kcs").isJsonObject())
+		{
+			for (Map.Entry<String, JsonElement> e : cl.getAsJsonObject("slayer_kcs").entrySet())
+			{
+				int sc = matchScore(ql, e.getKey());
+				if (sc < 0 || !kinds.add(LocalStore.kindOf(e.getKey())))
+				{
+					continue;
+				}
+				long n = safeLong(e.getValue());
+				fights.add(new Hit(e.getKey(), fmt(n) + " kc", null, "In the Kill Log", () ->
+				{
+					slayerLens = "Monsters";
+					applyTab(View.SLAYER);
+				}, sc, n));
+			}
+		}
+		total += searchGroup(p, "Bosses and monsters", fights);
+
+		// The slayer tasks, one row a task however often it was given.
+		List<Hit> tasks = new ArrayList<>();
+		LocalStore.SlayerJourney journey = journeyCache;
+		if (journey != null)
+		{
+			Map<String, int[]> byTask = new LinkedHashMap<>();   // {times, newest index}
+			for (int i = 0; i < journey.tasks.size(); i++)
+			{
+				LocalStore.SlayerTask t = journey.tasks.get(i);
+				if (t.task == null || matchScore(ql, t.task) < 0)
+				{
+					continue;
+				}
+				int[] seen = byTask.computeIfAbsent(t.task.toLowerCase(Locale.ROOT), k -> new int[]{0, -1});
+				seen[0]++;
+				seen[1] = Math.max(seen[1], i);
+			}
+			for (int[] seen : byTask.values())
+			{
+				final int at = seen[1];
+				String name = journey.tasks.get(at).task;
+				tasks.add(new Hit(name, count(seen[0], "task"), null, "Opens the newest", () ->
+				{
+					applyTab(View.SLAYER);
+					detailTask = at;
+					rebuild();
+				}, matchScore(ql, name), seen[0]));
+			}
+		}
+		total += searchGroup(p, "Slayer tasks", tasks);
+
+		// The items: every bag, and what was left on the floor.
 		Map<String, long[]> itemAgg = new LinkedHashMap<>();       // name -> {qty, value}
 		Map<String, List<String>> itemSrcs = new LinkedHashMap<>();
 		for (LocalStore.SourceRow src : sources())
 		{
 			for (LocalStore.BagItem b : plugin.sourceItems(src.name))
 			{
-				if (!b.name.toLowerCase(Locale.ROOT).contains(ql))
+				if (matchScore(ql, b.name) < 0)
 				{
 					continue;
 				}
 				long[] agg = itemAgg.computeIfAbsent(b.name, k -> new long[2]);
 				agg[0] += b.qty;
 				agg[1] += b.value;
-				itemSrcs.computeIfAbsent(b.name, k -> new ArrayList<>())
-					.add(src.name + (b.qty > 1 ? " ×" + fmt(b.qty) : ""));
+				itemSrcs.computeIfAbsent(b.name, k -> new ArrayList<>()).add(src.name);
 			}
 		}
-		List<String> itemNames = new ArrayList<>(itemAgg.keySet());
-		itemNames.sort(Comparator.comparingLong((String n) -> itemAgg.get(n)[1]).reversed());
-		List<LocalStore.SourceRow> srcHits = new ArrayList<>();
-		for (LocalStore.SourceRow r : sources())
+		List<Hit> items = new ArrayList<>();
+		for (Map.Entry<String, long[]> e : itemAgg.entrySet())
 		{
-			// "abyssal demons" for Abyssal demon: the plural names the source too
-			if (r.name.toLowerCase(Locale.ROOT).contains(ql) || namesExactly(q, r.name))
-			{
-				srcHits.add(r);
-			}
+			final String itm = e.getKey();
+			List<String> from = itemSrcs.get(itm);
+			String tip = (e.getValue()[1] > 0 ? gp(e.getValue()[1]) + " gp · " : "") + "from "
+				+ String.join(", ", from.subList(0, Math.min(4, from.size())))
+				+ (from.size() > 4 ? " and " + (from.size() - 4) + " more" : "");
+			items.add(new Hit(itm, "×" + fmt(e.getValue()[0]), null, tip, () -> openItem(itm),
+				matchScore(ql, itm), e.getValue()[1]));
 		}
-		srcHits.sort(Comparator.comparingLong((LocalStore.SourceRow r) -> r.value).reversed());
-		// A source named exactly (or in the singular) stands first: the reader
-		// who typed a boss's name means the boss, not the scales named after it,
-		// and Enter opens the first row.
-		boolean sourceFirst = false;
-		for (LocalStore.SourceRow r : srcHits)
+		for (LocalStore.UntakenRow u : plugin.untakenItems())
 		{
-			sourceFirst |= namesExactly(q, r.name);
+			if (itemAgg.containsKey(u.name) || matchScore(ql, u.name) < 0)
+			{
+				continue;
+			}
+			final String itm = u.name;
+			items.add(new Hit(itm, "×" + fmt(u.qty) + " left", ACCENT_RED, "Left on the floor", () ->
+			{
+				applyTab(View.DROPS);
+				dropsLeftBehind = true;
+				leftBehindItem = itm;
+				rebuild();
+			}, matchScore(ql, itm), u.value));
 		}
-		if (!itemNames.isEmpty() || !srcHits.isEmpty())
-		{
-			p.add(group("Drops"));
-			if (sourceFirst)
-			{
-				addSourceHits(p, srcHits);
-			}
-			for (int i = 0; i < Math.min(2, itemNames.size()); i++)
-			{
-				String name = itemNames.get(i);
-				long[] agg = itemAgg.get(name);
-				JPanel r = row(name + " ×" + fmt(agg[0]),
-					agg[1] > 0 ? gp(agg[1]) + " gp" : "", accent());
-				final String itm = name;
-				door(r, () -> openItem(itm));
-				p.add(r);
-				List<String> srcs = itemSrcs.get(name);
-				StringBuilder fromLine = new StringBuilder("from ");
-				for (int s = 0; s < Math.min(3, srcs.size()); s++)
-				{
-					fromLine.append(s > 0 ? " · " : "").append(srcs.get(s));
-				}
-				if (srcs.size() > 3)
-				{
-					fromLine.append(" · +").append(srcs.size() - 3);
-				}
-				p.add(ghostRow(fromLine.toString(), ""));
-				total++;
-			}
-			if (!sourceFirst)
-			{
-				addSourceHits(p, srcHits);
-			}
-			total += Math.min(2, srcHits.size());
-		}
+		total += searchGroup(p, "Items", items);
 
-		// Collection log: the whole taxonomy, with your obtained state.
+		// The collection log: its pages, and every slot, in the log's own green and red.
+		List<Hit> log = new ArrayList<>();
 		Obtained ob = obtained(clogNow());
-		// One hit per item: obtaining one whip lights every slot that holds it,
-		// so the first page carrying it stands in as its address.
-		Map<String, String> slotFirstPage = new LinkedHashMap<>();
-		Map<String, Boolean> slotGot = new LinkedHashMap<>();
-		clogSearch:
-		for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
+		Set<String> slotSeen = new HashSet<>();
+		for (Map<String, List<String>> tab : taxonomy(plugin.gson()).values())
 		{
-			for (Map.Entry<String, List<String>> pg : tab.getValue().entrySet())
+			for (Map.Entry<String, List<String>> pg : tab.entrySet())
 			{
+				final String page = pg.getKey();
+				int ps = matchScore(ql, page);
+				if (ps >= 0)
+				{
+					int held = 0;
+					for (String slot : pg.getValue())
+					{
+						held += slotHeld(slot, page, pg.getValue(), ob, sharedSlotNames(plugin.gson())) ? 1 : 0;
+					}
+					// a page is the named thing the slots are inside, so it stands
+					// a place above a slot that answers as well
+					log.add(new Hit(page, held + " / " + pg.getValue().size(), null, "The page",
+						() -> openLogPage(page), Math.max(0, ps - 1), 2));
+				}
 				for (String slot : pg.getValue())
 				{
-					if (slot.toLowerCase(Locale.ROOT).contains(ql))
+					int sc = matchScore(ql, slot);
+					if (sc < 0 || !slotSeen.add(slot))
 					{
-						if (slotFirstPage.putIfAbsent(slot, pg.getKey()) == null)
-						{
-							// Same rule as the Log tab, or a slot known only from a
-							// page scrape reads as obtained there and missing here.
-							slotGot.put(slot, slotHeld(slot, pg.getKey(), pg.getValue(), ob,
-								sharedSlotNames(plugin.gson())));
-						}
-						if (slotFirstPage.size() >= 4)
-						{
-							break clogSearch;
-						}
+						continue;
 					}
+					boolean got = slotHeld(slot, page, pg.getValue(), ob, sharedSlotNames(plugin.gson()));
+					log.add(new Hit(slot, page, got ? ACCENT_SESSION : ACCENT_RED,
+						got ? "Held" : "Missing", () -> openLogPage(page), sc, got ? 1 : 0));
 				}
 			}
 		}
-		if (!slotFirstPage.isEmpty())
-		{
-			// The log is a page WITHIN the sheet, and opening the sheet puts its
-			// page back to none, so a hit that named the page and then the sheet
-			// landed the reader on the top of the skills. The page is opened
-			// after the tab, on the page the slot was found on.
-			p.add(group("Collection log"));
-			for (Map.Entry<String, String> hit : slotFirstPage.entrySet())
-			{
-				boolean got = Boolean.TRUE.equals(slotGot.get(hit.getKey()));
-				// The page stays in the right hand column, which is what that
-				// column means on every other search row. Held or not is said the
-				// way the log itself says it, in green and red, rather than by
-				// replacing the address with the word "obtained" - which threw
-				// away the page this loop had just worked out, and only for the
-				// slots the reader HAS.
-				JPanel sr = row(hit.getKey(), hit.getValue(),
-					got ? ACCENT_SESSION : ACCENT_RED, true);
-				final String page = hit.getValue();
-				door(sr, () ->
-				{
-					if (!openLogPage(page))
-					{
-						openSheetPage("log");
-					}
-				});
-				p.add(sr);
-				total++;
-			}
-		}
+		total += searchGroup(p, "Collection log", log);
 
-		// The two bundled tables. A combat achievement is found by its name and a
-		// diary entry by what it asks for, since a diary entry has no name, and
-		// either way the line underneath is the requirement: what the reader was
-		// actually asking when they typed it.
+		// The quests, as the quest board has them.
+		List<Hit> questHits = new ArrayList<>();
+		for (String name : quests.keySet())
+		{
+			int sc = matchScore(ql, name);
+			if (sc < 0)
+			{
+				continue;
+			}
+			String state = quests.get(name).getAsString();
+			boolean done = "FINISHED".equals(state);
+			questHits.add(new Hit(name, done ? "complete" : "IN_PROGRESS".equals(state)
+				? "in progress" : "not started", done ? ACCENT_SESSION : ACCENT_RED, null,
+				() -> openSheetPage("quests"), sc, done ? 1 : 0));
+		}
+		total += searchGroup(p, "Quests", questHits);
+
+		// The two bundled tables, found by what they ask for as well as by name:
+		// they are the things a reader can look up before having done them.
 		if (ql.length() >= 3)
 		{
-			total += searchAchievements(p, ql);
-		}
-
-		// Journal milestone lines.
-		List<JsonObject> feedHits = new ArrayList<>();
-		for (JsonObject e : plugin.feedNewest(500))
-		{
-			if (feedLine(e).toLowerCase(Locale.ROOT).contains(ql))
+			Set<Integer> done = caDone();
+			bundledCombat = bundle(plugin.gson(), "osrs_combat_achievements.json", bundledCombat);
+			JsonObject cas = bundledCombat.has("tasks") ? bundledCombat.getAsJsonObject("tasks") : new JsonObject();
+			List<Hit> caHits = new ArrayList<>();
+			for (String id : cas.keySet())
 			{
-				feedHits.add(e);
-				if (feedHits.size() >= 4)
+				JsonObject t = cas.getAsJsonObject(id);
+				String name = t.get("name").getAsString();
+				String task = t.get("task").getAsString();
+				int sc = matchScore(ql, name);
+				if (sc < 0 && task.toLowerCase(Locale.ROOT).contains(ql))
 				{
-					break;
+					sc = 3;
+				}
+				if (sc < 0)
+				{
+					continue;
+				}
+				boolean has = done.contains(Integer.parseInt(id));
+				caHits.add(new Hit(name, prettyTier(t.get("tier").getAsString().toLowerCase(Locale.ROOT)),
+					done.isEmpty() ? null : has ? ACCENT_SESSION : ACCENT_RED,
+					t.get("monster").getAsString() + ": " + task, () -> openSheetPage("combat"), sc,
+					has ? 1 : 0));
+			}
+			total += searchGroup(p, "Combat achievements", caHits);
+
+			bundledDiaries = bundle(plugin.gson(), "osrs_achievement_diaries.json", bundledDiaries);
+			JsonObject diaries = bundledDiaries.has("diaries")
+				? bundledDiaries.getAsJsonObject("diaries") : new JsonObject();
+			List<Hit> diaryHits = new ArrayList<>();
+			for (String region : diaries.keySet())
+			{
+				JsonObject tiers = diaries.getAsJsonObject(region);
+				for (String tier : tiers.keySet())
+				{
+					for (JsonElement e : tiers.getAsJsonArray(tier))
+					{
+						JsonObject t = e.getAsJsonObject();
+						String task = t.get("task").getAsString();
+						if (!task.toLowerCase(Locale.ROOT).contains(ql))
+						{
+							continue;
+						}
+						String needs = t.has("requirements") ? t.get("requirements").getAsString() : "";
+						// the tier on the right and the region in the hover: "Lumbridge &
+						// Draynor medium" left the task three words to be read by
+						diaryHits.add(new Hit(firstSentence(task), tier.toLowerCase(Locale.ROOT), null,
+							region + " " + tier.toLowerCase(Locale.ROOT) + ": " + task
+								+ (needs.isEmpty() || "None".equalsIgnoreCase(needs) ? "" : " Needs: " + needs),
+							() -> openSheetPage("diaries"), 3, 0));
+					}
 				}
 			}
+			total += searchGroup(p, "Diary tasks", diaryHits);
 		}
-		if (!feedHits.isEmpty())
+
+		// The trackers, below the named things so a counter named after a fight
+		// ("Wyrm bones sacrificed") never takes Enter from the fight.
+		List<Hit> stats = new ArrayList<>();
+		for (Map.Entry<String, Long> e : counters().entrySet())
 		{
-			p.add(group("Journal"));
-			for (JsonObject e : feedHits)
+			if (e.getValue() == 0 || StatRegistry.hidden(e.getKey()))
 			{
-				long ts = e.has("ts") ? e.get("ts").getAsLong() : 0;
-				JPanel jr = row(feedLine(e), ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "", null);
-				final long at = ts;
-				door(jr, () -> openJournalOn(at));
-				p.add(jr);
-				total++;
+				continue;
 			}
+			String label = StatRegistry.label(e.getKey());
+			int sc = bestScore(ql, label, e.getKey());
+			if (sc < 0)
+			{
+				continue;
+			}
+			stats.add(new Hit(label, StatRegistry.isGp(e.getKey()) ? gp(e.getValue()) + " gp" : fmt(e.getValue()),
+				null, null, this::openAllTrackers, sc, e.getValue()));
 		}
+		total += searchGroup(p, "Trackers", stats);
+
+		// The journal, every line of it and the milestones, newest first.
+		List<Hit> journal = new ArrayList<>();
+		int thisYear = LocalDate.now().getYear();
+		for (Object[] line : searchFeed())
+		{
+			if (!((String) line[0]).contains(ql))
+			{
+				continue;
+			}
+			final long at = (Long) line[2];
+			String day = at <= 0 ? "" : (dayOf(at).getYear() == thisYear ? DAY : TASK_DAY)
+				.format(Instant.ofEpochMilli(at));
+			journal.add(new Hit((String) line[1], day, null, null, () -> openJournalOn(at), 0, at));
+		}
+		total += searchGroup(p, "Journal", journal);
 
 		if (total == 0)
 		{
@@ -15306,6 +15681,15 @@ class ChroniclePanel extends PluginPanel
 			p.add(ghostRow("enter opens the first row", ""));
 		}
 		return p;
+	}
+
+	/** A diary task to its first sentence: the rest is a note the hover keeps. */
+	private static String firstSentence(String task)
+	{
+		int note = task.indexOf(" Note:");
+		String s = note > 0 ? task.substring(0, note) : task;
+		int stop = s.indexOf(". ");
+		return stop > 0 ? s.substring(0, stop + 1) : s;
 	}
 
 	// Where Enter lands: the first row the search drew.

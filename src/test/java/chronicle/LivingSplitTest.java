@@ -97,6 +97,33 @@ public class LivingSplitTest
 		assertEquals(said.toString(), "340", after(said, "POTIONS"));
 	}
 
+	/**
+	 * The whole record says one spend. The trackers' own spend began when the
+	 * plugin started writing it; the ledger also prices every meal and dose
+	 * eaten before. The board said "Consumed value 632k" over Food and Potions
+	 * heads adding to 2.16M, so the whole record reads the ledger throughout.
+	 * And meals and doses head their sections, what no item row can claim
+	 * being the heads' own "Other" rather than a second row beside them.
+	 */
+	@Test
+	public void theWholeRecordSaysOneSpend() throws Exception
+	{
+		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
+		s.lifetime.put("foodEaten", 2_420L);
+		s.lifetime.put("sharkEaten", 2_410L);
+		s.lifetime.put("potionDoses", 1_479L);
+		s.lifetime.put("prayerPotionDoses", 747L);
+		s.lifetime.put("consumedValue", 638_206L);
+		s.consumVals.put("sharkEaten", 1_299_422L);
+		s.consumVals.put("prayerPotionDoses", 861_495L);
+		List<String> said = living(s, null);
+		assertEquals(said.toString(), "2.2M gp", after(said, "Consumed value"));
+		assertEquals(said.toString(), "2,420 · 1.3M gp", after(said, "FOOD"));
+		assertEquals(said.toString(), "1,479 · 861k gp", after(said, "POTIONS"));
+		assertEquals("meals stand beside the head that counts them: " + said,
+			-1, said.indexOf("Meals eaten"));
+	}
+
 	/** The Living board for one month, as its labels and figures. */
 	private static List<String> living(PanelPreviewTest.StubPlugin s, LocalDate cursor)
 		throws Exception
@@ -109,15 +136,19 @@ public class LivingSplitTest
 		{
 			try
 			{
-				for (String[] f : new String[][]{{"histGranularity", "Month"}, {"statsFamily", "Living"}})
+				for (String[] f : new String[][]{{"histGranularity", cursor == null ? "Lifetime" : "Month"},
+					{"statsFamily", "Living"}})
 				{
 					Field fld = ChroniclePanel.class.getDeclaredField(f[0]);
 					fld.setAccessible(true);
 					fld.set(hold[0], f[1]);
 				}
-				Field cur = ChroniclePanel.class.getDeclaredField("histCursor");
-				cur.setAccessible(true);
-				cur.set(hold[0], cursor);
+				if (cursor != null)
+				{
+					Field cur = ChroniclePanel.class.getDeclaredField("histCursor");
+					cur.setAccessible(true);
+					cur.set(hold[0], cursor);
+				}
 				Method m = ChroniclePanel.class.getDeclaredMethod("buildStats");
 				m.setAccessible(true);
 				collect((Component) m.invoke(hold[0]), said);

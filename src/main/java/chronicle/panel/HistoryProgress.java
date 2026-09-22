@@ -610,7 +610,7 @@ public final class HistoryProgress
 				// a flat key that heads one of the family's own sections files
 				// there as the floor: potionDoses is Living's "Doses drunk" and
 				// the Potions floor, and one figure is shown once
-				String heads = headOf(family, key);
+				String heads = StatRegistry.headOf(family, key);
 				if (heads != null)
 				{
 					sec = heads;
@@ -648,20 +648,6 @@ public final class HistoryProgress
 			}
 		}
 		return out;
-	}
-
-	// the section of `family` that `key` is a floor of, or null when none of the
-	// family's fixed sections is headed by it
-	private static String headOf(String family, String key)
-	{
-		for (String sec : StatRegistry.fixedSections(family))
-		{
-			if (!sec.isEmpty() && StatRegistry.floorKeys(sec).contains(key))
-			{
-				return sec;
-			}
-		}
-		return null;
 	}
 
 	// Skilling ranks its crafts by weight (the floor when there is one, else the

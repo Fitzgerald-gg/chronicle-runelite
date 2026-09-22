@@ -49,18 +49,43 @@ public class FoughtAsTest
 		});
 	}
 
+	/**
+	 * The page's time row over a month the minutes cover whole: a time row is
+	 * drawn only there, never over a lifetime the minutes began part way into.
+	 */
 	private static String timeRow(String source, Map<String, Long> minutes) throws Exception
 	{
 		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
 		stub.sources.add(new LocalStore.SourceRow(source, 0, 0, 1_000L, null, 0, 0));
 		stub.bags.put(source, new ArrayList<>());
-		stub.lifetime.putAll(minutes);
+		java.time.LocalDate cursor = java.time.LocalDate.of(2026, 6, 15);
+		stub.history.clear();
+		HistoryLog.Baseline open = new HistoryLog.Baseline();
+		HistoryLog.Baseline close = new HistoryLog.Baseline();
+		open.counters.put("timeIdle", 0L);
+		close.counters.put("timeIdle", 0L);
+		for (Map.Entry<String, Long> e : minutes.entrySet())
+		{
+			open.counters.put(e.getKey(), 0L);
+			close.counters.put(e.getKey(), e.getValue());
+		}
+		stub.history.put(cursor.withDayOfMonth(5), open);
+		stub.history.put(cursor.withDayOfMonth(13), close);
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
+		PanelPreviewTest.regatherHistory(hold[0]);
 		final JPanel[] page = new JPanel[1];
 		SwingUtilities.invokeAndWait(() ->
 		{
 			try
 			{
-				ChroniclePanel p = new ChroniclePanel(stub);
+				ChroniclePanel p = hold[0];
+				Field g = ChroniclePanel.class.getDeclaredField("histGranularity");
+				g.setAccessible(true);
+				g.set(p, "Month");
+				Field c = ChroniclePanel.class.getDeclaredField("histCursor");
+				c.setAccessible(true);
+				c.set(p, cursor);
 				Method m = ChroniclePanel.class.getDeclaredMethod("buildSourceDetail", String.class);
 				m.setAccessible(true);
 				page[0] = (JPanel) m.invoke(p, source);
