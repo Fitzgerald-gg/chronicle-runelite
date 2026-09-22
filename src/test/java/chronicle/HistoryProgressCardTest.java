@@ -4230,10 +4230,12 @@ public class HistoryProgressCardTest
 			}
 		}
 		assertEquals("tabs: " + tips, 4, tips.size());
-		for (String want : new String[]{"Record", "Hiscores", "Loot", "Trackers"})
+		for (String want : new String[]{"Record", "Standing", "Loot", "Trackers"})
 		{
 			assertTrue("tabs: " + tips, tips.contains(want));
 		}
+		// nothing on the sheet ranks the account against another player
+		assertFalse("tabs: " + tips, tips.contains("Hiscores"));
 		assertFalse("tabs: " + tips, tips.contains("History"));
 		assertFalse("Progression is no longer a destination: " + tips,
 			tips.contains("Progression"));

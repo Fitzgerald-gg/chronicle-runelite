@@ -197,10 +197,10 @@ public class AuditCrawlTest
 			b.add(new Board("Ledger:" + fam, "RECORD", "Ledger", "statsFamily", fam));
 		}
 		b.add(new Board("Recap", "RECORD", "Recap"));
-		b.add(new Board("Sheet", "HISCORES", null));
+		b.add(new Board("Sheet", "STANDING", null));
 		for (String page : new String[]{"combat", "quests", "diaries", "clues", "log"})
 		{
-			b.add(new Board("Sheet:" + page, "HISCORES", null, "sheetPage", page));
+			b.add(new Board("Sheet:" + page, "STANDING", null, "sheetPage", page));
 		}
 		for (boolean left : new boolean[]{false, true})
 		{

@@ -130,7 +130,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private enum Tab
 	{
-		RECORD, HISCORES, LOOT, TRACKERS
+		RECORD, STANDING, LOOT, TRACKERS
 	}
 
 	private static final Map<Tab, String[]> SUBS = new java.util.EnumMap<>(Tab.class);
@@ -150,7 +150,7 @@ class ChroniclePanel extends PluginPanel
 		// No sub-tabs: the sheet is one board. Its activity tiles are the way into
 		// the collection log, the diaries, the combat achievements and the quests,
 		// which is what freed a whole tab for the loot.
-		SUBS.put(Tab.HISCORES, new String[0]);
+		SUBS.put(Tab.STANDING, new String[0]);
 		SUBS.put(Tab.LOOT, new String[]{"Loot", "Slayer"});
 		// Every counter in one place. Combat's used to hang off PvM's fourth
 		// board, which put damage dealt and deaths a tab away from every other
@@ -319,13 +319,15 @@ class ChroniclePanel extends PluginPanel
 		north.add(vgap(3));
 
 		tabGroup.setLayout(new GridLayout(1, 4, 2, 0));
-		// tab_history is the set's clock, which is the only clock anywhere: not
-		// one of the 4,057 named sprites in runelite-api is a clock, an hourglass
-		// or a watch, so an all-sprite strip could not have had one.
-		addTab("tab_history.png", "Record", Tab.RECORD);
-		addTab("tab_pvm.png", "Hiscores", Tab.HISCORES);
-		addTab("tab_log.png", "Loot", Tab.LOOT);
-		addTab("tab_stats.png", "Trackers", Tab.TRACKERS);
+		// Each tab wears what it holds: a ledger page for the written record, the
+		// game's own skills chart for where the account stands, a chest for the
+		// loot and a tally for the counters. "Hiscores" promised a ranking against
+		// other players, and there is none; the swords it wore dated from when
+		// the board was PvM alone.
+		addTab("tab_record.png", "Record", Tab.RECORD);
+		addTab("tab_standing.png", "Standing", Tab.STANDING);
+		addTab("tab_loot.png", "Loot", Tab.LOOT);
+		addTab("tab_trackers.png", "Trackers", Tab.TRACKERS);
 		north.add(tabGroup);
 		north.add(vgap(7));
 		north.add(searchField);
@@ -477,7 +479,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		switch (tab)
 		{
-			case HISCORES:
+			case STANDING:
 				return View.SHEET;
 			case LOOT:
 				return "Slayer".equals(sub()) ? View.SLAYER : View.DROPS;
@@ -512,7 +514,7 @@ class ChroniclePanel extends PluginPanel
 			case SHEET:
 			case HISTORY:
 			case LOG:
-				return Tab.HISCORES;
+				return Tab.STANDING;
 			// The Trackers tab IS the counters board: viewOf maps TRACKERS to
 			// STATS, and without the return leg STATS fell through to Record, so
 			// asking for the counters landed a tab away from them. The Ledger
@@ -577,7 +579,7 @@ class ChroniclePanel extends PluginPanel
 		// which is how the preview harness reaches a board.
 		view = viewOf();
 		sheetPage = null;
-		if (tab == Tab.HISCORES)
+		if (tab == Tab.STANDING)
 		{
 			histFacet = "Skills";
 		}
@@ -1539,7 +1541,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				if (tab.getValue().containsKey(source))
 				{
-					applyTab(Tab.HISCORES);
+					applyTab(Tab.STANDING);
 					sheetPage = "log";
 					clogTab = tab.getKey();
 					clogPageSel = source;
@@ -14068,7 +14070,7 @@ class ChroniclePanel extends PluginPanel
 	/** The sheet, opened straight onto one of its pages. */
 	private void openSheetPage(String page)
 	{
-		applyTab(Tab.HISCORES);
+		applyTab(Tab.STANDING);
 		sheetPage = page;
 		rebuild();
 	}
