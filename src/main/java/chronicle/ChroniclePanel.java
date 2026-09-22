@@ -715,6 +715,8 @@ class ChroniclePanel extends PluginPanel
 	/** Where the hiscores and the collection log name one fight differently. */
 	private static final Map<String, String> LOG_PAGE_FOR = new LinkedHashMap<>();
 	private static final Map<String, String> PAYS_OUT = new LinkedHashMap<>();
+	// A fight keyed by kind, against the NPC names its minutes are filed under.
+	private static final Map<String, List<String>> FOUGHT_AS = new LinkedHashMap<>();
 
 	static
 	{
@@ -729,6 +731,62 @@ class ChroniclePanel extends PluginPanel
 		// files against the fight that hands it over.
 		PAYS_OUT.put("The Gauntlet", "Crystalline Hunllef");
 		PAYS_OUT.put("The Corrupted Gauntlet", "Corrupted Hunllef");
+
+		// The minutes are filed under the NPC the hit landed on, and half the
+		// roster is not named after one: a raid is named for the place, Barrows
+		// for the chest at the end of it, and a few fights are named for what
+		// the log calls them rather than what stands there. Everything here is
+		// PART OF THE FIGHT -- the boss under another name, or a minion that is
+		// only alive during it -- so its minutes are that fight's minutes.
+		foughtAs("Barrows Chests", "Ahrim the Blighted", "Dharok the Wretched",
+			"Guthan the Infested", "Karil the Tainted", "Torag the Corrupted",
+			"Verac the Defiled");
+		foughtAs("Nightmare", "The Nightmare");
+		foughtAs("The Gauntlet", "Crystalline Hunllef");
+		foughtAs("The Corrupted Gauntlet", "Corrupted Hunllef");
+		foughtAs("Grotesque Guardians", "Dusk", "Dawn");
+		foughtAs("The Royal Titans", "Branda the Fire Queen", "Eldric the Ice King");
+		String[] xeric = {"Great Olm", "Tekton", "Vespula", "Vasa Nistirio", "Muttadile",
+			"Abyssal portal", "Ice demon", "Skeletal Mystic", "Lizardman shaman",
+			"Deathly mage", "Deathly ranger", "Vanguard", "Guardian", "Vespine soldier"};
+		foughtAs("Chambers of Xeric", xeric);
+		foughtAs("Chambers of Xeric: Challenge Mode", xeric);
+		String[] blood = {"The Maiden of Sugadinti", "Pestilent Bloat", "Nylocas Vasilias",
+			"Sotetseg", "Xarpus", "Verzik Vitur", "Nylocas Hagios", "Nylocas Ischyros",
+			"Nylocas Toxobolos"};
+		foughtAs("Theatre of Blood", blood);
+		foughtAs("Theatre of Blood: Hard Mode", blood);
+		String[] amascut = {"Akkha", "Ba-Ba", "Kephri", "Zebak", "Tumeken's Warden",
+			"Elidinis' Warden", "Akkha's Shadow", "Baboon Brawler", "Scarab Mage"};
+		foughtAs("Tombs of Amascut", amascut);
+		foughtAs("Tombs of Amascut: Expert Mode", amascut);
+		// A boss and the things it calls up: alive only inside the fight, so
+		// the minutes spent on them were spent on it.
+		foughtAs("General Graardor", "Sergeant Strongstack", "Sergeant Steelwill",
+			"Sergeant Grimspike");
+		foughtAs("Commander Zilyana", "Starlight", "Growler", "Bree");
+		foughtAs("Kree'arra", "Wingman Skree", "Flight Kilisa", "Flockleader Geerin");
+		foughtAs("K'ril Tsutsaroth", "Balfrug Kreeyath", "Tstanon Karlak", "Zakl'n Gritch");
+		foughtAs("Nex", "Fumus", "Umbra", "Cruor", "Glacies");
+		foughtAs("Corporeal Beast", "Dark core");
+		foughtAs("Vorkath", "Zombified Spawn");
+		foughtAs("Cerberus", "Summoned Soul");
+		foughtAs("Araxxor", "Araxyte");
+		foughtAs("Callisto", "Callisto cub");
+		foughtAs("Artio", "Callisto cub");
+		foughtAs("Venenatis", "Venenatis spiderling");
+		foughtAs("Spindel", "Venenatis spiderling");
+		foughtAs("Vet'ion", "Skeleton Hellhound", "Greater Skeleton Hellhound");
+		foughtAs("Calvar'ion", "Skeleton Hellhound", "Greater Skeleton Hellhound");
+		foughtAs("TzTok-Jad", "Tz-Kih", "Tz-Kek", "Tok-Xil", "Yt-MejKot", "Ket-Zek",
+			"Yt-HurKot");
+		foughtAs("TzKal-Zuk", "Jal-MejRah", "Jal-Ak", "Jal-AkRek-Mej", "Jal-AkRek-Xil",
+			"Jal-AkRek-Ket", "Jal-ImKot", "Jal-Xil", "Jal-Zek", "Jal-MejJak", "JalTok-Jad");
+	}
+
+	private static void foughtAs(String fight, String... npcs)
+	{
+		FOUGHT_AS.put(LocalStore.kindOf(fight), java.util.Arrays.asList(npcs));
 	}
 
 	// Per build: the best kill count known for each KIND, from the chat lines and
@@ -1807,8 +1865,7 @@ class ChroniclePanel extends PluginPanel
 			labels.add("Average kill");
 			figures.add(pb(timed[1] / timed[0]) + " · " + fmt((long) timed[0]) + " timed");
 		}
-		long here = (wholeRecord() ? counters() : periodCounters())
-			.getOrDefault(chronicle.counters.StatKeys.timeKey(b.name), 0L);
+		long here = minutesAt(b.name, wholeRecord() ? counters() : periodCounters());
 		if (here > 0)
 		{
 			labels.add("Time here");
@@ -5946,14 +6003,49 @@ class ChroniclePanel extends PluginPanel
 	 * part of its minutes. Either reads as a rate and is not one, so the row
 	 * says the hours alone until the record can divide honestly.
 	 */
-	private boolean minutesCoverPeriod(String key)
+	private boolean minutesCoverPeriod()
 	{
 		if (sessionPeriod())
 		{
 			return true;   // the sitting's own minutes over the sitting's own figures
 		}
 		Span s = span();
-		return s != null && s.opening.counters.containsKey(key);
+		if (s == null)
+		{
+			return false;
+		}
+		// Any minutes key at all: they all begin on the day the tracker files
+		// its first minute, so one of them standing on the opening line says
+		// the whole window is inside the measured era. A fight first met inside
+		// the window has no key of its own there and is still measured whole.
+		for (String key : s.opening.counters.keySet())
+		{
+			if (chronicle.counters.StatKeys.isTime(key))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The minutes one fight owns, its own name and every NPC it is fought as.
+	 *
+	 * <p>A minute is filed under the NPC the hit landed on, and half the roster
+	 * is not named after one: a raid is named for the place, Barrows for the
+	 * chest at the end of it. Without the table a boss page simply drew no time
+	 * row, which is silence rather than a wrong figure, but silence about an
+	 * hour the reader spent there.
+	 */
+	private long minutesAt(String name, Map<String, Long> counters)
+	{
+		long minutes = counters.getOrDefault(chronicle.counters.StatKeys.timeKey(name), 0L);
+		for (String npc : FOUGHT_AS.getOrDefault(LocalStore.kindOf(name),
+			Collections.emptyList()))
+		{
+			minutes += counters.getOrDefault(chronicle.counters.StatKeys.timeKey(npc), 0L);
+		}
+		return minutes;
 	}
 
 	// The source under the glass: kills tracked, the take, and its whole bag.
@@ -6061,12 +6153,10 @@ class ChroniclePanel extends PluginPanel
 			// the fight; the period's, like every figure above it, and the
 			// kills an hour once there is half an hour to divide and both
 			// figures cover the same span.
-			String timeKey = chronicle.counters.StatKeys.timeKey(sr.name);
-			long here = (inWindow == null ? counters() : periodCounters())
-				.getOrDefault(timeKey, 0L);
+			long here = minutesAt(sr.name, inWindow == null ? counters() : periodCounters());
 			if (here > 0)
 			{
-				boolean rate = killed && shown > 0 && here >= 30 && minutesCoverPeriod(timeKey);
+				boolean rate = killed && shown > 0 && here >= 30 && minutesCoverPeriod();
 				head.add(row("Time here", hoursMinutes(here)
 					+ (rate ? " · " + rateText(shown * 60.0 / here) + " kills/h" : ""), null));
 			}
@@ -11406,12 +11496,12 @@ class ChroniclePanel extends PluginPanel
 		}
 		// the minutes the trackers filed under this craft, and the xp per hour
 		// they come to where the period's gain is known and the minutes cover it
-		String craftTime = chronicle.counters.StatKeys.timeKey(craft);
-		long minutes = (wholeRecord() ? counters() : periodCounters()).getOrDefault(craftTime, 0L);
+		long minutes = (wholeRecord() ? counters() : periodCounters())
+			.getOrDefault(chronicle.counters.StatKeys.timeKey(craft), 0L);
 		if (minutes > 0)
 		{
 			long gained = !wholeRecord() && was != null && now != null && now > was ? now - was : 0;
-			boolean rate = gained > 0 && minutes >= 30 && minutesCoverPeriod(craftTime);
+			boolean rate = gained > 0 && minutes >= 30 && minutesCoverPeriod();
 			head.add(row("Time", hoursMinutes(minutes)
 				+ (rate ? " · " + gp(Math.round(gained * 60.0 / minutes)) + " xp/h" : ""), null));
 		}
