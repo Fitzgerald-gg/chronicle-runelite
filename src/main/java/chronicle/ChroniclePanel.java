@@ -11080,6 +11080,32 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/**
+	 * Whether a window that holds no closing line of its own can still be read,
+	 * because it reaches today and the client is the closing figure.
+	 *
+	 * <p>Today's baseline is not written until the day rolls over or the client
+	 * closes. Until then a window ending today has only the line it opened on,
+	 * and every board measuring between two lines read as empty: the sheet drew
+	 * no skills, the Kills board said the window held fewer than two baselines,
+	 * and the counters answered nothing, on a day the player had plainly been
+	 * playing. The live sheet, ledger and trackers close it instead.
+	 *
+	 * <p>The opening still has to be the eve of the window, or the gain would
+	 * carry days the heading does not name: a record three days cold measures
+	 * three days and would print them under today's date. A sitting is exempt,
+	 * being counted from the trackers rather than measured between two lines.
+	 */
+	private boolean closesOnTheClient(Map.Entry<LocalDate, HistoryLog.Baseline> from,
+		LocalDate start, LocalDate end)
+	{
+		if (from == null || end.isBefore(LocalDate.now()))
+		{
+			return false;
+		}
+		return sessionPeriod() || !from.getKey().isBefore(start.minusDays(1));
+	}
+
+	/**
 	 * The spine folded to the window's two ends.
 	 *
 	 * <p>Not cheap: it walks the whole spine twice, and the Kills board asks for
@@ -11102,7 +11128,8 @@ class ChroniclePanel extends PluginPanel
 			HistoryLog.windowStart(historySpine, w.start, w.end);
 		Map.Entry<LocalDate, HistoryLog.Baseline> at =
 			historySpine.floorEntry(w.end);
-		if (at == null || from == null || at.getKey().equals(from.getKey()))
+		if (at == null || from == null
+			|| (at.getKey().equals(from.getKey()) && !closesOnTheClient(from, w.start, w.end)))
 		{
 			return null;
 		}
@@ -11623,7 +11650,8 @@ class ChroniclePanel extends PluginPanel
 		Map.Entry<LocalDate, HistoryLog.Baseline> from =
 			HistoryLog.windowStart(hist, pStart, pEnd);
 		Map.Entry<LocalDate, HistoryLog.Baseline> at = hist.floorEntry(pEnd);
-		if (at == null || from == null || at.getKey().equals(from.getKey()))
+		if (at == null || from == null
+			|| (at.getKey().equals(from.getKey()) && !closesOnTheClient(from, pStart, pEnd)))
 		{
 			String empty;
 			if (hist.isEmpty())
