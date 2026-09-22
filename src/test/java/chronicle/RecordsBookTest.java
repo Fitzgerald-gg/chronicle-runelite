@@ -107,7 +107,7 @@ public class RecordsBookTest
 			}
 		});
 		assertEquals("9h 12m · " + DAY.format(today.minusDays(4)), beside(book[0], "Longest sitting"));
-		assertEquals("Then 2h 0m · " + DAY.format(today.minusDays(9)),
+		assertEquals("Was 2h 0m · " + DAY.format(today.minusDays(9)),
 			rowNamed(book[0], "Longest sitting").getToolTipText());
 		assertEquals("+1.4M xp · " + DAY.format(today.minusDays(2)), beside(book[0], "Biggest day"));
 		assertTrue(rowNamed(book[0], "Biggest day").getToolTipText().startsWith("Most in Hunter"));

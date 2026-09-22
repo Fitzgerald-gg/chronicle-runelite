@@ -61,30 +61,46 @@ public class TimeStatTracker implements StatTracker
 		}
 		Integer prev = xpSeen.put(skill, event.getXp());
 		// the first reading of a skill is the career total, not a drop
-		if (prev != null && event.getXp() > prev)
+		if (prev == null || event.getXp() <= prev)
 		{
-			lastSkill = skill;
-			lastSkillTick = client.getTickCount();
+			return;
 		}
+		// A fight's own xp does not make it a craft. Attack and Hitpoints drop
+		// on every hit, and seeding the skill branch with them filed the walk
+		// after the fight under Attack and then rated the fight's xp over it.
+		if (fighting())
+		{
+			return;
+		}
+		lastSkill = skill;
+		lastSkillTick = client.getTickCount();
 	}
 
+	/** Whether a fight still owns the tick. */
+	private boolean fighting()
+	{
+		return lastNpc != null && client.getTickCount() - lastNpcTick <= FIGHT_GRACE;
+	}
+
+	/**
+	 * A hit I dealt is the one thing that starts a fight.
+	 *
+	 * <p>Interaction alone is not: a fishing spot, a banker, a pickpocket
+	 * target and an impling are all NPCs, and letting any of them claim the
+	 * tick filed an hour of fishing under the shoal rather than under Fishing.
+	 */
 	@Override
 	public void onHitsplatApplied(HitsplatApplied event)
 	{
 		Actor on = event.getActor();
 		if (on instanceof NPC && on != client.getLocalPlayer() && event.getHitsplat().isMine())
 		{
-			noteNpc((NPC) on);
-		}
-	}
-
-	private void noteNpc(NPC npc)
-	{
-		String name = npc.getName();
-		if (name != null && !name.isEmpty())
-		{
-			lastNpc = name;
-			lastNpcTick = client.getTickCount();
+			String name = on.getName();
+			if (name != null && !name.isEmpty())
+			{
+				lastNpc = name;
+				lastNpcTick = client.getTickCount();
+			}
 		}
 	}
 
@@ -95,12 +111,16 @@ public class TimeStatTracker implements StatTracker
 		{
 			return;
 		}
-		Player me = client.getLocalPlayer();
-		if (me != null && me.getInteracting() instanceof NPC)
-		{
-			noteNpc((NPC) me.getInteracting());
-		}
 		int now = client.getTickCount();
+		// Still on the thing last hit: the fight goes on through a phase nobody
+		// is landing damage in, but it cannot begin from standing near one.
+		Player me = client.getLocalPlayer();
+		Actor with = me == null ? null : me.getInteracting();
+		if (with instanceof NPC && lastNpc != null && lastNpc.equals(with.getName())
+			&& now - lastNpcTick <= FIGHT_GRACE)
+		{
+			lastNpcTick = now;
+		}
 		String key;
 		if (lastNpc != null && now - lastNpcTick <= FIGHT_GRACE)
 		{

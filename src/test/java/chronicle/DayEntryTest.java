@@ -104,6 +104,43 @@ public class DayEntryTest
 		assertEquals("1 sitting · 45m", said.get(b + 1));
 	}
 
+	/**
+	 * A week away and the next line carries the whole gap. Attributing that to
+	 * the first day back is a figure nobody earned in a day, so the day says
+	 * what it can and leaves the xp out.
+	 */
+	@Test
+	public void theFirstDayBackDoesNotClaimTheGap() throws Exception
+	{
+		LocalDate back = LocalDate.now().minusDays(2);
+		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
+		s.feed.add(session(back, 20, 60));
+		s.history.put(back.minusDays(8), line(1_000_000L, 500_000L));
+		s.history.put(back, line(3_000_000L, 500_000L));   // two million over eight days
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(s));
+		PanelPreviewTest.regatherHistory(hold[0]);
+		final List<String> said = new ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = ChroniclePanel.class.getDeclaredMethod("buildJournal");
+				m.setAccessible(true);
+				collect((Component) m.invoke(hold[0]), said);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		String heading = DateTimeFormatter.ofPattern("d MMM", Locale.UK)
+			.format(back).toUpperCase(Locale.ROOT);
+		int at = said.indexOf(heading);
+		assertTrue(said.toString(), at >= 0);
+		assertEquals("1 sitting · 1h 0m", said.get(at + 1));
+	}
+
 	private static void collect(Component c, List<String> out)
 	{
 		if (c instanceof JLabel && ((JLabel) c).getText() != null && !((JLabel) c).getText().isEmpty())

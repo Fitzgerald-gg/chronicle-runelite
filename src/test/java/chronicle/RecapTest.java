@@ -11,6 +11,7 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -21,6 +22,7 @@ import javax.swing.SwingUtilities;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -123,12 +125,25 @@ public class RecapTest
 		{
 			assertEquals(left(r), Cursor.HAND_CURSOR, r.getCursor().getType());
 		}
-		// and no row carries a sentence: figures joined by the panel's own dot
+		// The plate, whole and exact. A shape test passed on any sentence that
+		// happened to start with a digit; this is the only assertion that can
+		// actually catch prose arriving on the plate.
+		List<String> pairs = new ArrayList<>();
 		for (JPanel r : rows)
 		{
-			String right = right(r);
-			assertTrue(right, !right.endsWith(".") && !right.contains("  "));
+			pairs.add(left(r) + " | " + right(r));
 		}
+		assertEquals(Arrays.asList(
+			"Drops | 8,732 · 214.0M gp",
+			"Left behind | 1,704 · 757k gp",
+			"Potions | 8,442 doses",
+			"Killed most | Abyssal demons · 4,425",
+			"Log slot | 1 · Abyssal head",
+			"Pet | 1 · Abyssal orphan",
+			"Quest | 1 · Dragon Slayer II",
+			"Diary | 1 · Karamja",
+			"Combat achievement | 1 · Perfect Zulrah",
+			"Death | 1"), pairs);
 	}
 
 	@Test
@@ -150,6 +165,64 @@ public class RecapTest
 		});
 		assertEquals("Feats", field(hold[0], "journalLens"));
 		assertEquals("JOURNAL", String.valueOf(field(hold[0], "view")));
+	}
+
+	/**
+	 * Over a window, killed-most is the Kills board's own arithmetic: a species
+	 * the opening line does not carry keeps its earliest recorded base, so the
+	 * kills after that base count. Subtracting a missing opening read them as
+	 * none and handed the row to whoever the opening happened to name.
+	 */
+	@Test
+	public void killedMostOverAWindowKeepsTheEarliestBase() throws Exception
+	{
+		LocalDate cursor = LocalDate.of(2026, 6, 15);
+		PanelPreviewTest.StubPlugin stub = new PanelPreviewTest.StubPlugin(null);
+		HistoryLog.Baseline open = kcLine(900L, null);
+		HistoryLog.Baseline mid = kcLine(950L, 100L);     // Vorkath first recorded here
+		HistoryLog.Baseline close = kcLine(1_000L, 400L);
+		stub.history.put(cursor.withDayOfMonth(5), open);
+		stub.history.put(cursor.withDayOfMonth(9), mid);
+		stub.history.put(cursor.withDayOfMonth(13), close);
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
+		PanelPreviewTest.regatherHistory(hold[0]);
+		final JPanel[] plate = new JPanel[1];
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Field g = ChroniclePanel.class.getDeclaredField("histGranularity");
+				g.setAccessible(true);
+				g.set(hold[0], "Month");
+				Field c = ChroniclePanel.class.getDeclaredField("histCursor");
+				c.setAccessible(true);
+				c.set(hold[0], cursor);
+				Method m = ChroniclePanel.class.getDeclaredMethod("recapPlate");
+				m.setAccessible(true);
+				plate[0] = (JPanel) m.invoke(hold[0]);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		// 300 Vorkath since its base of 100, against 100 Nechryael
+		assertEquals("Vorkath · 300", beside(plate[0], "Killed most"));
+	}
+
+	private static HistoryLog.Baseline kcLine(long nechryael, Long vorkath)
+	{
+		HistoryLog.Baseline b = new HistoryLog.Baseline();
+		b.skills.put("attack", 1_000_000L);
+		b.skills.put("overall", 1_000_000L);
+		b.kcs.put("Nechryael", nechryael);
+		if (vorkath != null)
+		{
+			b.kcs.put("Vorkath", vorkath);
+		}
+		b.complete = true;
+		return b;
 	}
 
 	@Test

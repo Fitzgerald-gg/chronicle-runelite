@@ -1523,6 +1523,12 @@ public class ChroniclePlugin extends Plugin
 		long[] left = localStore.sessionUntakenTally();
 		JsonObject data = new JsonObject();
 		data.addProperty("minutes", mins);
+		// When it began, so a sitting that crossed midnight is read on the day
+		// it was played rather than the day it happened to end.
+		if (sessionStartMs > 0)
+		{
+			data.addProperty("start", sessionStartMs);
+		}
 		data.addProperty("xp", xp);
 		data.addProperty("drops", drops);
 		data.addProperty("dropsGp", dropsGp);

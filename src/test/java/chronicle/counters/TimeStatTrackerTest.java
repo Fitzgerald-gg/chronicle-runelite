@@ -64,10 +64,23 @@ public class TimeStatTrackerTest
 		t.onStatChanged(new StatChanged(skill, total, 1, 1));
 	}
 
+	/** A hit I dealt, which is the one thing that starts a fight. */
+	private void hit(String name)
+	{
+		Hitsplat splat = Mockito.mock(Hitsplat.class);
+		Mockito.when(splat.isMine()).thenReturn(true);
+		HitsplatApplied e = new HitsplatApplied();
+		e.setActor(npc(name));
+		e.setHitsplat(splat);
+		t.onHitsplatApplied(e);
+	}
+
 	private void fight(String name)
 	{
-		NPC n = npc(name);
-		Mockito.when(me.getInteracting()).thenReturn(n);
+		hit(name);
+		// built before the stubbing, or npc()'s own when() nests inside this one
+		NPC on = npc(name);
+		Mockito.when(me.getInteracting()).thenReturn(on);
 	}
 
 	private void noFight()
@@ -94,20 +107,47 @@ public class TimeStatTrackerTest
 	@Test
 	public void aHitOwnsThemToo()
 	{
-		Hitsplat splat = Mockito.mock(Hitsplat.class);
-		Mockito.when(splat.isMine()).thenReturn(true);
-		NPC demon = npc("Abyssal demon");
-		HitsplatApplied e = new HitsplatApplied();
-		e.setActor(demon);
-		e.setHitsplat(splat);
 		// a fight is a run of hits, each holding the tick for the grace after it
 		for (int i = 0; i < 3; i++)
 		{
-			t.onHitsplatApplied(e);
+			hit("Abyssal demon");
 			ticks(40);
 		}
 		assertEquals(1, store.getStat("timeAbyssalDemon"));
 		assertEquals(0, store.getStat(StatKeys.TIME_IDLE));
+	}
+
+	/**
+	 * And standing beside one is not. A fishing spot, a banker, a pickpocket
+	 * target and an impling are all NPCs, and letting an interaction claim the
+	 * tick filed an hour of fishing under the shoal rather than under Fishing.
+	 */
+	@Test
+	public void interactingAloneStartsNothing()
+	{
+		NPC spot = npc("Fishing spot");
+		Mockito.when(me.getInteracting()).thenReturn(spot);
+		xp(Skill.FISHING, 1_000_000);
+		xp(Skill.FISHING, 1_000_090);
+		ticks(200);
+		assertEquals(0, store.getStat("timeFishingSpot"));
+		assertEquals(2, store.getStat("timeFishing"));
+	}
+
+	/** A fight's own xp does not make it a craft. */
+	@Test
+	public void combatXpDoesNotSeedTheSkillBranch()
+	{
+		xp(Skill.ATTACK, 1_000_000);
+		fight("Vorkath");
+		ticks(10);
+		xp(Skill.ATTACK, 1_000_400);   // lands mid-fight
+		noFight();
+		ticks(300);
+		assertEquals(0, store.getStat("timeAttack"));
+		// the fight keeps its grace, and what follows is idle
+		assertEquals(0, store.getStat("timeVorkath"));
+		assertEquals(2, store.getStat(StatKeys.TIME_IDLE));
 	}
 
 	@Test
@@ -156,6 +196,18 @@ public class TimeStatTrackerTest
 		noFight();
 		ticks(20);
 		assertEquals(0, store.getStat("timeVorkath"));
+		// and the next sitting starts from nothing: 90 ticks carried over would
+		// have credited a minute after only ten of the new one
+		fight("Vorkath");
+		ticks(10);
+		assertEquals(0, store.getStat("timeVorkath"));
+		ticks(90);
+		assertEquals(1, store.getStat("timeVorkath"));
+		// the xp baseline too, or the first drop back reads as a career total
+		xp(Skill.FISHING, 2_000_000);
+		noFight();
+		ticks(TimeStatTracker.FIGHT_GRACE + 100);
+		assertEquals(0, store.getStat("timeFishing"));
 	}
 
 	@Test

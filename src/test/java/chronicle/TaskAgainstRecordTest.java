@@ -86,9 +86,34 @@ public class TaskAgainstRecordTest
 		tasks.add(task("Nechryael", 170, 1_200_000L, 20, false));
 		tasks.add(task("Nechryael", 160, 1_000_000L, 30, false));
 		JPanel page = page(tasks, 0);
-		assertEquals("1.4M gp · 168 kills · over 3 tasks", beside(page, "Your usual"));
-		String best = beside(page, "Your best");
+		assertEquals("1.4M gp · 168 kills · over 3 tasks", beside(page, "Usual"));
+		String best = beside(page, "Best");
 		assertTrue(best, best.startsWith("2.1M gp · "));
+	}
+
+	/** Only the CLOSED tasks BEFORE this one, and only of the same assignment. */
+	@Test
+	public void anOpenTaskAndALaterOneAreNoPartOfTheUsual() throws Exception
+	{
+		List<LocalStore.SlayerTask> tasks = new ArrayList<>();
+		tasks.add(task("Nechryael", 500, 9_000_000L, 0, true));      // still running
+		tasks.add(task("Nechryael", 174, 1_300_000L, 5, false));     // the one opened
+		tasks.add(task("Nechryael", 175, 2_100_000L, 10, false));
+		tasks.add(task("Nechryael", 170, 1_200_000L, 20, false));
+		JPanel page = page(tasks, 1);
+		// the open one above it and the task itself are both out: 2 earlier, not 3
+		assertEquals("1.7M gp · 172 kills · over 2 tasks", beside(page, "Usual"));
+	}
+
+	/** The oldest task of an assignment has nothing to be read against. */
+	@Test
+	public void theFirstOfAnAssignmentHasNoUsual() throws Exception
+	{
+		List<LocalStore.SlayerTask> tasks = new ArrayList<>();
+		tasks.add(task("Nechryael", 174, 1_300_000L, 0, false));
+		tasks.add(task("Nechryael", 175, 2_100_000L, 10, false));
+		tasks.add(task("Nechryael", 170, 1_200_000L, 20, false));
+		assertNull(beside(page(tasks, 2), "Usual"));
 	}
 
 	@Test
@@ -98,8 +123,8 @@ public class TaskAgainstRecordTest
 		tasks.add(task("Nechryael", 174, 1_300_000L, 0, false));
 		tasks.add(task("Nechryael", 160, 1_000_000L, 30, false));
 		JPanel page = page(tasks, 0);
-		assertNull(beside(page, "Your usual"));
-		assertNull(beside(page, "Your best"));
+		assertNull(beside(page, "Usual"));
+		assertNull(beside(page, "Best"));
 	}
 
 	private static String beside(Component c, String left)

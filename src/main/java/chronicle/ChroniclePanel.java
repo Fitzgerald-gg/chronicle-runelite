@@ -1805,7 +1805,7 @@ class ChroniclePanel extends PluginPanel
 		if (timed[0] > 0)
 		{
 			labels.add("Average kill");
-			figures.add(pb(timed[1] / timed[0]) + " over " + fmt((long) timed[0]));
+			figures.add(pb(timed[1] / timed[0]) + " · " + fmt((long) timed[0]) + " timed");
 		}
 		long here = (wholeRecord() ? counters() : periodCounters())
 			.getOrDefault(chronicle.counters.StatKeys.timeKey(b.name), 0L);
@@ -4347,10 +4347,10 @@ class ChroniclePanel extends PluginPanel
 		{
 			return;
 		}
-		head.add(row("Your usual", gp(sumValue / earlier) + " gp · " + fmt(sumKills / earlier)
+		head.add(row("Usual", gp(sumValue / earlier) + " gp · " + fmt(sumKills / earlier)
 			+ " kills · over " + earlier + " tasks", null));
 		LocalStore.SlayerTask best = j.tasks.get(bestAt);
-		JPanel bestRow = row("Your best", gp(best.totalValue) + " gp · "
+		JPanel bestRow = row("Best", gp(best.totalValue) + " gp · "
 			+ TASK_DAY.format(Instant.ofEpochMilli((long) (best.ts * 1000))), null);
 		final int at = bestAt;
 		bestRow.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -5928,6 +5928,26 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
+	/**
+	 * Whether the minutes filed under {@code key} cover the whole of this
+	 * period, so a rate drawn from them divides two figures of one span.
+	 *
+	 * <p>The minutes begin the day the tracker first files one. A lifetime
+	 * would pair them with kills the account had before this plugin existed,
+	 * and a window straddling that first day pairs a whole window's kills with
+	 * part of its minutes. Either reads as a rate and is not one, so the row
+	 * says the hours alone until the record can divide honestly.
+	 */
+	private boolean minutesCoverPeriod(String key)
+	{
+		if (sessionPeriod())
+		{
+			return true;   // the sitting's own minutes over the sitting's own figures
+		}
+		Span s = span();
+		return s != null && s.opening.counters.containsKey(key);
+	}
+
 	// The source under the glass: kills tracked, the take, and its whole bag.
 	private JPanel buildSourceDetail(String name)
 	{
@@ -6016,7 +6036,7 @@ class ChroniclePanel extends PluginPanel
 					null);
 				if (recData != null && recData.has("was"))
 				{
-					best.setToolTipText("Beat " + pb(recData.get("was").getAsDouble()));
+					best.setToolTipText("Was " + pb(recData.get("was").getAsDouble()));
 				}
 				head.add(best);
 			}
@@ -6031,13 +6051,16 @@ class ChroniclePanel extends PluginPanel
 			}
 			// How long was spent here, off the minutes the trackers file under
 			// the fight; the period's, like every figure above it, and the
-			// kills an hour it comes to once there is half an hour to divide.
+			// kills an hour once there is half an hour to divide and both
+			// figures cover the same span.
+			String timeKey = chronicle.counters.StatKeys.timeKey(sr.name);
 			long here = (inWindow == null ? counters() : periodCounters())
-				.getOrDefault(chronicle.counters.StatKeys.timeKey(sr.name), 0L);
+				.getOrDefault(timeKey, 0L);
 			if (here > 0)
 			{
-				head.add(row("Time here", hoursMinutes(here) + (killed && shown > 0 && here >= 30
-					? " · " + rateText(shown * 60.0 / here) + " kills an hour" : ""), null));
+				boolean rate = killed && shown > 0 && here >= 30 && minutesCoverPeriod(timeKey);
+				head.add(row("Time here", hoursMinutes(here)
+					+ (rate ? " · " + rateText(shown * 60.0 / here) + " kills/h" : ""), null));
 			}
 			// Not on a picture. It is the reader's own bookkeeping rather than
 			// anything about the fight, and on an account whose ledger carries
@@ -7683,9 +7706,16 @@ class ChroniclePanel extends PluginPanel
 			}
 			else if (sec.equals("Food") || sec.equals("Potions"))
 			{
-				// the period's own spend, written at the bite and the dose
-				secGp = counters.getOrDefault(
-					sec.equals("Food") ? "foodConsumedValue" : "potionsConsumedValue", 0L);
+				// The period's own spend, written at the bite and the dose, and
+				// only where the split was already being written when the window
+				// opened: a whole window's count beside part of its spend is one
+				// figure pretending to account for the other.
+				String gpKey = sec.equals("Food") ? "foodConsumedValue" : "potionsConsumedValue";
+				Span s = span();
+				if (sessionPeriod() || (s != null && s.opening.counters.containsKey(gpKey)))
+				{
+					secGp = counters.getOrDefault(gpKey, 0L);
+				}
 			}
 			// The count stands in both states, and the gp beside it is the same
 			// period's: the lifetime priced by the record, a window by the split
@@ -9560,7 +9590,10 @@ class ChroniclePanel extends PluginPanel
 		// tiles take a row each instead of overlapping in one.
 		JPanel combat = combatLevelTile(gain, opened);
 		JPanel total = totalLevelTile(stand, opened);
-		// the one cell on the sheet that was not a door
+		// The one cell on the sheet that was not a door, and the hover is where
+		// it says so: a door with no sign on it is a door nobody opens.
+		total.setToolTipText(periodTip != null ? tipLine(periodTip, "Opens the records")
+			: tip("Total level", new String[]{"Opens"}, new String[]{"the records"}));
 		total.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		total.addMouseListener(clicker(this::openRecords));
 		if (wholeRecord())
@@ -10485,6 +10518,12 @@ class ChroniclePanel extends PluginPanel
 			new String[]{hoursMinutes(played[0]), fmt(played[1]), "+" + gp(xp)});
 	}
 
+	/** One more line on the foot of a hover card already built. */
+	private static String tipLine(String card, String line)
+	{
+		return card.replace("</body>", "<div style='color:#8f8f8f'>" + line + "</div></body>");
+	}
+
 	/**
 	 * A hover card in the shape RuneLite's own hiscores panel draws: a titled
 	 * block of label and figure rows. That panel builds its with setToolTipText
@@ -11330,15 +11369,16 @@ class ChroniclePanel extends PluginPanel
 		{
 			head.add(row("Level", "-", null));
 		}
-		// the minutes the trackers filed under this craft, and the xp an hour
-		// they come to where the period's gain is known
-		long minutes = (wholeRecord() ? counters() : periodCounters())
-			.getOrDefault(chronicle.counters.StatKeys.timeKey(craft), 0L);
+		// the minutes the trackers filed under this craft, and the xp per hour
+		// they come to where the period's gain is known and the minutes cover it
+		String craftTime = chronicle.counters.StatKeys.timeKey(craft);
+		long minutes = (wholeRecord() ? counters() : periodCounters()).getOrDefault(craftTime, 0L);
 		if (minutes > 0)
 		{
 			long gained = !wholeRecord() && was != null && now != null && now > was ? now - was : 0;
-			head.add(row("Time", hoursMinutes(minutes) + (gained > 0 && minutes >= 30
-				? " · " + gp(Math.round(gained * 60.0 / minutes)) + " xp an hour" : ""), null));
+			boolean rate = gained > 0 && minutes >= 30 && minutesCoverPeriod(craftTime);
+			head.add(row("Time", hoursMinutes(minutes)
+				+ (rate ? " · " + gp(Math.round(gained * 60.0 / minutes)) + " xp/h" : ""), null));
 		}
 		p.add(head);
 		p.add(vgap(6));
@@ -12198,9 +12238,14 @@ class ChroniclePanel extends PluginPanel
 							.toInstant().toEpochMilli();
 						crossings(prev, now, ts, milestones);
 					}
-					// a partial line speaks only for the skills it names, so the
-					// levels it implies are not a standing to measure from
-					prev = now;
+					// A partial line speaks only for the axes it can: it carries
+					// no total level or count of 99s. Those keep the last standing
+					// that did, or the next complete line's crossing would have
+					// nothing to be measured against and go unrecorded.
+					Map<String, Long> carried = prev == null
+						? new LinkedHashMap<>() : new LinkedHashMap<>(prev);
+					carried.putAll(now);
+					prev = carried;
 				}
 				Collections.reverse(milestones);
 			}
@@ -12279,7 +12324,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				if (crossed(prev, now, e.getKey(), t))
 				{
-					into.add(milestone(ts, gp(t) + " xp in "
+					into.add(milestone(ts, threshold(t) + " xp in "
 						+ StatRegistry.prettify(e.getKey().substring(3))));
 				}
 			}
@@ -12288,7 +12333,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			if (crossed(prev, now, "overall", t))
 			{
-				into.add(milestone(ts, gp(t) + " xp overall"));
+				into.add(milestone(ts, threshold(t) + " xp overall"));
 			}
 		}
 		for (long t : LOG_SLOTS)
@@ -12298,6 +12343,12 @@ class ChroniclePanel extends PluginPanel
 				into.add(milestone(ts, fmt(t) + " collection log slots"));
 			}
 		}
+	}
+
+	/** A threshold as the round figure it is: 10M, not gp()'s 10.0M. */
+	private static String threshold(long xp)
+	{
+		return xp % 1_000_000_000L == 0 ? xp / 1_000_000_000L + "B" : xp / 1_000_000L + "M";
 	}
 
 	private static boolean crossed(Map<String, Long> prev, Map<String, Long> now, String key,
@@ -12338,12 +12389,15 @@ class ChroniclePanel extends PluginPanel
 		}
 		List<JsonObject> out = new ArrayList<>(feed.size() + marks.size());
 		int m = 0;
+		// The head is the sitting in progress when there is one, and that is
+		// later than everything however it is stamped. With no sitting it is an
+		// ordinary line, and skipping it filed a newer milestone under it.
+		boolean liveHead = !feed.isEmpty() && feed.get(0).has("live");
 		for (int i = 0; i < feed.size(); i++)
 		{
 			long ts = safeLong(feed.get(i).get("ts"));
-			// the head may be the sitting in progress, which is later than
-			// everything however it is stamped
-			while (i > 0 && m < marks.size() && safeLong(marks.get(m).get("ts")) > ts)
+			while ((i > 0 || !liveHead) && m < marks.size()
+				&& safeLong(marks.get(m).get("ts")) > ts)
 			{
 				out.add(marks.get(m++));
 			}
@@ -12426,7 +12480,12 @@ class ChroniclePanel extends PluginPanel
 				{
 					continue;
 				}
-				LocalDate day = Instant.ofEpochMilli(safeLong(e.get("ts")))
+				JsonObject d = e.has("data") && e.get("data").isJsonObject()
+					? e.getAsJsonObject("data") : new JsonObject();
+				// the day it BEGAN, where the line says; older lines carry only
+				// the moment they closed
+				long began = safeLong(d.get("start"));
+				LocalDate day = Instant.ofEpochMilli(began > 0 ? began : safeLong(e.get("ts")))
 					.atZone(ZoneId.systemDefault()).toLocalDate();
 				long[] t = daysPlayed.computeIfAbsent(day, k -> new long[2]);
 				t[0] += sessionMinutes(e);
@@ -12457,7 +12516,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		HistoryLog.Baseline at = spine.get(day);
 		Map.Entry<LocalDate, HistoryLog.Baseline> before = spine.lowerEntry(day);
-		if (at == null || before == null)
+		// Only against the day before it. A week away and the next line carries
+		// the whole gap, and attributing that to the first day back is a figure
+		// nobody earned in a day.
+		if (at == null || before == null || !before.getKey().plusDays(1).equals(day))
 		{
 			return null;
 		}
@@ -12533,24 +12595,35 @@ class ChroniclePanel extends PluginPanel
 		JPanel plate = card(wholeRecord() ? "The whole record" : window().label);
 		int rows = 0;
 
-		// the sittings
+		// The sittings. A sitting in progress is ONE sitting and is measured by
+		// its own clock: daysPlayed is keyed by day, and a day's noon falls
+		// outside the sitting's own window, so reading it there counted the
+		// whole day or nothing at all.
 		long minutes = 0;
 		int sittings = 0;
 		LocalDate busiest = null;
 		long busiestMinutes = 0;
-		for (Map.Entry<LocalDate, long[]> d : daysPlayed().entrySet())
+		if (sessionPeriod())
 		{
-			if (!insideWindow(d.getKey().atTime(12, 0).atZone(ZoneId.systemDefault())
-				.toInstant().toEpochMilli()))
+			minutes = plugin.sessionElapsedMinutes();
+			sittings = minutes > 0 ? 1 : 0;
+		}
+		else
+		{
+			for (Map.Entry<LocalDate, long[]> d : daysPlayed().entrySet())
 			{
-				continue;
-			}
-			minutes += d.getValue()[0];
-			sittings += d.getValue()[1];
-			if (d.getValue()[0] > busiestMinutes)
-			{
-				busiestMinutes = d.getValue()[0];
-				busiest = d.getKey();
+				if (!insideWindow(d.getKey().atTime(12, 0).atZone(ZoneId.systemDefault())
+					.toInstant().toEpochMilli()))
+				{
+					continue;
+				}
+				minutes += d.getValue()[0];
+				sittings += d.getValue()[1];
+				if (d.getValue()[0] > busiestMinutes)
+				{
+					busiestMinutes = d.getValue()[0];
+					busiest = d.getKey();
+				}
 			}
 		}
 		if (sittings > 0)
@@ -12577,7 +12650,8 @@ class ChroniclePanel extends PluginPanel
 		{
 			String most = periodXpMost();
 			rows += plateRow(plate, wholeRecord() ? "Xp" : "Xp gained",
-				(wholeRecord() ? "" : "+") + gp(xp[0]) + (most != null ? " · most in " + most : ""),
+				(wholeRecord() ? "" : "+") + gp(xp[0]) + " xp"
+					+ (most != null ? ", most in " + most : ""),
 				() -> applyTab(View.SHEET));
 		}
 		long[] levels = periodLevels();
@@ -12611,21 +12685,26 @@ class ChroniclePanel extends PluginPanel
 			});
 		}
 
-		// what it cost to stay alive
+		// What it cost to stay alive, in the Ledger's own two sections and its
+		// own words, since that is the board these open onto.
 		Map<String, Long> counters = wholeRecord() ? counters() : periodCounters();
-		long food = counters.getOrDefault("foodEaten", 0L);
-		long doses = counters.getOrDefault("potionDoses", 0L);
-		long spend = counters.getOrDefault("consumedValue", 0L);
-		if (food > 0 || doses > 0)
+		Runnable toLiving = () ->
 		{
-			rows += plateRow(plate, "Eaten & sipped", (food > 0 ? fmt(food) + " food" : "")
-				+ (food > 0 && doses > 0 ? " · " : "") + (doses > 0 ? fmt(doses) + " doses" : "")
-				+ (spend > 0 ? " · " + gp(spend) + " gp" : ""), () ->
-			{
-				statsFamily = "Living";
-				subByTab.put(Tab.RECORD, "Ledger");
-				applyCommon();
-			});
+			statsFamily = "Living";
+			subByTab.put(Tab.RECORD, "Ledger");
+			applyCommon();
+		};
+		long food = counters.getOrDefault("foodEaten", 0L);
+		if (food > 0)
+		{
+			rows += plateRow(plate, "Food", fmt(food)
+				+ splitSpend("foodConsumedValue", counters), toLiving);
+		}
+		long doses = counters.getOrDefault("potionDoses", 0L);
+		if (doses > 0)
+		{
+			rows += plateRow(plate, "Potions", fmt(doses) + " doses"
+				+ splitSpend("potionsConsumedValue", counters), toLiving);
 		}
 
 		// the fights
@@ -12684,6 +12763,23 @@ class ChroniclePanel extends PluginPanel
 		return plate;
 	}
 
+	/**
+	 * What a period's food or potions cost, where the split was already being
+	 * written when the window opened; empty otherwise, since a whole window's
+	 * count beside part of its spend is one figure pretending to account for
+	 * the other.
+	 */
+	private String splitSpend(String key, Map<String, Long> counters)
+	{
+		Span s = span();
+		if (!sessionPeriod() && (s == null || !s.opening.counters.containsKey(key)))
+		{
+			return "";
+		}
+		long spend = counters.getOrDefault(key, 0L);
+		return spend > 0 ? " · " + gp(spend) + " gp" : "";
+	}
+
 	private int plateRow(JPanel plate, String left, String right, Runnable go)
 	{
 		JPanel r = row(left, right, null);
@@ -12724,6 +12820,17 @@ class ChroniclePanel extends PluginPanel
 			long[] overall = plugin.skillSheet().get("overall");
 			return overall != null && overall.length > 1 ? new long[]{overall[1]} : null;
 		}
+		// A sitting is not measurable between two of the spine's lines: both of
+		// them are today's. The trackers hold it instead, as everywhere else.
+		if (sessionPeriod())
+		{
+			long xp = 0;
+			for (ExperienceStatTracker.SkillGain g : plugin.sessionSkillXp())
+			{
+				xp += Math.max(0, g.xp);
+			}
+			return new long[]{xp};
+		}
 		Map.Entry<LocalDate, HistoryLog.Baseline>[] ends = periodEnds();
 		if (ends == null)
 		{
@@ -12745,6 +12852,19 @@ class ChroniclePanel extends PluginPanel
 	private String periodXpMost()
 	{
 		Map<String, Long> by = new LinkedHashMap<>();
+		if (sessionPeriod())
+		{
+			ExperienceStatTracker.SkillGain top = null;
+			for (ExperienceStatTracker.SkillGain g : plugin.sessionSkillXp())
+			{
+				if (g.xp > 0 && (top == null || g.xp > top.xp))
+				{
+					top = g;
+				}
+			}
+			return top == null ? null : StatRegistry.prettify(
+				top.skill.name().toLowerCase(Locale.ROOT));
+		}
 		if (wholeRecord())
 		{
 			for (Map.Entry<String, long[]> e : plugin.skillSheet().entrySet())
@@ -12791,6 +12911,21 @@ class ChroniclePanel extends PluginPanel
 		{
 			long[] overall = plugin.skillSheet().get("overall");
 			return overall != null && overall[0] > 0 ? new long[]{overall[0], overall[0]} : null;
+		}
+		// The sitting counts the levels the feed dated inside it, for the same
+		// reason its xp is read off the trackers.
+		if (sessionPeriod())
+		{
+			long[] overall = plugin.skillSheet().get("overall");
+			long gained = 0;
+			for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
+			{
+				if ("LEVEL".equals(typeOf(e)) && insideWindow(safeLong(e.get("ts"))))
+				{
+					gained++;
+				}
+			}
+			return gained > 0 && overall != null ? new long[]{gained, overall[0]} : null;
 		}
 		Map.Entry<LocalDate, HistoryLog.Baseline>[] ends = periodEnds();
 		if (ends == null || !ends[0].getValue().complete || !ends[1].getValue().complete)
@@ -12890,20 +13025,23 @@ class ChroniclePanel extends PluginPanel
 			}
 			return top == null ? null : new String[]{top, fmt(most)};
 		}
-		Map.Entry<LocalDate, HistoryLog.Baseline>[] ends = periodEnds();
-		if (ends == null)
+		// The Kills board's own arithmetic, not a closing minus an opening: a
+		// species the window first put on the record has no opening line, and
+		// subtracting read it as none killed rather than as all of them.
+		Span s = span();
+		if (s == null)
 		{
 			return null;
 		}
+		Map<String, Long> moved = HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
+			closingNow(s.closing.kcs, plugin.killCounts()));
 		String top = null;
 		long most = 0;
-		for (Map.Entry<String, Long> e : ends[1].getValue().kcs.entrySet())
+		for (Map.Entry<String, Long> e : moved.entrySet())
 		{
-			Long was = ends[0].getValue().kcs.get(e.getKey());
-			long gained = was == null ? 0 : e.getValue() - was;
-			if (gained > most)
+			if (e.getValue() > most)
 			{
-				most = gained;
+				most = e.getValue();
 				top = e.getKey();
 			}
 		}
@@ -12947,7 +13085,7 @@ class ChroniclePanel extends PluginPanel
 		if (best[0] > 0)
 		{
 			rows += recordRow(book, "Longest sitting", hoursMinutes(best[0]), best[1],
-				then[0] > 0 ? "Then " + hoursMinutes(then[0]) + " · " + dated(then[1]) : null);
+				then[0] > 0 ? "Was " + hoursMinutes(then[0]) + " · " + dated(then[1]) : null);
 		}
 
 		// the spine, day against the day before it
@@ -13014,13 +13152,13 @@ class ChroniclePanel extends PluginPanel
 			{
 				rows += recordRow(book, "Biggest day", "+" + gp(bigXp[0]) + " xp", bigXp[1],
 					(bigSkill != null ? "Most in " + bigSkill : "")
-						+ (thenXp[0] > 0 ? (bigSkill != null ? " · " : "") + "then +" + gp(thenXp[0])
+						+ (thenXp[0] > 0 ? (bigSkill != null ? " · " : "") + "was +" + gp(thenXp[0])
 						+ " · " + dated(thenXp[1]) : ""));
 			}
 			if (bigKills[0] > 0)
 			{
 				rows += recordRow(book, "Most kills in a day", fmt(bigKills[0]), bigKills[1],
-					thenKills[0] > 0 ? "Then " + fmt(thenKills[0]) + " · " + dated(thenKills[1]) : null);
+					thenKills[0] > 0 ? "Was " + fmt(thenKills[0]) + " · " + dated(thenKills[1]) : null);
 			}
 			if (longest > 1 && runEnd != null)
 			{
@@ -13070,13 +13208,13 @@ class ChroniclePanel extends PluginPanel
 		if (rich[0] > 0)
 		{
 			rows += recordRow(book, "Richest day", gp(rich[0]) + " gp", rich[1],
-				fmt(rich[2]) + " drops" + (thenRich[0] > 0 ? " · then " + gp(thenRich[0]) + " · "
+				fmt(rich[2]) + " drops" + (thenRich[0] > 0 ? " · was " + gp(thenRich[0]) + " · "
 					+ dated(thenRich[1]) : ""));
 		}
 		if (busy[0] > 0)
 		{
 			rows += recordRow(book, "Most drops in a day", fmt(busy[0]), busy[1],
-				gp(busy[2]) + " gp" + (thenBusy[0] > 0 ? " · then " + fmt(thenBusy[0]) + " · "
+				gp(busy[2]) + " gp" + (thenBusy[0] > 0 ? " · was " + fmt(thenBusy[0]) + " · "
 					+ dated(thenBusy[1]) : ""));
 		}
 

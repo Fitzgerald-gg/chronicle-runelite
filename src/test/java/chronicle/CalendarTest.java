@@ -190,6 +190,98 @@ public class CalendarTest
 		Field sc = ChroniclePanel.class.getDeclaredField("showCalendar");
 		sc.setAccessible(true);
 		assertEquals(true, sc.get(hold[0]));
+		// and it opens on the month the reader is already reading
+		Field cm = ChroniclePanel.class.getDeclaredField("calendarMonth");
+		cm.setAccessible(true);
+		assertEquals(YearMonth.from(LocalDate.now()), cm.get(hold[0]));
+	}
+
+	/** The arrows step the month, and the forward one stops at this one. */
+	@Test
+	public void theArrowsStepTheMonth() throws Exception
+	{
+		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(s));
+		Field cm = ChroniclePanel.class.getDeclaredField("calendarMonth");
+		cm.setAccessible(true);
+		YearMonth now = YearMonth.now();
+		cm.set(hold[0], now);
+		press(hold[0], "<");
+		assertEquals(now.minusMonths(1), cm.get(hold[0]));
+		press(hold[0], ">");
+		assertEquals(now, cm.get(hold[0]));
+		// this month is the end of the record: forward is inert, and says so
+		press(hold[0], ">");
+		assertEquals(now, cm.get(hold[0]));
+	}
+
+	/** A day the spine wrote but no sitting closed on still reads as written. */
+	@Test
+	public void aDayOnTheSpineAloneIsWritten() throws Exception
+	{
+		LocalDate day = LocalDate.now().minusDays(1).withDayOfMonth(2);
+		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
+		HistoryLog.Baseline b = new HistoryLog.Baseline();
+		b.skills.put("attack", 1_000_000L);
+		s.history.put(day, b);
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(s));
+		PanelPreviewTest.regatherHistory(hold[0]);
+		Field cm = ChroniclePanel.class.getDeclaredField("calendarMonth");
+		cm.setAccessible(true);
+		cm.set(hold[0], YearMonth.from(day));
+		List<Component> flat = calendar(hold[0]);
+		int written = 0;
+		for (Component c : flat)
+		{
+			if (c instanceof JComponent && "Written".equals(((JComponent) c).getToolTipText()))
+			{
+				written++;
+			}
+		}
+		assertEquals(1, written);
+	}
+
+	private static List<Component> calendar(ChroniclePanel p) throws Exception
+	{
+		final List<Component> flat = new ArrayList<>();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			try
+			{
+				Method m = ChroniclePanel.class.getDeclaredMethod("buildCalendar");
+				m.setAccessible(true);
+				flatten((Component) m.invoke(p), flat);
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException(e);
+			}
+		});
+		return flat;
+	}
+
+	/** Press the arrow whose label is {@code glyph}. */
+	private static void press(ChroniclePanel p, String glyph) throws Exception
+	{
+		JLabel arrow = null;
+		for (Component c : calendar(p))
+		{
+			if (c instanceof JLabel && glyph.equals(((JLabel) c).getText()))
+			{
+				arrow = (JLabel) c;
+			}
+		}
+		assertNotNull("no " + glyph + " arrow", arrow);
+		final JLabel a = arrow;
+		SwingUtilities.invokeAndWait(() ->
+		{
+			for (MouseListener l : a.getMouseListeners())
+			{
+				l.mousePressed(new MouseEvent(a, MouseEvent.MOUSE_PRESSED, 0L, 0, 1, 1, 1, false));
+			}
+		});
 	}
 
 	private static void flatten(Component c, List<Component> out)

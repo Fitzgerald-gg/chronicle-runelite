@@ -112,7 +112,7 @@ public class MilestonesTest
 	{
 		List<String> said = journal(stub(), "Feats");
 		String text = String.join(" | ", said);
-		assertTrue(text, said.contains("Milestone: 10.0M xp in Fishing"));
+		assertTrue(text, said.contains("Milestone: 10M xp in Fishing"));
 		assertTrue(text, said.contains("Milestone: 500 collection log slots"));
 		assertTrue(text, said.contains("Milestone: Total level 2,000"));
 		assertTrue(text, said.contains("Milestone: Total level 2,376"));
@@ -120,9 +120,34 @@ public class MilestonesTest
 		assertTrue(text, said.contains("Milestone: 20th 99"));
 		assertTrue(text, said.contains("Milestone: Combat level 126"));
 		// dated: the fishing line sits under DAY2's heading, the 99s under DAY3's
-		int fishing = said.indexOf("Milestone: 10.0M xp in Fishing");
+		int fishing = said.indexOf("Milestone: 10M xp in Fishing");
 		int nines = said.indexOf("Milestone: 20th 99");
 		assertTrue("the newer milestone is not above the older", nines < fishing);
+		// and under the right headings, which is the whole claim: a milestone
+		// stamped today would pass every assertion above it
+		java.time.format.DateTimeFormatter head =
+			java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.UK);
+		int day3 = said.indexOf(head.format(DAY3).toUpperCase(java.util.Locale.ROOT));
+		int day2 = said.indexOf(head.format(DAY2).toUpperCase(java.util.Locale.ROOT));
+		assertTrue(text, day3 >= 0 && day2 > day3);
+		assertTrue("the 99s are not under the day they fell: " + text, nines > day3 && nines < day2);
+		assertTrue("fishing is not under the day it crossed: " + text, fishing > day2);
+	}
+
+	/**
+	 * A partial line carries no total level, and the next complete line's
+	 * crossing was measured against it and lost.
+	 */
+	@Test
+	public void aPartialLineBetweenTwoCompleteOnesLosesNothing() throws Exception
+	{
+		PanelPreviewTest.StubPlugin s = stub();
+		HistoryLog.Baseline partial = new HistoryLog.Baseline();
+		partial.skills.put("fishing", 11_000_000L);
+		s.history.put(DAY2.plusDays(1), partial);
+		List<String> said = journal(s, "Feats");
+		assertTrue(said.toString(), said.contains("Milestone: Total level 2,376"));
+		assertTrue(said.toString(), said.contains("Milestone: 20th 99"));
 	}
 
 	@Test

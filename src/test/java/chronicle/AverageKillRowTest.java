@@ -88,7 +88,7 @@ public class AverageKillRowTest
 		String best = beside(page[0], "Personal best");
 		assertNotNull(best);
 		assertTrue(best, best.startsWith("1:10 · set "));
-		assertEquals("Beat 1:12", rowNamed(page[0], "Personal best").getToolTipText());
+		assertEquals("Was 1:12", rowNamed(page[0], "Personal best").getToolTipText());
 		// and the Journal names it
 		Method fl = ChroniclePanel.class.getDeclaredMethod("feedLine", JsonObject.class);
 		fl.setAccessible(true);

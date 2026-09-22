@@ -62,9 +62,45 @@ public class LivingSplitTest
 	@Test
 	public void aPeriodsFoldHeadReadsThePeriodsSpend() throws Exception
 	{
+		// A fixed month, not "ten days ago": on the 1st and 2nd of a month that
+		// fell in the month before and the window held one line, not two.
+		LocalDate cursor = LocalDate.of(2026, 6, 15);
 		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
-		s.history.put(LocalDate.now().minusDays(10), line(100, 40_000L, 200, 20_000L));
-		s.history.put(LocalDate.now().minusDays(2), line(312, 136_000L, 540, 61_000L));
+		s.history.put(cursor.withDayOfMonth(5), line(100, 40_000L, 200, 20_000L));
+		s.history.put(cursor.withDayOfMonth(13), line(312, 136_000L, 540, 61_000L));
+		List<String> said = living(s, cursor);
+		assertEquals(said.toString(), "212 · 96k gp", after(said, "FOOD"));
+		assertEquals(said.toString(), "340 · 41k gp", after(said, "POTIONS"));
+	}
+
+	/**
+	 * And a window that opened before the split was being written gets the
+	 * count alone: a whole window's meals beside part of its spend is one
+	 * figure pretending to account for the other.
+	 */
+	@Test
+	public void aWindowOpeningBeforeTheSplitGetsTheCountAlone() throws Exception
+	{
+		LocalDate cursor = LocalDate.of(2026, 6, 15);
+		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
+		// the window opens on a line written before the split existed
+		HistoryLog.Baseline before = line(100, 0L, 200, 0L);
+		before.counters.remove("foodConsumedValue");
+		before.counters.remove("potionsConsumedValue");
+		s.history.put(cursor.minusMonths(1).withDayOfMonth(25), before);
+		// and the split begins part way through it, so the spend it can measure
+		// covers part of a count that covers the whole window
+		s.history.put(cursor.withDayOfMonth(5), line(180, 50_000L, 320, 22_000L));
+		s.history.put(cursor.withDayOfMonth(13), line(312, 136_000L, 540, 61_000L));
+		List<String> said = living(s, cursor);
+		assertEquals(said.toString(), "212", after(said, "FOOD"));
+		assertEquals(said.toString(), "340", after(said, "POTIONS"));
+	}
+
+	/** The Living board for one month, as its labels and figures. */
+	private static List<String> living(PanelPreviewTest.StubPlugin s, LocalDate cursor)
+		throws Exception
+	{
 		final ChroniclePanel[] hold = new ChroniclePanel[1];
 		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(s));
 		PanelPreviewTest.regatherHistory(hold[0]);
@@ -79,6 +115,9 @@ public class LivingSplitTest
 					fld.setAccessible(true);
 					fld.set(hold[0], f[1]);
 				}
+				Field cur = ChroniclePanel.class.getDeclaredField("histCursor");
+				cur.setAccessible(true);
+				cur.set(hold[0], cursor);
 				Method m = ChroniclePanel.class.getDeclaredMethod("buildStats");
 				m.setAccessible(true);
 				collect((Component) m.invoke(hold[0]), said);
@@ -88,8 +127,7 @@ public class LivingSplitTest
 				throw new RuntimeException(e);
 			}
 		});
-		assertEquals(said.toString(), "212 · 96k gp", after(said, "FOOD"));
-		assertEquals(said.toString(), "340 · 41k gp", after(said, "POTIONS"));
+		return said;
 	}
 
 	private static String after(List<String> said, String label)
