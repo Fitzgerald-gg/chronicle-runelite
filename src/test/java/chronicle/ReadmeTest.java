@@ -73,13 +73,14 @@ public class ReadmeTest
 	public void itNamesTheTabsThePanelActuallyCarries() throws Exception
 	{
 		String text = readme();
-		for (String tab : new String[]{"Record", "Hiscores", "Loot", "Trackers"})
+		for (String tab : new String[]{"Record", "Standing", "Loot", "Trackers"})
 		{
 			assertTrue("the README never mentions the " + tab + " tab",
 				text.contains(tab));
 		}
-		// the three the restructure removed
-		for (String gone : new String[]{"### PvM", "### Skilling", "### Collection log"})
+		// the three the restructure removed, and the name Standing replaced
+		for (String gone : new String[]{"### PvM", "### Skilling", "### Collection log",
+			"### Hiscores"})
 		{
 			assertTrue("the README still has a section for a tab that is gone: " + gone,
 				!text.contains(gone));
