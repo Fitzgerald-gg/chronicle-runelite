@@ -4923,13 +4923,21 @@ class ChroniclePanel extends PluginPanel
 		{
 			return named;
 		}
-		List<LocalStore.SourceRow> all = sources();
-		String low = name.toLowerCase(Locale.ROOT);
+		// The ledger's own spelling of the SAME thing, and nothing looser: a
+		// plural against a singular, "Jellies" against "Jelly", or the container
+		// a fight pays out through.
+		//
+		// NOT a name that merely contains this one. The ledger's "Dagannoth"
+		// sits inside "Dagannoth Rex", so all three kings opened the ordinary
+		// dagannoth's six hundred kills instead of their own page, and "King
+		// Black Dragon" would have opened "Black dragon" the same way. A click
+		// landing on a different monster's loot is worse than landing on an
+		// empty page, which is what a source with no drops honestly has.
+		String kind = LocalStore.kindOf(name);
 		LocalStore.SourceRow best = null;
-		for (LocalStore.SourceRow r : all)
+		for (LocalStore.SourceRow r : sources())
 		{
-			String rl = r.name.toLowerCase(Locale.ROOT);
-			if ((rl.contains(low) || low.contains(rl))
+			if ((LocalStore.kindOf(r.name).equals(kind) || namesInBrackets(r.name, name))
 				&& (best == null || r.value > best.value))
 			{
 				best = r;
