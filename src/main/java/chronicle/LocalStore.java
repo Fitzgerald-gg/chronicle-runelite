@@ -52,9 +52,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 *
 	 * <p>0: the Plugin Hub's build to 7bd5812, the ledger raised to the page
 	 * counter as the floor, and the kills sum over the ledger's own figures.
-	 * 1: the page's labelled line and the ledger's own figure as the floor
-	 * (56acd70), and the kills sum over the reconciled figure of each fight
-	 * the ledger has seen loot from, found by kind (ff053e5).
+	 * 1: the page's labelled line and the ledger's own figure as the floor,
+	 * and the kills sum over the reconciled figure of each fight the ledger
+	 * has seen loot from, found by kind.
 	 */
 	static final int KILLS_VERSION = 1;
 	// runaway guard
