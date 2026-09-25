@@ -136,8 +136,8 @@ public class ExampleExportTest
 			"resourcesDropped", "buildSources", "buildClog", "buildSpan",
 			"spanAsked", "historySpine", "historyFeed", "historyJourney",
 			"historyDay", "historyFeedTs", "historyEpoch", "skilled",
-			"itemsByName", "periodFrom", "periodTo", "searchFirst", "milestones", "landedSlots", "records", "daysPlayed", "daySkills", "crossedDays", "dayTotals", "playedIsTheGames", "searchFeed", "searchFeedTs", "searchFeedSpine",
-			"taskItemsEver", "taskKillsEverCache", "sheetBandDrawn", "periodTip", "measuredSince", "buildAchievements"})
+			"itemsByName", "periodFrom", "periodTo", "searchFirst", "milestones", "landedSlots", "records", "daysPlayed", "daySkills", "crossedDays", "dayTotals", "searchFeed", "searchFeedTs", "searchFeedSpine",
+			"taskItemsEver", "taskKillsEverCache", "periodTip", "measuredSince", "buildAchievements"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
 		}

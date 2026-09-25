@@ -788,12 +788,12 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private static JsonObject table(String name)
 	{
-		try (java.io.Reader in = new InputStreamReader(ChroniclePanel.class.getResourceAsStream(
+		try (InputStreamReader in = new InputStreamReader(ChroniclePanel.class.getResourceAsStream(
 			name), StandardCharsets.UTF_8))
 		{
 			return new com.google.gson.JsonParser().parse(in).getAsJsonObject();
 		}
-		catch (java.io.IOException | RuntimeException ex)
+		catch (Exception ex)
 		{
 			return new JsonObject();
 		}
@@ -1400,7 +1400,6 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildSheet()
 	{
 		JPanel p = column();
-		sheetBandDrawn = false;
 		String was = histFacet;
 		try
 		{
@@ -1410,7 +1409,6 @@ class ChroniclePanel extends PluginPanel
 		finally
 		{
 			histFacet = was;
-			sheetBandDrawn = false;
 		}
 		p.add(activitySheet());
 		p.add(buildKills());
@@ -2238,10 +2236,6 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 
-	// Whether the time played on show is the game's own total rather than the
-	// hours Chronicle has watched. Cleared at the top of every build.
-	private boolean playedIsTheGames;
-
 	// True while a rebuild is a redraw of the view the reader is already in: the
 	// home ticker, a push landing under them, a fold or a "show more". The
 	// viewport holds their place through all of those on its own. False is
@@ -2317,7 +2311,6 @@ class ChroniclePanel extends PluginPanel
 		// standing it carried one period's dropped figure onto another period's
 		// gathered row, and stepping the period never moved it.
 		resourcesDropped = 0;
-		playedIsTheGames = false;
 		kcByKind = null;
 		chatKcByKind = null;
 		killKinds = null;
@@ -4162,13 +4155,8 @@ class ChroniclePanel extends PluginPanel
 		// used to stop at twenty and send the reader to the search box for the
 		// rest, which made the search the only door to most of the log.
 		final int cap = drillShown.getOrDefault("killlog", ROW_CAP);
-		int mounted = 0;
-		for (Map.Entry<String, Long> e : kcs)
+		for (Map.Entry<String, Long> e : firstN(kcs, cap))
 		{
-			if (mounted++ >= cap)
-			{
-				break;
-			}
 			JPanel r = row(e.getKey(), fmt(e.getValue()));
 			final String mob = e.getKey();
 			link(r, () -> openSourceLoose(mob));
@@ -4471,14 +4459,9 @@ class ChroniclePanel extends PluginPanel
 			head.add(row("Slayer xp (est.)", gp(j.totalXpEst)));
 		}
 		spaced(p, head);
-		int mounted = 0;
-		for (int k = 0; k < shown.size(); k++)
+		for (int k = 0; k < shown.size() && k < slayerShown; k++)
 		{
 			LocalStore.SlayerTask t = shown.get(k);
-			if (mounted++ >= slayerShown)
-			{
-				break;
-			}
 			JPanel card = cardPlain();
 			// Lit name, no suffix: the card has no room for one.
 			// the drill indexes the WHOLE journey, not the window's slice of it
@@ -7925,13 +7908,8 @@ class ChroniclePanel extends PluginPanel
 			if (experience)
 			{
 				int cap = shownCap(GAINS_LIST);
-				int mounted = 0;
-				for (Map.Entry<String, Long> e : gains)
+				for (Map.Entry<String, Long> e : firstN(gains, cap))
 				{
-					if (mounted++ >= cap)
-					{
-						break;
-					}
 					card.add(row(StatRegistry.prettify(e.getKey()), "+" + gp(e.getValue())));
 				}
 				// the gains are the group's own rows, not a list one step in,
@@ -7975,13 +7953,8 @@ class ChroniclePanel extends PluginPanel
 		if (open)
 		{
 			int cap = shownCap(listKey);
-			int mounted = 0;
-			for (String[] entry : list)
+			for (String[] entry : firstN(list, cap))
 			{
-				if (mounted++ >= cap)
-				{
-					break;
-				}
 				card.add(nested(ghostRow(entry[0], entry[1])));
 			}
 			addMore(card, listKey, list.size(), cap, true);
@@ -8015,13 +7988,8 @@ class ChroniclePanel extends PluginPanel
 			return;
 		}
 		int cap = shownCap(stateKey);
-		int mounted = 0;
-		for (HistoryProgress.Row r : s.rows())
+		for (HistoryProgress.Row r : firstN(s.rows(), cap))
 		{
-			if (mounted++ >= cap)
-			{
-				break;
-			}
 			card.add(nested(row(r.label(), "+" + figure(r))));
 		}
 		addMore(card, stateKey, s.rows().size(), cap, true);
@@ -8783,13 +8751,8 @@ class ChroniclePanel extends PluginPanel
 		Integer asked = histListShown.get(stateKey);
 		int cap = asked == null ? BAND_CAP : asked;
 		JPanel card = cardPlain();
-		int mounted = 0;
-		for (Map.Entry<String, Long> e : rows)
+		for (Map.Entry<String, Long> e : firstN(rows, cap))
 		{
-			if (mounted++ >= cap)
-			{
-				break;
-			}
 			card.add(kindRow(e.getKey(), e.getValue(),
 				paidFor(worth, loose, e.getKey()), withIcons));
 		}
@@ -9310,13 +9273,7 @@ class ChroniclePanel extends PluginPanel
 	/** The combat level, wearing a handful of the combat counters on hover. */
 	private JPanel combatLevelTile(Map<String, Long> gain, HistoryLog.Levels opened)
 	{
-		JPanel cell = tile(4, 6);
-		cell.setAlignmentX(Component.LEFT_ALIGNMENT);
-		cell.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
-		JLabel name = new JLabel("Combat");
-		name.setFont(small());
-		name.setForeground(dim());
-		cell.add(name, BorderLayout.CENTER);
+		JPanel cell = levelTile("Combat");
 		int cb = plugin.combatLevel();
 		// Where it opened, when the period moved it: the shape the total level
 		// tile beside this one already draws. Worked out from the seven skills'
@@ -9531,16 +9488,8 @@ class ChroniclePanel extends PluginPanel
 		{
 			paid += b.value;
 		}
-		List<String> labels = new ArrayList<>();
-		List<String> figures = new ArrayList<>();
-		labels.add("Tasks tracked");
-		figures.add(fmt(tally[2]));
-		labels.add("Kills on task");
-		figures.add(fmt(tally[0]));
-		labels.add("On-task loot");
-		figures.add(gps(paid));
-		return tip("Slayer", labels.toArray(new String[0]),
-			figures.toArray(new String[0]));
+		return tip("Slayer", new String[]{"Tasks tracked", "Kills on task", "On-task loot"},
+			new String[]{fmt(tally[2]), fmt(tally[0]), gps(paid)});
 	}
 
 	/** The combat level the seven opening levels work out to, or null short of all seven. */
@@ -10240,20 +10189,7 @@ class ChroniclePanel extends PluginPanel
 			figure = (stand.standing == shut.total
 				? fmt(opened.total) + " to " + figure : figure) + " · +" + fmt(levels);
 		}
-		JPanel cell = tile(4, 6);
-		cell.setAlignmentX(Component.LEFT_ALIGNMENT);
-		cell.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
-
-		// CENTER, not WEST. BorderLayout gives WEST and EAST each their preferred
-		// width and lets them overlap when the row is narrower than the two of
-		// them; CENTER takes what is left. On a period the figure grows from
-		// "2,235" to "2,231 to 2,235 - +2" and the two were drawn on top of one
-		// another, which is how "Total level" came out as T2a2l3ke2t5o1t2a2l.
-		JLabel name = new JLabel("Total level");
-		name.setFont(small());
-		name.setForeground(dim());
-		cell.add(name, BorderLayout.CENTER);
-
+		JPanel cell = levelTile("Total level");
 		if (periodTip != null)
 		{
 			cell.setToolTipText(periodTip);
@@ -10359,9 +10295,6 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	private String histFacet = "Skills";
-	// True while the sheet is drawing its SECOND band, so the head card that
-	// stands over the whole sheet is not drawn again underneath it.
-	private boolean sheetBandDrawn;
 	// What the total level tile says on hover while the sheet is drawing, in the
 	// markup RuneLite's own hiscores panel uses for exactly this.
 	private String periodTip;
@@ -11347,20 +11280,7 @@ class ChroniclePanel extends PluginPanel
 			// a board measuring to it sat still through an hour of training and
 			// moved on logout: the levels above already read live and the GAIN
 			// did not, which is the half a reader is watching.
-			Map<String, Long> closesOn = closing.skills;
-			if (live)
-			{
-				Map<String, Long> nowXp = new HashMap<>(closing.skills);
-				for (Map.Entry<String, long[]> e : plugin.skillSheet().entrySet())
-				{
-					if (e.getValue() != null && e.getValue().length > 1
-						&& e.getValue()[1] > 0)
-					{
-						nowXp.merge(e.getKey(), e.getValue()[1], Math::max);
-					}
-				}
-				closesOn = nowXp;
-			}
+			Map<String, Long> closesOn = live ? closingSkills(closing.skills, true) : closing.skills;
 			List<Map.Entry<String, Long>> gains = new ArrayList<>();
 			for (Map.Entry<String, Long> e : HistoryLog.gained(opening.skills,
 				earliest.skills, closesOn, opening.complete).entrySet())
@@ -11612,7 +11532,6 @@ class ChroniclePanel extends PluginPanel
 				if (theirs > played[0])
 				{
 					played[0] = theirs;
-					playedIsTheGames = true;
 				}
 			}
 
@@ -11686,7 +11605,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				periodTip = periodTip(played, gains);
 			}
-			else if (!sheetBandDrawn)
+			else
 			{
 				p.add(headline(progress, gains, stand, opened, played));
 				p.add(vgap(5));
@@ -12491,7 +12410,7 @@ class ChroniclePanel extends PluginPanel
 						+ ": a period is the distance between two baselines, and this one holds fewer than two.";
 				return;
 			}
-			closing = closingSkills(s);
+			closing = closingSkills(s.closing.skills, periodReachesToday());
 		}
 		Map<String, Integer> startLevels = new LinkedHashMap<>();
 		Map<String, Integer> endLevels = new LinkedHashMap<>();
@@ -13590,7 +13509,7 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		HistoryLog.Baseline shut = new HistoryLog.Baseline();
-		shut.skills.putAll(closingSkills(s));
+		shut.skills.putAll(closingSkills(s.closing.skills, periodReachesToday()));
 		shut.complete = true;
 		HistoryLog.Levels was = HistoryLog.levels(s.opening, keys);
 		HistoryLog.Levels now = HistoryLog.levels(shut, keys);
@@ -13612,16 +13531,16 @@ class ChroniclePanel extends PluginPanel
 			return null;
 		}
 		Map<String, Long> out = new LinkedHashMap<>(HistoryLog.gained(s.opening.skills,
-			s.earliest.skills, closingSkills(s), s.opening.complete));
+			s.earliest.skills, closingSkills(s.closing.skills, periodReachesToday()), s.opening.complete));
 		out.remove("overall");
 		return out;
 	}
 
 	/** The xp a period closes on: its last state, or the live sheet where it reaches today. */
-	private Map<String, Long> closingSkills(Span s)
+	private Map<String, Long> closingSkills(Map<String, Long> skills, boolean live)
 	{
-		Map<String, Long> close = new HashMap<>(s.closing.skills);
-		if (periodReachesToday())
+		Map<String, Long> close = new HashMap<>(skills);
+		if (live)
 		{
 			for (Map.Entry<String, long[]> e : plugin.skillSheet().entrySet())
 			{
@@ -14140,13 +14059,8 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		String lastDay = null;
-		int mounted = 0;
-		for (JsonObject e : feed)
+		for (JsonObject e : firstN(feed, journalShown))
 		{
-			if (mounted++ >= journalShown)
-			{
-				break;
-			}
 			long ts = filedAt(e);
 			String day = ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "";
 			if (!day.equals(lastDay))
@@ -15581,6 +15495,30 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/** A dark tile, inset v top and bottom and h either side. */
+	// A full-width level tile and its name.
+	private static JPanel levelTile(String title)
+	{
+		JPanel cell = tile(4, 6);
+		cell.setAlignmentX(Component.LEFT_ALIGNMENT);
+		cell.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+		// CENTER, not WEST. BorderLayout gives WEST and EAST each their preferred
+		// width and lets them overlap when the row is narrower than the two of
+		// them; CENTER takes what is left. On a period the figure grows from
+		// "2,235" to "2,231 to 2,235 - +2" and the two were drawn on top of one
+		// another, which is how "Total level" came out as T2a2l3ke2t5o1t2a2l.
+		JLabel name = new JLabel(title);
+		name.setFont(small());
+		name.setForeground(dim());
+		cell.add(name, BorderLayout.CENTER);
+		return cell;
+	}
+
+	// The first cap of a list, or all of it where it is shorter.
+	private static <T> List<T> firstN(List<T> l, int cap)
+	{
+		return l.subList(0, Math.min(cap, l.size()));
+	}
+
 	private static JPanel tile(int v, int h)
 	{
 		JPanel cell = new JPanel(new BorderLayout(3, 0));
