@@ -265,7 +265,6 @@ public class SkillDeriver
 		}
 		if (msg.contains("You fill the bucket with sap"))
 		{
-			// an evergreen gives the same line; the tree the last click named decides
 			if (objectTarget.toLowerCase(Locale.ROOT).contains("bloodwood"))
 			{
 				statStore.incrementStat("bloodwoodSapBucketsFilled");
