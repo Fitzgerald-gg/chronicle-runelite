@@ -4136,8 +4136,8 @@ public class HistoryProgressCardTest
 		{
 			bag.add(new LocalStore.BagItem(i + 1, "Thing " + i, 1, 10));
 		}
-		Method ot = ChroniclePanel.class.getDeclaredMethod("onTaskLootPicture",
-			List.class, long.class, long.class, long[].class);
+		Method ot = ChroniclePanel.class.getDeclaredMethod("lootPicture",
+			String.class, List.class, long[].class, boolean.class);
 		ot.setAccessible(true);
 		Method ci = ChroniclePanel.class.getDeclaredMethod("copyImage", JPanel.class);
 		ci.setAccessible(true);
@@ -4145,7 +4145,7 @@ public class HistoryProgressCardTest
 		final Object[] out = new Object[2];
 		edt(() ->
 		{
-			JPanel page = (JPanel) ot.invoke(p, bag, 287L, 2_870L, new long[]{300, 4});
+			JPanel page = (JPanel) ot.invoke(p, "On-task loot", bag, new long[]{287, 2_870}, false);
 			// read before drawing: the drawing takes the page apart to set it
 			out[0] = labels(page);
 			out[1] = ci.invoke(null, page);
@@ -4167,31 +4167,6 @@ public class HistoryProgressCardTest
 			img.getWidth(null) >= 340 * 4);
 		assertTrue("the ribbon was never broken up: " + img.getHeight(null),
 			img.getHeight(null) < 2_000);
-	}
-
-	@Test
-	public void thereIsStillACeilingOnHowBigAPictureCanGet() throws Exception
-	{
-		// Columns are not a licence for a picture the size of a wall. Past six
-		// columns two hundred deep the rest is named rather than drawn, which no
-		// real board reaches.
-		ChroniclePanel p = panel(stub(true));
-		final List<LocalStore.BagItem> bag = new ArrayList<>();
-		for (int i = 0; i < 1_250; i++)
-		{
-			bag.add(new LocalStore.BagItem(i + 1, "Thing " + i, 1, 10));
-		}
-		Method ot = ChroniclePanel.class.getDeclaredMethod("onTaskLootPicture",
-			List.class, long.class, long.class, long[].class);
-		ot.setAccessible(true);
-
-		final Object[] out = new Object[1];
-		edt(() -> out[0] = labels(
-			(JPanel) ot.invoke(p, bag, 1_250L, 12_500L, new long[]{1_300, 9})));
-		@SuppressWarnings("unchecked")
-		List<String> said = (List<String>) out[0];
-		assertTrue("the ceiling is gone: " + said.size() + " rows",
-			said.contains("+ 50 more"));
 	}
 
 	@Test

@@ -209,14 +209,15 @@ public class EveryListOpensTest
 			java.nio.charset.StandardCharsets.UTF_8);
 		assertFalse("a list still ends in a pointer to search",
 			src.contains("Search finds") || src.contains("search finds"));
-		// and the inert "+ N more" tail exists only on a board drawn as a picture
+		// and no list ends in an inert "+ N more" tail; the one board that drew
+		// it, an on-task picture nothing built, is gone
 		int tails = 0;
 		int at = -1;
 		while ((at = src.indexOf("ghostRow(\"+ \"", at + 1)) >= 0)
 		{
 			tails++;
 		}
-		assertEquals("an inert tail with no door past it, off the picture board", 1, tails);
+		assertEquals("an inert tail with no door past it", 0, tails);
 	}
 
 	private static void flatten(Component c, List<Component> out)

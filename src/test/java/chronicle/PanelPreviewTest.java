@@ -212,31 +212,6 @@ public class PanelPreviewTest
 				}
 				shown.remove(top);
 
-				// the on-task board's picture, reflowed into columns
-				Method ot = ChroniclePanel.class.getDeclaredMethod("onTaskLootPicture",
-					List.class, long.class, long.class, long[].class);
-				ot.setAccessible(true);
-				List<LocalStore.BagItem> task = stub.onTaskLoot(Long.MIN_VALUE / 2,
-					Long.MAX_VALUE / 2, true);
-				if (!task.isEmpty())
-				{
-					long q = 0;
-					long v = 0;
-					for (LocalStore.BagItem b : task)
-					{
-						q += b.qty;
-						v += b.value;
-					}
-					javax.swing.JPanel tp = (javax.swing.JPanel) ot.invoke(panel, task, q, v,
-						stub.onTaskTally(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, true));
-					Object timg = pi.invoke(null, tp);
-					if (timg != null)
-					{
-						ImageIO.write((BufferedImage) timg, "png",
-							new File(out, prefix + "-copy-ontask-image.png"));
-					}
-				}
-
 				// and the item page's own picture
 				List<LocalStore.BagItem> topBag = stub.sourceItems(top);
 				if (!topBag.isEmpty())
