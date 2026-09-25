@@ -8,6 +8,7 @@ import java.util.Deque;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Actor;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -31,6 +32,7 @@ import net.runelite.api.events.StatChanged;
  * timeIdle), which is what lets the spine carry it and any period answer
  * "how long here". Nothing here is a rate: the pages divide.
  */
+@RequiredArgsConstructor
 public class TimeStatTracker implements StatTracker
 {
 	static final int TICKS_A_MINUTE = 100;
@@ -47,12 +49,6 @@ public class TimeStatTracker implements StatTracker
 	private final Deque<int[]> drops = new ArrayDeque<>();
 	private String lastNpc;
 	private int lastNpcTick = Integer.MIN_VALUE / 2;
-
-	public TimeStatTracker(StatStore store, Client client)
-	{
-		this.store = store;
-		this.client = client;
-	}
 
 	@Override
 	public void onStatChanged(StatChanged event)

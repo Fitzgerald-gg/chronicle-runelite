@@ -8,14 +8,11 @@
  */
 package chronicle.counters;
 
-import net.runelite.api.ChatMessageType;
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
-import net.runelite.api.InventoryID;
 import net.runelite.api.ItemID;
-import net.runelite.api.Item;
 import net.runelite.api.MenuAction;
-import net.runelite.api.NPC;
 import net.runelite.api.Skill;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
@@ -28,7 +25,6 @@ import net.runelite.client.util.Text;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,6 +41,7 @@ import java.util.Set;
  * with an XP boost (Lumberjack, Kandarin, Raiments). Chat is read only for the 0-XP
  * outcomes no XP drop can see: failed pickpockets, burnt food, planting.
  */
+@RequiredArgsConstructor
 public class SkillingStatTracker implements StatTracker
 {
 	private final StatStore statStore;
@@ -86,34 +83,11 @@ public class SkillingStatTracker implements StatTracker
 	private static final int RAKE_MAX_PER_EVENT = 3;
 	private int rakeTtl = 0;
 
-	// 0-xp outcomes only. Gather and produce lines stay out because the xp tuples
-	// already count those, and chat on top would double them.
-	private static final String[] SKILL_PREFIXES = {
-		"You accidentally burn",   // cooking burns
-		"You fail to pick",        // pickpocket failure; success rides the target-name tuple
-		"You plant ",              // farming seeds planted
-		"Rooftop lap", "lap count", // agility laps, which aren't 1:1 with obstacle xp
-		"into your herb sack",     // a herb sacked, whole or from the Fill option
-		"You gently shoo the letvek",
-		"You fill the bucket with sap",   // bloodwood or evergreen; the click target decides
-		"The tanner tans",         // one hide or a batch, both named in the line
-		"You put the",             // a herb into a vial of water
-		"You resurrect ",          // a thrall; the tier and kind are only in the line
-		"The glowing fish scatter" // a Tempoross spirit pool harpooned
-	};
-
 	// The game object the last click named, kept until the next object click. The
 	// sap line reads the same at an evergreen as at a bloodwood tree, so the tree
 	// tells them apart; and a tap is one click for many buckets, so the tick TTL
 	// on lastTargetName would drop every bucket after the first.
 	private String lastObjectTarget = "";
-
-	public SkillingStatTracker(StatStore statStore, Client client, SkillDeriver deriver)
-	{
-		this.statStore = statStore;
-		this.client = client;
-		this.deriver = deriver;
-	}
 
 	@Override
 	public void onStatChanged(StatChanged event)
@@ -193,17 +167,10 @@ public class SkillingStatTracker implements StatTracker
 	@Override
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
-		if (event.getItemContainer() != client.getItemContainer(InventoryID.INVENTORY))
+		Map<Integer, Integer> now = StatTracker.inventory(client, event);
+		if (now == null)
 		{
 			return;
-		}
-		Map<Integer, Integer> now = new HashMap<>();
-		for (Item it : event.getItemContainer().getItems())
-		{
-			if (it != null && it.getId() >= 0)
-			{
-				now.merge(it.getId(), it.getQuantity(), Integer::sum);
-			}
 		}
 		if (invSnapshot != null)
 		{
@@ -292,25 +259,14 @@ public class SkillingStatTracker implements StatTracker
 	@Override
 	public void onChatMessage(ChatMessage event)
 	{
-		if (event.getType() != ChatMessageType.SPAM
-			&& event.getType() != ChatMessageType.GAMEMESSAGE
-			&& event.getType() != ChatMessageType.MESBOX)
+		if (!StatTracker.gameChat(event))
 		{
 			return;
 		}
-		final String msg = event.getMessage();
-		if (msg == null || msg.isEmpty())
-		{
-			return;
-		}
-		for (String prefix : SKILL_PREFIXES)
-		{
-			if (msg.contains(prefix))
-			{
-				deriver.applyChat(msg, lastObjectTarget);
-				return;
-			}
-		}
+		// the deriver reads only the 0-xp outcomes. Gather and produce lines stay
+		// out because the xp tuples already count those, and chat on top would
+		// double them.
+		deriver.applyChat(event.getMessage(), lastObjectTarget);
 	}
 
 	@Override

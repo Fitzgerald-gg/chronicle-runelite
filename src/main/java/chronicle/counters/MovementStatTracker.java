@@ -10,6 +10,7 @@ package chronicle.counters;
 
 import com.google.gson.JsonObject;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Player;
@@ -47,6 +48,7 @@ import net.runelite.client.util.Text;
  * a player with run on and a sliver of energy too small to spend walks, and that tile
  * books as a run. Run is therefore very slightly over-counted, never under-counted.
  */
+@RequiredArgsConstructor
 public class MovementStatTracker implements StatTracker
 {
 	// A player covers two tiles in a tick only by running; walking is always one.
@@ -103,13 +105,6 @@ public class MovementStatTracker implements StatTracker
 	// chat-menu row click shortly after. The pending itself is what lets that row
 	// through; this is the gate for a row whose own arm was missed. -1 = idle
 	private int rubTick = -1;
-
-	public MovementStatTracker(StatStore statStore, Client client, ItemManager itemManager)
-	{
-		this.statStore = statStore;
-		this.client = client;
-		this.itemManager = itemManager;
-	}
 
 	@Override
 	public void onMenuOptionClicked(MenuOptionClicked event)

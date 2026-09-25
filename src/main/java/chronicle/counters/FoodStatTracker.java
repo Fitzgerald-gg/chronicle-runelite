@@ -17,13 +17,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.runelite.api.ChatMessageType;
+import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
-import net.runelite.api.InventoryID;
-import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.Skill;
 import net.runelite.api.events.ChatMessage;
@@ -50,33 +50,13 @@ import net.runelite.http.api.item.ItemPrice;
  * dose at all, so a teleport, a watering or a waterskin sip in the pairing window is
  * never taken for the potion.
  */
+@RequiredArgsConstructor
 public class FoodStatTracker implements StatTracker
 {
 	// Consumables that heal exactly one hitpoint. A +1 tick straight after one of these
 	// is that heal, not regen. Matched as a substring of the menu target.
-	private static final List<String> SINGLE_HP_HEALS = List.of(
-		"Anchovies",
-		"Cabbage",
-		"Chopped onion",
-		"Equa leaves",
-		"Fresh monkfish",
-		"Nettle-water",
-		"Onion",
-		"Potato",
-		"Pot of cream",
-		"Asgarnian ale",
-		"Axeman's folly",
-		"Bandit's brew",
-		"Beer",
-		"Chef's delight",
-		"Cider",
-		"Dragon bitter",
-		"Dwarven stout",
-		"Elven dawn",
-		"Greenman's ale",
-		"Kovac's grog",
-		"Slayer's respite",
-		"Wizard's mind bomb");
+	private static final String[] SINGLE_HP_HEALS =
+		Tables.strings(Tables.load("counters_food.json").get("singleHpHeals"));
 
 	// How long a pending Eat waits for the item to leave the pack.
 	private static final int EAT_CONFIRM_TICKS = 3;
@@ -98,17 +78,12 @@ public class FoodStatTracker implements StatTracker
 	// Cap so clicks that never resolve can't grow the queue unbounded.
 	private static final int MAX_PENDING_EATS = 8;
 
+	@AllArgsConstructor
 	private static final class PendingEat
 	{
 		// Keyed by id, because noted and unnoted forms share a name.
 		private final int itemId;
 		private int ticksLeft;
-
-		private PendingEat(int itemId, int ticksLeft)
-		{
-			this.itemId = itemId;
-			this.ticksLeft = ticksLeft;
-		}
 	}
 
 	// Previous inventory contents, for spotting the eaten stack shrink.
@@ -116,36 +91,23 @@ public class FoodStatTracker implements StatTracker
 
 	// A potion dose seen leaving the pack: which item shrank, its catalogue name with
 	// the dose suffix off, and how many doses it held.
+	@AllArgsConstructor
 	private static final class DoseDrunk
 	{
 		private final int itemId;
 		private final String base;
 		private final int doses;
 		private int ticksLeft;
-
-		private DoseDrunk(int itemId, String base, int doses, int ticksLeft)
-		{
-			this.itemId = itemId;
-			this.base = base;
-			this.doses = doses;
-			this.ticksLeft = ticksLeft;
-		}
 	}
 
 	// A drink line the pack has not yet explained: the typed key it was tallied under,
 	// and the name as drunk for the chat-name fallback should the pack never do so.
+	@AllArgsConstructor
 	private static final class ParkedDrink
 	{
 		private final String typed;
 		private final String potion;
 		private int ticksLeft;
-
-		private ParkedDrink(String typed, String potion, int ticksLeft)
-		{
-			this.typed = typed;
-			this.potion = potion;
-			this.ticksLeft = ticksLeft;
-		}
 	}
 
 	// The chat line and the pack change of one drink land in the same client cycle, in
@@ -176,15 +138,6 @@ public class FoodStatTracker implements StatTracker
 	// until ChronicleCounters builds this tracker, which it defers until the plugin has
 	// wired the sink.
 	private final BiConsumer<String, Integer> consumableSink;
-
-	public FoodStatTracker(StatStore statStore, Client client, ItemManager itemManager,
-		BiConsumer<String, Integer> consumableSink)
-	{
-		this.itemManager = itemManager;
-		this.store = statStore;
-		this.client = client;
-		this.consumableSink = consumableSink;
-	}
 
 	@Override
 	public void onMenuOptionClicked(MenuOptionClicked event)
@@ -298,18 +251,10 @@ public class FoodStatTracker implements StatTracker
 	@Override
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
-		if (event.getItemContainer() != client.getItemContainer(InventoryID.INVENTORY))
+		Map<Integer, Integer> current = StatTracker.inventory(client, event);
+		if (current == null)
 		{
 			return;
-		}
-
-		Map<Integer, Integer> current = new HashMap<>();
-		for (Item item : event.getItemContainer().getItems())
-		{
-			if (item != null && item.getId() >= 0)
-			{
-				current.merge(item.getId(), item.getQuantity(), Integer::sum);
-			}
 		}
 
 		// Confirm a pending Eat: the clicked food's own stack must have shrunk. Multi
@@ -328,7 +273,7 @@ public class FoodStatTracker implements StatTracker
 				// id at once: a multi-unit shrink is a drop, a deposit, a trade or a
 				// death. Don't break out of the loop either: a combo-eat shrinks two
 				// stacks in one event.
-				if (consumed != 1 || !takePendingEat(before.getKey()))
+				if (consumed != 1 || take(pendingEats, p -> p.itemId == before.getKey()) == null)
 				{
 					continue;
 				}
@@ -369,7 +314,7 @@ public class FoodStatTracker implements StatTracker
 				{
 					continue;
 				}
-				ParkedDrink drink = takeParkedDrink(dose.base);
+				ParkedDrink drink = take(parkedDrinks, d -> namesAgree(d.potion, dose.base));
 				if (drink != null)
 				{
 					filePrice(drink.typed, itemDosePrice(dose));
@@ -449,36 +394,6 @@ public class FoodStatTracker implements StatTracker
 		return false;
 	}
 
-	/** The first dose waiting that names the potion this drink line does, or null. */
-	private DoseDrunk takePendingDose(String potion)
-	{
-		for (Iterator<DoseDrunk> it = pendingDoses.iterator(); it.hasNext(); )
-		{
-			DoseDrunk dose = it.next();
-			if (namesAgree(potion, dose.base))
-			{
-				it.remove();
-				return dose;
-			}
-		}
-		return null;
-	}
-
-	/** The first drink line waiting that names the potion this dose was, or null. */
-	private ParkedDrink takeParkedDrink(String base)
-	{
-		for (Iterator<ParkedDrink> it = parkedDrinks.iterator(); it.hasNext(); )
-		{
-			ParkedDrink drink = it.next();
-			if (namesAgree(drink.potion, base))
-			{
-				it.remove();
-				return drink;
-			}
-		}
-		return null;
-	}
-
 	/**
 	 * Whether a drink line and a pack item name the same potion. The chat names it in
 	 * its own words ("restore prayer potion"), the catalogue in its own ("Prayer
@@ -513,7 +428,7 @@ public class FoodStatTracker implements StatTracker
 	 */
 	private void priceDrink(String typed, String potion)
 	{
-		DoseDrunk dose = takePendingDose(potion);
+		DoseDrunk dose = take(pendingDoses, d -> namesAgree(potion, d.base));
 		if (dose != null)
 		{
 			filePrice(typed, itemDosePrice(dose));
@@ -664,18 +579,19 @@ public class FoodStatTracker implements StatTracker
 		return definition == null ? "" : definition.getName();
 	}
 
-	/** Remove one queued eat matching this item; false when none is waiting on it. */
-	private boolean takePendingEat(int itemId)
+	/** Remove the first waiting entry that matches and hand it back; null when none does. */
+	private static <T> T take(List<T> waiting, Predicate<T> match)
 	{
-		for (Iterator<PendingEat> it = pendingEats.iterator(); it.hasNext(); )
+		for (Iterator<T> it = waiting.iterator(); it.hasNext(); )
 		{
-			if (it.next().itemId == itemId)
+			T t = it.next();
+			if (match.test(t))
 			{
 				it.remove();
-				return true;
+				return t;
 			}
 		}
-		return false;
+		return null;
 	}
 
 	/**
@@ -753,10 +669,7 @@ public class FoodStatTracker implements StatTracker
 	@Override
 	public void onChatMessage(ChatMessage event)
 	{
-		ChatMessageType type = event.getType();
-		if (type != ChatMessageType.SPAM
-			&& type != ChatMessageType.GAMEMESSAGE
-			&& type != ChatMessageType.MESBOX)
+		if (!StatTracker.gameChat(event))
 		{
 			return;
 		}

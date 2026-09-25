@@ -1,0 +1,27 @@
+{
+ "_comment": "Read by FoodStatTracker. singleHpHeals: the consumables that heal exactly one hitpoint, matched as a substring of the menu target.",
+ "singleHpHeals": [
+  "Anchovies",
+  "Cabbage",
+  "Chopped onion",
+  "Equa leaves",
+  "Fresh monkfish",
+  "Nettle-water",
+  "Onion",
+  "Potato",
+  "Pot of cream",
+  "Asgarnian ale",
+  "Axeman's folly",
+  "Bandit's brew",
+  "Beer",
+  "Chef's delight",
+  "Cider",
+  "Dragon bitter",
+  "Dwarven stout",
+  "Elven dawn",
+  "Greenman's ale",
+  "Kovac's grog",
+  "Slayer's respite",
+  "Wizard's mind bomb"
+ ]
+}

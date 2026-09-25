@@ -8,6 +8,7 @@
  */
 package chronicle.counters;
 
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
@@ -26,6 +27,7 @@ import net.runelite.api.events.ItemContainerChanged;
  * whatever landed in the pack, and only if it is small enough to be a volley. Ava's
  * recoveries never reach the slot: the tally is ammo gone for good.
  */
+@RequiredArgsConstructor
 public class RangedStatTracker implements StatTracker
 {
 	// a one-tick drop bigger than this is a bank deposit or a death, not shooting
@@ -42,12 +44,6 @@ public class RangedStatTracker implements StatTracker
 	private int pendingConsume;
 	// baseline for the unequip check
 	private int packAmmoAtTickStart;
-
-	public RangedStatTracker(StatStore store, Client client)
-	{
-		this.store = store;
-		this.client = client;
-	}
 
 	@Override
 	public void onItemContainerChanged(ItemContainerChanged event)

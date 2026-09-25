@@ -9,8 +9,8 @@
 package chronicle.counters;
 
 import java.util.Set;
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Actor;
-import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Hitsplat;
@@ -30,6 +30,7 @@ import static chronicle.counters.StatKeys.DAMAGE_DEALT;
  * Lifetime combat counters: damage dealt and taken, biggest hits, blocks, misses, deaths.
  * Damage comes off the hitsplat stream; deaths off the chat death notice.
  */
+@RequiredArgsConstructor
 public class CombatStatTracker implements StatTracker
 {
 	// Every hitsplat that is damage, plain and max, in all five colours; poison and
@@ -47,12 +48,6 @@ public class CombatStatTracker implements StatTracker
 	// Special attack energy last tick (0-1000). A drop means a spec was used; regen and
 	// death charge only ever raise it. -1 = unprimed.
 	private int prevSpecEnergy = -1;
-
-	public CombatStatTracker(StatStore store, Client client)
-	{
-		this.store = store;
-		this.client = client;
-	}
 
 	@Override
 	public void onGameTick(GameTick tick)
@@ -136,7 +131,7 @@ public class CombatStatTracker implements StatTracker
 	public void onChatMessage(ChatMessage event)
 	{
 		// the death notice only ever arrives on these three channels
-		if (!isTrackedChannel(event.getType()))
+		if (!StatTracker.gameChat(event))
 		{
 			return;
 		}
@@ -207,12 +202,5 @@ public class CombatStatTracker implements StatTracker
 	private boolean isLocalPlayer(Actor actor)
 	{
 		return actor == client.getLocalPlayer();
-	}
-
-	private static boolean isTrackedChannel(ChatMessageType type)
-	{
-		return type == ChatMessageType.SPAM
-			|| type == ChatMessageType.GAMEMESSAGE
-			|| type == ChatMessageType.MESBOX;
 	}
 }

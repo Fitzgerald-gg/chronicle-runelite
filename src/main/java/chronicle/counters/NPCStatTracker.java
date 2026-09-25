@@ -8,23 +8,20 @@
  */
 package chronicle.counters;
 
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
 
 /**
  * Pet-petting, counted off the "Pet" menu click and settled a tick later.
  */
+@RequiredArgsConstructor
 public class NPCStatTracker implements StatTracker
 {
 	private final StatStore statStore;
 
 	private boolean evenTick = false;
 	private boolean pendingPet = false;
-
-	public NPCStatTracker(StatStore statStore)
-	{
-		this.statStore = statStore;
-	}
 
 	@Override
 	public void onMenuOptionClicked(MenuOptionClicked event)

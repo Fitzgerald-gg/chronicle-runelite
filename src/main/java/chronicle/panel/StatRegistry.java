@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import lombok.AllArgsConstructor;
 
 /**
  * Presentation table for counter keys: which family a key belongs to, which
@@ -61,20 +62,13 @@ public final class StatRegistry
 	private static final Set<String> PEAK = Tables.set(TABLES, "peak");
 
 	// one craft's claim on the key space: named keys, floor totals, typed suffixes
+	@AllArgsConstructor
 	private static final class SkillSpec
 	{
 		final String name;
 		final String[] suffixes;
 		final String[] floors;
 		final String[] keys;
-
-		SkillSpec(String name, String[] suffixes, String[] floors, String[] keys)
-		{
-			this.name = name;
-			this.suffixes = suffixes;
-			this.floors = floors;
-			this.keys = keys;
-		}
 	}
 
 	// matchedSuffix takes the first hit: this order, and the order inside each

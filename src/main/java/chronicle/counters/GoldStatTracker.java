@@ -8,6 +8,7 @@
  */
 package chronicle.counters;
 
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.InventoryID;
@@ -27,6 +28,7 @@ import net.runelite.api.widgets.InterfaceID;
  * (a drop, a player trade, a bank withdrawal) fall outside that window and aren't
  * counted.
  */
+@RequiredArgsConstructor
 public class GoldStatTracker implements StatTracker
 {
 	// no shop open. -1 is safe as a sentinel: a real coin count is never negative
@@ -37,12 +39,6 @@ public class GoldStatTracker implements StatTracker
 
 	// pack coins at the end of the previous tick, or IDLE
 	private int coinsLastTick = IDLE;
-
-	public GoldStatTracker(StatStore statStore, Client client)
-	{
-		this.statStore = statStore;
-		this.client = client;
-	}
 
 	@Override
 	public void onWidgetLoaded(WidgetLoaded event)

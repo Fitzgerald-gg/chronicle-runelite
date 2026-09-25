@@ -8,13 +8,11 @@
  */
 package chronicle.counters;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
-import net.runelite.api.InventoryID;
-import net.runelite.api.Item;
 import net.runelite.api.ItemID;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
@@ -28,6 +26,7 @@ import net.runelite.api.events.StatChanged;
  * Magic counters read off the local player's cast animation: alchemy coins, offensive
  * casts, and the two Arceuus offerings.
  */
+@RequiredArgsConstructor
 public class MagicStatTracker implements StatTracker
 {
 	private static final int HIGH_ALCH_ANIM = 713;
@@ -91,12 +90,6 @@ public class MagicStatTracker implements StatTracker
 	private int prevPrayerXp = -1;
 	private int offeringXpThisTick = 0;
 
-	public MagicStatTracker(StatStore store, Client client)
-	{
-		this.store = store;
-		this.client = client;
-	}
-
 	@Override
 	public void onAnimationChanged(AnimationChanged event)
 	{
@@ -134,20 +127,13 @@ public class MagicStatTracker implements StatTracker
 	@Override
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
-		if (event.getItemContainer() != client.getItemContainer(InventoryID.INVENTORY))
+		Map<Integer, Integer> now = StatTracker.inventory(client, event);
+		if (now == null)
 		{
 			return;
 		}
 		// Tally non-rune items leaving the pack; if an offering was cast this tick, onGameTick
 		// credits them as bones/ashes sacrificed. Runes are the spell cost.
-		Map<Integer, Integer> now = new HashMap<>();
-		for (Item it : event.getItemContainer().getItems())
-		{
-			if (it != null && it.getId() >= 0)
-			{
-				now.merge(it.getId(), it.getQuantity(), Integer::sum);
-			}
-		}
 		if (invSnap != null)
 		{
 			for (Map.Entry<Integer, Integer> e : invSnap.entrySet())

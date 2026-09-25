@@ -8,6 +8,7 @@
  */
 package chronicle.counters;
 
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.InventoryID;
 import net.runelite.api.Item;
@@ -20,6 +21,7 @@ import net.runelite.client.game.ItemManager;
  * Item interactions with no attempt count of their own: examines, drops (and the value
  * binned), cabbage and flax picks. All of them arrive as a menu click or a line of chat.
  */
+@RequiredArgsConstructor
 public class ItemStatTracker implements StatTracker
 {
 	private final StatStore statStore;
@@ -29,15 +31,6 @@ public class ItemStatTracker implements StatTracker
 	// tells a gathered resource apart from bank junk at the click. nullable: without
 	// one, a drop only feeds the plain dropped-value stat.
 	private final GatheredLedger gatheredLedger;
-
-	public ItemStatTracker(StatStore statStore, Client client, ItemManager itemManager,
-		GatheredLedger gatheredLedger)
-	{
-		this.statStore = statStore;
-		this.client = client;
-		this.itemManager = itemManager;
-		this.gatheredLedger = gatheredLedger;
-	}
 
 	@Override
 	public void onMenuOptionClicked(MenuOptionClicked event)

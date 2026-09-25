@@ -8,6 +8,12 @@
  */
 package chronicle.counters;
 
+import java.util.HashMap;
+import java.util.Map;
+import net.runelite.api.ChatMessageType;
+import net.runelite.api.Client;
+import net.runelite.api.InventoryID;
+import net.runelite.api.Item;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
@@ -45,4 +51,31 @@ public interface StatTracker
 	default void onStatChanged(StatChanged event) {}
 
 	default void onItemContainerChanged(ItemContainerChanged event) {}
+
+	// the three channels the game's own lines arrive on
+	static boolean gameChat(ChatMessage event)
+	{
+		ChatMessageType type = event.getType();
+		return type == ChatMessageType.SPAM
+			|| type == ChatMessageType.GAMEMESSAGE
+			|| type == ChatMessageType.MESBOX;
+	}
+
+	// the pack as item id to quantity, or null when the change is to another container
+	static Map<Integer, Integer> inventory(Client client, ItemContainerChanged event)
+	{
+		if (event.getItemContainer() != client.getItemContainer(InventoryID.INVENTORY))
+		{
+			return null;
+		}
+		Map<Integer, Integer> now = new HashMap<>();
+		for (Item it : event.getItemContainer().getItems())
+		{
+			if (it != null && it.getId() >= 0)
+			{
+				now.merge(it.getId(), it.getQuantity(), Integer::sum);
+			}
+		}
+		return now;
+	}
 }

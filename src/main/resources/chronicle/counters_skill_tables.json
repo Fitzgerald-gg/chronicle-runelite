@@ -1,6 +1,6 @@
 {
  "_comment": {
-  "file": "Read by SkillDeriver (every table but singleHpHeals) and FoodStatTracker (singleHpHeals). What each table is for is said where the Java declares it.",
+  "file": "Read by SkillDeriver. What each table is for is said where the Java declares it.",
   "prayerBaseXp": "Ashes carry their scatter base and bones their bury base, written as the decimal the xp is. The empty key is plain Ashes.",
   "reanimXp": "Keyed by the whole xp a reanimation pays, as written in decimal.",
   "netTrap": "Keyed by the catch xp as a decimal, in the order the species are tried."
@@ -192,29 +192,5 @@
   "rune essence",
   "daeyalt essence",
   "dark essence fragments"
- ],
- "singleHpHeals": [
-  "Anchovies",
-  "Cabbage",
-  "Chopped onion",
-  "Equa leaves",
-  "Fresh monkfish",
-  "Nettle-water",
-  "Onion",
-  "Potato",
-  "Pot of cream",
-  "Asgarnian ale",
-  "Axeman's folly",
-  "Bandit's brew",
-  "Beer",
-  "Chef's delight",
-  "Cider",
-  "Dragon bitter",
-  "Dwarven stout",
-  "Elven dawn",
-  "Greenman's ale",
-  "Kovac's grog",
-  "Slayer's respite",
-  "Wizard's mind bomb"
  ]
 }
