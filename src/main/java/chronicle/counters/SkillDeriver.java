@@ -8,14 +8,9 @@
  */
 package chronicle.counters;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,154 +37,37 @@ import net.runelite.client.game.ItemManager;
 @Singleton
 public class SkillDeriver
 {
-	private static final Map<String, String> SMITH_ORE_ALIAS = new HashMap<>();
-	private static final Set<String> SMITH_METALS = new HashSet<>(Arrays.asList(
-		"bronze", "iron", "steel", "silver", "gold", "mithril",
-		"adamant", "adamantite", "rune", "runite", "black", "blurite"));
-	private static final Set<String> MINING_ROCKS = new HashSet<>(Arrays.asList(
-		"coal", "clay", "limestone", "amethyst", "pure essence", "pay-dirt", "pay dirt",
-		"volcanic ash", "barronite shards", "barronite deposit",
-		"basalt", "urt salt", "efh salt", "te salt", "daeyalt shard",
-		"dense essence block"));
+	// the fixed lookup tables below; the file carries its own notes on the rows
+	private static final JsonObject TABLES = Tables.load("counters_skill_tables.json");
+	private static final Map<String, String> SMITH_ORE_ALIAS = Tables.map(TABLES, "smithOreAlias");
+	private static final Set<String> SMITH_METALS = Tables.set(TABLES, "smithMetals");
+	private static final Set<String> MINING_ROCKS = Tables.set(TABLES, "miningRocks");
 	// the catches the game hands over with no "Raw " in front of the name
-	private static final Set<String> FISH_NORAW = new HashSet<>(Arrays.asList(
-		"minnow", "minnows", "karambwanji", "sacred eel"));
-	private static final Map<String, String> ITEM_ALIASES = new HashMap<>();
-	private static final Set<String> PRODUCTION = new HashSet<>(Arrays.asList(
-		"FLETCHING", "CRAFTING", "HERBLORE", "HUNTER"));
+	private static final Set<String> FISH_NORAW = Tables.set(TABLES, "fishNoRaw");
+	private static final Map<String, String> ITEM_ALIASES = Tables.map(TABLES, "itemAliases");
+	private static final Set<String> PRODUCTION = Tables.set(TABLES, "production");
 	// gathering: generic floor key + typed family suffix
-	private static final Map<String, String[]> GATHERING = new HashMap<>();
+	private static final Map<String, String> GATHERING_FLOOR = Tables.map(TABLES, "gatheringFloor");
+	private static final Map<String, String> GATHERING_SUFFIX = Tables.map(TABLES, "gatheringSuffix");
 	// gp is only counted where the world hands over new material. cooking,
 	// runecraft, smithing and herblore transform something already valued.
-	private static final Set<String> VALUED_GATHERING = new HashSet<>(Arrays.asList(
-		"WOODCUTTING", "MINING", "FISHING"));
+	private static final Set<String> VALUED_GATHERING = Tables.set(TABLES, "valuedGathering");
 	// net-trap species by exact catch xp (merged multi-trap deltas match ×n)
-	private static final double[][] NET_TRAP_BASES = {
-		{152.0, 0}, {224.0, 1}, {272.0, 2}, {319.2, 3}, {344.0, 4}};
-	private static final String[] NET_TRAP_KEYS = {
-		"swampLizardsTrapped", "orangeSalamandersTrapped", "redSalamandersTrapped",
-		"blackSalamandersTrapped", "tecuSalamandersTrapped"};
+	private static final Map<String, String> NET_TRAP = Tables.map(TABLES, "netTrap");
 	// six nets is the most a hunter can lay at once
 	private static final int NET_TRAP_MAX = 6;
-	private static final Map<Integer, String> ENSOULED_REANIM_XP = new HashMap<>();
-	private static final Map<String, Double> PRAYER_BASE_XP = new HashMap<>();
-	private static final Map<String, String> HUNTER_ITEM_SPECIES = new HashMap<>();
-	private static final Map<String, String> BUTTERFLY_TARGETS = new HashMap<>();
+	private static final Map<String, String> ENSOULED_REANIM_XP = Tables.map(TABLES, "reanimXp");
+	private static final Map<String, String> PRAYER_BASE_XP = Tables.map(TABLES, "prayerBaseXp");
+	private static final Map<String, String> HUNTER_ITEM_SPECIES = Tables.map(TABLES, "hunterItemSpecies");
+	private static final Map<String, String> BUTTERFLY_TARGETS = Tables.map(TABLES, "butterflyTargets");
 	// What an altar eats to make a rune, by name so a reskinned id still lands.
 	// Guardian essence is deliberately absent: it is the only essence the
 	// Guardians of the Rift altars take, and those altars roll no pet, so
 	// leaving it out keeps the minigame out of the count entirely.
-	private static final Set<String> ALTAR_ESSENCE = new HashSet<>(Arrays.asList(
-		"pure essence", "rune essence", "daeyalt essence", "dark essence fragments"));
-
-	static
-	{
-		SMITH_ORE_ALIAS.put("adamant", "adamantite");
-		SMITH_ORE_ALIAS.put("rune", "runite");
-		ITEM_ALIASES.put("shrimps", "shrimp");
-		ITEM_ALIASES.put("minnows", "minnow");
-		ITEM_ALIASES.put("harpoonfish", "harpoonFish");
-		ITEM_ALIASES.put("anchovy", "anchovies");
-		GATHERING.put("WOODCUTTING", new String[]{"logsChopped", "LogsChopped"});
-		GATHERING.put("MINING", new String[]{"rocksMined", "Mined"});
-		GATHERING.put("FISHING", new String[]{"fishCaught", "Caught"});
-		GATHERING.put("COOKING", new String[]{"foodCooked", "Cooked"});
-		String[][] reanimPairs = {
-			{"130", "goblin"}, {"182", "monkey"}, {"286", "imp"}, {"364", "minotaur"},
-			{"454", "scorpion"}, {"480", "bear"}, {"494", "unicorn"}, {"520", "dog"},
-			{"584", "chaosDruid"}, {"650", "giant"}, {"716", "ogre"}, {"754", "elf"},
-			{"780", "troll"}, {"832", "horror"}, {"884", "kalphite"}, {"936", "dagannoth"},
-			{"1040", "bloodveld"}, {"1104", "tzhaar"}, {"1170", "demon"},
-			{"1200", "hellhound"}, {"1234", "aviansie"}, {"1300", "abyssal"},
-			{"1560", "dragon"}};
-		for (String[] p : reanimPairs)
-		{
-			ENSOULED_REANIM_XP.put(Integer.parseInt(p[0]), p[1]);
-		}
-		// ashes (scatter base); "" = plain Ashes. bones (bury base).
-		PRAYER_BASE_XP.put("", 10.0);
-		PRAYER_BASE_XP.put("fiendish", 10.0);
-		PRAYER_BASE_XP.put("vile", 25.0);
-		PRAYER_BASE_XP.put("malicious", 65.0);
-		PRAYER_BASE_XP.put("abyssal", 85.0);
-		PRAYER_BASE_XP.put("infernal", 110.0);
-		PRAYER_BASE_XP.put("normal", 4.5);
-		PRAYER_BASE_XP.put("wolf", 4.5);
-		PRAYER_BASE_XP.put("burnt", 4.5);
-		PRAYER_BASE_XP.put("monkey", 5.0);
-		PRAYER_BASE_XP.put("bat", 5.3);
-		PRAYER_BASE_XP.put("big", 15.0);
-		PRAYER_BASE_XP.put("jogre", 15.0);
-		PRAYER_BASE_XP.put("zogre", 22.5);
-		PRAYER_BASE_XP.put("shaikahan", 25.0);
-		PRAYER_BASE_XP.put("babydragon", 30.0);
-		PRAYER_BASE_XP.put("wyrm", 50.0);
-		PRAYER_BASE_XP.put("dragon", 72.0);
-		PRAYER_BASE_XP.put("wyvern", 72.0);
-		PRAYER_BASE_XP.put("drake", 80.0);
-		PRAYER_BASE_XP.put("fayrg", 84.0);
-		PRAYER_BASE_XP.put("lavaDragon", 85.0);
-		PRAYER_BASE_XP.put("raurg", 96.0);
-		PRAYER_BASE_XP.put("hydra", 110.0);
-		PRAYER_BASE_XP.put("dagannoth", 125.0);
-		PRAYER_BASE_XP.put("ourg", 140.0);
-		PRAYER_BASE_XP.put("superiorDragon", 150.0);
-		String[][] species = {
-			{"Chinchompa", "greyChinchompasTrapped"},
-			{"Red chinchompa", "redChinchompasTrapped"},
-			{"Black chinchompa", "blackChinchompasTrapped"},
-			{"Ferret", "ferretsTrapped"},
-			{"Jerboa tail", "embertailedJerboasTrapped"},
-			{"Kebbit claws", "wildKebbitsTrapped"},
-			{"Barb-tail harpoon", "barbTailedKebbitsTrapped"},
-			{"Kebbit spike", "pricklyKebbitsTrapped"},
-			{"Kebbit teeth", "sabreToothedKebbitsTrapped"},
-			{"Fox fur", "pyreFoxesTrapped"},
-			{"Damaged monkey tail", "maniacalMonkeysTrapped"},
-			{"Spotted kebbit fur", "spottedKebbitsTrapped"},
-			{"Dark kebbit fur", "darkKebbitsTrapped"},
-			{"Dashing kebbit fur", "dashingKebbitsTrapped"},
-			{"Polar kebbit fur", "polarKebbitsTrapped"},
-			{"Common kebbit fur", "commonKebbitsTrapped"},
-			{"Feldip weasel fur", "feldipWeaselsTrapped"},
-			{"Desert devil fur", "desertDevilsTrapped"},
-			{"Long kebbit spike", "razorBackedKebbitsTrapped"},
-			{"Larupia fur", "spinedLarupiasTrapped"},
-			{"Tatty larupia fur", "spinedLarupiasTrapped"},
-			{"Graahk fur", "hornedGraahksTrapped"},
-			{"Tatty graahk fur", "hornedGraahksTrapped"},
-			{"Kyatt fur", "sabreToothedKyattsTrapped"},
-			{"Tatty kyatt fur", "sabreToothedKyattsTrapped"},
-			{"Sunlight antelope antler", "sunlightAntelopesTrapped"},
-			{"Sunlight antelope fur", "sunlightAntelopesTrapped"},
-			{"Raw sunlight antelope", "sunlightAntelopesTrapped"},
-			{"Moonlight antelope antler", "moonlightAntelopesTrapped"},
-			{"Moonlight antelope fur", "moonlightAntelopesTrapped"},
-			{"Raw moonlight antelope", "moonlightAntelopesTrapped"},
-			{"Red feather", "crimsonSwiftsTrapped"},
-			{"Yellow feather", "goldenWarblersTrapped"},
-			{"Orange feather", "copperLongtailsTrapped"},
-			{"Blue feather", "ceruleanTwitchesTrapped"},
-			{"Stripy feather", "tropicalWagtailsTrapped"},
-			{"Ruby harvest", "rubyHarvestsTrapped"},
-			{"Sapphire glacialis", "sapphireGlacialisTrapped"},
-			{"Snowy knight", "snowyKnightsTrapped"},
-			{"Black warlock", "blackWarlocksTrapped"},
-			{"Moonlight moth", "moonlightMothsTrapped"},
-			{"Sunlight moth", "sunlightMothsTrapped"}};
-		for (String[] p : species)
-		{
-			HUNTER_ITEM_SPECIES.put(p[0], p[1]);
-		}
-		BUTTERFLY_TARGETS.put("ruby harvest", "rubyHarvestsTrapped");
-		BUTTERFLY_TARGETS.put("sapphire glacialis", "sapphireGlacialisTrapped");
-		BUTTERFLY_TARGETS.put("snowy knight", "snowyKnightsTrapped");
-		BUTTERFLY_TARGETS.put("black warlock", "blackWarlocksTrapped");
-	}
+	private static final Set<String> ALTAR_ESSENCE = Tables.set(TABLES, "altarEssence");
 
 	private final ItemManager itemManager;
 	private final StatStore statStore;
-	private final Gson gson;
 
 	// wired after construction, once a journal is mounted for the account, so
 	// volatile for the client thread. null until then, and in tests.
@@ -210,11 +88,10 @@ public class SkillDeriver
 	}
 
 	@Inject
-	SkillDeriver(ItemManager itemManager, StatStore statStore, Gson gson)
+	SkillDeriver(ItemManager itemManager, StatStore statStore)
 	{
 		this.itemManager = itemManager;
 		this.statStore = statStore;
-		this.gson = gson;
 	}
 
 	void setGatheredLedger(GatheredLedger ledger)
@@ -295,12 +172,7 @@ public class SkillDeriver
 		"You put the (?:grimy )?([\\w' -]+?)(?: herb)? into your herb sack",
 		Pattern.CASE_INSENSITIVE);
 
-	// the lines that count what no xp drop can: see chatLine and the branches below
-	void applyChat(String msg)
-	{
-		applyChat(msg, "");
-	}
-
+	// the lines that count what no xp drop can: see chatLine and the branches below.
 	// objectTarget is the game object the player last clicked, tags stripped,
 	// for the one line that reads the same at two trees: a bucket fills with sap
 	// at an evergreen as it does at a bloodwood tree, and only the second counts.
@@ -551,22 +423,13 @@ public class SkillDeriver
 		if (skill.equals("RUNECRAFT"))
 		{
 			String low = name(itemId).toLowerCase(Locale.ROOT);
-			if (low.endsWith(" rune") || low.endsWith(" runes"))
-			{
-				String tok = stripCamel(low, new String[]{" runes", " rune"}, "");
-				List<Map.Entry<String, Integer>> out = pairs("runesCrafted", qty);
-				if (!tok.isEmpty())
-				{
-					out.add(entry(tok + "Runecrafted", qty));
-				}
-				essenceSpent(out, consumedId, consumedQty);
-				return out;
-			}
-			if (!itemId.isEmpty())
+			boolean rune = low.endsWith(" rune") || low.endsWith(" runes");
+			if (!rune && !itemId.isEmpty())
 			{
 				return null;   // tiaras, veneration and rewards make no runes
 			}
-			List<Map.Entry<String, Integer>> out = pairs("runesCrafted", qty);
+			List<Map.Entry<String, Integer>> out = typed("runesCrafted", qty,
+				rune ? stripCamel(low, new String[]{" runes", " rune"}, "") : "", "Runecrafted");
 			essenceSpent(out, consumedId, consumedQty);
 			return out;
 		}
@@ -578,12 +441,7 @@ public class SkillDeriver
 			{
 				tok = ladder("FIREMAKING", xpStr);
 			}
-			List<Map.Entry<String, Integer>> out = pairs("logsBurned", 1);
-			if (!tok.isEmpty())
-			{
-				out.add(entry(tok + "LogsBurned", 1));
-			}
-			return out;
+			return typed("logsBurned", 1, tok, "LogsBurned");
 		}
 
 		if (skill.equals("PRAYER"))
@@ -598,16 +456,7 @@ public class SkillDeriver
 
 		if (skill.equals("AGILITY"))
 		{
-			List<Map.Entry<String, Integer>> out = pairs("agilityObstacles", 1);
-			if (itemId.isEmpty())
-			{
-				String key = ladder("AGILITY", xpStr);
-				if (!key.isEmpty())
-				{
-					out.add(entry(key, 1));
-				}
-			}
-			return out;
+			return typed("agilityObstacles", 1, itemId.isEmpty() ? ladder("AGILITY", xpStr) : "", "");
 		}
 		if (skill.equals("CONSTRUCTION"))
 		{
@@ -640,8 +489,8 @@ public class SkillDeriver
 		}
 
 		// GATHERING: generic floor + typed identity (gainedItem > object > xp).
-		String[] gen = GATHERING.get(skill);
-		if (gen == null)
+		String floor = GATHERING_FLOOR.get(skill);
+		if (floor == null)
 		{
 			return null;
 		}
@@ -665,11 +514,7 @@ public class SkillDeriver
 		{
 			token = ladder(skill, xpStr);
 		}
-		List<Map.Entry<String, Integer>> out = pairs(gen[0], n);
-		if (!token.isEmpty())
-		{
-			out.add(entry(token + gen[1], n));
-		}
+		List<Map.Entry<String, Integer>> out = typed(floor, n, token, GATHERING_SUFFIX.get(skill));
 		if (gained > 0 && VALUED_GATHERING.contains(skill))
 		{
 			// priced at the gather and banked as a running total. pricing the
@@ -788,12 +633,8 @@ public class SkillDeriver
 				}
 				if (name.equals("Arrow shaft"))
 				{
-					String tok = consumedId.isEmpty() ? "" : itemToken("WOODCUTTING", name(consumedId));
-					List<Map.Entry<String, Integer>> out = pairs("logsFletched", 1);
-					if (!tok.isEmpty())
-					{
-						out.add(entry(tok + "LogsFletched", 1));
-					}
+					List<Map.Entry<String, Integer>> out = typed("logsFletched", 1,
+						consumedId.isEmpty() ? "" : itemToken("WOODCUTTING", name(consumedId)), "LogsFletched");
 					out.add(entry("arrowShaftsFletched", qty));
 					return out;
 				}
@@ -833,13 +674,7 @@ public class SkillDeriver
 				if (name.equals("Bones") || name.equals("Big bones")
 					|| name.equals("Raw bird meat") || name.equals("Raw beast meat"))
 				{
-					String k = ladder("HUNTER", xpStr);
-					List<Map.Entry<String, Integer>> out = pairs("creaturesTrapped", 1);
-					if (!k.isEmpty())
-					{
-						out.add(entry(k, 1));
-					}
-					return out;
+					return typed("creaturesTrapped", 1, ladder("HUNTER", xpStr), "");
 				}
 			}
 			Rule match = matchProduction(skill, name);
@@ -858,13 +693,8 @@ public class SkillDeriver
 			}
 			if (tl.endsWith(" moth"))
 			{
-				String tok = camel(tl.substring(0, tl.length() - 5).trim());
-				List<Map.Entry<String, Integer>> out = pairs("creaturesTrapped", 1);
-				if (!tok.isEmpty())
-				{
-					out.add(entry(tok + "MothsTrapped", 1));
-				}
-				return out;
+				return typed("creaturesTrapped", 1, camel(tl.substring(0, tl.length() - 5).trim()),
+					"MothsTrapped");
 			}
 			String bf = BUTTERFLY_TARGETS.get(tl);
 			if (bf != null)
@@ -901,7 +731,7 @@ public class SkillDeriver
 		int xp = intOr(xpStr, 0);
 		if (low.isEmpty())
 		{
-			String tok = ENSOULED_REANIM_XP.get(xp);
+			String tok = ENSOULED_REANIM_XP.get(String.valueOf(xp));
 			if (tok != null)
 			{
 				return pairs("headsReanimated", 1, tok + "HeadsReanimated", 1);
@@ -928,12 +758,7 @@ public class SkillDeriver
 			}
 			if (verb[0] == 1 || xp == 0)
 			{
-				List<Map.Entry<String, Integer>> out = pairs("ashesScattered", 1);
-				if (!tok.isEmpty())
-				{
-					out.add(entry(tok + "AshesScattered", 1));
-				}
-				return out;
+				return typed("ashesScattered", 1, tok, "AshesScattered");
 			}
 			return null;
 		}
@@ -959,12 +784,13 @@ public class SkillDeriver
 	}
 
 	// {verbCode, n}: 1=ground, 2=spell ×n, 3=altar, 0=unknown
-	private static int[] prayerVerb(int xp, Double base)
+	private static int[] prayerVerb(int xp, String baseXp)
 	{
-		if (base == null || xp <= 0)
+		if (baseXp == null || xp <= 0)
 		{
 			return new int[]{0, 0};
 		}
+		double base = Double.parseDouble(baseXp);
 		if (Math.floor(base) <= xp && xp <= Math.ceil(base))
 		{
 			return new int[]{1, 1};
@@ -1036,9 +862,7 @@ public class SkillDeriver
 		{
 			return pairs("safesCracked", 1);
 		}
-		String npc = camel(npcName(low));
-		return npc.isEmpty() ? pairs("pickPockets", 1)
-			: pairs("pickPockets", 1, npc + "Pickpockets", 1);
+		return typed("pickPockets", 1, camel(npcName(low)), "Pickpockets");
 	}
 
 	// Sailing pays out for half a dozen activities and several of them share xp
@@ -1050,25 +874,15 @@ public class SkillDeriver
 		// one hook roll, one salvage.
 		if (gained.endsWith(" salvage"))
 		{
-			String tok = stripCamel(gained, new String[]{" salvage"}, "");
-			List<Map.Entry<String, Integer>> out = pairs("salvagePulled", 1);
-			if (!tok.isEmpty())
-			{
-				out.add(entry(tok + "SalvagePulled", 1));
-			}
-			return out;
+			return typed("salvagePulled", 1, stripCamel(gained, new String[]{" salvage"}, ""),
+				"SalvagePulled");
 		}
 		// sorting hands back loot, so the salvage that LEFT the pack names the row
 		String used = name(consumedId).toLowerCase(Locale.ROOT);
 		if (used.endsWith(" salvage"))
 		{
-			String tok = stripCamel(used, new String[]{" salvage"}, "");
-			List<Map.Entry<String, Integer>> out = pairs("salvageSorted", 1);
-			if (!tok.isEmpty())
-			{
-				out.add(entry(tok + "SalvageSorted", 1));
-			}
-			return out;
+			return typed("salvageSorted", 1, stripCamel(used, new String[]{" salvage"}, ""),
+				"SalvageSorted");
 		}
 		// courier and bounty tasks each pay out one bag, so the bag is the receipt
 		if (gained.contains("port coin bag") || gained.contains("port reward bag"))
@@ -1095,13 +909,13 @@ public class SkillDeriver
 		{
 			return null;
 		}
-		for (double[] row : NET_TRAP_BASES)
+		for (Map.Entry<String, String> row : NET_TRAP.entrySet())
 		{
-			double base = row[0];
+			double base = Double.parseDouble(row.getKey());
 			int n = (int) Math.round(xp / base);
 			if (n >= 1 && n <= NET_TRAP_MAX && Math.abs(xp - n * base) < 1.0)
 			{
-				return pairs("creaturesTrapped", n, NET_TRAP_KEYS[(int) row[1]], n);
+				return pairs("creaturesTrapped", n, row.getValue(), n);
 			}
 		}
 		return null;
@@ -1350,6 +1164,18 @@ public class SkillDeriver
 		return new java.util.AbstractMap.SimpleEntry<>(k, v);
 	}
 
+	// the floor row, and beside it the typed row when there is a token to type it by
+	private static List<Map.Entry<String, Integer>> typed(String floor, int n, String tok,
+		String suffix)
+	{
+		List<Map.Entry<String, Integer>> out = pairs(floor, n);
+		if (!tok.isEmpty())
+		{
+			out.add(entry(tok + suffix, n));
+		}
+		return out;
+	}
+
 	private static int intOr(String s, int def)
 	{
 		try
@@ -1369,28 +1195,24 @@ public class SkillDeriver
 		if (xpTable == null)
 		{
 			xpTable = new HashMap<>();
-			JsonObject o = resource("/chronicle/osrs_skill_xp.json");
-			if (o != null)
+			for (Map.Entry<String, JsonElement> skill : Tables.load("osrs_skill_xp.json").entrySet())
 			{
-				for (Map.Entry<String, JsonElement> skill : o.entrySet())
+				if (!skill.getValue().isJsonObject())
 				{
-					if (!skill.getValue().isJsonObject())
-					{
-						continue;
-					}
-					Map<String, String> ladder = new HashMap<>();
-					for (Map.Entry<String, JsonElement> e
-						: skill.getValue().getAsJsonObject().entrySet())
-					{
-						if (e.getValue().isJsonPrimitive()
-							&& e.getValue().getAsJsonPrimitive().isString())
-						{
-							ladder.put(e.getKey(), e.getValue().getAsString());
-						}
-						// {"members":[...]} rows are ambiguous xp values, skipped
-					}
-					xpTable.put(skill.getKey(), ladder);
+					continue;
 				}
+				Map<String, String> ladder = new HashMap<>();
+				for (Map.Entry<String, JsonElement> e
+					: skill.getValue().getAsJsonObject().entrySet())
+				{
+					if (e.getValue().isJsonPrimitive()
+						&& e.getValue().getAsJsonPrimitive().isString())
+					{
+						ladder.put(e.getKey(), e.getValue().getAsString());
+					}
+					// {"members":[...]} rows are ambiguous xp values, skipped
+				}
+				xpTable.put(skill.getKey(), ladder);
 			}
 		}
 		return xpTable;
@@ -1401,62 +1223,59 @@ public class SkillDeriver
 		if (itemRules == null)
 		{
 			itemRules = new HashMap<>();
-			JsonObject o = resource("/chronicle/osrs_skill_item_rules.json");
-			if (o != null)
+			for (Map.Entry<String, JsonElement> skill
+				: Tables.load("osrs_skill_item_rules.json").entrySet())
 			{
-				for (Map.Entry<String, JsonElement> skill : o.entrySet())
+				if (!skill.getValue().isJsonArray())
 				{
-					if (!skill.getValue().isJsonArray())
+					continue;
+				}
+				List<Rule> rules = new ArrayList<>();
+				for (JsonElement el : skill.getValue().getAsJsonArray())
+				{
+					if (!el.isJsonObject())
 					{
 						continue;
 					}
-					List<Rule> rules = new ArrayList<>();
-					for (JsonElement el : skill.getValue().getAsJsonArray())
+					JsonObject ro = el.getAsJsonObject();
+					Rule r = new Rule();
+					r.match = ro.has("match") ? ro.get("match").getAsString() : null;
+					r.key = ro.has("key") && !ro.get("key").isJsonNull()
+						? ro.get("key").getAsString() : null;
+					r.qty = ro.has("qty") && ro.get("qty").getAsBoolean();
+					if (ro.has("value"))
 					{
-						if (!el.isJsonObject())
+						JsonElement v = ro.get("value");
+						if (v.isJsonArray())
 						{
-							continue;
-						}
-						JsonObject ro = el.getAsJsonObject();
-						Rule r = new Rule();
-						r.match = ro.has("match") ? ro.get("match").getAsString() : null;
-						r.key = ro.has("key") && !ro.get("key").isJsonNull()
-							? ro.get("key").getAsString() : null;
-						r.qty = ro.has("qty") && ro.get("qty").getAsBoolean();
-						if (ro.has("value"))
-						{
-							JsonElement v = ro.get("value");
-							if (v.isJsonArray())
+							r.valueSet = new HashSet<>();
+							for (JsonElement item : v.getAsJsonArray())
 							{
-								r.valueSet = new HashSet<>();
-								for (JsonElement item : v.getAsJsonArray())
-								{
-									r.valueSet.add(item.getAsString());
-								}
-							}
-							else
-							{
-								r.value = v.getAsString();
-								if ("regex".equals(r.match))
-								{
-									try
-									{
-										r.regex = Pattern.compile(r.value);
-									}
-									catch (RuntimeException e)
-									{
-										r.match = "";   // bad pattern, rule never matches
-									}
-								}
+								r.valueSet.add(item.getAsString());
 							}
 						}
-						if (r.match != null)
+						else
 						{
-							rules.add(r);
+							r.value = v.getAsString();
+							if ("regex".equals(r.match))
+							{
+								try
+								{
+									r.regex = Pattern.compile(r.value);
+								}
+								catch (RuntimeException e)
+								{
+									r.match = "";   // bad pattern, rule never matches
+								}
+							}
 						}
 					}
-					itemRules.put(skill.getKey(), rules);
+					if (r.match != null)
+					{
+						rules.add(r);
+					}
 				}
+				itemRules.put(skill.getKey(), rules);
 			}
 		}
 		return itemRules;
@@ -1467,8 +1286,8 @@ public class SkillDeriver
 		if (objTable == null)
 		{
 			objTable = new HashMap<>();
-			JsonObject o = resource("/chronicle/osrs_object_species.json");
-			if (o != null && o.has("objects") && o.get("objects").isJsonObject())
+			JsonObject o = Tables.load("osrs_object_species.json");
+			if (o.has("objects") && o.get("objects").isJsonObject())
 			{
 				for (Map.Entry<String, JsonElement> e
 					: o.getAsJsonObject("objects").entrySet())
@@ -1478,23 +1297,5 @@ public class SkillDeriver
 			}
 		}
 		return objTable;
-	}
-
-	private JsonObject resource(String path)
-	{
-		try (InputStream in = SkillDeriver.class.getResourceAsStream(path))
-		{
-			if (in == null)
-			{
-				return null;
-			}
-			return gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8),
-				JsonObject.class);
-		}
-		catch (Exception e)
-		{
-			log.debug("reference table {} unreadable", path, e);
-			return null;
-		}
 	}
 }

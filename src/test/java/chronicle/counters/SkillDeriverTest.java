@@ -3,7 +3,6 @@
  */
 package chronicle.counters;
 
-import com.google.gson.Gson;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -41,7 +40,7 @@ public class SkillDeriverTest
 				(Integer) inv.getArgument(0), ""));
 			return c;
 		});
-		d = new SkillDeriver(im, new StatStore(), new Gson());
+		d = new SkillDeriver(im, new StatStore());
 		d.setGatheredLedger(new GatheredLedger()
 		{
 			@Override
@@ -214,17 +213,17 @@ public class SkillDeriverTest
 	{
 		StatStore store = new StatStore();
 		ItemManager im = Mockito.mock(ItemManager.class);
-		SkillDeriver cd = new SkillDeriver(im, store, new Gson());
-		cd.applyChat("You fail to pick the Master Farmer's pocket.");
+		SkillDeriver cd = new SkillDeriver(im, store);
+		cd.applyChat("You fail to pick the Master Farmer's pocket.", "");
 		assertEquals(1, store.getStat("failedPickPockets"));
 		assertEquals(1, store.getStat("masterFarmerFailedPickpockets"));
-		cd.applyChat("You accidentally burn the shark.");
+		cd.applyChat("You accidentally burn the shark.", "");
 		assertEquals(1, store.getStat("foodBurned"));
-		cd.applyChat("You plant 3 potato seeds.");
+		cd.applyChat("You plant 3 potato seeds.", "");
 		assertEquals(1, store.getStat("seedsPlanted"));
-		cd.applyChat("Rooftop lap count: 42.");
+		cd.applyChat("Rooftop lap count: 42.", "");
 		assertEquals(1, store.getStat("rooftopAgilityLaps"));
-		cd.applyChat("Your Ardougne lap count is: 100.");
+		cd.applyChat("Your Ardougne lap count is: 100.", "");
 		assertEquals(1, store.getStat("normalAgilityLaps"));
 	}
 
@@ -277,21 +276,21 @@ public class SkillDeriverTest
 		StatStore store = new StatStore();
 		SkillDeriver cd = chatDeriver(store);
 		// three seeds go in, but the patch was planted once
-		cd.applyChat("You plant 3 potato seeds in the allotment.");
+		cd.applyChat("You plant 3 potato seeds in the allotment.", "");
 		assertEquals(1, store.getStat("seedsPlanted"));
 		assertEquals(1, store.getStat("potatoPlanted"));
-		cd.applyChat("You plant a guam seed in the herb patch.");
+		cd.applyChat("You plant a guam seed in the herb patch.", "");
 		assertEquals(1, store.getStat("guamPlanted"));
 		// saplings and spores name their crop the same way
-		cd.applyChat("You plant an oak sapling in the tree patch.");
+		cd.applyChat("You plant an oak sapling in the tree patch.", "");
 		assertEquals(1, store.getStat("oakPlanted"));
-		cd.applyChat("You plant a bittercap mushroom spore in the mushroom patch.");
+		cd.applyChat("You plant a bittercap mushroom spore in the mushroom patch.", "");
 		assertEquals(1, store.getStat("bittercapMushroomPlanted"));
-		cd.applyChat("You plant a seaweed spore in the seaweed patch.");
+		cd.applyChat("You plant a seaweed spore in the seaweed patch.", "");
 		assertEquals(1, store.getStat("seaweedPlanted"));
 		assertEquals(5, store.getStat("seedsPlanted"));
 		// a line that names no seed leaves the aggregate to carry it alone
-		cd.applyChat("You plant the explosive.");
+		cd.applyChat("You plant the explosive.", "");
 		assertEquals(6, store.getStat("seedsPlanted"));
 		assertEquals(0, store.getStat("explosivePlanted"));
 	}
@@ -299,7 +298,7 @@ public class SkillDeriverTest
 	// a deriver on a fresh store, for the chat lines that need no item lookup
 	private static SkillDeriver chatDeriver(StatStore store)
 	{
-		return new SkillDeriver(Mockito.mock(ItemManager.class), store, new Gson());
+		return new SkillDeriver(Mockito.mock(ItemManager.class), store);
 	}
 
 	@Test
@@ -307,14 +306,14 @@ public class SkillDeriverTest
 	{
 		StatStore store = new StatStore();
 		SkillDeriver cd = chatDeriver(store);
-		cd.applyChat("You put the grimy guam leaf herb into your herb sack.");
+		cd.applyChat("You put the grimy guam leaf herb into your herb sack.", "");
 		assertEquals(1, store.getStat("herbsSacked"));
 		assertEquals(1, store.getStat("guamLeafSacked"));
-		cd.applyChat("You put the grimy ranarr weed herb into your herb sack.");
+		cd.applyChat("You put the grimy ranarr weed herb into your herb sack.", "");
 		assertEquals(1, store.getStat("ranarrWeedSacked"));
 		// the grimy prefix and the trailing "herb" are both unconfirmed, so a line
 		// without either still names its herb
-		cd.applyChat("You put the Toadflax into your herb sack.");
+		cd.applyChat("You put the Toadflax into your herb sack.", "");
 		assertEquals(1, store.getStat("toadflaxSacked"));
 		assertEquals(3, store.getStat("herbsSacked"));
 		assertEquals(0, store.getStat("grimyGuamLeafSacked"));
@@ -325,9 +324,9 @@ public class SkillDeriverTest
 	{
 		StatStore store = new StatStore();
 		SkillDeriver cd = chatDeriver(store);
-		cd.applyChat("You gently shoo the letvek away.");
+		cd.applyChat("You gently shoo the letvek away.", "");
 		assertEquals(1, store.getStat("letveksShooed"));
-		cd.applyChat("The glowing fish scatter, shedding their magical scales.");
+		cd.applyChat("The glowing fish scatter, shedding their magical scales.", "");
 		assertEquals(1, store.getStat("spiritPoolsHarpooned"));
 	}
 
@@ -341,7 +340,7 @@ public class SkillDeriverTest
 		assertEquals(1, store.getStat("bloodwoodSapBucketsFilled"));
 		// the same line at an evergreen, and with no tree known at all
 		cd.applyChat(line, "Knife -> Evergreen");
-		cd.applyChat(line);
+		cd.applyChat(line, "");
 		assertEquals(1, store.getStat("bloodwoodSapBucketsFilled"));
 		cd.applyChat(line, "Engorged bloodwood tree");
 		assertEquals(2, store.getStat("bloodwoodSapBucketsFilled"));
@@ -358,7 +357,7 @@ public class SkillDeriverTest
 		{
 			for (String kind : kinds)
 			{
-				cd.applyChat("You resurrect a " + tier + " " + kind + " thrall.");
+				cd.applyChat("You resurrect a " + tier + " " + kind + " thrall.", "");
 			}
 		}
 		assertEquals(9, store.getStat("thrallsSummoned"));
@@ -372,7 +371,7 @@ public class SkillDeriverTest
 		assertEquals(1, store.getStat("greaterSkeletalThrallsSummoned"));
 		assertEquals(1, store.getStat("greaterZombifiedThrallsSummoned"));
 		// a thrall the line names no tier for still counts the floor alone
-		cd.applyChat("You resurrect a thrall.");
+		cd.applyChat("You resurrect a thrall.", "");
 		assertEquals(10, store.getStat("thrallsSummoned"));
 	}
 
@@ -381,16 +380,16 @@ public class SkillDeriverTest
 	{
 		StatStore store = new StatStore();
 		SkillDeriver cd = chatDeriver(store);
-		cd.applyChat("The tanner tans your cowhide.");
+		cd.applyChat("The tanner tans your cowhide.", "");
 		assertEquals(1, store.getStat("hidesTanned"));
 		assertEquals(1, store.getStat("cowhideTanned"));
-		cd.applyChat("The tanner tans your cowhide for you.");
+		cd.applyChat("The tanner tans your cowhide for you.", "");
 		assertEquals(2, store.getStat("cowhideTanned"));
 		// the batch form names the count and the plural; both land on the same key
-		cd.applyChat("The tanner tans 27 green dragonhides for you.");
+		cd.applyChat("The tanner tans 27 green dragonhides for you.", "");
 		assertEquals(29, store.getStat("hidesTanned"));
 		assertEquals(27, store.getStat("greenDragonhideTanned"));
-		cd.applyChat("The tanner tans 5 snake hides for you.");
+		cd.applyChat("The tanner tans 5 snake hides for you.", "");
 		assertEquals(5, store.getStat("snakeHideTanned"));
 		assertEquals(34, store.getStat("hidesTanned"));
 		assertEquals(0, store.getStat("greenDragonhidesTanned"));
@@ -401,14 +400,14 @@ public class SkillDeriverTest
 	{
 		StatStore store = new StatStore();
 		SkillDeriver cd = chatDeriver(store);
-		cd.applyChat("You put the Guam leaf into the vial of water.");
+		cd.applyChat("You put the Guam leaf into the vial of water.", "");
 		assertEquals(1, store.getStat("unfinishedPotionsMade"));
 		// the sack line also starts "You put the"; it is not a potion
-		cd.applyChat("You put the grimy guam leaf herb into your herb sack.");
+		cd.applyChat("You put the grimy guam leaf herb into your herb sack.", "");
 		assertEquals(1, store.getStat("unfinishedPotionsMade"));
 		// nor is any other "You put the" line the gate forwards (a synthetic one:
 		// the vial is what makes the line a potion, not the opening words)
-		cd.applyChat("You put the coins into the coffer.");
+		cd.applyChat("You put the coins into the coffer.", "");
 		assertEquals(1, store.getStat("unfinishedPotionsMade"));
 	}
 
@@ -495,14 +494,14 @@ public class SkillDeriverTest
 	{
 		StatStore store = new StatStore();
 		SkillDeriver cd = chatDeriver(store);
-		cd.applyChat("You accidentally burn the shark.");
-		cd.applyChat("You accidentally burn the moonlight antelope.");
+		cd.applyChat("You accidentally burn the shark.", "");
+		cd.applyChat("You accidentally burn the moonlight antelope.", "");
 		// a cake is no fish: the rule reads the name off the line, not off a list
-		cd.applyChat("You accidentally burn the cake.");
+		cd.applyChat("You accidentally burn the cake.", "");
 		// the cooked row is aliased to the singular, so the burnt one sits beside it
-		cd.applyChat("You accidentally burn the shrimps.");
+		cd.applyChat("You accidentally burn the shrimps.", "");
 		// the one line that runs on past the food (wiki, verbatim)
-		cd.applyChat("You accidentally burn the karambwanji to ashes.");
+		cd.applyChat("You accidentally burn the karambwanji to ashes.", "");
 		assertEquals(5, store.getStat("foodBurned"));
 		assertEquals(1, store.getStat("sharkBurned"));
 		assertEquals(1, store.getStat("moonlightAntelopeBurned"));
@@ -570,7 +569,7 @@ public class SkillDeriverTest
 		assertEquals("Master Farmer", SkillDeriver.npcName("Master Farmer"));
 		StatStore store = new StatStore();
 		SkillDeriver cd = chatDeriver(store);
-		cd.applyChat("You fail to pick the Guard's pocket.");
+		cd.applyChat("You fail to pick the Guard's pocket.", "");
 		assertEquals(1, store.getStat("guardFailedPickpockets"));
 	}
 }

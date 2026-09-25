@@ -30,11 +30,6 @@ public class ItemStatTracker implements StatTracker
 	// one, a drop only feeds the plain dropped-value stat.
 	private final GatheredLedger gatheredLedger;
 
-	public ItemStatTracker(StatStore statStore, Client client, ItemManager itemManager)
-	{
-		this(statStore, client, itemManager, null);
-	}
-
 	public ItemStatTracker(StatStore statStore, Client client, ItemManager itemManager,
 		GatheredLedger gatheredLedger)
 	{

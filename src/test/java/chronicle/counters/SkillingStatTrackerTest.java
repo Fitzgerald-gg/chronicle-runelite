@@ -8,7 +8,6 @@
  */
 package chronicle.counters;
 
-import com.google.gson.Gson;
 import java.util.HashMap;
 import java.util.Map;
 import net.runelite.api.ChatMessageType;
@@ -74,7 +73,7 @@ public class SkillingStatTrackerTest
 		});
 
 		career = 1_000_000;
-		tracker = new SkillingStatTracker(store, client, new SkillDeriver(items, store, new Gson()));
+		tracker = new SkillingStatTracker(store, client, new SkillDeriver(items, store));
 	}
 
 	private void holds(Item... contents)

@@ -133,7 +133,7 @@ public class ItemStatTrackerTest
 			Mockito.mock(net.runelite.client.game.ItemManager.class);
 		Mockito.when(items.canonicalize(Mockito.anyInt())).thenAnswer(inv -> inv.getArgument(0));
 		Mockito.when(items.getItemPrice(YEW_LOGS)).thenReturn(240);
-		tracker = new ItemStatTracker(store, client, items);
+		tracker = new ItemStatTracker(store, client, items, null);
 
 		drop(YEW_LOGS, 5);
 		assertEquals(5 * 240, dropped());
