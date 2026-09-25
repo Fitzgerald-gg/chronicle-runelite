@@ -2999,6 +2999,9 @@ class ChroniclePanel extends PluginPanel
 	 * has no dated account of its loot and says so, naming the day one begins,
 	 * rather than reporting the part it can see as the whole.
 	 */
+	private static final String UNDATED = "No loot has been dated yet. The roll keeps one entry a "
+		+ "day and starts with the next drop that lands.";
+
 	private JPanel dropsInWindow(JPanel p)
 	{
 		Window win = window();
@@ -3012,8 +3015,7 @@ class ChroniclePanel extends PluginPanel
 		long fromMs = startMs(win.start);
 		if (sitting == null && rollFrom <= 0)
 		{
-			return noted(p, "No loot has been dated yet. The roll keeps one entry a "
-				+ "day and starts with the next drop that lands.");
+			return noted(p, UNDATED);
 		}
 		if (sitting == null && rollFrom > fromMs)
 		{
@@ -5353,14 +5355,28 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 		}
-		srcs.sort((a, b) -> Long.compare((long) b[1], (long) a[1]));
 		// What THIS period's roll says of the item, where the period is not the
-		// whole record. The roll keeps a day's items beside its sources and the
-		// sitting keeps its own, so the head can answer a week or a sitting
-		// exactly; the list of sources beneath cannot - the roll does not keep
-		// which source dropped which item - and says so rather than quietly
-		// showing everything.
+		// whole record: the head off the day's heap, the sources beneath off
+		// what each kept of it, and whatever the heap holds beyond them as Other.
 		final long[] inWindow = wholeRecord() ? null : itemInWindow(name);
+		long other = 0;
+		if (inWindow != null)
+		{
+			srcs.clear();
+			other = inWindow[0];
+			for (Map.Entry<String, List<BagItem>> e : periodItems().entrySet())
+			{
+				for (BagItem b : e.getValue())
+				{
+					if (b.name.equalsIgnoreCase(name))
+					{
+						srcs.add(new Object[]{e.getKey(), b.qty, b.value});
+						other -= b.qty;
+					}
+				}
+			}
+		}
+		srcs.sort((a, b) -> Long.compare((long) b[1], (long) a[1]));
 		final long qty = inWindow != null ? inWindow[0] : got;
 		final long value = inWindow != null ? inWindow[1] : worth;
 		final int itemId = found;
@@ -5422,13 +5438,11 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		p.add(head);
-		if (inWindow != null)
+		String since = inWindow == null ? null : lootSince();
+		if (since != null)
 		{
 			p.add(vgap(4));
-			p.add(note("The figures above are " + periodInSentence() + "'s. The "
-				+ "sources below are everything that has ever dropped this: the dated "
-				+ "roll keeps a day's items together rather than under the thing that "
-				+ "dropped them."));
+			p.add(note(since));
 		}
 		p.add(vgap(6));
 		if (hasTask)
@@ -5446,13 +5460,14 @@ class ChroniclePanel extends PluginPanel
 			hold.add(vgap(6));
 			p.add(hold);
 		}
-		if (srcs.isEmpty())
-		{
-			return noted(p, "The journal hasn't seen this item drop yet.");
-		}
 		if (hasTask && onTaskOnly)
 		{
 			return byTaskRows(p, properName(name));
+		}
+		if (srcs.isEmpty() && other <= 0)
+		{
+			return inWindow != null ? nothing(p, "dropped", since)
+				: noted(p, "The journal hasn't seen this item drop yet.");
 		}
 		p.add(group("From"));
 		// the copy lifts itemSourceCap; a reader lifts the drill's own cap
@@ -5471,7 +5486,40 @@ class ChroniclePanel extends PluginPanel
 			link(r, () -> openSource(src));
 			p.add(r);
 		}
+		addOther(p, "×" + fmt(other), other);
 		return p;
+	}
+
+	/** Each source's own items for the period on show: the sitting's, or its days'. */
+	private Map<String, List<BagItem>> periodItems()
+	{
+		Window w = window();
+		return sessionPeriod() ? plugin.itemsBySource(null, null) : plugin.itemsBySource(w.start, w.end);
+	}
+
+	// Where a period reaches back before the dated roll: the day it can be read from.
+	private String lootSince()
+	{
+		long from = plugin.lootRollFrom();
+		return sessionPeriod() || from > 0 && from <= startMs(window().start) ? null
+			: from <= 0 ? UNDATED : "Loot since " + dayOf(from).format(FULL_DAY);
+	}
+
+	// A period's page with nothing in it, said once: a since line already says why.
+	private JPanel nothing(JPanel p, String what, String since)
+	{
+		return since != null ? p : noted(p, "Nothing " + what + " inside " + periodInSentence() + ".");
+	}
+
+	// What a period paid on days the roll kept as one heap, not under a source.
+	private static void addOther(JPanel p, String figure, long n)
+	{
+		if (n > 0)
+		{
+			JPanel r = ghostRow("Other", figure);
+			r.setToolTipText("Dropped on days the record kept whole, before it filed drops by source");
+			p.add(r);
+		}
 	}
 
 	/**
@@ -5792,13 +5840,13 @@ class ChroniclePanel extends PluginPanel
 		long[] inWindow = wholeRecord() ? null
 			: sourceInWindow(sr != null ? sr.name : name);
 		// Read before the row is built, because the copy hands back the WHOLE
-		// page: every loot line, not the twenty five the page mounts. The sitting
-		// keeps its own items per source and can answer exactly; a longer period
-		// cannot, and the page says so rather than quietly showing a lifetime.
-		final List<BagItem> bag = sessionPeriod()
-			? plugin.sessionSourceItems(sr != null ? sr.name : name)
-			: plugin.sourceItems(sr != null ? sr.name : name);
+		// page: every loot line, not the twenty five the page mounts. A period
+		// reads its own items: the sitting and each day keep them per source.
+		final List<BagItem> bag = inWindow == null ? plugin.sourceItems(sr != null ? sr.name : name)
+			: new ArrayList<>(periodItems().getOrDefault(sr != null ? sr.name : name, new ArrayList<>()));
 		bag.sort(Comparator.comparingLong((BagItem b) -> b.value).reversed());
+		// what the period paid on days the roll kept only as one heap
+		final long other = inWindow == null ? 0 : inWindow[1] - tallyOf(bag)[1];
 		spaced(p, backRow(() -> copySourcePage(name)), 4);
 		JPanel head = card(name);
 		if (sr != null)
@@ -5928,11 +5976,16 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		spaced(p, head);
+		String since = inWindow == null ? null : lootSince();
+		if (since != null)
+		{
+			spaced(p, note(since), 5);
+		}
 		if (sr != null)
 		{
 			addAssignments(p, sr.name);
 		}
-		if (!bag.isEmpty())
+		if (!bag.isEmpty() || other > 0)
 		{
 			JPanel grid = new JPanel(new GridLayout(0, 5, 3, 3));
 			grid.setBackground(DARK);
@@ -5958,17 +6011,6 @@ class ChroniclePanel extends PluginPanel
 				spaced(p, grid, 5);
 			}
 			p.add(group("Loot"));
-			// Said once, under the heading it applies to. The dated roll keeps a
-			// day's items in one heap rather than per source, so a week can say
-			// what this source paid and not what it paid it in; only the sitting,
-			// which keeps its own, can break it down.
-			if (inWindow != null && !sessionPeriod())
-			{
-				p.add(note("The figures above are " + periodInSentence() + "'s. "
-					+ "What follows is everything this source has ever paid: the "
-					+ "dated roll keeps a day's items together rather than under "
-					+ "the thing that dropped them."));
-			}
 			int cap = drillShown.getOrDefault(name, 25);
 			addBagRows(p, bag.subList(0, Math.min(cap, bag.size())), cap, name);
 			if (bag.size() > cap)
@@ -5976,11 +6018,12 @@ class ChroniclePanel extends PluginPanel
 				p.add(vgap(3));
 				p.add(expander(name, cap, bag.size()));
 			}
+			addOther(p, gps(other), other);
 			return p;
 		}
-		return noted(p, sr == null
-			? "The journal has no drops from this source yet."
-			: "Items fill in as you play. The journal prices each drop the "
+		return sr == null ? noted(p, "The journal has no drops from this source yet.")
+			: inWindow != null ? nothing(p, "from " + name, since)
+			: noted(p, "Items fill in as you play. The journal prices each drop the "
 			+ "moment it lands.");
 	}
 

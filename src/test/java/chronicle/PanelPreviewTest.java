@@ -1594,17 +1594,24 @@ public class PanelPreviewTest
 			return new ArrayList<>(bags.getOrDefault(source, new ArrayList<>()));
 		}
 
-		// Read off the store where there is one, the bag otherwise. Left to the
-		// plugin, this asked a store the stub never injects and threw on every
-		// source page opened under the sitting.
+		// A period's own items per source: off the store where there is one, the
+		// fixture's otherwise. Left to the plugin, this asked a store the stub
+		// never injects and threw on every source page opened under a period.
+		final java.util.Map<String, java.util.List<LocalStore.BagItem>> periodBags =
+			new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+
 		@Override
-		java.util.List<LocalStore.BagItem> sessionSourceItems(String source)
+		java.util.Map<String, java.util.List<LocalStore.BagItem>> itemsBySource(
+			java.time.LocalDate from, java.time.LocalDate to)
 		{
 			if (store != null)
 			{
-				return store.sessionSourceItems(source);
+				return store.itemsBySource(from, to);
 			}
-			return new ArrayList<>(bags.getOrDefault(source, new ArrayList<>()));
+			java.util.Map<String, java.util.List<LocalStore.BagItem>> out =
+				new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+			periodBags.forEach((k, v) -> out.put(k, new ArrayList<>(v)));
+			return out;
 		}
 
 		@Override

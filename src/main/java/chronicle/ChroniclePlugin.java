@@ -1153,10 +1153,10 @@ public class ChroniclePlugin extends Plugin
 		return localStore.sessionLootWindow();
 	}
 
-	/** What one source paid this sitting. */
-	List<LocalStore.BagItem> sessionSourceItems(String source)
+	/** Each source's own items over [from, to], or this sitting's when from is null. */
+	Map<String, List<LocalStore.BagItem>> itemsBySource(LocalDate from, LocalDate to)
 	{
-		return localStore.sessionSourceItems(source);
+		return localStore.itemsBySource(from, to);
 	}
 
 	int sessionLoots()

@@ -26,6 +26,7 @@ import static org.junit.Assert.assertTrue;
 public class SessionPeriodTest
 {
 	private static ChroniclePanel panel;
+	private static PanelPreviewTest.StubPlugin stub;
 
 	@BeforeClass
 	public static void build() throws Exception
@@ -43,7 +44,7 @@ public class SessionPeriodTest
 				throw new RuntimeException(e);
 			}
 		});
-		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
+		stub = PanelPreviewTest.fixtureStub();
 		final ChroniclePanel[] hold = new ChroniclePanel[1];
 		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
 		panel = hold[0];
@@ -593,29 +594,37 @@ public class SessionPeriodTest
 	}
 
 	/**
-	 * The item page reads the period, the way the source page was taught to.
-	 * Its head used to be the ledger's lifetime totals under any heading, and
-	 * the list beneath - which no window can split, since the roll does not keep
-	 * which source dropped which item - now says it is the lifetime rather than
-	 * quietly being it.
+	 * The item page reads the period, the way the source page does: its head off
+	 * the sitting's own entry, and the sources beneath off what each of them
+	 * dropped of it in the sitting, not every source that has ever dropped it.
+	 * What the heap holds beyond the sources' own rows is Other, so the list
+	 * still comes to the head.
 	 */
 	@Test
 	public void theItemPageReadsThePeriod() throws Exception
 	{
+		stub.periodBags.put("Nechryael", new java.util.ArrayList<>(java.util.Collections.singletonList(
+			new LocalStore.BagItem(2363, "Rune bar", 8, 202_742L))));
 		period("Session");
 		began(30 * 60_000L);
 		java.util.List<String> sitting = itemPage("Rune bar");
+		stub.periodBags.clear();
 		int at = sitting.indexOf("Obtained");
 		assertTrue("the sitting's page drew no Obtained row: " + sitting, at >= 0);
 		assertEquals("the sitting's page did not read the sitting's own entry: "
 			+ sitting, "\u00d712", sitting.get(at + 1));
-		assertTrue("the page did not say its source list is the lifetime: " + sitting,
-			String.join(" ", sitting).contains("sources below are everything"));
+		int from = sitting.indexOf("FROM");
+		assertTrue("no source list: " + sitting, from >= 0);
+		java.util.List<String> rows = sitting.subList(from + 1, sitting.size());
+		assertEquals("the sitting's sources, then what no source kept: " + sitting,
+			java.util.Arrays.asList("Nechryael", "Other", "\u00d74"),
+			java.util.Arrays.asList(rows.get(0), rows.get(2), rows.get(3)));
+		assertEquals("a source the sitting did not see listed under it: " + sitting,
+			4, rows.size());
 
 		period("Lifetime");
 		java.util.List<String> whole = itemPage("Rune bar");
-		assertFalse("the lifetime page carried the period caveat",
-			String.join(" ", whole).contains("sources below are everything"));
+		assertFalse("the lifetime page carried an Other row: " + whole, whole.contains("Other"));
 	}
 
 	private static java.util.List<String> itemPage(String item) throws Exception
