@@ -61,6 +61,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.BooleanSupplier;
@@ -98,6 +99,8 @@ import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.OSType;
 import net.runelite.http.api.item.ItemPrice;
+import static chronicle.LocalStore.kindOf;
+import static chronicle.panel.StatRegistry.prettify;
 
 /**
  * The journal's face: a period row, four tabs (Record, Hiscores, Loot and
@@ -348,8 +351,7 @@ class ChroniclePanel extends PluginPanel
 		// that, the row would never take a pixel of the strip.
 		periodHolder.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
 		periodHolder.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 16, 22));
-		north.add(periodHolder);
-		north.add(vgap(3));
+		spaced(north, periodHolder, 3);
 
 		tabGroup.setLayout(new GridLayout(1, 4, 2, 0));
 		// Each tab wears what it holds: a ledger page for the written record, the
@@ -361,10 +363,8 @@ class ChroniclePanel extends PluginPanel
 		addTab("tab_standing.png", "Standing", Tab.STANDING);
 		addTab("tab_loot.png", "Loot", Tab.LOOT);
 		addTab("tab_trackers.png", "Trackers", Tab.TRACKERS);
-		north.add(tabGroup);
-		north.add(vgap(7));
-		north.add(searchField);
-		north.add(vgap(8));
+		spaced(north, tabGroup, 7);
+		spaced(north, searchField, 8);
 
 		add(north, BorderLayout.NORTH);
 		add(display, BorderLayout.CENTER);
@@ -786,7 +786,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		obj(FIGHTS, "paysOut").entrySet().forEach(e -> PAYS_OUT.put(e.getKey(), strs(e.getValue())));
 		obj(FIGHTS, "foughtAs").entrySet().forEach(e ->
-			FOUGHT_AS.put(LocalStore.kindOf(e.getKey()), strs(e.getValue())));
+			FOUGHT_AS.put(kindOf(e.getKey()), strs(e.getValue())));
 	}
 
 	/**
@@ -836,13 +836,13 @@ class ChroniclePanel extends PluginPanel
 			return kcByKind;
 		}
 		Map<String, Long> out = new LinkedHashMap<>();
-		for (Map.Entry<String, Long> e : plugin.killCounts().entrySet())
+		for (Entry<String, Long> e : plugin.killCounts().entrySet())
 		{
 			out.merge(LocalStore.chatKind(e.getKey()), e.getValue(), Math::max);
 		}
 		for (SourceRow r : sources())
 		{
-			out.merge(LocalStore.kindOf(r.name), (long) r.kc, Math::max);
+			out.merge(kindOf(r.name), (long) r.kc, Math::max);
 		}
 		kcByKind = out;
 		return out;
@@ -864,7 +864,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		JsonObject cl = clogNow();
 		long best = Math.max(0, lookup(cl, "slayer_kcs", name));
-		String kind = LocalStore.kindOf(name);
+		String kind = kindOf(name);
 		// The chat line, which the reconciliation treats as first-class and this
 		// board did not read at all. It arrives on the kill with nothing opened,
 		// where the Kill Log above only moves when a player goes and looks; a
@@ -888,7 +888,7 @@ class ChroniclePanel extends PluginPanel
 		// whichever count came first on the page, which may be counting rewards,
 		// and on a journal written before best times were turned away it may be
 		// half of one: the Gauntlet's page reads 55 where 31 were completed.
-		for (Map.Entry<String, Long> ln : pageLines(name, "kc_lines"))
+		for (Entry<String, Long> ln : pageLines(name, "kc_lines"))
 		{
 			String said = low(ln.getKey());
 			if (said.contains("kill") || said.contains("completion"))
@@ -925,7 +925,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return v;
 		}
-		for (Map.Entry<String, JsonElement> e : o.entrySet())
+		for (Entry<String, JsonElement> e : o.entrySet())
 		{
 			if (e.getKey().equalsIgnoreCase(key))
 			{
@@ -982,7 +982,7 @@ class ChroniclePanel extends PluginPanel
 		Long moved = movedKcs.get(name);
 		if (moved == null)
 		{
-			for (Map.Entry<String, Long> e : movedKcs.entrySet())
+			for (Entry<String, Long> e : movedKcs.entrySet())
 			{
 				if (e.getKey().equalsIgnoreCase(name))
 				{
@@ -1033,11 +1033,11 @@ class ChroniclePanel extends PluginPanel
 				long n = safeParse(r[1]);
 				if (n > 0)
 				{
-					rolledKcs.put(LocalStore.kindOf(r[0]), n);
+					rolledKcs.put(kindOf(r[0]), n);
 				}
 			}
 		}
-		return rolledKcs.get(LocalStore.kindOf(name));
+		return rolledKcs.get(kindOf(name));
 	}
 
 	/**
@@ -1068,9 +1068,9 @@ class ChroniclePanel extends PluginPanel
 	 * gone to that fight in {@link #lineBelongsTo}, so the Gauntlet's card never
 	 * carries the Corrupted Gauntlet's completion count.
 	 */
-	private List<Map.Entry<String, Long>> logLines(String boss)
+	private List<Entry<String, Long>> logLines(String boss)
 	{
-		List<Map.Entry<String, Long>> out = pageLines(boss, "kc_lines");
+		List<Entry<String, Long>> out = pageLines(boss, "kc_lines");
 		// A line that only restates the count the card already carries is noise.
 		// What is worth reading beside it is a line counting something ELSE:
 		// Wintertodt's rewards claimed against its kills.
@@ -1144,7 +1144,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			lined.add(low(pageName));
 		}
-		for (Map.Entry<String, JsonElement> e
+		for (Entry<String, JsonElement> e
 			: obj(cl, "kcs").entrySet())
 		{
 			String key = low(e.getKey());
@@ -1153,7 +1153,7 @@ class ChroniclePanel extends PluginPanel
 				out.merge(key, safeLong(e.getValue()), Math::max);
 			}
 		}
-		for (Map.Entry<String, Long> e : LocalStore.pageKillLines(cl).entrySet())
+		for (Entry<String, Long> e : LocalStore.pageKillLines(cl).entrySet())
 		{
 			out.put(low(e.getKey()), e.getValue());
 		}
@@ -1182,7 +1182,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		List<String> labels = new ArrayList<>();
 		List<String> figures = new ArrayList<>();
-		for (Map.Entry<String, JsonElement> ln
+		for (Entry<String, JsonElement> ln
 			: found.getAsJsonObject().entrySet())
 		{
 			labels.add(ln.getKey());
@@ -1195,9 +1195,9 @@ class ChroniclePanel extends PluginPanel
 	 * The page's lines that are this fight's, as the page wrote them: from
 	 * kc_lines, or from pb_lines for its best times in seconds.
 	 */
-	private List<Map.Entry<String, Long>> pageLines(String boss, String map)
+	private List<Entry<String, Long>> pageLines(String boss, String map)
 	{
-		List<Map.Entry<String, Long>> out = new ArrayList<>();
+		List<Entry<String, Long>> out = new ArrayList<>();
 		JsonObject cl = clogNow();
 		if (cl == null)
 		{
@@ -1208,7 +1208,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return out;
 		}
-		for (Map.Entry<String, JsonElement> ln
+		for (Entry<String, JsonElement> ln
 			: found.getAsJsonObject().entrySet())
 		{
 			long n = safeLong(ln.getValue());
@@ -1232,7 +1232,7 @@ class ChroniclePanel extends PluginPanel
 		// Choke devil read "Times looted 13" while the journal held thirteen task
 		// kills of it. A monster in a task's own monsters map is a thing this
 		// account killed, which is the whole question being asked.
-		return killKinds().contains(LocalStore.kindOf(name))
+		return killKinds().contains(kindOf(name))
 			|| taskKillsEver().containsKey(name);
 	}
 
@@ -1250,14 +1250,14 @@ class ChroniclePanel extends PluginPanel
 		Set<String> out = new HashSet<>();
 		for (Boss b : bossRoster(plugin.gson()))
 		{
-			out.add(LocalStore.kindOf(b.name));
+			out.add(kindOf(b.name));
 		}
 		JsonObject cl = clogNow();
 		if (cl != null)
 		{
 			for (String said : obj(cl, "slayer_kcs").keySet())
 			{
-				out.add(LocalStore.kindOf(said));
+				out.add(kindOf(said));
 			}
 		}
 		killKinds = out;
@@ -1272,8 +1272,8 @@ class ChroniclePanel extends PluginPanel
 		int open = source.lastIndexOf('(');
 		int close = source.lastIndexOf(')');
 		return open > 0 && close > open
-			&& LocalStore.kindOf(source.substring(open + 1, close))
-				.equals(LocalStore.kindOf(boss));
+			&& kindOf(source.substring(open + 1, close))
+				.equals(kindOf(boss));
 	}
 
 	private static String beforeBracket(String source)
@@ -1527,7 +1527,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private boolean openLogPage(String page)
 	{
-		for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
+		for (Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
 		{
 			if (tab.getValue().containsKey(page))
 			{
@@ -1694,7 +1694,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return null;
 		}
-		for (Map.Entry<LocalDate, Baseline> e : spine.entrySet())
+		for (Entry<LocalDate, Baseline> e : spine.entrySet())
 		{
 			if (!(kills ? e.getValue().kcs : e.getValue().counters).isEmpty())
 			{
@@ -1774,10 +1774,9 @@ class ChroniclePanel extends PluginPanel
 			// dropped, and that reaches back only so far. Said once at the top
 			// rather than left as a number meaning something its neighbours do
 			// not: those cells are a floor, over part of the window.
-			p.add(note("Kills the journal cannot date are counted from loot "
+			spaced(p, note("Kills the journal cannot date are counted from loot "
 				+ "instead, which reaches back only to " + shortFrom.format(FULL_DAY)
-				+ " and sees a kill only where it dropped something."));
-			p.add(vgap(4));
+				+ " and sees a kill only where it dropped something."), 4);
 		}
 		spaced(p, opening);
 		return p;
@@ -1849,7 +1848,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		List<String> labels = new ArrayList<>();
 		List<String> figures = new ArrayList<>();
-		String kind = LocalStore.kindOf(b.name);
+		String kind = kindOf(b.name);
 		SourceRow src = null;
 		// What the fight is paid out through as well as the fight itself. A
 		// skilling boss hands its loot over in a container -- "Reward cart
@@ -1860,7 +1859,7 @@ class ChroniclePanel extends PluginPanel
 		List<SourceRow> paidOut = new ArrayList<>();
 		for (SourceRow r : sources())
 		{
-			if (LocalStore.kindOf(r.name).equals(kind))
+			if (kindOf(r.name).equals(kind))
 			{
 				if (src == null)
 				{
@@ -1888,7 +1887,7 @@ class ChroniclePanel extends PluginPanel
 		labels.add("Kills tracked");
 		figures.add(known > 0 ? fmt(known) : src != null ? fmt(src.loots) : "-");
 		// the best time, which is a time
-		for (Map.Entry<String, Long> pb : pageLines(b.name, "pb_lines"))
+		for (Entry<String, Long> pb : pageLines(b.name, "pb_lines"))
 		{
 			labels.add(pb.getKey());
 			figures.add(clock(pb.getValue()));
@@ -1909,7 +1908,7 @@ class ChroniclePanel extends PluginPanel
 			figures.add(hoursMinutes(here));
 		}
 		// what the page itself counts, which need not be kills at all
-		for (Map.Entry<String, Long> ln : logLines(b.name))
+		for (Entry<String, Long> ln : logLines(b.name))
 		{
 			labels.add(ln.getKey());
 			figures.add(fmt(ln.getValue()));
@@ -1946,10 +1945,10 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private String bossLootSource(Boss b)
 	{
-		String kind = LocalStore.kindOf(b.name);
+		String kind = kindOf(b.name);
 		for (SourceRow r : sources())
 		{
-			if (LocalStore.kindOf(r.name).equals(kind))
+			if (kindOf(r.name).equals(kind))
 			{
 				return r.name;
 			}
@@ -2804,7 +2803,7 @@ class ChroniclePanel extends PluginPanel
 				case "LEVEL":
 					if (has(d, "skill") && has(d, "level"))
 					{
-						levels.merge(StatRegistry.prettify(
+						levels.merge(prettify(
 							low(d.get("skill").getAsString())),
 							safeLong(d.get("level")), Math::max);
 					}
@@ -2829,7 +2828,7 @@ class ChroniclePanel extends PluginPanel
 		if (!levels.isEmpty())
 		{
 			List<String> said = new ArrayList<>();
-			for (Map.Entry<String, Long> l : levels.entrySet())
+			for (Entry<String, Long> l : levels.entrySet())
 			{
 				said.add(l.getKey() + " " + l.getValue());
 			}
@@ -2867,10 +2866,10 @@ class ChroniclePanel extends PluginPanel
 	private int addSessionMovers(JPanel strip, Map<String, Integer> sess,
 		Set<String> shownKeys)
 	{
-		Map<String, List<Map.Entry<String, Long>>> byFamily = new LinkedHashMap<>();
+		Map<String, List<Entry<String, Long>>> byFamily = new LinkedHashMap<>();
 		// what each parent is standing for, so its row can open on them
-		Map<String, List<Map.Entry<String, Long>>> under = new LinkedHashMap<>();
-		for (Map.Entry<String, Integer> e : sess.entrySet())
+		Map<String, List<Entry<String, Long>>> under = new LinkedHashMap<>();
+		for (Entry<String, Integer> e : sess.entrySet())
 		{
 			String key = e.getKey();
 			if (e.getValue() <= 0 || shownKeys.contains(key) || StatRegistry.hidden(key)
@@ -2878,7 +2877,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				continue;
 			}
-			Map.Entry<String, Long> moved =
+			Entry<String, Long> moved =
 				new AbstractMap.SimpleEntry<>(key, (long) e.getValue());
 			String parent = parentOf(key, sess);
 			if (parent != null)
@@ -2893,7 +2892,7 @@ class ChroniclePanel extends PluginPanel
 		int mounted = 0;
 		for (String family : StatRegistry.FAMILIES)
 		{
-			List<Map.Entry<String, Long>> rows = byFamily.get(family);
+			List<Entry<String, Long>> rows = byFamily.get(family);
 			if (rows == null || rows.isEmpty())
 			{
 				continue;
@@ -2907,7 +2906,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				continue;
 			}
-			for (Map.Entry<String, Long> e : rows)
+			for (Entry<String, Long> e : rows)
 			{
 				mounted += addMoverRow(strip, e.getKey(), e.getValue(),
 					under.get(e.getKey()));
@@ -2924,7 +2923,7 @@ class ChroniclePanel extends PluginPanel
 	 * "Other" rather than going missing. Returns the lines mounted.
 	 */
 	private int addMoverRow(JPanel strip, String key, long value,
-		List<Map.Entry<String, Long>> kids)
+		List<Entry<String, Long>> kids)
 	{
 		if (kids == null || kids.isEmpty())
 		{
@@ -2945,7 +2944,7 @@ class ChroniclePanel extends PluginPanel
 		int cap = shownCap(listKey);
 		int shown = 0;
 		long named = 0;
-		for (Map.Entry<String, Long> k : kids)
+		for (Entry<String, Long> k : kids)
 		{
 			named += k.getValue();
 			if (shown++ >= cap)
@@ -3340,8 +3339,7 @@ class ChroniclePanel extends PluginPanel
 				? gp(r.value / Math.max(1, r.loots))
 					+ (killed ? " gp/drop" : " gp each") : ""));
 			link(card, () -> openSource(r.name));
-			p.add(card);
-			p.add(vgap(4));
+			spaced(p, card, 4);
 		}
 		if (sources.size() > dropsShown)
 		{
@@ -3547,8 +3545,7 @@ class ChroniclePanel extends PluginPanel
 				leftBehindSource = byItem ? null : r.name;
 				rebuild();
 			});
-			p.add(card);
-			p.add(vgap(4));
+			spaced(p, card, 4);
 		}
 		return p;
 	}
@@ -3840,8 +3837,7 @@ class ChroniclePanel extends PluginPanel
 		spaced(page, onTaskHead(qty, value, tally));
 		if (lootTask != null)
 		{
-			page.add(row("Task", lootTask, accent()));
-			page.add(vgap(4));
+			spaced(page, row("Task", lootTask, accent()), 4);
 		}
 		for (Kind k : kindsOf(bag))
 		{
@@ -4096,7 +4092,7 @@ class ChroniclePanel extends PluginPanel
 		return copyHeaderLater(title, take ->
 		{
 			JPopupMenu menu = new JPopupMenu();
-			for (Map.Entry<String, BooleanSupplier> e
+			for (Entry<String, BooleanSupplier> e
 				: choices.entrySet())
 			{
 				menuItem(menu, e.getKey(), false, () -> reportCopy(take, e.getValue().getAsBoolean()));
@@ -4137,7 +4133,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel addKillLog(JPanel p)
 	{
-		List<Map.Entry<String, Long>> kcs = new ArrayList<>(LocalStore.killLogCounts(clogNow()).entrySet());
+		List<Entry<String, Long>> kcs = new ArrayList<>(LocalStore.killLogCounts(clogNow()).entrySet());
 		if (kcs.isEmpty())
 		{
 			// Behind a pill this is a screen of its own and has to say something.
@@ -4146,13 +4142,13 @@ class ChroniclePanel extends PluginPanel
 			return noted(p, "No kill log yet. It copies itself the next time you open "
 				+ "the Slayer Kill Log in game.");
 		}
-		kcs.sort(Map.Entry.<String, Long>comparingByValue().reversed());
+		kcs.sort(Entry.<String, Long>comparingByValue().reversed());
 		JPanel card = card("Kill log");
 		// Capped like every other list, and opened like every other list: it
 		// used to stop at twenty and send the reader to the search box for the
 		// rest, which made the search the only door to most of the log.
 		final int cap = drillShown.getOrDefault("killlog", ROW_CAP);
-		for (Map.Entry<String, Long> e : firstN(kcs, cap))
+		for (Entry<String, Long> e : firstN(kcs, cap))
 		{
 			JPanel r = row(e.getKey(), fmt(e.getValue()));
 			final String mob = e.getKey();
@@ -4479,8 +4475,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			card.add(row(kills, t.ts > 0
 				? day((long) (t.ts * 1000)) : ""));
-			p.add(card);
-			p.add(vgap(4));
+			spaced(p, card, 4);
 		}
 		// shown, not j.tasks: the cards above are the window's tasks and the count
 		// was the whole journey's, so a sitting with two tasks in it offered to
@@ -4571,8 +4566,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildInfo()
 	{
 		JPanel p = column();
-		p.add(backRow(() -> copyPicture(stripChrome(buildInfo()))));
-		p.add(vgap(4));
+		spaced(p, backRow(() -> copyPicture(stripChrome(buildInfo()))), 4);
 		Map<String, Long> f = plugin.journalFacts();
 
 		JPanel loot = facts(card("Loot"), f, accent(), "Sources", "sources",
@@ -4696,7 +4690,7 @@ class ChroniclePanel extends PluginPanel
 	/** The timed kills the roll holds for one source inside the window: {count, seconds}. */
 	private double[] sourceTimesInWindow(String name)
 	{
-		for (Map.Entry<String, double[]> e : lootWindow().times.entrySet())
+		for (Entry<String, double[]> e : lootWindow().times.entrySet())
 		{
 			if (e.getKey().equalsIgnoreCase(name))
 			{
@@ -4754,11 +4748,11 @@ class ChroniclePanel extends PluginPanel
 		// Black Dragon" would have opened "Black dragon" the same way. A click
 		// landing on a different monster's loot is worse than landing on an
 		// empty page, which is what a source with no drops honestly has.
-		String kind = LocalStore.kindOf(name);
+		String kind = kindOf(name);
 		SourceRow best = null;
 		for (SourceRow r : sources())
 		{
-			if ((LocalStore.kindOf(r.name).equals(kind) || namesInBrackets(r.name, name))
+			if ((kindOf(r.name).equals(kind) || namesInBrackets(r.name, name))
 				&& (best == null || r.value > best.value))
 			{
 				best = r;
@@ -5372,8 +5366,7 @@ class ChroniclePanel extends PluginPanel
 		final int itemId = found;
 		// read before the row is built: the copy hands back every source, not the
 		// forty the page mounts
-		p.add(backRow(() -> copyItemPage(name)));
-		p.add(vgap(4));
+		spaced(p, backRow(() -> copyItemPage(name)), 4);
 		JPanel head = card(name);
 		if (itemId > 0)
 		{
@@ -5564,7 +5557,7 @@ class ChroniclePanel extends PluginPanel
 		if (chatKcByKind == null)
 		{
 			Map<String, Long> out = new LinkedHashMap<>();
-			for (Map.Entry<String, Long> e : plugin.killCounts().entrySet())
+			for (Entry<String, Long> e : plugin.killCounts().entrySet())
 			{
 				out.merge(LocalStore.chatKind(e.getKey()), e.getValue(), Math::max);
 			}
@@ -5624,7 +5617,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return;
 		}
-		for (Map.Entry<String, Long> e : rows.entrySet())
+		for (Entry<String, Long> e : rows.entrySet())
 		{
 			head.add(row(e.getKey(), fmt(e.getValue())));
 		}
@@ -5634,7 +5627,7 @@ class ChroniclePanel extends PluginPanel
 	private static void putKind(Map<String, Long> rows, String label,
 		Map<String, Long> from, String want)
 	{
-		for (Map.Entry<String, Long> e : from.entrySet())
+		for (Entry<String, Long> e : from.entrySet())
 		{
 			if (LocalStore.chatKind(e.getKey()).equals(want) && e.getValue() > 0)
 			{
@@ -5770,7 +5763,7 @@ class ChroniclePanel extends PluginPanel
 	private long minutesAt(String name, Map<String, Long> counters)
 	{
 		long minutes = counters.getOrDefault(StatKeys.timeKey(name), 0L);
-		for (String npc : FOUGHT_AS.getOrDefault(LocalStore.kindOf(name),
+		for (String npc : FOUGHT_AS.getOrDefault(kindOf(name),
 			Collections.emptyList()))
 		{
 			minutes += counters.getOrDefault(StatKeys.timeKey(npc), 0L);
@@ -5806,8 +5799,7 @@ class ChroniclePanel extends PluginPanel
 			? plugin.sessionSourceItems(sr != null ? sr.name : name)
 			: plugin.sourceItems(sr != null ? sr.name : name);
 		bag.sort(Comparator.comparingLong((BagItem b) -> b.value).reversed());
-		p.add(backRow(() -> copySourcePage(name)));
-		p.add(vgap(4));
+		spaced(p, backRow(() -> copySourcePage(name)), 4);
 		JPanel head = card(name);
 		if (sr != null)
 		{
@@ -5848,11 +5840,11 @@ class ChroniclePanel extends PluginPanel
 				addFloorRow(head, sr.name);
 			}
 			// what the log's own page counts for it, in the log's own words
-			for (Map.Entry<String, Long> pbLine : pageLines(sr.name, "pb_lines"))
+			for (Entry<String, Long> pbLine : pageLines(sr.name, "pb_lines"))
 			{
 				head.add(row(pbLine.getKey(), clock(pbLine.getValue())));
 			}
-			for (Map.Entry<String, Long> ln : logLines(sr.name))
+			for (Entry<String, Long> ln : logLines(sr.name))
 			{
 				head.add(row(ln.getKey(), fmt(ln.getValue())));
 			}
@@ -5963,8 +5955,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			if (sprites > 0)
 			{
-				p.add(grid);
-				p.add(vgap(5));
+				spaced(p, grid, 5);
 			}
 			p.add(group("Loot"));
 			// Said once, under the heading it applies to. The dated roll keeps a
@@ -6091,7 +6082,7 @@ class ChroniclePanel extends PluginPanel
 		Map<String, Long> kcs = pageCounts(cl);
 
 		Map<String, List<String>> pages = tax.getOrDefault(clogTab, new LinkedHashMap<>());
-		for (Map.Entry<String, List<String>> pg : pages.entrySet())
+		for (Entry<String, List<String>> pg : pages.entrySet())
 		{
 			String page = pg.getKey();
 			List<String> slots = pg.getValue();
@@ -6155,9 +6146,8 @@ class ChroniclePanel extends PluginPanel
 				// cut at, so those figures run a little dry.
 				if (anyDetail)
 				{
-					drill.add(note("Click pet to see odds. Skilling odds are based "
-						+ "on current level."));
-					drill.add(vgap(3));
+					spaced(drill, note("Click pet to see odds. Skilling odds are based "
+						+ "on current level."), 3);
 				}
 				Map<String, Long> landed = landedSlots();
 				for (int i = 0; i < slots.size(); i++)
@@ -6194,8 +6184,7 @@ class ChroniclePanel extends PluginPanel
 						}
 					}
 				}
-				p.add(drill);
-				p.add(vgap(3));
+				spaced(p, drill, 3);
 			}
 		}
 
@@ -6822,12 +6811,12 @@ class ChroniclePanel extends PluginPanel
 	private static Obtained obtained(JsonObject cl)
 	{
 		Obtained o = new Obtained();
-		for (Map.Entry<String, JsonElement> e
+		for (Entry<String, JsonElement> e
 			: obj(cl, "clog_items").entrySet())
 		{
 			o.all.merge(low(e.getKey()), safeLong(e.getValue()), Math::max);
 		}
-		for (Map.Entry<String, JsonElement> pg
+		for (Entry<String, JsonElement> pg
 			: obj(cl, "by_cat").entrySet())
 		{
 			if (!pg.getValue().isJsonObject())
@@ -6835,7 +6824,7 @@ class ChroniclePanel extends PluginPanel
 				continue;
 			}
 			Map<String, Long> items = new LinkedHashMap<>();
-			for (Map.Entry<String, JsonElement> it
+			for (Entry<String, JsonElement> it
 				: pg.getValue().getAsJsonObject().entrySet())
 			{
 				items.merge(low(it.getKey()),
@@ -6907,9 +6896,9 @@ class ChroniclePanel extends PluginPanel
 			return sharedSlotNames;
 		}
 		Map<String, Integer> homes = new LinkedHashMap<>();
-		for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy(gson).entrySet())
+		for (Entry<String, Map<String, List<String>>> tab : taxonomy(gson).entrySet())
 		{
-			for (Map.Entry<String, List<String>> pg : tab.getValue().entrySet())
+			for (Entry<String, List<String>> pg : tab.getValue().entrySet())
 			{
 				Set<String> onThisPage = new HashSet<>();
 				for (String slot : pg.getValue())
@@ -6923,7 +6912,7 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		Set<String> shared = new HashSet<>();
-		for (Map.Entry<String, Integer> e : homes.entrySet())
+		for (Entry<String, Integer> e : homes.entrySet())
 		{
 			if (e.getValue() > 1)
 			{
@@ -6962,10 +6951,10 @@ class ChroniclePanel extends PluginPanel
 				JsonObject rootTax = gson.fromJson(
 					new InputStreamReader(in, StandardCharsets.UTF_8),
 					JsonObject.class);
-				for (Map.Entry<String, JsonElement> tab : rootTax.entrySet())
+				for (Entry<String, JsonElement> tab : rootTax.entrySet())
 				{
 					Map<String, List<String>> pages = new LinkedHashMap<>();
-					for (Map.Entry<String, JsonElement> pg
+					for (Entry<String, JsonElement> pg
 						: tab.getValue().getAsJsonObject().entrySet())
 					{
 						List<String> slots = new ArrayList<>();
@@ -7143,7 +7132,7 @@ class ChroniclePanel extends PluginPanel
 		Map<String, Long> out = new LinkedHashMap<>(base);
 		long food = 0;
 		long potions = 0;
-		for (Map.Entry<String, Long> e : plugin.consumableValues().entrySet())
+		for (Entry<String, Long> e : plugin.consumableValues().entrySet())
 		{
 			long v = e.getValue() == null ? 0 : e.getValue();
 			if (v <= 0)
@@ -7174,7 +7163,7 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
-	private String rowValue(Map.Entry<String, Long> e)
+	private String rowValue(Entry<String, Long> e)
 	{
 		String base = value(e);
 		if (e.getKey().equals("resourcesGatheredValue") && resourcesDropped > 0)
@@ -7200,9 +7189,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel buildAllTrackers()
 	{
-		JPanel p = column();
-		p.add(backRow());
-		p.add(vgap(4));
+		JPanel p = backPage();
 		consumVals = plugin.consumableValues();
 		Map<String, Long> counters = countersForPeriod();
 		if (counters == null)
@@ -7215,19 +7202,19 @@ class ChroniclePanel extends PluginPanel
 		// the gathered row was either missing, on a panel that had never drawn
 		// Stats, or from whatever period Stats was last looked at.
 		resourcesDropped = counters.getOrDefault("resourcesDroppedValue", 0L);
-		Map<String, Map<String, List<Map.Entry<String, Long>>>> filed = new LinkedHashMap<>();
+		Map<String, Map<String, List<Entry<String, Long>>>> filed = new LinkedHashMap<>();
 		for (String fam : StatRegistry.FAMILIES)
 		{
 			filed.put(fam, new LinkedHashMap<>());
 		}
 		int kept = 0;
-		for (Map.Entry<String, Long> e : counters.entrySet())
+		for (Entry<String, Long> e : counters.entrySet())
 		{
 			if (e.getValue() == null || e.getValue() <= 0 || StatRegistry.hidden(e.getKey()))
 			{
 				continue;
 			}
-			Map<String, List<Map.Entry<String, Long>>> fam =
+			Map<String, List<Entry<String, Long>>> fam =
 				filed.computeIfAbsent(StatRegistry.family(e.getKey()), k -> new LinkedHashMap<>());
 			// under the section it heads everywhere else: Meals eaten with Food
 			String sec = StatRegistry.subgroup(e.getKey());
@@ -7244,22 +7231,22 @@ class ChroniclePanel extends PluginPanel
 		{
 			return noted(p, "Nothing tracked inside " + periodInSentence() + ".");
 		}
-		for (Map.Entry<String, Map<String, List<Map.Entry<String, Long>>>> fam : filed.entrySet())
+		for (Entry<String, Map<String, List<Entry<String, Long>>>> fam : filed.entrySet())
 		{
 			if (fam.getValue().isEmpty())
 			{
 				continue;
 			}
 			p.add(group(fam.getKey()));
-			for (Map.Entry<String, List<Map.Entry<String, Long>>> sec : fam.getValue().entrySet())
+			for (Entry<String, List<Entry<String, Long>>> sec : fam.getValue().entrySet())
 			{
-				List<Map.Entry<String, Long>> rows = sec.getValue();
+				List<Entry<String, Long>> rows = sec.getValue();
 				rows.sort(StatRegistry::compareRows);
 				if (!sec.getKey().isEmpty())
 				{
 					p.add(ghostRow(sec.getKey(), ""));
 				}
-				for (Map.Entry<String, Long> e : rows)
+				for (Entry<String, Long> e : rows)
 				{
 					p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
 				}
@@ -7295,9 +7282,9 @@ class ChroniclePanel extends PluginPanel
 			t[0]++;
 			t[1] = Math.max(t[1], ts);
 		}
-		List<Map.Entry<String, long[]>> ranked = new ArrayList<>(killers.entrySet());
+		List<Entry<String, long[]>> ranked = new ArrayList<>(killers.entrySet());
 		ranked.sort((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0]));
-		for (Map.Entry<String, long[]> k : ranked)
+		for (Entry<String, long[]> k : ranked)
 		{
 			JPanel r = row(k.getKey(), fmt(k.getValue()[0]) + " · last "
 				+ day(k.getValue()[1]));
@@ -7352,9 +7339,9 @@ class ChroniclePanel extends PluginPanel
 			return p;
 		}
 		resourcesDropped = counters.getOrDefault("resourcesDroppedValue", 0L);
-		Map<String, List<Map.Entry<String, Long>>> rowsBySection = new LinkedHashMap<>();
+		Map<String, List<Entry<String, Long>>> rowsBySection = new LinkedHashMap<>();
 		Map<String, Long> floorTotals = new LinkedHashMap<>();
-		for (Map.Entry<String, Long> e : counters.entrySet())
+		for (Entry<String, Long> e : counters.entrySet())
 		{
 			if (e.getValue() == 0 || StatRegistry.hidden(e.getKey())
 				|| !StatRegistry.family(e.getKey()).equals(statsFamily))
@@ -7387,7 +7374,7 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		// Destinations nest inside the Teleports fold.
-		List<Map.Entry<String, Long>> destRows = statsFamily.equals("Ledger & Roads")
+		List<Entry<String, Long>> destRows = statsFamily.equals("Ledger & Roads")
 			? rowsBySection.remove("Destinations") : null;
 		if (destRows != null && !rowsBySection.containsKey("Teleports")
 			&& !floorTotals.containsKey("Teleports"))
@@ -7399,14 +7386,14 @@ class ChroniclePanel extends PluginPanel
 		List<String> order = sectionOrder(rowsBySection, floorTotals);
 		for (String sec : order)
 		{
-			List<Map.Entry<String, Long>> rows =
+			List<Entry<String, Long>> rows =
 				rowsBySection.getOrDefault(sec, new ArrayList<>());
 			rows.sort(StatRegistry::compareRows);
 			long floor = floorTotals.getOrDefault(sec, 0L);
 
 			if (sec.isEmpty())
 			{
-				for (Map.Entry<String, Long> e : rows)
+				for (Entry<String, Long> e : rows)
 				{
 					if ("deaths".equals(e.getKey()) && e.getValue() > 0)
 					{
@@ -7426,7 +7413,7 @@ class ChroniclePanel extends PluginPanel
 			long typedSum = 0;
 			boolean anyTyped = false;
 			long shown = 0;
-			for (Map.Entry<String, Long> e : rows)
+			for (Entry<String, Long> e : rows)
 			{
 				shown += e.getValue();
 				if (StatRegistry.typed(e.getKey()))
@@ -7451,7 +7438,7 @@ class ChroniclePanel extends PluginPanel
 			if (!foldable)
 			{
 				p.add(group(sec));
-				for (Map.Entry<String, Long> e : rows)
+				for (Entry<String, Long> e : rows)
 				{
 					p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
 				}
@@ -7463,7 +7450,7 @@ class ChroniclePanel extends PluginPanel
 			long secGp = 0;
 			if (wholeRecord())
 			{
-				for (Map.Entry<String, Long> e : rows)
+				for (Entry<String, Long> e : rows)
 				{
 					Long cv = consumVals.get(e.getKey());
 					if (cv != null)
@@ -7500,7 +7487,7 @@ class ChroniclePanel extends PluginPanel
 					&& addCraftNested(p, sec, rows, counters);
 				if (!nested)
 				{
-					for (Map.Entry<String, Long> e : rows)
+					for (Entry<String, Long> e : rows)
 					{
 						p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
 					}
@@ -7514,7 +7501,7 @@ class ChroniclePanel extends PluginPanel
 					// own name and once as "Other means" underneath it.
 					if (rows.isEmpty() && floor > 0)
 					{
-						List<Map.Entry<String, Long>> floors = new ArrayList<>();
+						List<Entry<String, Long>> floors = new ArrayList<>();
 						for (String fk : StatRegistry.floorKeys(sec))
 						{
 							long fv = counters.getOrDefault(fk, 0L);
@@ -7524,7 +7511,7 @@ class ChroniclePanel extends PluginPanel
 							}
 						}
 						floors.sort(StatRegistry::compareRows);
-						for (Map.Entry<String, Long> fe : floors)
+						for (Entry<String, Long> fe : floors)
 						{
 							p.add(row(StatRegistry.label(fe.getKey()), fmt(fe.getValue())));
 						}
@@ -7550,7 +7537,7 @@ class ChroniclePanel extends PluginPanel
 
 	// Sections in display order: Skilling's crafts rank by weight, the other
 	// families keep the registry's fixed order with strays appended.
-	private List<String> sectionOrder(Map<String, List<Map.Entry<String, Long>>> rowsBySection,
+	private List<String> sectionOrder(Map<String, List<Entry<String, Long>>> rowsBySection,
 		Map<String, Long> floorTotals)
 	{
 		LinkedHashSet<String> present = new LinkedHashSet<>();
@@ -7570,7 +7557,7 @@ class ChroniclePanel extends PluginPanel
 					return floor;
 				}
 				long sum = 0;
-				for (Map.Entry<String, Long> e
+				for (Entry<String, Long> e
 					: rowsBySection.getOrDefault(s, new ArrayList<>()))
 				{
 					sum += e.getValue();
@@ -7600,11 +7587,11 @@ class ChroniclePanel extends PluginPanel
 	 * false under two verb groups, and the caller renders the flat list instead.
 	 */
 	private boolean addCraftNested(JPanel p, String craft,
-		List<Map.Entry<String, Long>> rows, Map<String, Long> counters)
+		List<Entry<String, Long>> rows, Map<String, Long> counters)
 	{
-		Map<String, List<Map.Entry<String, Long>>> byVerb = new LinkedHashMap<>();
-		List<Map.Entry<String, Long>> leaves = new ArrayList<>();
-		for (Map.Entry<String, Long> e : rows)
+		Map<String, List<Entry<String, Long>>> byVerb = new LinkedHashMap<>();
+		List<Entry<String, Long>> leaves = new ArrayList<>();
+		for (Entry<String, Long> e : rows)
 		{
 			String suf = StatRegistry.suffixOf(e.getKey());
 			if (suf == null)
@@ -7620,7 +7607,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return false;
 		}
-		for (Map.Entry<String, Long> e : leaves)
+		for (Entry<String, Long> e : leaves)
 		{
 			p.add(row(StatRegistry.rowLabel(e.getKey()), value(e)));
 		}
@@ -7631,7 +7618,7 @@ class ChroniclePanel extends PluginPanel
 			String floorKey = StatRegistry.suffixFloor(craft, verb);
 			long floorVal = floorKey != null ? counters.getOrDefault(floorKey, 0L) : 0L;
 			long sum = 0;
-			for (Map.Entry<String, Long> e : byVerb.get(verb))
+			for (Entry<String, Long> e : byVerb.get(verb))
 			{
 				sum += e.getValue();
 			}
@@ -7648,7 +7635,7 @@ class ChroniclePanel extends PluginPanel
 			if (open)
 			{
 				long sum = 0;
-				for (Map.Entry<String, Long> e : byVerb.get(verb))
+				for (Entry<String, Long> e : byVerb.get(verb))
 				{
 					p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
 					sum += e.getValue();
@@ -7664,11 +7651,11 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	// Destinations sit one level under Teleports: where the roads led.
-	private void addDestinationsFold(JPanel p, List<Map.Entry<String, Long>> destRows)
+	private void addDestinationsFold(JPanel p, List<Entry<String, Long>> destRows)
 	{
 		destRows.sort(StatRegistry::compareRows);
 		long sum = 0;
-		for (Map.Entry<String, Long> e : destRows)
+		for (Entry<String, Long> e : destRows)
 		{
 			sum += e.getValue();
 		}
@@ -7677,7 +7664,7 @@ class ChroniclePanel extends PluginPanel
 		p.add(subHead("Destinations", fmt(sum), stateKey));
 		if (open)
 		{
-			for (Map.Entry<String, Long> e : destRows)
+			for (Entry<String, Long> e : destRows)
 			{
 				p.add(row(StatRegistry.label(e.getKey()), value(e)));
 			}
@@ -7694,7 +7681,7 @@ class ChroniclePanel extends PluginPanel
 		return head;
 	}
 
-	private static String value(Map.Entry<String, Long> e)
+	private static String value(Entry<String, Long> e)
 	{
 		return StatRegistry.isGp(e.getKey()) ? gps(e.getValue()) : fmt(e.getValue());
 	}
@@ -7866,7 +7853,7 @@ class ChroniclePanel extends PluginPanel
 	 * names and a section's rows, start shut.
 	 */
 	private JPanel trackedProgress(HistoryProgress progress,
-		List<Map.Entry<String, Long>> gains, Map<String, List<String[]>> named)
+		List<Entry<String, Long>> gains, Map<String, List<String[]>> named)
 	{
 		JPanel card = card("Tracked progress");
 		for (String name : HistoryProgress.GROUPS)
@@ -7899,9 +7886,9 @@ class ChroniclePanel extends PluginPanel
 			if (experience)
 			{
 				int cap = shownCap(GAINS_LIST);
-				for (Map.Entry<String, Long> e : firstN(gains, cap))
+				for (Entry<String, Long> e : firstN(gains, cap))
 				{
-					card.add(row(StatRegistry.prettify(e.getKey()), "+" + gp(e.getValue())));
+					card.add(row(prettify(e.getKey()), "+" + gp(e.getValue())));
 				}
 				// the gains are the group's own rows, not a list one step in,
 				// so their tail pages at the same indent they do
@@ -8136,12 +8123,12 @@ class ChroniclePanel extends PluginPanel
 			case "COMBAT_ACHIEVEMENT":
 				return has(d, "task")
 					? (has(d, "tier")
-					? StatRegistry.prettify(low(d.get("tier").getAsString()))
+					? prettify(low(d.get("tier").getAsString()))
 					+ " · " : "") + d.get("task").getAsString()
 					: null;
 			case "LEVEL":
 				return has(d, "skill")
-					? StatRegistry.prettify(low(d.get("skill").getAsString()))
+					? prettify(low(d.get("skill").getAsString()))
 					+ (has(d, "level") ? " " + d.get("level").getAsString() : "")
 					: null;
 			default:
@@ -8359,7 +8346,7 @@ class ChroniclePanel extends PluginPanel
 		Map<String, Long> loose = loosely(worth);
 		// Lifetime shows what a thing stands at; a period shows only what that
 		// period put on it, and a thing the period never touched is not in it.
-		Map<String, List<Map.Entry<String, Long>>> byKind = new LinkedHashMap<>();
+		Map<String, List<Entry<String, Long>>> byKind = new LinkedHashMap<>();
 		for (String name : whole ? standing.keySet() : union(gained.keySet(), worth.keySet()))
 		{
 			long figure = whole ? standing.getOrDefault(name, 0L) : gained.getOrDefault(name, 0L);
@@ -8370,7 +8357,7 @@ class ChroniclePanel extends PluginPanel
 			byKind.computeIfAbsent(sourceKind(name), k -> new ArrayList<>())
 				.add(new AbstractMap.SimpleEntry<>(name, figure));
 		}
-		Comparator<Map.Entry<String, Long>> byPaid = (a, b) ->
+		Comparator<Entry<String, Long>> byPaid = (a, b) ->
 		{
 			long wa = paidFor(worth, loose, a.getKey());
 			long wb = paidFor(worth, loose, b.getKey());
@@ -8385,7 +8372,7 @@ class ChroniclePanel extends PluginPanel
 		boolean drew = false;
 		for (String kind : new String[]{first, second})
 		{
-			List<Map.Entry<String, Long>> rows = byKind.get(kind);
+			List<Entry<String, Long>> rows = byKind.get(kind);
 			if (rows == null || rows.isEmpty())
 			{
 				continue;
@@ -8441,16 +8428,16 @@ class ChroniclePanel extends PluginPanel
 	private static long paidFor(Map<String, Long> worth, Map<String, Long> loose, String name)
 	{
 		Long exact = worth.get(name);
-		return exact != null ? exact : loose.getOrDefault(LocalStore.kindOf(name), 0L);
+		return exact != null ? exact : loose.getOrDefault(kindOf(name), 0L);
 	}
 
 	// The same figures under the one spelling both sides can agree on.
 	private static Map<String, Long> loosely(Map<String, Long> worth)
 	{
 		Map<String, Long> out = new LinkedHashMap<>();
-		for (Map.Entry<String, Long> e : worth.entrySet())
+		for (Entry<String, Long> e : worth.entrySet())
 		{
-			out.merge(LocalStore.kindOf(e.getKey()), e.getValue(), Long::sum);
+			out.merge(kindOf(e.getKey()), e.getValue(), Long::sum);
 		}
 		return out;
 	}
@@ -8551,7 +8538,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return KIND_SKILLING;
 		}
-		for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
+		for (Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
 		{
 			if (!tab.getValue().containsKey(name))
 			{
@@ -8731,7 +8718,7 @@ class ChroniclePanel extends PluginPanel
 	 * second is plain, since it runs to hundreds and a list is what hundreds of
 	 * anything wants to be.
 	 */
-	private void addKindBand(JPanel p, String kind, List<Map.Entry<String, Long>> rows,
+	private void addKindBand(JPanel p, String kind, List<Entry<String, Long>> rows,
 		Map<String, Long> worth, Map<String, Long> loose, boolean withIcons)
 	{
 		String stateKey = "history:kind:" + kind;
@@ -8747,7 +8734,7 @@ class ChroniclePanel extends PluginPanel
 		Integer asked = histListShown.get(stateKey);
 		int cap = asked == null ? BAND_CAP : asked;
 		JPanel card = cardPlain();
-		for (Map.Entry<String, Long> e : firstN(rows, cap))
+		for (Entry<String, Long> e : firstN(rows, cap))
 		{
 			card.add(kindRow(e.getKey(), e.getValue(),
 				paidFor(worth, loose, e.getKey()), withIcons));
@@ -9072,14 +9059,14 @@ class ChroniclePanel extends PluginPanel
 	 * end of the window: a count taken across a hole one side alone has would
 	 * read that hole as a gain.
 	 */
-	private JPanel headline(HistoryProgress progress, List<Map.Entry<String, Long>> gains,
+	private JPanel headline(HistoryProgress progress, List<Entry<String, Long>> gains,
 		SkillStand stand, HistoryLog.Levels opened, long[] played)
 	{
 		// Named for what it IS: a card headed "The period" over a strip saying
 		// "This session" is the panel using two words for one thing.
 		JPanel card = card(sessionPeriod() ? "This sitting" : "The period");
 		long xp = 0;
-		for (Map.Entry<String, Long> g : gains)
+		for (Entry<String, Long> g : gains)
 		{
 			xp += g.getValue();
 		}
@@ -9199,11 +9186,11 @@ class ChroniclePanel extends PluginPanel
 	// The hiscores grid: every skill's level at the period's close and the
 	// period's gain. A skill that didn't move keeps its place and says nothing.
 	// The headline above it carries the totals.
-	private void addSkillGrid(JPanel p, List<Map.Entry<String, Long>> gains, SkillStand stand,
+	private void addSkillGrid(JPanel p, List<Entry<String, Long>> gains, SkillStand stand,
 		HistoryLog.Levels opened)
 	{
 		Map<String, Long> gain = new LinkedHashMap<>();
-		for (Map.Entry<String, Long> g : gains)
+		for (Entry<String, Long> g : gains)
 		{
 			gain.put(g.getKey(), g.getValue());
 		}
@@ -9222,8 +9209,7 @@ class ChroniclePanel extends PluginPanel
 			Long from = was == null ? null : Long.valueOf(was.longValue());
 			grid.add(skillCell(sk, levels.get(sk), gain.get(key), from));
 		}
-		p.add(grid);
-		p.add(vgap(3));
+		spaced(p, grid, 3);
 		// Combat beside Total, the way the game's own panel puts them, and each
 		// carrying the reading that belongs to it: the period on the total, the
 		// combat counters on the combat level.
@@ -9249,8 +9235,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		else
 		{
-			p.add(combat);
-			p.add(vgap(2));
+			spaced(p, combat, 2);
 			p.add(total);
 		}
 		p.add(vgap(6));
@@ -9374,7 +9359,7 @@ class ChroniclePanel extends PluginPanel
 	/** The source's log page line named exactly as the tile is, or 0. */
 	private long namedLine(String source, String label)
 	{
-		for (Map.Entry<String, Long> ln : pageLines(source, "kc_lines"))
+		for (Entry<String, Long> ln : pageLines(source, "kc_lines"))
 		{
 			if (ln.getKey().equalsIgnoreCase(label))
 			{
@@ -9423,7 +9408,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		Map<String, Long> now = periodCounters();
 		List<String> floors = new ArrayList<>();
-		List<Map.Entry<String, Long>> named = new ArrayList<>();
+		List<Entry<String, Long>> named = new ArrayList<>();
 		for (String key : StatRegistry.headlines(craft))
 		{
 			Long v = now.get(key);
@@ -9440,7 +9425,7 @@ class ChroniclePanel extends PluginPanel
 				named.add(new AbstractMap.SimpleEntry<>(key, v));
 			}
 		}
-		named.sort(Map.Entry.<String, Long>comparingByValue().reversed());
+		named.sort(Entry.<String, Long>comparingByValue().reversed());
 		List<String> labels = new ArrayList<>();
 		List<String> figures = new ArrayList<>();
 		for (String key : floors)
@@ -9448,7 +9433,7 @@ class ChroniclePanel extends PluginPanel
 			labels.add(StatRegistry.rowLabel(key));
 			figures.add(fmt(now.get(key)));
 		}
-		for (Map.Entry<String, Long> e : named)
+		for (Entry<String, Long> e : named)
 		{
 			if (labels.size() >= 6)
 			{
@@ -9634,9 +9619,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel buildSheetPage()
 	{
-		JPanel p = column();
-		p.add(backRow());
-		p.add(vgap(4));
+		JPanel p = backPage();
 		if ("log".equals(sheetPage))
 		{
 			p.add(buildLog());
@@ -9867,9 +9850,8 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, head);
 		if (!known)
 		{
-			p.add(note("Which tiers you have finished arrives when you next log in. "
-				+ "Until then this is what each one asks for."));
-			p.add(vgap(4));
+			spaced(p, note("Which tiers you have finished arrives when you next log in. "
+				+ "Until then this is what each one asks for."), 4);
 		}
 		// The game states which TIERS are done and never which tasks, so a tier is
 		// ticked or it is not, and the tasks under it are what it asks for rather
@@ -9989,11 +9971,10 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, head);
 		if (unnamed > 0)
 		{
-			p.add(note("You have also done " + fmt(unnamed) + " combat achievement"
+			spaced(p, note("You have also done " + fmt(unnamed) + " combat achievement"
 				+ (unnamed == 1 ? "" : "s") + " added to the game since this copy of"
 				+ " Chronicle was built. They are counted by the game, not named"
-				+ " here, until the plugin updates."));
-			p.add(vgap(4));
+				+ " here, until the plugin updates."), 4);
 		}
 		// Which tasks are DONE, from the game's own per-task bits rather than from
 		// the handful this journal happened to watch land. Empty on a journal
@@ -10006,9 +9987,8 @@ class ChroniclePanel extends PluginPanel
 			// Said, not implied. Without it the board draws every task in the same
 			// colour and a reader with no reason to think otherwise reads that as
 			// an answer rather than as the absence of one.
-			p.add(note("Which tasks you have done arrives when you next log in. "
-				+ "Until then this is what each tier asks for."));
-			p.add(vgap(4));
+			spaced(p, note("Which tasks you have done arrives when you next log in. "
+				+ "Until then this is what each tier asks for."), 4);
 		}
 		// Filed by what they are fought against, not by tier. Six tiers meant one
 		// of them was a hundred and seventy three rows to mount the moment it was
@@ -10025,7 +10005,7 @@ class ChroniclePanel extends PluginPanel
 			bySource.computeIfAbsent(caSource(task.get("monster").getAsString()),
 				k -> new ArrayList<>()).add(task);
 		}
-		for (Map.Entry<String, List<JsonObject>> e : bySource.entrySet())
+		for (Entry<String, List<JsonObject>> e : bySource.entrySet())
 		{
 			long got = 0;
 			for (JsonObject task : e.getValue())
@@ -10106,10 +10086,10 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/** The head card's three figures, as the markup a tooltip takes. */
-	private String periodTip(long[] played, List<Map.Entry<String, Long>> gains)
+	private String periodTip(long[] played, List<Entry<String, Long>> gains)
 	{
 		long xp = 0;
-		for (Map.Entry<String, Long> g : gains)
+		for (Entry<String, Long> g : gains)
 		{
 			xp += g.getValue();
 		}
@@ -10192,7 +10172,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel skillCell(Skill sk, long level, Long gained, Long from)
 	{
 		JPanel cell = tile(3, 4);
-		final String craft = StatRegistry.prettify(low(sk.name()));
+		final String craft = prettify(low(sk.name()));
 		// The same hover card the boss and activity tiles draw. This was the last
 		// tile on the sheet answering in a sentence while the two grids under it
 		// answered in a titled block.
@@ -10646,7 +10626,7 @@ class ChroniclePanel extends PluginPanel
 	 * three days and would print them under today's date. A sitting is exempt,
 	 * being counted from the trackers rather than measured between two lines.
 	 */
-	private boolean closesOnTheClient(Map.Entry<LocalDate, Baseline> from,
+	private boolean closesOnTheClient(Entry<LocalDate, Baseline> from,
 		LocalDate start, LocalDate end)
 	{
 		if (from == null || end.isBefore(LocalDate.now()))
@@ -10675,9 +10655,9 @@ class ChroniclePanel extends PluginPanel
 			return null;
 		}
 		Window w = window();
-		Map.Entry<LocalDate, Baseline> from =
+		Entry<LocalDate, Baseline> from =
 			HistoryLog.windowStart(historySpine, w.start, w.end);
-		Map.Entry<LocalDate, Baseline> at =
+		Entry<LocalDate, Baseline> at =
 			historySpine.floorEntry(w.end);
 		if (at == null || from == null
 			|| (at.getKey().equals(from.getKey()) && !closesOnTheClient(from, w.start, w.end)))
@@ -10709,7 +10689,7 @@ class ChroniclePanel extends PluginPanel
 			return closing;
 		}
 		Map<String, Long> out = new HashMap<>(closing);
-		for (Map.Entry<String, Long> e : live.entrySet())
+		for (Entry<String, Long> e : live.entrySet())
 		{
 			if (e.getValue() != null)
 			{
@@ -10745,7 +10725,7 @@ class ChroniclePanel extends PluginPanel
 		if (sessionPeriod())
 		{
 			Map<String, Long> out = new LinkedHashMap<>();
-			for (Map.Entry<String, Integer> e : plugin.sessionView().entrySet())
+			for (Entry<String, Integer> e : plugin.sessionView().entrySet())
 			{
 				if (e.getValue() != null && e.getValue() != 0)
 				{
@@ -10922,9 +10902,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel buildSkillDetail(String craft)
 	{
-		JPanel p = column();
-		p.add(backRow());
-		p.add(vgap(4));
+		JPanel p = backPage();
 		consumVals = plugin.consumableValues();
 		String key = low(craft);
 
@@ -10974,8 +10952,8 @@ class ChroniclePanel extends PluginPanel
 			p.add(noPeriod());
 			return p;
 		}
-		List<Map.Entry<String, Long>> rows = new ArrayList<>();
-		for (Map.Entry<String, Long> e : counters.entrySet())
+		List<Entry<String, Long>> rows = new ArrayList<>();
+		for (Entry<String, Long> e : counters.entrySet())
 		{
 			if (e.getValue() == null || e.getValue() <= 0
 				|| !"Skilling".equals(StatRegistry.family(e.getKey()))
@@ -10997,7 +10975,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		rows.sort(StatRegistry::compareRows);
 		addPaceLine(p, craft);
-		for (Map.Entry<String, Long> e : rows)
+		for (Entry<String, Long> e : rows)
 		{
 			p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
 		}
@@ -11206,11 +11184,11 @@ class ChroniclePanel extends PluginPanel
 		// and the last close inside it. With nothing closed before the window the
 		// earliest line on record stands in, the way the site measured from its
 		// first snapshot: a fresh record's first week reads from its first day.
-		Map.Entry<LocalDate, Baseline> before =
+		Entry<LocalDate, Baseline> before =
 			hist.floorEntry(pStart.minusDays(1));
-		Map.Entry<LocalDate, Baseline> from =
+		Entry<LocalDate, Baseline> from =
 			HistoryLog.windowStart(hist, pStart, pEnd);
-		Map.Entry<LocalDate, Baseline> at = hist.floorEntry(pEnd);
+		Entry<LocalDate, Baseline> at = hist.floorEntry(pEnd);
 		if (at == null || from == null
 			|| (at.getKey().equals(from.getKey()) && !closesOnTheClient(from, pStart, pEnd)))
 		{
@@ -11275,8 +11253,8 @@ class ChroniclePanel extends PluginPanel
 			// moved on logout: the levels above already read live and the GAIN
 			// did not, which is the half a reader is watching.
 			Map<String, Long> closesOn = live ? closingSkills(closing.skills, true) : closing.skills;
-			List<Map.Entry<String, Long>> gains = new ArrayList<>();
-			for (Map.Entry<String, Long> e : HistoryLog.gained(opening.skills,
+			List<Entry<String, Long>> gains = new ArrayList<>();
+			for (Entry<String, Long> e : HistoryLog.gained(opening.skills,
 				earliest.skills, closesOn, opening.complete).entrySet())
 			{
 				if (!"overall".equals(e.getKey()))
@@ -11302,7 +11280,7 @@ class ChroniclePanel extends PluginPanel
 					}
 				}
 			}
-			gains.sort(Map.Entry.<String, Long>comparingByValue().reversed());
+			gains.sort(Entry.<String, Long>comparingByValue().reversed());
 			// The standing figures are the period's close, its last line, the
 			// way the site drew every period as a snapshot. Only a period that
 			// reaches today reads the live sheet and ledger: its closing line
@@ -11601,8 +11579,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			else
 			{
-				p.add(headline(progress, gains, stand, opened, played));
-				p.add(vgap(5));
+				spaced(p, headline(progress, gains, stand, opened, played), 5);
 			}
 			// What the loot rows actually reach back to. The sittings are the
 			// only dated account of a take, so where they do not reach back to
@@ -11628,8 +11605,7 @@ class ChroniclePanel extends PluginPanel
 					lootSince, lootFromTs > 0);
 			if (since != null)
 			{
-				p.add(note(since));
-				p.add(vgap(5));
+				spaced(p, note(since), 5);
 			}
 
 			// Four readings of the one period. Each owns its own figures, so a
@@ -11658,8 +11634,7 @@ class ChroniclePanel extends PluginPanel
 				}
 				else if (!progress.groups().isEmpty() || !gains.isEmpty())
 				{
-					p.add(trackedProgress(progress, gains, named));
-					p.add(vgap(5));
+					spaced(p, trackedProgress(progress, gains, named), 5);
 				}
 			}
 			else
@@ -11824,7 +11799,7 @@ class ChroniclePanel extends PluginPanel
 					}
 				}
 				Map<String, Long> prev = null;
-				for (Map.Entry<LocalDate, Baseline> day : spine.entrySet())
+				for (Entry<LocalDate, Baseline> day : spine.entrySet())
 				{
 					Map<String, Long> now = standings(day.getValue(), keys);
 					if (prev != null)
@@ -11895,7 +11870,7 @@ class ChroniclePanel extends PluginPanel
 			if (key.startsWith("xp:"))
 			{
 				cross(prev, now, ts, into, key, SKILL_XP, t -> threshold(t) + " xp in "
-					+ StatRegistry.prettify(key.substring(3)));
+					+ prettify(key.substring(3)));
 			}
 		}
 		cross(prev, now, ts, into, "overall", OVERALL_XP, t -> threshold(t) + " xp overall");
@@ -12080,7 +12055,7 @@ class ChroniclePanel extends PluginPanel
 				{
 					t[7]++;
 					Map<String, Long> by = daySkills.computeIfAbsent(day, k -> new LinkedHashMap<>());
-					for (Map.Entry<String, JsonElement> sk : d.getAsJsonObject("skills").entrySet())
+					for (Entry<String, JsonElement> sk : d.getAsJsonObject("skills").entrySet())
 					{
 						by.merge(sk.getKey(), safeLong(sk.getValue()), Long::sum);
 					}
@@ -12115,7 +12090,7 @@ class ChroniclePanel extends PluginPanel
 			return null;
 		}
 		Baseline at = spine.get(day);
-		Map.Entry<LocalDate, Baseline> before = spine.lowerEntry(day);
+		Entry<LocalDate, Baseline> before = spine.lowerEntry(day);
 		// Only against the day before it. A week away and the next line carries
 		// the whole gap, and attributing that to the first day back is a figure
 		// nobody earned in a day.
@@ -12126,7 +12101,7 @@ class ChroniclePanel extends PluginPanel
 		long total = 0;
 		long most = 0;
 		String top = null;
-		for (Map.Entry<String, Long> e : at.skills.entrySet())
+		for (Entry<String, Long> e : at.skills.entrySet())
 		{
 			Long was = before.getValue().skills.get(e.getKey());
 			if ("overall".equals(e.getKey()) || was == null)
@@ -12145,7 +12120,7 @@ class ChroniclePanel extends PluginPanel
 				top = e.getKey();
 			}
 		}
-		return total > 0 ? new Object[]{total, StatRegistry.prettify(top)} : null;
+		return total > 0 ? new Object[]{total, prettify(top)} : null;
 	}
 
 	/** How wide a row's text can run on a board, outside any card. */
@@ -12215,7 +12190,7 @@ class ChroniclePanel extends PluginPanel
 			String most = by == null ? null : topOf(by);
 			if (most != null)
 			{
-				most = StatRegistry.prettify(most);
+				most = prettify(most);
 			}
 			else
 			{
@@ -12412,7 +12387,7 @@ class ChroniclePanel extends PluginPanel
 				lEnd = Math.max(10, lEnd);
 				lStart = lStart == null ? null : Math.max(10, lStart);
 			}
-			f.skills.add(new RecapPicture.SkillLine(sk, StatRegistry.prettify(key), lStart, lEnd,
+			f.skills.add(new RecapPicture.SkillLine(sk, prettify(key), lStart, lEnd,
 				start, end));
 			endLevels.put(key, Math.min(99, lEnd));
 			endXp += end;
@@ -12571,8 +12546,8 @@ class ChroniclePanel extends PluginPanel
 			worth.putAll(periodWorth(w.start, w.end));
 		}
 		Map<String, Long> loose = loosely(worth);
-		List<Map.Entry<String, Long>> kept = new ArrayList<>();
-		for (Map.Entry<String, Long> e : by.entrySet())
+		List<Entry<String, Long>> kept = new ArrayList<>();
+		for (Entry<String, Long> e : by.entrySet())
 		{
 			if (e.getValue() > 0 && recapMonster(e.getKey()))
 			{
@@ -12580,7 +12555,7 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		kept.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
-		for (Map.Entry<String, Long> e : kept.subList(0, Math.min(10, kept.size())))
+		for (Entry<String, Long> e : kept.subList(0, Math.min(10, kept.size())))
 		{
 			long paid = paidFor(worth, loose, e.getKey());
 			f.monsters.add(new RecapPicture.Named(e.getKey(), fmt(e.getValue()),
@@ -12599,10 +12574,10 @@ class ChroniclePanel extends PluginPanel
 		{
 			return false;
 		}
-		String kind = LocalStore.kindOf(name);
+		String kind = kindOf(name);
 		for (Boss b : bossRoster(plugin.gson()))
 		{
-			if (LocalStore.kindOf(b.name).equals(kind) || namesInBrackets(name, b.name)
+			if (kindOf(b.name).equals(kind) || namesInBrackets(name, b.name)
 				|| paysOutThrough(b.name, name))
 			{
 				return false;
@@ -12612,7 +12587,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			for (String npc : npcs)
 			{
-				if (LocalStore.kindOf(npc).equals(kind))
+				if (kindOf(npc).equals(kind))
 				{
 					return false;
 				}
@@ -12783,11 +12758,11 @@ class ChroniclePanel extends PluginPanel
 				: "Nothing closed inside " + periodInSentence() + ".";
 			return;
 		}
-		for (Map.Entry<String, Integer> fam : RECAP_TRACKER_ROWS.entrySet())
+		for (Entry<String, Integer> fam : RECAP_TRACKER_ROWS.entrySet())
 		{
 			List<String> order = StatRegistry.fixedSections(fam.getKey());
-			List<Map.Entry<String, Long>> rows = new ArrayList<>();
-			for (Map.Entry<String, Long> e : counters.entrySet())
+			List<Entry<String, Long>> rows = new ArrayList<>();
+			for (Entry<String, Long> e : counters.entrySet())
 			{
 				String key = e.getKey();
 				if (e.getValue() == null || e.getValue() <= 0 || StatRegistry.hidden(key)
@@ -12810,7 +12785,7 @@ class ChroniclePanel extends PluginPanel
 				return Long.compare(b.getValue(), a.getValue());
 			});
 			List<RecapPicture.Named> out = new ArrayList<>();
-			for (Map.Entry<String, Long> e : rows.subList(0, Math.min(fam.getValue(), rows.size())))
+			for (Entry<String, Long> e : rows.subList(0, Math.min(fam.getValue(), rows.size())))
 			{
 				String key = e.getKey();
 				boolean money = StatRegistry.isGp(key);
@@ -12924,7 +12899,7 @@ class ChroniclePanel extends PluginPanel
 				fmt(plugin.clogFinished()) + " of " + fmt(plugin.clogAvailable()) + " slots"));
 			named.remove("Collection log");
 		}
-		for (Map.Entry<String, List<String>> e : named.entrySet())
+		for (Entry<String, List<String>> e : named.entrySet())
 		{
 			if (!e.getValue().isEmpty())
 			{
@@ -12942,7 +12917,7 @@ class ChroniclePanel extends PluginPanel
 			n.merge(s, 1, Integer::sum);
 		}
 		List<String> out = new ArrayList<>();
-		for (Map.Entry<String, Integer> e : n.entrySet())
+		for (Entry<String, Integer> e : n.entrySet())
 		{
 			out.add(e.getKey() + (e.getValue() > 1 ? " ×" + e.getValue() : ""));
 		}
@@ -13085,7 +13060,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		else
 		{
-			for (Map.Entry<LocalDate, long[]> d : daysPlayed().entrySet())
+			for (Entry<LocalDate, long[]> d : daysPlayed().entrySet())
 			{
 				if (!insideWindow(noon(d.getKey())))
 				{
@@ -13364,12 +13339,12 @@ class ChroniclePanel extends PluginPanel
 					top = g;
 				}
 			}
-			return top == null ? null : StatRegistry.prettify(
+			return top == null ? null : prettify(
 				low(top.skill.name()));
 		}
 		if (wholeRecord())
 		{
-			for (Map.Entry<String, long[]> e : plugin.skillSheet().entrySet())
+			for (Entry<String, long[]> e : plugin.skillSheet().entrySet())
 			{
 				if (!"overall".equals(e.getKey()) && e.getValue().length > 1)
 				{
@@ -13387,14 +13362,14 @@ class ChroniclePanel extends PluginPanel
 			by.putAll(gains);
 		}
 		String top = topOf(by);
-		return top == null ? null : StatRegistry.prettify(top);
+		return top == null ? null : prettify(top);
 	}
 
 	private static String topOf(Map<String, Long> by)
 	{
 		String top = null;
 		long most = 0;
-		for (Map.Entry<String, Long> e : by.entrySet())
+		for (Entry<String, Long> e : by.entrySet())
 		{
 			if (e.getValue() > most)
 			{
@@ -13475,7 +13450,7 @@ class ChroniclePanel extends PluginPanel
 		Map<String, Long> close = new HashMap<>(skills);
 		if (live)
 		{
-			for (Map.Entry<String, long[]> e : plugin.skillSheet().entrySet())
+			for (Entry<String, long[]> e : plugin.skillSheet().entrySet())
 			{
 				if (e.getValue() != null && e.getValue().length > 1 && e.getValue()[1] > 0)
 				{
@@ -13570,9 +13545,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel buildRecords()
 	{
-		JPanel p = column();
-		p.add(backRow());
-		p.add(vgap(4));
+		JPanel p = backPage();
 		JPanel book = card("Records");
 		int held = book.getComponentCount();
 
@@ -13602,8 +13575,8 @@ class ChroniclePanel extends PluginPanel
 			int longest = 0;
 			LocalDate runEnd = null;
 			LocalDate prevDay = null;
-			Map.Entry<LocalDate, Baseline> before = null;
-			for (Map.Entry<LocalDate, Baseline> day : spine.entrySet())
+			Entry<LocalDate, Baseline> before = null;
+			for (Entry<LocalDate, Baseline> day : spine.entrySet())
 			{
 				run = prevDay != null && prevDay.plusDays(1).equals(day.getKey()) ? run + 1 : 1;
 				if (run > longest)
@@ -13621,7 +13594,7 @@ class ChroniclePanel extends PluginPanel
 						bigSkill = (String) xp[1];
 					}
 					long kills = 0;
-					for (Map.Entry<String, Long> k : day.getValue().kcs.entrySet())
+					for (Entry<String, Long> k : day.getValue().kcs.entrySet())
 					{
 						Long was = before.getValue().kcs.get(k.getKey());
 						if (was != null && k.getValue() > was)
@@ -13655,7 +13628,7 @@ class ChroniclePanel extends PluginPanel
 		// the roll by day
 		long[][] rich = {{0, 0}, {0, 0}};
 		long[][] busy = {{0, 0}, {0, 0}};
-		for (Map.Entry<String, long[]> d : dayTotals().entrySet())
+		for (Entry<String, long[]> d : dayTotals().entrySet())
 		{
 			long ts;
 			try
@@ -13740,9 +13713,7 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel buildCalendar()
 	{
-		JPanel p = column();
-		p.add(backRow());
-		p.add(vgap(4));
+		JPanel p = backPage();
 		JPanel head = stepStrip();
 		JLabel title = styled(new JLabel(MONTH_YEAR.format(calendarMonth.atDay(1)
 			.atStartOfDay(ZoneId.systemDefault()).toInstant()).toUpperCase(Locale.ROOT), JLabel.CENTER),
@@ -13756,8 +13727,7 @@ class ChroniclePanel extends PluginPanel
 			calendarMonth = calendarMonth.plusMonths(1);
 			rebuildInPlace();
 		}, title);
-		p.add(head);
-		p.add(vgap(4));
+		spaced(p, head, 4);
 
 		JPanel grid = new JPanel(new GridLayout(0, 7, 2, 2));
 		grid.setBackground(DARK);
@@ -13827,8 +13797,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			grid.add(blankCell());
 		}
-		p.add(grid);
-		p.add(vgap(4));
+		spaced(p, grid, 4);
 		p.add(ghostRow(written == 0 ? "nothing written this month"
 			: fmt(written) + (written == 1 ? " day written" : " days written")
 			+ (monthMinutes > 0 ? " · " + hoursMinutes(monthMinutes) : ""), ""));
@@ -14122,7 +14091,7 @@ class ChroniclePanel extends PluginPanel
 		names.addAll(obj(achievements(), "quests").keySet());
 		for (Skill sk : skillOrder())
 		{
-			names.add(StatRegistry.prettify(low(sk.name())));
+			names.add(prettify(low(sk.name())));
 		}
 		names.addAll(Arrays.asList("Quests", "Collection log", "Achievement diaries",
 			"Combat achievements", "Clues", "Records", "Calendar", "Recap", "All trackers",
@@ -14511,7 +14480,7 @@ class ChroniclePanel extends PluginPanel
 		for (Skill sk : skillOrder())
 		{
 			String key = low(sk.name());
-			String name = StatRegistry.prettify(key);
+			String name = prettify(key);
 			long[] cur = sheet.get(key);
 			Runnable to = sk == Skill.SLAYER ? () ->
 			{
@@ -14590,14 +14559,14 @@ class ChroniclePanel extends PluginPanel
 		for (Boss b : bossRoster(plugin.gson()))
 		{
 			int sc = matchScore(ql, b.name);
-			if (sc < 0 || !kinds.add(LocalStore.kindOf(b.name)))
+			if (sc < 0 || !kinds.add(kindOf(b.name)))
 			{
 				continue;
 			}
 			final String open = bossLootSource(b);
-			kinds.add(LocalStore.kindOf(open));
+			kinds.add(kindOf(open));
 			SourceRow r = ledgerRows.get(open);
-			boolean own = r != null && LocalStore.kindOf(open).equals(LocalStore.kindOf(b.name))
+			boolean own = r != null && kindOf(open).equals(kindOf(b.name))
 				&& isKillSource(open);
 			long n = own ? standingKills(r) : bossKills(b.name);
 			fights.add(new Hit(b.name, n > 0 ? fmt(n) + " kc" : "-", null,
@@ -14607,7 +14576,7 @@ class ChroniclePanel extends PluginPanel
 		for (SourceRow r : sources())
 		{
 			int sc = matchScore(ql, r.name);
-			if (sc < 0 || !kinds.add(LocalStore.kindOf(r.name)))
+			if (sc < 0 || !kinds.add(kindOf(r.name)))
 			{
 				continue;
 			}
@@ -14618,10 +14587,10 @@ class ChroniclePanel extends PluginPanel
 				() -> openSource(r.name), sc, n));
 		}
 		JsonObject cl = clogNow();
-		for (Map.Entry<String, JsonElement> e : obj(cl, "slayer_kcs").entrySet())
+		for (Entry<String, JsonElement> e : obj(cl, "slayer_kcs").entrySet())
 		{
 			int sc = matchScore(ql, e.getKey());
-			if (sc < 0 || !kinds.add(LocalStore.kindOf(e.getKey())))
+			if (sc < 0 || !kinds.add(kindOf(e.getKey())))
 			{
 				continue;
 			}
@@ -14695,7 +14664,7 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		List<Hit> items = new ArrayList<>();
-		for (Map.Entry<String, long[]> e : itemAgg.entrySet())
+		for (Entry<String, long[]> e : itemAgg.entrySet())
 		{
 			final String itm = e.getKey();
 			List<String> from = itemSrcs.get(itm);
@@ -14727,7 +14696,7 @@ class ChroniclePanel extends PluginPanel
 		Set<String> slotSeen = new HashSet<>();
 		for (Map<String, List<String>> tab : taxonomy(plugin.gson()).values())
 		{
-			for (Map.Entry<String, List<String>> pg : tab.entrySet())
+			for (Entry<String, List<String>> pg : tab.entrySet())
 			{
 				final String page = pg.getKey();
 				int ps = matchScore(ql, page);
@@ -14852,7 +14821,7 @@ class ChroniclePanel extends PluginPanel
 		// The trackers, below the named things so a counter named after a fight
 		// ("Wyrm bones sacrificed") never takes Enter from the fight.
 		List<Hit> stats = new ArrayList<>();
-		for (Map.Entry<String, Long> e : withLedgerSpend(counters()).entrySet())
+		for (Entry<String, Long> e : withLedgerSpend(counters()).entrySet())
 		{
 			if (e.getValue() == 0 || StatRegistry.hidden(e.getKey()))
 			{
@@ -14979,7 +14948,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		String top = null;
 		long most = 0;
-		for (Map.Entry<String, JsonElement> e : obj(d, "skills").entrySet())
+		for (Entry<String, JsonElement> e : obj(d, "skills").entrySet())
 		{
 			long xp = safeLong(e.getValue());
 			if (xp > most)
@@ -14988,7 +14957,7 @@ class ChroniclePanel extends PluginPanel
 				top = e.getKey();
 			}
 		}
-		return top == null ? null : StatRegistry.prettify(top);
+		return top == null ? null : prettify(top);
 	}
 
 	private static String feedLine(JsonObject e)
@@ -15063,7 +15032,7 @@ class ChroniclePanel extends PluginPanel
 					+ (kc.isEmpty() ? "" : ", " + kc + " killed");
 			}
 			default:
-				return type.isEmpty() ? "Milestone" : StatRegistry.prettify(low(type));
+				return type.isEmpty() ? "Milestone" : prettify(low(type));
 		}
 	}
 
@@ -15156,8 +15125,7 @@ class ChroniclePanel extends PluginPanel
 		head.add(cap, BorderLayout.WEST);
 		head.add(note, BorderLayout.EAST);
 		head.setMaximumSize(new Dimension(Integer.MAX_VALUE, head.getPreferredSize().height));
-		c.add(head);
-		c.add(vgap(3));
+		spaced(c, head, 3);
 		return c;
 	}
 
@@ -15166,8 +15134,7 @@ class ChroniclePanel extends PluginPanel
 		JPanel c = cardPlain();
 		JLabel cap = styled(new JLabel(caption.toUpperCase(Locale.ROOT)), small(), dim());
 		cap.setAlignmentX(Component.LEFT_ALIGNMENT);
-		c.add(cap);
-		c.add(vgap(3));
+		spaced(c, cap, 3);
 		return c;
 	}
 
@@ -15369,6 +15336,20 @@ class ChroniclePanel extends PluginPanel
 	{
 		p.add(c);
 		p.add(vgap(6));
+	}
+
+	private static void spaced(JComponent p, Component c, int gap)
+	{
+		p.add(c);
+		p.add(vgap(gap));
+	}
+
+	/** A drill's page: a column under its back row. */
+	private JPanel backPage()
+	{
+		JPanel p = column();
+		spaced(p, backRow(), 4);
+		return p;
 	}
 
 	private static JPanel noted(JPanel p, String text)
