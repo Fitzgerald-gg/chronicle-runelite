@@ -3,6 +3,10 @@
  */
 package chronicle.panel;
 
+import chronicle.counters.Tables;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -29,36 +33,21 @@ public final class StatRegistry
 		"Living", "Combat", "Skilling", "Ledger & Roads"
 	};
 
-	private static final Set<String> COMBAT = new HashSet<>(Arrays.asList(
-		"damageDealt", "damageTaken", "highestHit", "highestHitTaken",
-		"hitsMissed", "hitsBlocked", "deaths", "poisonDamageTaken", "venomDamageTaken",
-		"specialAttacksUsed", "damageDealtMelee", "damageDealtRanged", "damageDealtMagic",
-		"thrallsSummoned"));
+	// the key sets, the crafts and the labels below are read from here, and
+	// HistoryProgress reads its own tables from the same file; the file carries
+	// its own notes on particular rows
+	static final JsonObject TABLES = Tables.load("stat_registry.json");
+
+	private static final Set<String> COMBAT = Tables.set(TABLES, "combat");
 	// the typed thrall keys (lesserGhostlyThrallsSummoned) are minted from the
 	// chat line, so Combat claims them by suffix the way a craft does
 	private static final String THRALL_SUFFIX = "ThrallsSummoned";
-	private static final Set<String> LIVING_FLAT = new HashSet<>(Arrays.asList(
-		"foodEaten", "potionDoses", "beersDrunk", "vialsShattered",
-		"hitpointsRegenerated", "divinePotionDamage", "consumedValue",
-		// the same spend split by what it went on, written at the bite and the dose
-		"potionsConsumedValue", "foodConsumedValue"));
-	private static final Set<String> LEDGER = new HashSet<>(Arrays.asList(
-		"resourcesGatheredValue", "coinsFromAlchemy", "itemsDroppedValue",
-		"itemsDiscarded", "examines", "coinsSpentAtShops", "coinsEarnedAtShops",
-		"untakenLootValue", "untakenLootCount", "distanceWalked", "distanceRan",
-		"ammoConsumed", "offensiveSpellsCast", "cabbagesPicked", "flaxGathered",
-		"animalsPetted", "patchesRaked"));
+	private static final Set<String> LIVING_FLAT = Tables.set(TABLES, "livingFlat");
+	private static final Set<String> LEDGER = Tables.set(TABLES, "ledger");
 	// kept out of the rows. History owns xp, the offering-xp keys double-count
 	// real Prayer xp, and resourcesDroppedValue is drawn as the margin on the
 	// resourcesGatheredValue row instead of standing on its own.
-	private static final Set<String> HIDE = new HashSet<>(Arrays.asList(
-		"totalXpGained", "demonicOfferingXp", "sinisterOfferingXp",
-		// the Food and Potions fold heads carry these beside their counts
-		"foodConsumedValue", "potionsConsumedValue",
-		// bowsFletched predates bowsStrung and still sits in older journals;
-		// nothing writes it now, but family() would give it a row if it showed up
-		"bowsFletched",
-		"resourcesDroppedValue"));
+	private static final Set<String> HIDE = Tables.set(TABLES, "hide");
 	// spine-only totals: the plugin derives them from the journal (loot events,
 	// loot left on the floor and the kills that left it, kills, slayer tasks,
 	// collection log slots) and writes them beside the counters on each history
@@ -66,13 +55,10 @@ public final class StatRegistry
 	// are hidden from every Stats family. The lootLeft keys are not the
 	// untakenLoot pair: that one is a lifetime figure carried in from an older
 	// record, and the spine copy must not step on it.
-	private static final Set<String> SUMMARY = new HashSet<>(Arrays.asList(
-		"dropsReceived", "lootValue", "lootLeftCount", "lootLeftValue", "lootLeftKills", "kills",
-		"slayerTasksCompleted", "clogSlotsObtained"));
+	private static final Set<String> SUMMARY = Tables.set(TABLES, "summary");
 	// high-water counters (highest hit): a period delta of one means nothing.
 	// LocalStore.MAX_KEYS holds the same names for the lifetime arithmetic.
-	private static final Set<String> PEAK = new HashSet<>(Arrays.asList(
-		"highestHit", "highestHitTaken"));
+	private static final Set<String> PEAK = Tables.set(TABLES, "peak");
 
 	// one craft's claim on the key space: named keys, floor totals, typed suffixes
 	private static final class SkillSpec
@@ -91,76 +77,9 @@ public final class StatRegistry
 		}
 	}
 
-	private static final String[] NONE = {};
 	// matchedSuffix takes the first hit: this order, and the order inside each
 	// craft's suffix list, is load-bearing (FailedPickpockets before Pickpockets)
-	private static final List<SkillSpec> SKILLS = Arrays.asList(
-		// the two Vampyrium keys are chat-counted: a tap is a chop with a bucket
-		new SkillSpec("Woodcutting", new String[]{"LogsChopped"}, new String[]{"logsChopped"},
-			new String[]{"letveksShooed", "bloodwoodSapBucketsFilled"}),
-		new SkillSpec("Fishing", new String[]{"Caught"}, new String[]{"fishCaught"},
-			new String[]{"spiritPoolsHarpooned"}),
-		// Firemaking sits above Cooking so "LogsBurned" is claimed before the
-		// broader "Burned" sweep could take a log for a burnt meal
-		new SkillSpec("Firemaking", new String[]{"LogsBurned"}, new String[]{"logsBurned"}, NONE),
-		// a burn is typed by the food the chat line names, under its own floor
-		new SkillSpec("Cooking", new String[]{"Cooked", "Burned"},
-			new String[]{"foodCooked", "foodBurned"}, NONE),
-		new SkillSpec("Mining", new String[]{"OreMined", "Mined"}, new String[]{"rocksMined"}, NONE),
-		new SkillSpec("Smithing", new String[]{"BarsSmelted", "ItemsSmithed"}, NONE,
-			new String[]{"itemsSmithed", "cannonballsSmithed"}),
-		// "Sacked" is the herb sack, typed by herb off the chat line
-		new SkillSpec("Herblore", new String[]{"Sacked"}, new String[]{"herbsSacked"},
-			new String[]{"herbsCleaned", "unfinishedPotionsMade", "potionsMade",
-				"herbTarsMade", "weaponPoisonsMade"}),
-		// logsFletched is the total the typed logs reconcile to, not a row beside
-		// them: it counts every log cut to a bow, and mapleLogsFletched and its
-		// siblings are that same count typed by log
-		new SkillSpec("Fletching", new String[]{"LogsFletched"},
-			new String[]{"logsFletched"},
-			new String[]{"dartsFletched", "arrowsFletched", "boltsFletched", "boltsUnfinished",
-				"javelinsFletched", "boltTips", "crossbowsStrung", "crossbowsUnstrung",
-				"crossbowStocksCut", "bowsStrung",
-				"arrowShaftsFletched", "headlessArrowsFletched",
-				"javelinShaftsFletched", "ballistaeFletched", "blowpipesFletched"}),
-		// "Tanned" is the tanner's line, typed by hide; no xp behind it
-		new SkillSpec("Crafting", new String[]{"Tanned"}, new String[]{"hidesTanned"},
-			new String[]{"gemsCut", "glassBlown", "leatherCrafted", "dhideCrafted",
-				"jewelleryCrafted", "potteryMade", "battlestavesCrafted", "itemsSpun",
-				"moltenGlassMade", "snakeskinCrafted", "xericianCrafted", "silverCrafted",
-				"amuletsStrung", "potteryFired", "birdHousesCrafted", "itemsWoven",
-				"amethystCut"}),
-		// essenceCrafted is claimed by name so the "Runecrafted" sweep leaves it
-		// alone: it counts crafts, not runes, and can't reconcile against the floor
-		new SkillSpec("Runecraft", new String[]{"Runecrafted"}, new String[]{"runesCrafted"},
-			new String[]{"essenceCrafted"}),
-		new SkillSpec("Agility", new String[]{"Laps", "Cleared"},
-			new String[]{"agilityObstacles"},
-			new String[]{"rooftopAgilityLaps", "normalAgilityLaps"}),
-		new SkillSpec("Thieving",
-			new String[]{"FailedPickpockets", "Pickpockets", "StallsThieved", "ChestsLooted"},
-			new String[]{"pickPockets", "stallsThieved", "chestsLooted"},
-			new String[]{"failedPickPockets", "safesCracked", "pyramidPlunderUrns"}),
-		// "Planted" is one to a patch; "Harvested" is one to an item pulled out of it
-		new SkillSpec("Farming", new String[]{"Harvested", "Checked", "Planted"},
-			new String[]{"farmingActions"},
-			new String[]{"seedsPlanted"}),
-		new SkillSpec("Hunter", new String[]{"Trapped", "BirdhousesEmptied"},
-			new String[]{"creaturesTrapped", "birdhousesEmptied"},
-			// the explicit claim on herbiboarsHarvested keeps Farming's
-			// "Harvested" sweep off it
-			new String[]{"implingsCaught", "chompyBirdsPlucked", "herbiboarsHarvested"}),
-		new SkillSpec("Prayer",
-			new String[]{"BonesBuried", "AshesScattered", "HeadsReanimated",
-				"BonesSacrificed", "AshesSacrificed", "BonesOffered"},
-			new String[]{"bonesBuried", "ashesScattered", "headsReanimated",
-				"bonesOffered", "bonesSacrificed", "ashesSacrificed"},
-			NONE),
-		new SkillSpec("Construction", NONE, NONE, new String[]{"constructionBuilds"}),
-		new SkillSpec("Sailing",
-			new String[]{"SalvagePulled", "SalvageSorted", "TrialsCompleted"},
-			new String[]{"salvagePulled", "salvageSorted", "barracudaTrialsCompleted"},
-			new String[]{"portTasksCompleted"}));
+	private static final List<SkillSpec> SKILLS = new ArrayList<>();
 
 	// key -> craft, from the named keys and floors; consulted before the suffix
 	// sweep so a broad suffix (Fishing's "Caught") can't take implingsCaught
@@ -169,8 +88,12 @@ public final class StatRegistry
 
 	static
 	{
-		for (SkillSpec s : SKILLS)
+		for (JsonElement e : TABLES.getAsJsonArray("skills"))
 		{
+			JsonArray a = e.getAsJsonArray();
+			SkillSpec s = new SkillSpec(a.get(0).getAsString(), Tables.strings(a.get(1)),
+				Tables.strings(a.get(2)), Tables.strings(a.get(3)));
+			SKILLS.add(s);
 			for (String k : s.keys)
 			{
 				KEY_SKILL.put(k, s.name);
@@ -186,93 +109,13 @@ public final class StatRegistry
 		FLOORS.add("thrallsSummoned");
 	}
 
-	private static final Map<String, String> LABELS = new HashMap<>();
-	private static final Map<String, String> TELE_NAMES = new HashMap<>();
-
-	static
-	{
-		LABELS.put("hitpointsRegenerated", "Hitpoints regained");
-		LABELS.put("divinePotionDamage", "Divine potion self-damage");
-		LABELS.put("distanceWalked", "Distance walked");
-		LABELS.put("distanceRan", "Distance run");
-		LABELS.put("tilesWalked", "Tiles walked");
-		LABELS.put("tilesRan", "Tiles run");
-		LABELS.put("coinsFromAlchemy", "Coins from alchemy");
-		LABELS.put("itemsDroppedValue", "Value dropped");
-		// short because this row carries two figures (gathered and dropped) and
-		// they have to fit the 214px panel
-		LABELS.put("resourcesGatheredValue", "Gathered");
-		LABELS.put("untakenLootValue", "Uncollected loot");
-		LABELS.put("untakenLootCount", "Loot left behind");
-		LABELS.put("coinsSpentAtShops", "Spent at shops");
-		LABELS.put("coinsEarnedAtShops", "Earned at shops");
-		LABELS.put("offensiveSpellsCast", "Offensive casts");
-		LABELS.put("ammoConsumed", "Ammunition spent");
-		LABELS.put("foodEaten", "Meals eaten");
-		LABELS.put("potionDoses", "Doses drunk");
-		LABELS.put("highestHit", "Highest hit");
-		LABELS.put("highestHitTaken", "Highest hit taken");
-		LABELS.put("specialAttacksUsed", "Specials spent");
-		LABELS.put("consumedValue", "Consumed value");
-		LABELS.put("damageDealtMelee", "· by melee");
-		LABELS.put("damageDealtRanged", "· by ranged");
-		LABELS.put("damageDealtMagic", "· by magic");
-		LABELS.put("teleportsFairyRing", "· by fairy ring");
-		// courier and bounty tasks both land on this one key
-		LABELS.put("portTasksCompleted", "Port tasks");
-		LABELS.put("barracudaTrialsCompleted", "Barracuda trials");
-		LABELS.put("teleportsSpiritTree", "· by spirit tree");
-		// the essence spent, not the runes it came back as
-		LABELS.put("essenceCrafted", "Essence crafted");
-		LABELS.put("thrallsSummoned", "Thralls raised");
-		LABELS.put("dropsReceived", "Drops received");
-		LABELS.put("lootValue", "Loot value");
-		LABELS.put("slayerTasksCompleted", "Slayer tasks completed");
-		// read off the slayer journey on the History tab alone, never on the spine
-		LABELS.put("slayerKills", "Slayer kills");
-		// counted off the feed's dated entries on the History tab alone, never
-		// on the spine
-		LABELS.put("petsObtained", "Pets");
-		LABELS.put("questsCompleted", "Quests completed");
-		LABELS.put("diariesCompleted", "Diaries completed");
-		LABELS.put("combatAchievements", "Combat achievements");
-		LABELS.put("levelsGained", "Levels gained");
-		LABELS.put("clogSlotsObtained", "Collection log slots");
-		LABELS.put("lootLeftCount", "Left on the floor");
-		LABELS.put("lootLeftValue", "Value left on the floor");
-		// the kills that left at least one stack: never a line of its own, it is
-		// what "Drops taken" subtracts
-		LABELS.put("lootLeftKills", "Kills that left loot");
-		LABELS.put("kills", "Kills");
-		// derived on the History tab from lootValue and lootLeftValue; named here
-		// so every figure on that tab reads off one table
-		LABELS.put("lootKept", "Loot kept");
-		// derived from dropsReceived and lootLeftKills, on the History tab and the
-		// Home strip alike
-		LABELS.put("dropsTaken", "Drops taken");
-
-		// destinations whose real name the camelCase split can't get back to
-		TELE_NAMES.put("teleportsSeersVillage", "Seers' Village");
-		TELE_NAMES.put("teleportsFenkenstrain", "Fenkenstrain's Castle");
-		TELE_NAMES.put("teleportsFortis", "Civitas illa Fortis");
-		TELE_NAMES.put("teleportsGrandExchange", "Grand Exchange");
-		TELE_NAMES.put("teleportsWarriorsGuild", "Warriors' Guild");
-		TELE_NAMES.put("teleportsLegendsGuild", "Legends' Guild");
-		TELE_NAMES.put("teleportsOttosGrotto", "Otto's Grotto");
-		TELE_NAMES.put("teleportsDiaryRegion", "Achievement Diary");
-		TELE_NAMES.put("teleportsFalo", "Falo the Bard");
-		TELE_NAMES.put("teleportsPandemonium", "The Pandemonium");
-		TELE_NAMES.put("teleportsEmirsArena", "Emir's Arena");
-		TELE_NAMES.put("teleportsChampionsGuild", "Champions' Guild");
-		TELE_NAMES.put("teleportsWizardsTower", "Wizards' Tower");
-		TELE_NAMES.put("teleportsTearsOfGuthix", "Tears of Guthix");
-		TELE_NAMES.put("teleportsTheOutpost", "The Outpost");
-		TELE_NAMES.put("teleportsSlayerDungeons", "Slayer dungeons");
-		TELE_NAMES.put("teleportsColosseum", "Fortis Colosseum");
-		TELE_NAMES.put("teleportsDondakansRock", "Dondakan's Rock");
-		TELE_NAMES.put("teleportsEaglesEyrie", "Eagle's Eyrie");
-		TELE_NAMES.put("teleportsGiantsFoundry", "Giants' Foundry");
-	}
+	private static final Map<String, String> LABELS = Tables.map(TABLES, "labels");
+	// destinations whose real name the camelCase split can't get back to
+	private static final Map<String, String> TELE_NAMES = Tables.map(TABLES, "teleNames");
+	// suffix-group headings the camelCase split gets wrong
+	private static final Map<String, String> SUFFIX_LABELS = Tables.map(TABLES, "suffixLabels");
+	// the irregular floors, where a floor is not the decapitalised suffix
+	private static final Map<String, String> SUFFIX_FLOORS = Tables.map(TABLES, "suffixFloors");
 
 	private StatRegistry()
 	{
@@ -285,18 +128,6 @@ public final class StatRegistry
 		// the minutes keys are read by the pages that divide them, never as rows
 		return key.startsWith("_") || HIDE.contains(key) || SUMMARY.contains(key)
 			|| chronicle.counters.StatKeys.isTime(key);
-	}
-
-	// a spine-only total the History summary reads by name
-	public static boolean isSummary(String key)
-	{
-		return SUMMARY.contains(key);
-	}
-
-	// the spine-only summary keys, for the writer that derives them
-	public static Set<String> summaryKeys()
-	{
-		return Collections.unmodifiableSet(SUMMARY);
 	}
 
 	// a high-water counter whose period delta means nothing
@@ -628,62 +459,17 @@ public final class StatRegistry
 	// heading for a suffix group: "BonesBuried" -> "Bones buried"
 	public static String suffixLabel(String suffix)
 	{
-		switch (suffix)
-		{
-			case "HeadsReanimated":
-				return "Ensouled heads";
-			case "OreMined":
-				return "Ores mined";
-			case "Sacked":
-				return "Herbs sacked";
-			case "Tanned":
-				return "Hides tanned";
-			default:
-				return prettify(Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1));
-		}
+		String fixed = SUFFIX_LABELS.get(suffix);
+		return fixed != null ? fixed
+			: prettify(Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1));
 	}
 
 	// floor key heading one suffix group, or null if the craft declares none.
-	// the floor is usually the decapitalised suffix; irregulars are mapped below.
+	// the floor is usually the decapitalised suffix; SUFFIX_FLOORS maps the irregulars.
 	public static String suffixFloor(String craft, String suffix)
 	{
-		String cand;
-		switch (suffix)
-		{
-			case "Caught":
-				cand = "fishCaught";
-				break;
-			case "Mined":
-			case "OreMined":
-				cand = "rocksMined";
-				break;
-			case "Runecrafted":
-				cand = "runesCrafted";
-				break;
-			case "Trapped":
-				cand = "creaturesTrapped";
-				break;
-			case "Pickpockets":
-				cand = "pickPockets";
-				break;
-			case "Cooked":
-				cand = "foodCooked";
-				break;
-			case "Burned":
-				cand = "foodBurned";
-				break;
-			case "TrialsCompleted":
-				cand = "barracudaTrialsCompleted";
-				break;
-			case "Sacked":
-				cand = "herbsSacked";
-				break;
-			case "Tanned":
-				cand = "hidesTanned";
-				break;
-			default:
-				cand = Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1);
-		}
+		String cand = SUFFIX_FLOORS.getOrDefault(suffix,
+			Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1));
 		for (SkillSpec s : SKILLS)
 		{
 			if (!s.name.equals(craft))

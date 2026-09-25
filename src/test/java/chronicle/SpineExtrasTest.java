@@ -8,7 +8,7 @@
  */
 package chronicle;
 
-import chronicle.panel.StatRegistry;
+import chronicle.panel.StatRegistryTest;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import java.io.File;
@@ -91,10 +91,10 @@ public class SpineExtrasTest
 		Map<String, Long> trackers = store.trackersSnapshot();
 		for (String key : x.keySet())
 		{
-			assertTrue(key, StatRegistry.isSummary(key));
+			assertTrue(key, StatRegistryTest.summaryKeys().contains(key));
 			assertFalse(key, trackers.containsKey(key));
 		}
-		assertEquals(StatRegistry.summaryKeys(), x.keySet());
+		assertEquals(StatRegistryTest.summaryKeys(), x.keySet());
 	}
 
 	@Test

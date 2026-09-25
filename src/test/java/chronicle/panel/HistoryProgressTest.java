@@ -8,12 +8,14 @@
  */
 package chronicle.panel;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -39,7 +41,35 @@ public class HistoryProgressTest
 
 	private static HistoryProgress of(Map<String, Long> counters)
 	{
-		return HistoryProgress.of(counters, StatRegistry::isGp);
+		return HistoryProgress.of(counters, StatRegistry::isGp, null, true);
+	}
+
+	private static Object table(String name) throws Exception
+	{
+		Field f = HistoryProgress.class.getDeclaredField(name);
+		f.setAccessible(true);
+		return f.get(null);
+	}
+
+	// whether the summary consumes a counter key, read off the model's own set
+	@SuppressWarnings("unchecked")
+	private static boolean summaryKey(String key) throws Exception
+	{
+		return ((Set<String>) table("SUMMARY_KEYS")).contains(key);
+	}
+
+	// which group a summary key files under, or null when no row draws it
+	@SuppressWarnings("unchecked")
+	private static String groupOfKey(String key) throws Exception
+	{
+		for (Map.Entry<String, List<String>> e : ((Map<String, List<String>>) table("GROUP_ROWS")).entrySet())
+		{
+			if (e.getValue().contains(key))
+			{
+				return e.getKey();
+			}
+		}
+		return null;
 	}
 
 	private static List<String> labels(List<HistoryProgress.Row> rows)
@@ -159,7 +189,7 @@ public class HistoryProgressTest
 	}
 
 	@Test
-	public void theFeedsFiguresLineUpAfterDeathsAndNeverFile()
+	public void theFeedsFiguresLineUpAfterDeathsAndNeverFile() throws Exception
 	{
 		// the five keys the History tab counts off the feed alone: summary keys
 		// every one, so a journal carrying a counter by that name never files it
@@ -168,7 +198,7 @@ public class HistoryProgressTest
 			"combatAchievements", "levelsGained"};
 		for (String key : feed)
 		{
-			assertTrue(key, HistoryProgress.summaryKey(key));
+			assertTrue(key, summaryKey(key));
 		}
 		// handed in as retroactive figures over a spine that never carried them,
 		// they make their own lines, right after Deaths and before the log slots,
@@ -176,7 +206,7 @@ public class HistoryProgressTest
 		HistoryProgress p = HistoryProgress.of(map("deaths", 3, "clogSlotsObtained", 9),
 			StatRegistry::isGp,
 			map("levelsGained", 6, "combatAchievements", 4, "diariesCompleted", 1,
-				"questsCompleted", 2, "petsObtained", 5));
+				"questsCompleted", 2, "petsObtained", 5), true);
 		assertEquals(Arrays.asList("Deaths", "Pets", "Quests completed", "Diaries completed",
 			"Combat achievements", "Levels gained", "Collection log slots"), labels(p.summary()));
 		assertEquals(5, row(p, "Pets").value());
@@ -189,7 +219,7 @@ public class HistoryProgressTest
 		// a zero for one of them is no line, and a zero for deaths takes the
 		// spine's line away too: the feed said nothing happened
 		HistoryProgress zero = HistoryProgress.of(map("deaths", 3, "kills", 2),
-			StatRegistry::isGp, map("deaths", 0, "petsObtained", 0, "questsCompleted", 1));
+			StatRegistry::isGp, map("deaths", 0, "petsObtained", 0, "questsCompleted", 1), true);
 		assertEquals(Arrays.asList("Kills", "Quests completed"), labels(zero.summary()));
 
 		// as counters they are summary lines all the same, never sections
@@ -227,7 +257,7 @@ public class HistoryProgressTest
 	}
 
 	@Test
-	public void dropsTakenIsReceivedLessTheKillsThatLeftLoot()
+	public void dropsTakenIsReceivedLessTheKillsThatLeftLoot() throws Exception
 	{
 		// one unit both ways: the loot events less the kills that left a stack,
 		// never the items on the floor
@@ -261,17 +291,17 @@ public class HistoryProgressTest
 		HistoryProgress none = of(map("lootLeftKills", 5));
 		assertTrue(none.summary().isEmpty());
 		assertTrue(none.sections().isEmpty());
-		assertTrue(HistoryProgress.summaryKey("lootLeftKills"));
-		assertFalse(HistoryProgress.summaryKey("dropsTaken"));
+		assertTrue(summaryKey("lootLeftKills"));
+		assertFalse(summaryKey("dropsTaken"));
 
 		// a retroactive figure for the kills replaces the spine's delta
 		HistoryProgress retro = HistoryProgress.of(map("dropsReceived", 10, "lootLeftKills", 3),
-			StatRegistry::isGp, map("lootLeftKills", 1));
+			StatRegistry::isGp, map("lootLeftKills", 1), true);
 		assertEquals(9, row(retro, "Drops taken").value());
 	}
 
 	@Test
-	public void theImportedUntakenPairIsNotTheFloor()
+	public void theImportedUntakenPairIsNotTheFloor() throws Exception
 	{
 		// untakenLootCount and untakenLootValue are a lifetime figure carried in
 		// from an older record, not this build's ledger: they never make the
@@ -281,8 +311,8 @@ public class HistoryProgressTest
 		assertNull(row(p, "Left on the floor"));
 		assertEquals(1000, row(p, "Loot kept").value());
 		assertEquals(Arrays.asList("Loot value", "Loot kept"), labels(p.summary()));
-		assertFalse(HistoryProgress.summaryKey("untakenLootCount"));
-		assertFalse(HistoryProgress.summaryKey("untakenLootValue"));
+		assertFalse(summaryKey("untakenLootCount"));
+		assertFalse(summaryKey("untakenLootValue"));
 	}
 
 	@Test
@@ -341,7 +371,7 @@ public class HistoryProgressTest
 	}
 
 	@Test
-	public void summaryKeysNeverAppearInSections()
+	public void summaryKeysNeverAppearInSections() throws Exception
 	{
 		Map<String, Long> c = everything();
 		HistoryProgress p = of(c);
@@ -349,7 +379,7 @@ public class HistoryProgressTest
 		assertTrue(p.sections().toString(), p.sections().isEmpty());
 		for (String k : c.keySet())
 		{
-			assertTrue(k, HistoryProgress.summaryKey(k));
+			assertTrue(k, summaryKey(k));
 		}
 
 		// the family still lists what the summary leaves it
@@ -361,7 +391,7 @@ public class HistoryProgressTest
 	}
 
 	@Test
-	public void teleportsAreASectionNotASummaryLine()
+	public void teleportsAreASectionNotASummaryLine() throws Exception
 	{
 		// one place for one figure: the Teleports fold carries the period's
 		// total, its means under it and the rest as "Other means", as on the
@@ -369,7 +399,7 @@ public class HistoryProgressTest
 		HistoryProgress p = of(map("teleportsTotal", 10, "teleportsViaJewellery", 6,
 			"teleportsVarrock", 4));
 		assertNull(row(p, "Teleports"));
-		assertFalse(HistoryProgress.summaryKey("teleportsTotal"));
+		assertFalse(summaryKey("teleportsTotal"));
 		HistoryProgress.Section tele = section(p, "Teleports");
 		assertEquals(10, tele.total());
 		assertEquals(Collections.singletonList("· by jewellery"), labels(tele.rows()));
@@ -558,7 +588,7 @@ public class HistoryProgressTest
 		Map<String, Long> spine = map("kills", 3, "slayerTasksCompleted", 6, "clogSlotsObtained", 9);
 		Map<String, Long> journal = map("slayerTasksCompleted", 2, "clogSlotsObtained", 0,
 			"logsChopped", 50);
-		HistoryProgress p = HistoryProgress.of(spine, StatRegistry::isGp, journal);
+		HistoryProgress p = HistoryProgress.of(spine, StatRegistry::isGp, journal, true);
 		// the journal's figure stands in for the spine's, a zero included; a key
 		// the summary does not read is ignored, and never files as a section
 		assertEquals(Arrays.asList("Kills", "Slayer tasks completed"), labels(p.summary()));
@@ -567,10 +597,10 @@ public class HistoryProgressTest
 		assertTrue(p.sections().isEmpty());
 		// a figure the spine never carried still makes its line
 		HistoryProgress fresh = HistoryProgress.of(map("kills", 3), StatRegistry::isGp,
-			map("slayerTasksCompleted", 4));
+			map("slayerTasksCompleted", 4), true);
 		assertEquals(4, row(fresh, "Slayer tasks completed").value());
 		// no journal figures: the spine's deltas as they were
-		HistoryProgress plain = HistoryProgress.of(spine, StatRegistry::isGp, null);
+		HistoryProgress plain = HistoryProgress.of(spine, StatRegistry::isGp, null, true);
 		assertEquals(6, row(plain, "Slayer tasks completed").value());
 		assertEquals(9, row(plain, "Collection log slots").value());
 		// and the caller's map is left alone
@@ -583,12 +613,12 @@ public class HistoryProgressTest
 		HistoryProgress p = of(Collections.emptyMap());
 		assertTrue(p.summary().isEmpty());
 		assertTrue(p.sections().isEmpty());
-		HistoryProgress nulls = HistoryProgress.of(null, null);
+		HistoryProgress nulls = HistoryProgress.of(null, null, null, true);
 		assertTrue(nulls.summary().isEmpty());
 		assertTrue(nulls.sections().isEmpty());
 	}
 	@Test
-	public void everySummaryKeyFilesUnderExactlyOneGroup()
+	public void everySummaryKeyFilesUnderExactlyOneGroup() throws Exception
 	{
 		HistoryProgress p = of(everything());
 		// nothing the summary draws is out of reach, and nothing is drawn twice
@@ -614,7 +644,7 @@ public class HistoryProgressTest
 		{
 			for (HistoryProgress.Row r : g.rows())
 			{
-				assertEquals(r.key(), g.name(), HistoryProgress.groupOfKey(r.key()));
+				assertEquals(r.key(), g.name(), groupOfKey(r.key()));
 			}
 		}
 	}
@@ -651,7 +681,7 @@ public class HistoryProgressTest
 		assertEquals(Arrays.asList("Combat", "Skilling"), names(p));
 		assertNull(p.group("Loot"));
 		assertNull(p.group("The rest"));
-		assertTrue(HistoryProgress.of(map(), StatRegistry::isGp).groups().isEmpty());
+		assertTrue(HistoryProgress.of(map(), StatRegistry::isGp, null, true).groups().isEmpty());
 	}
 
 	@Test

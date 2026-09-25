@@ -7,6 +7,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.Set;
 import org.junit.Test;
 
 /** Which family and section a counter key files under, and what it is called. */
@@ -30,20 +33,28 @@ public class StatRegistryTest
 		assertEquals("Seers' Village", StatRegistry.label("teleportsSeersVillage"));
 	}
 
+	// the registry's spine-only summary keys, read off its own set
+	@SuppressWarnings("unchecked")
+	public static Set<String> summaryKeys() throws Exception
+	{
+		Field f = StatRegistry.class.getDeclaredField("SUMMARY");
+		f.setAccessible(true);
+		return Collections.unmodifiableSet((Set<String>) f.get(null));
+	}
+
 	@Test
-	public void summaryKeysLiveOffTheStatsTab()
+	public void summaryKeysLiveOffTheStatsTab() throws Exception
 	{
 		// spine-only totals: named and priced for the History summary, hidden from
 		// every Stats family so a journal carrying them lists nothing extra
-		for (String key : StatRegistry.summaryKeys())
+		for (String key : summaryKeys())
 		{
-			assertTrue(key, StatRegistry.isSummary(key));
 			assertTrue(key, StatRegistry.hidden(key));
 		}
 	}
 
 	@Test
-	public void summaryAndDerivedKeysAreNamed()
+	public void summaryAndDerivedKeysAreNamed() throws Exception
 	{
 		assertEquals("Drops received", StatRegistry.label("dropsReceived"));
 		assertEquals("Loot value", StatRegistry.label("lootValue"));
@@ -68,22 +79,22 @@ public class StatRegistryTest
 		assertEquals("Kills", StatRegistry.label("kills"));
 		// the kills that left a stack ride the spine for "Drops taken" to subtract
 		assertEquals("Kills that left loot", StatRegistry.label("lootLeftKills"));
-		assertTrue(StatRegistry.isSummary("lootLeftKills"));
+		assertTrue(summaryKeys().contains("lootLeftKills"));
 		assertFalse(StatRegistry.isGp("lootLeftKills"));
 		// derived on the History tab, named here all the same
 		assertEquals("Loot kept", StatRegistry.label("lootKept"));
 		assertEquals("Drops taken", StatRegistry.label("dropsTaken"));
 		assertFalse(StatRegistry.isGp("dropsTaken"));
-		assertFalse(StatRegistry.isSummary("dropsTaken"));
+		assertFalse(summaryKeys().contains("dropsTaken"));
 		assertTrue(StatRegistry.isGp("lootValue"));
 		assertTrue(StatRegistry.isGp("lootLeftValue"));
 		assertFalse(StatRegistry.isGp("dropsReceived"));
 		assertFalse(StatRegistry.isGp("lootLeftCount"));
 		assertFalse(StatRegistry.isGp("kills"));
-		assertFalse(StatRegistry.isSummary("damageDealt"));
+		assertFalse(summaryKeys().contains("damageDealt"));
 		// the spine pair is not the imported lifetime pair
-		assertFalse(StatRegistry.isSummary("untakenLootCount"));
-		assertFalse(StatRegistry.isSummary("untakenLootValue"));
+		assertFalse(summaryKeys().contains("untakenLootCount"));
+		assertFalse(summaryKeys().contains("untakenLootValue"));
 	}
 
 	@Test

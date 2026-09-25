@@ -8,6 +8,8 @@
  */
 package chronicle.panel;
 
+import chronicle.counters.Tables;
+import com.google.gson.JsonElement;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -269,21 +271,11 @@ public final class HistoryProgress
 
 	static
 	{
-		// levels stand under Experience as the feed's dated count, beside the
-		// per-skill gains the tab ranks there
-		GROUP_ROWS.put("Experience", Collections.singletonList("levelsGained"));
-		GROUP_ROWS.put("Combat", Arrays.asList("kills", "slayerTasksCompleted", "slayerKills",
-			"damageDealt", "damageDealtMelee", "damageDealtRanged", "damageDealtMagic",
-			"deaths"));
-		GROUP_ROWS.put("Loot", Arrays.asList("dropsReceived", "dropsTaken", "lootLeftCount",
-			"lootValue", "lootKept", "petsObtained", "clogSlotsObtained"));
-		GROUP_ROWS.put("Skilling", Collections.<String>emptyList());
-		GROUP_ROWS.put("Upkeep", Collections.singletonList("consumedValue"));
-		GROUP_ROWS.put("Travel", Arrays.asList("distanceRan", "distanceWalked"));
-		GROUP_ROWS.put("Achievement", Arrays.asList("questsCompleted", "diariesCompleted",
-			"combatAchievements"));
-		GROUP_ROWS.put("The rest", Arrays.asList("resourcesGatheredValue", "itemsDroppedValue",
-			"coinsFromAlchemy", "coinsSpentAtShops", "coinsEarnedAtShops"));
+		for (Map.Entry<String, JsonElement> e
+			: StatRegistry.TABLES.getAsJsonObject("groupRows").entrySet())
+		{
+			GROUP_ROWS.put(e.getKey(), Arrays.asList(Tables.strings(e.getValue())));
+		}
 	}
 
 	// the Ledger & Roads sections that are travel rather than ledger
@@ -303,14 +295,10 @@ public final class HistoryProgress
 	// collection log slots over the spine's delta. Teleports are not here: the
 	// Teleports section carries the period's total with its "Other means", one
 	// place for one figure.
-	private static final Set<String> SUMMARY_KEYS = new HashSet<>(Arrays.asList(
-		"dropsReceived", "lootValue", "lootLeftCount", "lootLeftValue", "lootLeftKills",
-		"kills", "slayerTasksCompleted", "slayerKills", "damageDealt", "damageDealtMelee",
-		"damageDealtRanged", "damageDealtMagic", "deaths", "petsObtained", "questsCompleted",
-		"diariesCompleted", "combatAchievements", "levelsGained", "clogSlotsObtained",
-		"distanceRan", "distanceWalked", "coinsSpentAtShops", "coinsEarnedAtShops",
-		"coinsFromAlchemy", "consumedValue", "resourcesGatheredValue",
-		"resourcesDroppedValue", "itemsDroppedValue"));
+	private static final Set<String> SUMMARY_KEYS = Tables.set(StatRegistry.TABLES, "historySummaryKeys");
+	// the plain summary lines between the derived loot rows and the gathered row,
+	// in the order they are drawn
+	private static final String[] SUMMARY_RUN = Tables.strings(StatRegistry.TABLES.get("summaryRun"));
 
 	private final List<Row> summary;
 	private final List<Section> sections;
@@ -373,19 +361,6 @@ public final class HistoryProgress
 		}
 	}
 
-	/** Which group a summary key files under, or null when no row draws it. */
-	public static String groupOfKey(String key)
-	{
-		for (Map.Entry<String, List<String>> e : GROUP_ROWS.entrySet())
-		{
-			if (e.getValue().contains(key))
-			{
-				return e.getKey();
-			}
-		}
-		return null;
-	}
-
 	// The summary rows and the sections, filed by group. A family's flat list
 	// (the section named after its own family) is run on as the group's rows
 	// rather than folded behind a head repeating the group's name; it holds no
@@ -437,26 +412,14 @@ public final class HistoryProgress
 		return out;
 	}
 
-	/** Whether the summary consumes a counter key, keeping it out of the sections. */
-	public static boolean summaryKey(String key)
-	{
-		return SUMMARY_KEYS.contains(key);
-	}
-
-	/**
-	 * Shape a period.
-	 *
-	 * @param counters the period's positive counter deltas, spine extras included
-	 * @param gp whether a key's figure is gp; null reads the registry
-	 */
-	public static HistoryProgress of(Map<String, Long> counters, Predicate<String> gp)
-	{
-		return of(counters, gp, null);
-	}
-
 	/**
 	 * Shape a period, with summary figures read off the journal itself laid over
-	 * the spine's deltas.
+	 * the spine's deltas, saying whether what was left on the floor is dated for
+	 * this period. It is not, on a record whose left-behind tally joined the spine
+	 * after the period began, and the two figures derived by subtracting it,
+	 * what was picked up and what was kept, would then claim the whole take:
+	 * the period received two hundred drops and left, so far as the record can
+	 * say, none. They are drawn only where the subtraction has a source.
 	 *
 	 * @param counters the period's positive counter deltas, spine extras included
 	 * @param gp whether a key's figure is gp; null reads the registry
@@ -464,20 +427,6 @@ public final class HistoryProgress
 	 * the period (closed slayer segments, the feed's dated entries by type); a
 	 * key here replaces the spine's delta, a zero included, and a key the
 	 * summary does not read is ignored. Null for none.
-	 */
-	public static HistoryProgress of(Map<String, Long> counters, Predicate<String> gp,
-		Map<String, Long> retroactive)
-	{
-		return of(counters, gp, retroactive, true);
-	}
-
-	/**
-	 * The same, saying whether what was left on the floor is dated for this
-	 * period. It is not, on a record whose left-behind tally joined the spine
-	 * after the period began, and the two figures derived by subtracting it,
-	 * what was picked up and what was kept, would then claim the whole take:
-	 * the period received two hundred drops and left, so far as the record can
-	 * say, none. They are drawn only where the subtraction has a source.
 	 */
 	public static HistoryProgress of(Map<String, Long> counters, Predicate<String> gp,
 		Map<String, Long> retroactive, boolean leftDated)
@@ -534,28 +483,10 @@ public final class HistoryProgress
 		{
 			out.add(new Row("lootKept", StatRegistry.label("lootKept"), kept, true));
 		}
-		add(out, c, gp, "kills");
-		add(out, c, gp, "slayerTasksCompleted");
-		add(out, c, gp, "slayerKills");
-		add(out, c, gp, "damageDealt");
-		// the split rides under its parent, with the registry's "· by" labels
-		add(out, c, gp, "damageDealtMelee");
-		add(out, c, gp, "damageDealtRanged");
-		add(out, c, gp, "damageDealtMagic");
-		add(out, c, gp, "deaths");
-		// the feed's dated entries, counted by type on the History tab
-		add(out, c, gp, "petsObtained");
-		add(out, c, gp, "questsCompleted");
-		add(out, c, gp, "diariesCompleted");
-		add(out, c, gp, "combatAchievements");
-		add(out, c, gp, "levelsGained");
-		add(out, c, gp, "clogSlotsObtained");
-		add(out, c, gp, "distanceRan");
-		add(out, c, gp, "distanceWalked");
-		add(out, c, gp, "coinsSpentAtShops");
-		add(out, c, gp, "coinsEarnedAtShops");
-		add(out, c, gp, "coinsFromAlchemy");
-		add(out, c, gp, "consumedValue");
+		for (String key : SUMMARY_RUN)
+		{
+			add(out, c, gp, key);
+		}
 		long gathered = at(c, "resourcesGatheredValue");
 		if (gathered > 0)
 		{

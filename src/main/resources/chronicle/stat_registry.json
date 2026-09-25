@@ -1,0 +1,540 @@
+{
+ "_comment": {
+  "file": "Read by StatRegistry (combat through suffixFloors) and HistoryProgress (groupRows, historySummaryKeys, summaryRun). What each table is for is said where the Java declares it; the notes below are about particular rows.",
+  "livingFlat": "potionsConsumedValue and foodConsumedValue are the same spend split by what it went on, written at the bite and the dose.",
+  "hide": "The Food and Potions fold heads carry foodConsumedValue and potionsConsumedValue beside their counts. bowsFletched predates bowsStrung and still sits in older journals; nothing writes it now, but family() would give it a row if it showed up.",
+  "skills": [
+   "Each craft is [name, suffixes, floors, named keys]. matchedSuffix takes the first hit, so this order and the order inside each suffix list are load-bearing (FailedPickpockets before Pickpockets).",
+   "Woodcutting: the two Vampyrium keys are chat-counted; a tap is a chop with a bucket.",
+   "Firemaking sits above Cooking so LogsBurned is claimed before the broader Burned sweep could take a log for a burnt meal. Cooking: a burn is typed by the food the chat line names, under its own floor.",
+   "Herblore: Sacked is the herb sack, typed by herb off the chat line.",
+   "Fletching: logsFletched is the total the typed logs reconcile to, not a row beside them: it counts every log cut to a bow, and mapleLogsFletched and its siblings are that same count typed by log.",
+   "Crafting: Tanned is the tanner's line, typed by hide; no xp behind it.",
+   "Runecraft: essenceCrafted is claimed by name so the Runecrafted sweep leaves it alone: it counts crafts, not runes, and can't reconcile against the floor.",
+   "Farming: Planted is one to a patch; Harvested is one to an item pulled out of it. Hunter's explicit claim on herbiboarsHarvested keeps Farming's Harvested sweep off it."
+  ],
+  "labels": [
+   "resourcesGatheredValue is short because this row carries two figures (gathered and dropped) and they have to fit the 214px panel.",
+   "portTasksCompleted: courier and bounty tasks both land on this one key. essenceCrafted: the essence spent, not the runes it came back as.",
+   "slayerKills is read off the slayer journey on the History tab alone, and petsObtained through levelsGained are counted off the feed's dated entries there; none is ever on the spine.",
+   "lootLeftKills, the kills that left at least one stack, is never a line of its own: it is what Drops taken subtracts. lootKept is derived on the History tab from lootValue and lootLeftValue, and dropsTaken from dropsReceived and lootLeftKills on the History tab and the Home strip alike; they are named here so every figure on that tab reads off one table."
+  ],
+  "groupRows": "Levels stand under Experience as the feed's dated count, beside the per-skill gains the tab ranks there.",
+  "summaryRun": "The damage split rides under its parent, with the registry's '· by' labels. petsObtained through levelsGained are the feed's dated entries, counted by type on the History tab."
+ },
+ "combat": [
+  "damageDealt",
+  "damageTaken",
+  "highestHit",
+  "highestHitTaken",
+  "hitsMissed",
+  "hitsBlocked",
+  "deaths",
+  "poisonDamageTaken",
+  "venomDamageTaken",
+  "specialAttacksUsed",
+  "damageDealtMelee",
+  "damageDealtRanged",
+  "damageDealtMagic",
+  "thrallsSummoned"
+ ],
+ "livingFlat": [
+  "foodEaten",
+  "potionDoses",
+  "beersDrunk",
+  "vialsShattered",
+  "hitpointsRegenerated",
+  "divinePotionDamage",
+  "consumedValue",
+  "potionsConsumedValue",
+  "foodConsumedValue"
+ ],
+ "ledger": [
+  "resourcesGatheredValue",
+  "coinsFromAlchemy",
+  "itemsDroppedValue",
+  "itemsDiscarded",
+  "examines",
+  "coinsSpentAtShops",
+  "coinsEarnedAtShops",
+  "untakenLootValue",
+  "untakenLootCount",
+  "distanceWalked",
+  "distanceRan",
+  "ammoConsumed",
+  "offensiveSpellsCast",
+  "cabbagesPicked",
+  "flaxGathered",
+  "animalsPetted",
+  "patchesRaked"
+ ],
+ "hide": [
+  "totalXpGained",
+  "demonicOfferingXp",
+  "sinisterOfferingXp",
+  "foodConsumedValue",
+  "potionsConsumedValue",
+  "bowsFletched",
+  "resourcesDroppedValue"
+ ],
+ "summary": [
+  "dropsReceived",
+  "lootValue",
+  "lootLeftCount",
+  "lootLeftValue",
+  "lootLeftKills",
+  "kills",
+  "slayerTasksCompleted",
+  "clogSlotsObtained"
+ ],
+ "peak": [
+  "highestHit",
+  "highestHitTaken"
+ ],
+ "skills": [
+  [
+   "Woodcutting",
+   [
+    "LogsChopped"
+   ],
+   [
+    "logsChopped"
+   ],
+   [
+    "letveksShooed",
+    "bloodwoodSapBucketsFilled"
+   ]
+  ],
+  [
+   "Fishing",
+   [
+    "Caught"
+   ],
+   [
+    "fishCaught"
+   ],
+   [
+    "spiritPoolsHarpooned"
+   ]
+  ],
+  [
+   "Firemaking",
+   [
+    "LogsBurned"
+   ],
+   [
+    "logsBurned"
+   ],
+   []
+  ],
+  [
+   "Cooking",
+   [
+    "Cooked",
+    "Burned"
+   ],
+   [
+    "foodCooked",
+    "foodBurned"
+   ],
+   []
+  ],
+  [
+   "Mining",
+   [
+    "OreMined",
+    "Mined"
+   ],
+   [
+    "rocksMined"
+   ],
+   []
+  ],
+  [
+   "Smithing",
+   [
+    "BarsSmelted",
+    "ItemsSmithed"
+   ],
+   [],
+   [
+    "itemsSmithed",
+    "cannonballsSmithed"
+   ]
+  ],
+  [
+   "Herblore",
+   [
+    "Sacked"
+   ],
+   [
+    "herbsSacked"
+   ],
+   [
+    "herbsCleaned",
+    "unfinishedPotionsMade",
+    "potionsMade",
+    "herbTarsMade",
+    "weaponPoisonsMade"
+   ]
+  ],
+  [
+   "Fletching",
+   [
+    "LogsFletched"
+   ],
+   [
+    "logsFletched"
+   ],
+   [
+    "dartsFletched",
+    "arrowsFletched",
+    "boltsFletched",
+    "boltsUnfinished",
+    "javelinsFletched",
+    "boltTips",
+    "crossbowsStrung",
+    "crossbowsUnstrung",
+    "crossbowStocksCut",
+    "bowsStrung",
+    "arrowShaftsFletched",
+    "headlessArrowsFletched",
+    "javelinShaftsFletched",
+    "ballistaeFletched",
+    "blowpipesFletched"
+   ]
+  ],
+  [
+   "Crafting",
+   [
+    "Tanned"
+   ],
+   [
+    "hidesTanned"
+   ],
+   [
+    "gemsCut",
+    "glassBlown",
+    "leatherCrafted",
+    "dhideCrafted",
+    "jewelleryCrafted",
+    "potteryMade",
+    "battlestavesCrafted",
+    "itemsSpun",
+    "moltenGlassMade",
+    "snakeskinCrafted",
+    "xericianCrafted",
+    "silverCrafted",
+    "amuletsStrung",
+    "potteryFired",
+    "birdHousesCrafted",
+    "itemsWoven",
+    "amethystCut"
+   ]
+  ],
+  [
+   "Runecraft",
+   [
+    "Runecrafted"
+   ],
+   [
+    "runesCrafted"
+   ],
+   [
+    "essenceCrafted"
+   ]
+  ],
+  [
+   "Agility",
+   [
+    "Laps",
+    "Cleared"
+   ],
+   [
+    "agilityObstacles"
+   ],
+   [
+    "rooftopAgilityLaps",
+    "normalAgilityLaps"
+   ]
+  ],
+  [
+   "Thieving",
+   [
+    "FailedPickpockets",
+    "Pickpockets",
+    "StallsThieved",
+    "ChestsLooted"
+   ],
+   [
+    "pickPockets",
+    "stallsThieved",
+    "chestsLooted"
+   ],
+   [
+    "failedPickPockets",
+    "safesCracked",
+    "pyramidPlunderUrns"
+   ]
+  ],
+  [
+   "Farming",
+   [
+    "Harvested",
+    "Checked",
+    "Planted"
+   ],
+   [
+    "farmingActions"
+   ],
+   [
+    "seedsPlanted"
+   ]
+  ],
+  [
+   "Hunter",
+   [
+    "Trapped",
+    "BirdhousesEmptied"
+   ],
+   [
+    "creaturesTrapped",
+    "birdhousesEmptied"
+   ],
+   [
+    "implingsCaught",
+    "chompyBirdsPlucked",
+    "herbiboarsHarvested"
+   ]
+  ],
+  [
+   "Prayer",
+   [
+    "BonesBuried",
+    "AshesScattered",
+    "HeadsReanimated",
+    "BonesSacrificed",
+    "AshesSacrificed",
+    "BonesOffered"
+   ],
+   [
+    "bonesBuried",
+    "ashesScattered",
+    "headsReanimated",
+    "bonesOffered",
+    "bonesSacrificed",
+    "ashesSacrificed"
+   ],
+   []
+  ],
+  [
+   "Construction",
+   [],
+   [],
+   [
+    "constructionBuilds"
+   ]
+  ],
+  [
+   "Sailing",
+   [
+    "SalvagePulled",
+    "SalvageSorted",
+    "TrialsCompleted"
+   ],
+   [
+    "salvagePulled",
+    "salvageSorted",
+    "barracudaTrialsCompleted"
+   ],
+   [
+    "portTasksCompleted"
+   ]
+  ]
+ ],
+ "labels": {
+  "hitpointsRegenerated": "Hitpoints regained",
+  "divinePotionDamage": "Divine potion self-damage",
+  "distanceWalked": "Distance walked",
+  "distanceRan": "Distance run",
+  "tilesWalked": "Tiles walked",
+  "tilesRan": "Tiles run",
+  "coinsFromAlchemy": "Coins from alchemy",
+  "itemsDroppedValue": "Value dropped",
+  "resourcesGatheredValue": "Gathered",
+  "untakenLootValue": "Uncollected loot",
+  "untakenLootCount": "Loot left behind",
+  "coinsSpentAtShops": "Spent at shops",
+  "coinsEarnedAtShops": "Earned at shops",
+  "offensiveSpellsCast": "Offensive casts",
+  "ammoConsumed": "Ammunition spent",
+  "foodEaten": "Meals eaten",
+  "potionDoses": "Doses drunk",
+  "highestHit": "Highest hit",
+  "highestHitTaken": "Highest hit taken",
+  "specialAttacksUsed": "Specials spent",
+  "consumedValue": "Consumed value",
+  "damageDealtMelee": "· by melee",
+  "damageDealtRanged": "· by ranged",
+  "damageDealtMagic": "· by magic",
+  "teleportsFairyRing": "· by fairy ring",
+  "portTasksCompleted": "Port tasks",
+  "barracudaTrialsCompleted": "Barracuda trials",
+  "teleportsSpiritTree": "· by spirit tree",
+  "essenceCrafted": "Essence crafted",
+  "thrallsSummoned": "Thralls raised",
+  "dropsReceived": "Drops received",
+  "lootValue": "Loot value",
+  "slayerTasksCompleted": "Slayer tasks completed",
+  "slayerKills": "Slayer kills",
+  "petsObtained": "Pets",
+  "questsCompleted": "Quests completed",
+  "diariesCompleted": "Diaries completed",
+  "combatAchievements": "Combat achievements",
+  "levelsGained": "Levels gained",
+  "clogSlotsObtained": "Collection log slots",
+  "lootLeftCount": "Left on the floor",
+  "lootLeftValue": "Value left on the floor",
+  "lootLeftKills": "Kills that left loot",
+  "kills": "Kills",
+  "lootKept": "Loot kept",
+  "dropsTaken": "Drops taken"
+ },
+ "teleNames": {
+  "teleportsSeersVillage": "Seers' Village",
+  "teleportsFenkenstrain": "Fenkenstrain's Castle",
+  "teleportsFortis": "Civitas illa Fortis",
+  "teleportsGrandExchange": "Grand Exchange",
+  "teleportsWarriorsGuild": "Warriors' Guild",
+  "teleportsLegendsGuild": "Legends' Guild",
+  "teleportsOttosGrotto": "Otto's Grotto",
+  "teleportsDiaryRegion": "Achievement Diary",
+  "teleportsFalo": "Falo the Bard",
+  "teleportsPandemonium": "The Pandemonium",
+  "teleportsEmirsArena": "Emir's Arena",
+  "teleportsChampionsGuild": "Champions' Guild",
+  "teleportsWizardsTower": "Wizards' Tower",
+  "teleportsTearsOfGuthix": "Tears of Guthix",
+  "teleportsTheOutpost": "The Outpost",
+  "teleportsSlayerDungeons": "Slayer dungeons",
+  "teleportsColosseum": "Fortis Colosseum",
+  "teleportsDondakansRock": "Dondakan's Rock",
+  "teleportsEaglesEyrie": "Eagle's Eyrie",
+  "teleportsGiantsFoundry": "Giants' Foundry"
+ },
+ "suffixLabels": {
+  "HeadsReanimated": "Ensouled heads",
+  "OreMined": "Ores mined",
+  "Sacked": "Herbs sacked",
+  "Tanned": "Hides tanned"
+ },
+ "suffixFloors": {
+  "Caught": "fishCaught",
+  "Mined": "rocksMined",
+  "OreMined": "rocksMined",
+  "Runecrafted": "runesCrafted",
+  "Trapped": "creaturesTrapped",
+  "Pickpockets": "pickPockets",
+  "Cooked": "foodCooked",
+  "Burned": "foodBurned",
+  "TrialsCompleted": "barracudaTrialsCompleted",
+  "Sacked": "herbsSacked",
+  "Tanned": "hidesTanned"
+ },
+ "groupRows": {
+  "Experience": [
+   "levelsGained"
+  ],
+  "Combat": [
+   "kills",
+   "slayerTasksCompleted",
+   "slayerKills",
+   "damageDealt",
+   "damageDealtMelee",
+   "damageDealtRanged",
+   "damageDealtMagic",
+   "deaths"
+  ],
+  "Loot": [
+   "dropsReceived",
+   "dropsTaken",
+   "lootLeftCount",
+   "lootValue",
+   "lootKept",
+   "petsObtained",
+   "clogSlotsObtained"
+  ],
+  "Skilling": [],
+  "Upkeep": [
+   "consumedValue"
+  ],
+  "Travel": [
+   "distanceRan",
+   "distanceWalked"
+  ],
+  "Achievement": [
+   "questsCompleted",
+   "diariesCompleted",
+   "combatAchievements"
+  ],
+  "The rest": [
+   "resourcesGatheredValue",
+   "itemsDroppedValue",
+   "coinsFromAlchemy",
+   "coinsSpentAtShops",
+   "coinsEarnedAtShops"
+  ]
+ },
+ "historySummaryKeys": [
+  "dropsReceived",
+  "lootValue",
+  "lootLeftCount",
+  "lootLeftValue",
+  "lootLeftKills",
+  "kills",
+  "slayerTasksCompleted",
+  "slayerKills",
+  "damageDealt",
+  "damageDealtMelee",
+  "damageDealtRanged",
+  "damageDealtMagic",
+  "deaths",
+  "petsObtained",
+  "questsCompleted",
+  "diariesCompleted",
+  "combatAchievements",
+  "levelsGained",
+  "clogSlotsObtained",
+  "distanceRan",
+  "distanceWalked",
+  "coinsSpentAtShops",
+  "coinsEarnedAtShops",
+  "coinsFromAlchemy",
+  "consumedValue",
+  "resourcesGatheredValue",
+  "resourcesDroppedValue",
+  "itemsDroppedValue"
+ ],
+ "summaryRun": [
+  "kills",
+  "slayerTasksCompleted",
+  "slayerKills",
+  "damageDealt",
+  "damageDealtMelee",
+  "damageDealtRanged",
+  "damageDealtMagic",
+  "deaths",
+  "petsObtained",
+  "questsCompleted",
+  "diariesCompleted",
+  "combatAchievements",
+  "levelsGained",
+  "clogSlotsObtained",
+  "distanceRan",
+  "distanceWalked",
+  "coinsSpentAtShops",
+  "coinsEarnedAtShops",
+  "coinsFromAlchemy",
+  "consumedValue"
+ ]
+}
