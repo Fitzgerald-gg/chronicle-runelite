@@ -747,7 +747,10 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
-	/** Where the hiscores and the collection log name one fight differently. */
+	/**
+	 * Where the hiscores and the collection log name one fight differently. One
+	 * page counts both Gauntlets, and each of them is its own row on the board.
+	 */
 	private static final Map<String, String> LOG_PAGE_FOR = new LinkedHashMap<>();
 	// Where a fight's takings are filed under another name entirely. NOT the
 	// creatures inside it -- a crystalline bear's shards are not the
@@ -763,7 +766,9 @@ class ChroniclePanel extends PluginPanel
 	// for the chest at the end of it, and a few fights are named for what
 	// the log calls them rather than what stands there. Everything in it is
 	// PART OF THE FIGHT -- the boss under another name, or a minion that is
-	// only alive during it -- so its minutes are that fight's minutes.
+	// only alive during it -- so its minutes are that fight's minutes. A boss and
+	// the things it calls up: alive only inside the fight, so the minutes spent
+	// on them were spent on it.
 	private static final Map<String, List<String>> FOUGHT_AS = new LinkedHashMap<>();
 
 	// The three tables are bundled in panel_fights.json, in the order they are read.
