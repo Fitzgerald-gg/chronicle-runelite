@@ -13,12 +13,36 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.game.ItemManager;
 
@@ -60,11 +84,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	// runaway guard
 	private static final int FEED_CAP = 20000;
 	// peak counters: lifetime is max(base, session) rather than base + session.
-	static final java.util.Set<String> MAX_KEYS = new java.util.HashSet<>(
-		java.util.Arrays.asList("highestHit", "highestHitTaken"));
+	static final Set<String> MAX_KEYS = new HashSet<>(
+		Arrays.asList("highestHit", "highestHitTaken"));
 	// Event types kept as dated feed lines. LOOT and LOOT_UNTAKEN are recorded too,
 	// into the drop and untaken ledgers; GROUP_STORAGE isn't kept at all.
-	private static final java.util.Set<String> FEED_TYPES = new java.util.HashSet<>(java.util.Arrays.asList(
+	private static final Set<String> FEED_TYPES = new HashSet<>(Arrays.asList(
 		"PET", "COLLECTION", "COMBAT_ACHIEVEMENT", "QUEST", "DIARY", "CLUE", "DEATH", "SLAYER",
 		"LEVEL",
 		"SESSION"));   // SESSION is recorded by the plugin itself, so it stays off the network
@@ -103,7 +127,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private long sessionUntakenValue;
 	// the kills that left at least one stack on the floor, the capture's own count
 	private int sessionUntakenKills;
-	private final java.util.ArrayDeque<RecentDrop> recentDrops = new java.util.ArrayDeque<>();
+	private final ArrayDeque<RecentDrop> recentDrops = new ArrayDeque<>();
 	// This sitting's take, in the same shape as one of the dated roll's days, so
 	// a board can read it through the same fold. The roll keeps ONE entry a day
 	// and a sitting is hours inside one of those, so it could never be asked what
@@ -116,10 +140,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private static final int GATHERED_CAP = 1024;
 	// Lock-free mirror of the record's "gathered_items", read on every drop click.
 	// The resolver writes it on the client thread while load() rebuilds it on the executor.
-	private final java.util.Set<Integer> gatheredItems =
-		java.util.concurrent.ConcurrentHashMap.newKeySet();
+	private final Set<Integer> gatheredItems =
+		ConcurrentHashMap.newKeySet();
 
-	@lombok.AllArgsConstructor(access = lombok.AccessLevel.PACKAGE)
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class RecentDrop
 	{
 		final int itemId;
@@ -399,7 +423,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				feed.remove(0);
 			}
-			root.addProperty("updated_at", nowSec());
+			touch();
 		}
 	}
 
@@ -408,7 +432,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		String source = str(data, "source", "Unknown");
 		JsonArray items = data.has("items") && data.get("items").isJsonArray()
 			? data.getAsJsonArray("items") : null;
-		Integer kc = data.has("killCount") && !data.get("killCount").isJsonNull()
+		Integer kc = present(data, "killCount")
 			? data.get("killCount").getAsInt() : null;
 
 		JsonArray priced = new JsonArray();
@@ -441,11 +465,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		// The standing PB when the game restated it, else this kill's own time when
 		// it was the record.
 		Double pbCand = null;
-		if (data.has("personalBestTime") && !data.get("personalBestTime").isJsonNull())
+		if (present(data, "personalBestTime"))
 		{
 			pbCand = data.get("personalBestTime").getAsDouble();
 		}
-		else if (data.has("personalBest") && !data.get("personalBest").isJsonNull()
+		else if (present(data, "personalBest")
 			&& data.get("personalBest").getAsBoolean()
 			&& data.has("killTime") && data.get("killTime").getAsDouble() >= 0)
 		{
@@ -454,11 +478,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		// This kill's own time, where the boss timer gave one. Kept as a count
 		// and a sum, on the source and on the dated roll, so an average over
 		// any period falls out without a row per kill.
-		Double killTime = data.has("killTime") && !data.get("killTime").isJsonNull()
+		Double killTime = present(data, "killTime")
 			&& data.get("killTime").getAsDouble() > 0 ? data.get("killTime").getAsDouble() : null;
 		// The game flagging THIS kill as the new best; a best merely restated
 		// on the first kill after install was set while nobody was watching.
-		boolean newRecord = data.has("personalBest") && !data.get("personalBest").isJsonNull()
+		boolean newRecord = present(data, "personalBest")
 			&& data.get("personalBest").getAsBoolean();
 
 		synchronized (lock)
@@ -555,7 +579,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					bag.add(key, p);
 				}
 			}
-			root.addProperty("updated_at", nowSec());
+			touch();
 		}
 	}
 
@@ -574,13 +598,13 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	// ------------------------------------------------------------------
 
 	private static final int DETAIL_DAYS = 400;
-	private static final java.time.format.DateTimeFormatter DAY_KEY =
-		java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd");
+	private static final DateTimeFormatter DAY_KEY =
+		DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
 	private JsonObject dayRoll()
 	{
 		JsonObject days = sub(root, "loot_days");
-		String today = java.time.LocalDate.now().format(DAY_KEY);
+		String today = LocalDate.now().format(DAY_KEY);
 		if (!days.has(today) || !days.get(today).isJsonObject())
 		{
 			days.add(today, new JsonObject());
@@ -592,8 +616,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	// the breakdown goes off days older than DETAIL_DAYS; their totals stay
 	private static void pruneDetail(JsonObject days)
 	{
-		String cut = java.time.LocalDate.now().minusDays(DETAIL_DAYS).format(DAY_KEY);
-		for (String day : new java.util.ArrayList<>(days.keySet()))
+		String cut = LocalDate.now().minusDays(DETAIL_DAYS).format(DAY_KEY);
+		for (String day : new ArrayList<>(days.keySet()))
 		{
 			if (day.compareTo(cut) >= 0 || !days.get(day).isJsonObject())
 			{
@@ -604,6 +628,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			d.remove("items");
 			d.remove("leftItems");
 		}
+	}
+
+	private static boolean present(JsonObject o, String key)
+	{
+		return o.has(key) && !o.get(key).isJsonNull();
 	}
 
 	private static void bump(JsonObject o, String key, long by)
@@ -671,7 +700,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	// one kill's floor, against today
-	private void rollLeft(long qty, long value, int kills, java.util.List<BagItem> perItem)
+	private void rollLeft(long qty, long value, int kills, List<BagItem> perItem)
 	{
 		for (JsonObject into : new JsonObject[]{dayRoll(), sessionRoll})
 		{
@@ -697,14 +726,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		long left;
 		long leftValue;
 		long leftKills;
-		final java.util.List<String[]> items = new java.util.ArrayList<>();
-		final java.util.List<String[]> sources = new java.util.ArrayList<>();
-		final java.util.List<String[]> leftItems = new java.util.ArrayList<>();
+		final List<String[]> items = new ArrayList<>();
+		final List<String[]> sources = new ArrayList<>();
+		final List<String[]> leftItems = new ArrayList<>();
 		// per source: {kills the timer timed, their seconds summed}
-		final java.util.Map<String, double[]> times = new java.util.LinkedHashMap<>();
-		private final java.util.Map<String, long[]> byItem = new java.util.LinkedHashMap<>();
-		private final java.util.Map<String, long[]> bySource = new java.util.LinkedHashMap<>();
-		private final java.util.Map<String, long[]> byLeft = new java.util.LinkedHashMap<>();
+		final Map<String, double[]> times = new LinkedHashMap<>();
+		private final Map<String, long[]> byItem = new LinkedHashMap<>();
+		private final Map<String, long[]> bySource = new LinkedHashMap<>();
+		private final Map<String, long[]> byLeft = new LinkedHashMap<>();
 
 		void add(JsonObject d)
 		{
@@ -746,13 +775,13 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					first = day;
 				}
 			}
-			return first == null ? 0 : java.time.LocalDate.parse(first)
-				.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+			return first == null ? 0 : LocalDate.parse(first)
+				.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 		}
 	}
 
 	/** The roll summed over [from, to], both days included. */
-	LootWindow lootBetween(java.time.LocalDate from, java.time.LocalDate to)
+	LootWindow lootBetween(LocalDate from, LocalDate to)
 	{
 		LootWindow w = new LootWindow();
 		synchronized (lock)
@@ -778,9 +807,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** Each day the roll holds, keyed yyyy-MM-dd: {loots, value, left, leftValue}. */
-	java.util.Map<String, long[]> dayTotals()
+	Map<String, long[]> dayTotals()
 	{
-		java.util.Map<String, long[]> out = new java.util.TreeMap<>();
+		Map<String, long[]> out = new TreeMap<>();
 		synchronized (lock)
 		{
 			JsonObject days = obj(root, "loot_days");
@@ -825,7 +854,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	private static boolean dayHolds(JsonObject day, String name)
 	{
-		for (java.util.Map.Entry<String, JsonElement> it : obj(day, "items").entrySet())
+		for (var it : obj(day, "items").entrySet())
 		{
 			if (it.getValue().isJsonObject() && it.getValue().getAsJsonObject().has("n")
 				&& name.equalsIgnoreCase(it.getValue().getAsJsonObject().get("n").getAsString()))
@@ -838,8 +867,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	private static long dayMs(String key)
 	{
-		return java.time.LocalDate.parse(key, DAY_KEY)
-			.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+		return LocalDate.parse(key, DAY_KEY)
+			.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 	}
 
 	/**
@@ -862,10 +891,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** What ONE source paid this sitting, ranked, or empty where it paid nothing. */
-	java.util.List<BagItem> sessionSourceItems(String source)
+	List<BagItem> sessionSourceItems(String source)
 	{
-		java.util.Map<String, long[]> items = new java.util.LinkedHashMap<>();
-		java.util.Map<String, Integer> ids = new java.util.LinkedHashMap<>();
+		Map<String, long[]> items = new LinkedHashMap<>();
+		Map<String, Integer> ids = new LinkedHashMap<>();
 		synchronized (lock)
 		{
 			JsonObject all = obj(sessionRoll, "sources");
@@ -900,7 +929,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	// fold one day's breakdown into the running tally. `named` reads the stored
 	// display name off the entry; a source is named by its own key.
 	private static void gather(JsonObject day, String key,
-		java.util.Map<String, long[]> into, boolean named)
+		Map<String, long[]> into, boolean named)
 	{
 		JsonObject o = obj(day, key);
 		for (String k : o.keySet())
@@ -918,7 +947,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	// the timed kills a day's source entries hold, summed per source
-	private static void gatherTimes(JsonObject day, java.util.Map<String, double[]> into)
+	private static void gatherTimes(JsonObject day, Map<String, double[]> into)
 	{
 		JsonObject o = obj(day, "sources");
 		for (String k : o.keySet())
@@ -934,12 +963,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	// biggest by value first, as {name, qty, value}
-	private static void rank(java.util.Map<String, long[]> from, java.util.List<String[]> into)
+	private static void rank(Map<String, long[]> from, List<String[]> into)
 	{
-		java.util.List<java.util.Map.Entry<String, long[]>> rows =
-			new java.util.ArrayList<>(from.entrySet());
+		List<Map.Entry<String, long[]>> rows =
+			new ArrayList<>(from.entrySet());
 		rows.sort((a, b) -> Long.compare(b.getValue()[1], a.getValue()[1]));
-		for (java.util.Map.Entry<String, long[]> e : rows)
+		for (var e : rows)
 		{
 			into.add(new String[]{e.getKey(), String.valueOf(e.getValue()[0]),
 				String.valueOf(e.getValue()[1])});
@@ -951,7 +980,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 *  lock covers both. {@code collectionLog} is the capture's raw map, converted to
 	 *  a tree here. */
 	void setCharacter(String rsn, JsonObject skills, int combatLevel,
-		java.util.Map<String, Object> collectionLog, JsonObject achievements)
+		Map<String, Object> collectionLog, JsonObject achievements)
 	{
 		if (!isReadyFor(rsn))
 		{
@@ -978,9 +1007,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				// merge, and re-anchoring on it would throw away the observations
 				// that number has been riding on.
 				Object read = collectionLog.get("slayer_kcs");
-				if (read instanceof java.util.Map)
+				if (read instanceof Map)
 				{
-					for (java.util.Map.Entry<?, ?> e : ((java.util.Map<?, ?>) read).entrySet())
+					for (var e : ((Map<?, ?>) read).entrySet())
 					{
 						if (e.getKey() != null && e.getValue() instanceof Number)
 						{
@@ -998,7 +1027,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				root.add("achievements", achievements);
 			}
-			root.addProperty("updated_at", nowSec());
+			touch();
 			if (before != null)
 			{
 				noteArrival(before, 0);
@@ -1007,16 +1036,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** The counts as they stand, and what each fight's figure rests on. */
-	@lombok.AllArgsConstructor(access = lombok.AccessLevel.PACKAGE)
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	private static final class Counts
 	{
 		// the reconciled figures, by the reconciliation's own names
-		final java.util.Map<String, Long> kills;
+		final Map<String, Long> kills;
 		// by kind: 1 a page counter, 2 something the game said; absent, the ledger alone
-		final java.util.Map<String, Integer> rank;
+		final Map<String, Integer> rank;
 		// the spine's kills sum, and the kinds it adds up
 		final long sum;
-		final java.util.Set<String> summed;
+		final Set<String> summed;
 	}
 
 	private Counts countsNow()
@@ -1024,11 +1053,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		synchronized (lock)
 		{
 			JsonObject cl = clogSnapshot();
-			java.util.List<SourceRow> sources = dropSources();
-			java.util.Map<String, Long> chat = chatKillCounts();
-			java.util.Map<String, Long> anchored = anchoredKills();
-			java.util.Map<String, Long> kills = reconciledKills(cl, sources, chat, anchored);
-			java.util.Map<String, Integer> rank = new java.util.HashMap<>();
+			List<SourceRow> sources = dropSources();
+			Map<String, Long> chat = chatKillCounts();
+			Map<String, Long> anchored = anchoredKills();
+			Map<String, Long> kills = reconciledKills(cl, sources, chat, anchored);
+			Map<String, Integer> rank = new HashMap<>();
 			// The page's raw counter is a word, but not one about kills: Tempoross's
 			// held 46, the tail of a 3:46 best time, where the Kill Log says 455.
 			for (String name : obj(cl, "kcs").keySet())
@@ -1038,16 +1067,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			// What the game said: the Kill Log, a page's labelled line (not a page
 			// merely opened, whose lines can be empty), a chat line and an anchor,
 			// the last two by the fight they name, not the words the chat box used.
-			java.util.Map<String, Long> said = killLogCounts(cl);
+			Map<String, Long> said = killLogCounts(cl);
 			said.putAll(pageKillLines(cl));
-			java.util.Set<String> vocabulary = clogKillCounts(cl).keySet();
+			Set<String> vocabulary = clogKillCounts(cl).keySet();
 			foldChatCounts(said, chat, vocabulary);
 			foldChatCounts(said, anchored, vocabulary);
 			for (String name : said.keySet())
 			{
 				rank.put(chatKind(name), 2);
 			}
-			java.util.Set<String> summed = new java.util.HashSet<>();
+			Set<String> summed = new HashSet<>();
 			long sum = 0;
 			for (String key : spineKillKeys(cl, sources, kills))
 			{
@@ -1078,11 +1107,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private void noteArrival(Counts before, long announced)
 	{
 		Counts after = countsNow();
-		java.util.Map<String, Long> was = new java.util.HashMap<>();
+		Map<String, Long> was = new HashMap<>();
 		before.kills.forEach((k, v) -> was.merge(chatKind(k), v, Math::max));
 		HistoryLog.Adjust adj = new HistoryLog.Adjust();
 		long played = 0;
-		for (java.util.Map.Entry<String, Long> e : after.kills.entrySet())
+		for (var e : after.kills.entrySet())
 		{
 			String kind = chatKind(e.getKey());
 			Long then = was.get(kind);
@@ -1139,7 +1168,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * covers both. {@code session} is the from-zero session snapshot; lifetime
 	 * is base + session (max for the peak counters), so repeat calls never double up.
 	 */
-	void setTrackers(java.util.Map<String, Integer> session, String rsn)
+	void setTrackers(Map<String, Integer> session, String rsn)
 	{
 		if (!isReadyFor(rsn) || session == null)
 		{
@@ -1148,12 +1177,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		synchronized (lock)
 		{
 			JsonObject tr = new JsonObject();
-			for (java.util.Map.Entry<String, Long> e : lifetimeOf(session).entrySet())
+			for (var e : lifetimeOf(session).entrySet())
 			{
 				tr.addProperty(e.getKey(), e.getValue());
 			}
 			root.add("trackers", tr);
-			root.addProperty("updated_at", nowSec());
+			touch();
 		}
 		revision++;
 	}
@@ -1167,20 +1196,20 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * moves when the journal is flushed, so a board showing what this account has
 	 * gathered sat still through an hour of gathering and then jumped on logout.
 	 */
-	java.util.Map<String, Long> lifetimeOf(java.util.Map<String, Integer> session)
+	Map<String, Long> lifetimeOf(Map<String, Integer> session)
 	{
-		java.util.Map<String, Long> out = new java.util.HashMap<>();
+		Map<String, Long> out = new HashMap<>();
 		synchronized (lock)
 		{
-			java.util.Set<String> keys = new java.util.HashSet<>(
-				session == null ? java.util.Collections.emptySet() : session.keySet());
-			for (java.util.Map.Entry<String, JsonElement> e : trackersBase.entrySet())
+			Set<String> keys = new HashSet<>(
+				session == null ? Collections.emptySet() : session.keySet());
+			for (var e : trackersBase.entrySet())
 			{
 				keys.add(e.getKey());
 			}
 			for (String k : keys)
 			{
-				long base = trackersBase.has(k) && !trackersBase.get(k).isJsonNull()
+				long base = present(trackersBase, k)
 					? trackersBase.get(k).getAsLong() : 0;
 				Integer s = session == null ? null : session.get(k);
 				long sess = s != null ? s.longValue() : 0;
@@ -1291,6 +1320,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return System.currentTimeMillis() / 1000L;
 	}
 
+	private void touch()
+	{
+		root.addProperty("updated_at", nowSec());
+	}
+
 	// ------------------------------------------------------------------
 	// Panel-facing reads (copies only; safe to call from the EDT)
 	// ------------------------------------------------------------------
@@ -1307,12 +1341,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** Lifetime counters as the journal knows them (base + this session). */
-	java.util.Map<String, Long> trackersSnapshot()
+	Map<String, Long> trackersSnapshot()
 	{
-		java.util.Map<String, Long> out = new java.util.HashMap<>();
+		Map<String, Long> out = new HashMap<>();
 		synchronized (lock)
 		{
-			for (java.util.Map.Entry<String, JsonElement> e : obj(root, "trackers").entrySet())
+			for (var e : obj(root, "trackers").entrySet())
 			{
 				if (!e.getValue().isJsonNull())
 				{
@@ -1323,7 +1357,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	@lombok.AllArgsConstructor(access = lombok.AccessLevel.PACKAGE)
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class SourceRow
 	{
 		final String name;
@@ -1338,24 +1372,23 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		// lower-cased name of every item the bag holds a copy of. The dryness book
 		// reads it as obtained: a unique already looted is never a chase, whatever the
 		// stored log says.
-		final java.util.Set<String> looted;
+		final Set<String> looted;
 		// kills the boss timer gave a time for, and those times summed in seconds
 		final long timed;
 		final double timeSum;
 	}
 
 	/** Every drop source, unsorted (the panel ranks). */
-	java.util.List<SourceRow> dropSources()
+	List<SourceRow> dropSources()
 	{
-		java.util.List<SourceRow> out = new java.util.ArrayList<>();
+		List<SourceRow> out = new ArrayList<>();
 		synchronized (lock)
 		{
 			if (root == null || !root.has("drops"))
 			{
 				return out;
 			}
-			for (java.util.Map.Entry<String, JsonElement> e
-				: root.getAsJsonObject("drops").entrySet())
+			for (var e : root.getAsJsonObject("drops").entrySet())
 			{
 				if (!e.getValue().isJsonObject())
 				{
@@ -1377,33 +1410,33 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	// The names in one source's bag, lower-cased, holding only entries with a copy
 	// in hand: a zero-quantity row is a name the bag once knew, not an item owned.
-	private static java.util.Set<String> lootedNames(JsonObject src)
+	private static Set<String> lootedNames(JsonObject src)
 	{
-		java.util.Set<String> out = new java.util.HashSet<>();
-		for (java.util.Map.Entry<String, JsonElement> e : obj(src, "items").entrySet())
+		Set<String> out = new HashSet<>();
+		for (var e : obj(src, "items").entrySet())
 		{
 			if (!e.getValue().isJsonObject())
 			{
 				continue;
 			}
 			JsonObject it = e.getValue().getAsJsonObject();
-			if (asLong(it.get("qty")) <= 0 || !it.has("name") || it.get("name").isJsonNull())
+			if (asLong(it.get("qty")) <= 0 || !present(it, "name"))
 			{
 				continue;
 			}
-			String name = it.get("name").getAsString().trim().toLowerCase(java.util.Locale.ROOT);
+			String name = it.get("name").getAsString().trim().toLowerCase(Locale.ROOT);
 			if (!name.isEmpty())
 			{
 				out.add(name);
 			}
 		}
-		return out.isEmpty() ? java.util.Collections.emptySet() : out;
+		return out.isEmpty() ? Collections.emptySet() : out;
 	}
 
 	/** Newest feed entries, newest first (deep copies). */
-	java.util.List<JsonObject> feedNewest(int n)
+	List<JsonObject> feedNewest(int n)
 	{
-		java.util.List<JsonObject> out = new java.util.ArrayList<>();
+		List<JsonObject> out = new ArrayList<>();
 		synchronized (lock)
 		{
 			JsonArray feed = arr(root, "feed");
@@ -1434,15 +1467,15 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	java.util.List<RecentDrop> recentDrops()
+	List<RecentDrop> recentDrops()
 	{
 		synchronized (lock)
 		{
-			return new java.util.ArrayList<>(recentDrops);
+			return new ArrayList<>(recentDrops);
 		}
 	}
 
-	@lombok.AllArgsConstructor(access = lombok.AccessLevel.PACKAGE)
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class BagItem
 	{
 		final int itemId;
@@ -1481,19 +1514,19 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private static String bagKey(int id, String name)
 	{
 		return id > 0 ? String.valueOf(id)
-			: "n:" + (name == null ? "" : name.toLowerCase(java.util.Locale.ROOT));
+			: "n:" + (name == null ? "" : name.toLowerCase(Locale.ROOT));
 	}
 
 	/** One source's whole record from the core Loot Tracker's local store, already
 	 *  canonicalised and priced by the caller (client thread). */
-	@lombok.AllArgsConstructor(access = lombok.AccessLevel.PACKAGE)
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class LootSeed
 	{
 		final String source;
 		final int kills;
 		final long firstMs;
 		final long lastMs;
-		final java.util.List<BagItem> items;
+		final List<BagItem> items;
 	}
 
 	/**
@@ -1503,7 +1536,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * value takes the priced sum, first_seen/last_seen extend as min/max. A re-run
 	 * can only raise floors it already set.
 	 */
-	void floorLootTracker(java.util.List<LootSeed> seeds, String rsn)
+	void floorLootTracker(List<LootSeed> seeds, String rsn)
 	{
 		if (!isReadyFor(rsn) || seeds == null)
 		{
@@ -1562,12 +1595,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					if (hit == null)
 					{
 						// a name-keyed entry picks up its real id here
-						for (java.util.Map.Entry<String, JsonElement> e : items.entrySet())
+						for (var e : items.entrySet())
 						{
 							if (e.getValue().isJsonObject())
 							{
 								JsonObject it = e.getValue().getAsJsonObject();
-								if (it.has("name") && !it.get("name").isJsonNull()
+								if (present(it, "name")
 									&& b.name.equalsIgnoreCase(it.get("name").getAsString()))
 								{
 									hit = it;
@@ -1616,7 +1649,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				// subtotal. Those two had drifted apart on 16 of my sources by
 				// 813,301 gp, with Vorkath's header 493,431 above its own rows.
 				long bagged = 0;
-				for (java.util.Map.Entry<String, JsonElement> e : items.entrySet())
+				for (var e : items.entrySet())
 				{
 					if (e.getValue().isJsonObject())
 					{
@@ -1636,13 +1669,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** One source's item bag, unsorted. */
-	java.util.List<BagItem> sourceItems(String source)
+	List<BagItem> sourceItems(String source)
 	{
-		java.util.List<BagItem> out = new java.util.ArrayList<>();
+		List<BagItem> out = new ArrayList<>();
 		synchronized (lock)
 		{
-			for (java.util.Map.Entry<String, JsonElement> e
-				: obj(obj(obj(root, "drops"), source), "items").entrySet())
+			for (var e : obj(obj(obj(root, "drops"), source), "items").entrySet())
 			{
 				if (!e.getValue().isJsonObject())
 				{
@@ -1684,7 +1716,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		int kills = (int) Math.max(0, asLong(data.get("kills")));
 		long qty = 0;
 		long value = 0;
-		java.util.List<BagItem> perItem = new java.util.ArrayList<>();
+		List<BagItem> perItem = new ArrayList<>();
 		for (JsonElement ie : items)
 		{
 			if (!ie.isJsonObject() || !ie.getAsJsonObject().has("id"))
@@ -1726,13 +1758,13 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			sessionUntaken += qty;
 			sessionUntakenValue += value;
 			sessionUntakenKills += kills;
-			root.addProperty("updated_at", nowSec());
+			touch();
 		}
 	}
 
 	/** A name/qty/value row: untaken sources, untaken items, task monsters. An
 	 *  untaken source also carries the kills that left its stacks; 0 elsewhere. */
-	@lombok.AllArgsConstructor(access = lombok.AccessLevel.PACKAGE)
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class UntakenRow
 	{
 		final String name;
@@ -1757,9 +1789,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		synchronized (lock)
 		{
 			JsonObject store = sub(root, "consumable_values");
-			long cur = store.has(key) && !store.get(key).isJsonNull() ? store.get(key).getAsLong() : 0;
+			long cur = present(store, key) ? store.get(key).getAsLong() : 0;
 			store.addProperty(key, cur + gp);
-			root.addProperty("updated_at", nowSec());
+			touch();
 		}
 	}
 
@@ -1784,7 +1816,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			JsonArray ids = arr(root, "gathered_items");
 			ids.add(itemId);
 			root.add("gathered_items", ids);
-			root.addProperty("updated_at", nowSec());
+			touch();
 		}
 	}
 
@@ -1799,8 +1831,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	{
 		synchronized (lock)
 		{
-			return trackersBase != null && trackersBase.has(key)
-				&& !trackersBase.get(key).isJsonNull()
+			return trackersBase != null && present(trackersBase, key)
 				? trackersBase.get(key).getAsLong() : 0;
 		}
 	}
@@ -1845,19 +1876,19 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	private static boolean isOpen(JsonObject seg)
 	{
-		return seg.has("open") && !seg.get("open").isJsonNull() && seg.get("open").getAsBoolean();
+		return present(seg, "open") && seg.get("open").getAsBoolean();
 	}
 
 	private static boolean namesTask(JsonObject seg, String task)
 	{
-		return seg.has("task") && !seg.get("task").isJsonNull()
+		return present(seg, "task")
 			&& task.equalsIgnoreCase(seg.get("task").getAsString());
 	}
 
 	/** A numeric field, or null when absent. */
 	private static Long optLong(JsonObject o, String key)
 	{
-		return o.has(key) && !o.get(key).isJsonNull() && o.get(key).isJsonPrimitive()
+		return o.has(key) && o.get(key).isJsonPrimitive()
 			? Long.valueOf(asLong(o.get(key))) : null;
 	}
 
@@ -2083,9 +2114,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
-		Long exact = data.has("killCount") && !data.get("killCount").isJsonNull()
+		Long exact = present(data, "killCount")
 			? data.get("killCount").getAsLong() : null;
-		Long streak = data.has("count") && !data.get("count").isJsonNull()
+		Long streak = present(data, "count")
 			? data.get("count").getAsLong() : null;
 		synchronized (lock)
 		{
@@ -2112,7 +2143,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			long done = asLong(sl.get("completed"));
 			// the streak line's lifetime total wins when it's ahead
 			sl.addProperty("completed", streak != null && streak > done ? streak : done + 1);
-			root.addProperty("updated_at", nowSec());
+			touch();
 		}
 	}
 
@@ -2132,7 +2163,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * handed out on Tuesday under a heading reading "This session". Unbounded, an
 	 * open task is simply part of the record and counts.
 	 */
-	java.util.List<BagItem> onTaskLoot(long fromMs, long toMs, boolean includeOpen)
+	List<BagItem> onTaskLoot(long fromMs, long toMs, boolean includeOpen)
 	{
 		return onTaskLoot(fromMs, toMs, null, includeOpen);
 	}
@@ -2142,17 +2173,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * what it came to. One walk of `drops` under one lock, rather than the
 	 * source list plus a bag read per source.
 	 */
-	java.util.List<BagItem> allLoot()
+	List<BagItem> allLoot()
 	{
-		java.util.Map<String, long[]> summed = new java.util.LinkedHashMap<>();
-		java.util.Map<String, Integer> ids = new java.util.LinkedHashMap<>();
+		Map<String, long[]> summed = new LinkedHashMap<>();
+		Map<String, Integer> ids = new LinkedHashMap<>();
 		synchronized (lock)
 		{
 			JsonObject drops = obj(root, "drops");
 			for (String s : drops.keySet())
 			{
-				for (java.util.Map.Entry<String, JsonElement> it
-					: obj(obj(drops, s), "items").entrySet())
+				for (var it : obj(obj(drops, s), "items").entrySet())
 				{
 					if (!it.getValue().isJsonObject())
 					{
@@ -2177,11 +2207,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return bagRows(summed, ids, -1);
 	}
 
-	private static java.util.List<BagItem> bagRows(java.util.Map<String, long[]> summed,
-		java.util.Map<String, Integer> ids, int noId)
+	private static List<BagItem> bagRows(Map<String, long[]> summed,
+		Map<String, Integer> ids, int noId)
 	{
-		java.util.List<BagItem> out = new java.util.ArrayList<>();
-		for (java.util.Map.Entry<String, long[]> e : summed.entrySet())
+		List<BagItem> out = new ArrayList<>();
+		for (var e : summed.entrySet())
 		{
 			out.add(new BagItem(ids.getOrDefault(e.getKey(), noId), e.getKey(),
 				e.getValue()[0], e.getValue()[1]));
@@ -2194,9 +2224,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * Every task name the journey holds, newest first and without repeats, which
 	 * is the order a picker wants: what you fought lately, first.
 	 */
-	java.util.List<String> taskNames()
+	List<String> taskNames()
 	{
-		java.util.LinkedHashSet<String> names = new java.util.LinkedHashSet<>();
+		LinkedHashSet<String> names = new LinkedHashSet<>();
 		synchronized (lock)
 		{
 			JsonArray arr = taskArray();
@@ -2214,7 +2244,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				}
 			}
 		}
-		return new java.util.ArrayList<>(names);
+		return new ArrayList<>(names);
 	}
 
 	/**
@@ -2227,7 +2257,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * monster would hand a reader Vorkath's drops under a blue dragon. The row
 	 * is labelled for the task for that reason.
 	 */
-	@lombok.AllArgsConstructor(access = lombok.AccessLevel.PACKAGE)
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class Assignment
 	{
 		final String task;
@@ -2249,9 +2279,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return str(t, "task", "");
 	}
 
-	private java.util.List<JsonObject> tasksIn(long fromMs, long toMs, String onlyTask, boolean includeOpen)
+	private List<JsonObject> tasksIn(long fromMs, long toMs, String onlyTask, boolean includeOpen)
 	{
-		java.util.List<JsonObject> out = new java.util.ArrayList<>();
+		List<JsonObject> out = new ArrayList<>();
 		for (JsonElement e : taskArray())
 		{
 			if (e.isJsonObject() && (includeOpen || !isOpen(e.getAsJsonObject()))
@@ -2279,14 +2309,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * and the other 368 must not be offered a filter that would show them
 	 * nothing.
 	 */
-	java.util.Map<String, long[]> onTaskItems(long fromMs, long toMs)
+	Map<String, long[]> onTaskItems(long fromMs, long toMs)
 	{
-		java.util.Map<String, long[]> out = new java.util.LinkedHashMap<>();
+		Map<String, long[]> out = new LinkedHashMap<>();
 		synchronized (lock)
 		{
 			for (JsonObject t : tasksIn(fromMs, toMs, null, true))
 			{
-				for (java.util.Map.Entry<String, JsonElement> it : obj(t, "items").entrySet())
+				for (var it : obj(t, "items").entrySet())
 				{
 					if (!it.getValue().isJsonObject())
 					{
@@ -2307,14 +2337,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * kills. Exact, unlike the loot: a task DOES say how many of each thing it
 	 * killed.
 	 */
-	java.util.Map<String, Long> onTaskKills(long fromMs, long toMs)
+	Map<String, Long> onTaskKills(long fromMs, long toMs)
 	{
-		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		Map<String, Long> out = new LinkedHashMap<>();
 		synchronized (lock)
 		{
 			for (JsonObject t : tasksIn(fromMs, toMs, null, true))
 			{
-				for (java.util.Map.Entry<String, JsonElement> m : obj(t, "monsters").entrySet())
+				for (var m : obj(t, "monsters").entrySet())
 				{
 					out.merge(m.getKey(), asLong(m.getValue()), Long::sum);
 				}
@@ -2328,18 +2358,18 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * What the FROM list on an item's page becomes when the filter is on task:
 	 * the record can name the assignment exactly and the monster not at all.
 	 */
-	java.util.List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
+	List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
 	{
-		java.util.Map<String, long[]> by = new java.util.LinkedHashMap<>();
+		Map<String, long[]> by = new LinkedHashMap<>();
 		if (itemName == null)
 		{
-			return new java.util.ArrayList<>();
+			return new ArrayList<>();
 		}
 		synchronized (lock)
 		{
 			for (JsonObject t : tasksIn(fromMs, toMs, null, true))
 			{
-				for (java.util.Map.Entry<String, JsonElement> it : obj(t, "items").entrySet())
+				for (var it : obj(t, "items").entrySet())
 				{
 					if (!it.getKey().equalsIgnoreCase(itemName)
 						|| !it.getValue().isJsonObject())
@@ -2353,8 +2383,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				}
 			}
 		}
-		java.util.List<Object[]> out = new java.util.ArrayList<>();
-		for (java.util.Map.Entry<String, long[]> e : by.entrySet())
+		List<Object[]> out = new ArrayList<>();
+		for (var e : by.entrySet())
 		{
 			out.add(new Object[]{e.getKey(), e.getValue()[0], e.getValue()[1]});
 		}
@@ -2369,22 +2399,22 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * that monster's and exact; the worth is the whole assignment's, which is
 	 * why the row names the task rather than the monster.
 	 */
-	java.util.List<Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
+	List<Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
 	{
-		java.util.List<Assignment> out = new java.util.ArrayList<>();
+		List<Assignment> out = new ArrayList<>();
 		if (npc == null)
 		{
 			return out;
 		}
 		synchronized (lock)
 		{
-			java.util.List<JsonObject> ts = tasksIn(fromMs, toMs, null, true);
-			java.util.Collections.reverse(ts);
+			List<JsonObject> ts = tasksIn(fromMs, toMs, null, true);
+			Collections.reverse(ts);
 			for (JsonObject t : ts)
 			{
 				long here = 0;
 				boolean found = false;
-				for (java.util.Map.Entry<String, JsonElement> m : obj(t, "monsters").entrySet())
+				for (var m : obj(t, "monsters").entrySet())
 				{
 					if (m.getKey().equalsIgnoreCase(npc))
 					{
@@ -2410,16 +2440,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * <p>By NAME rather than by segment: a reader asking what Nechryael have
 	 * paid means all eleven of them, not the one that closed on Tuesday.
 	 */
-	java.util.List<BagItem> onTaskLoot(long fromMs, long toMs, String onlyTask,
+	List<BagItem> onTaskLoot(long fromMs, long toMs, String onlyTask,
 		boolean includeOpen)
 	{
-		java.util.Map<String, long[]> summed = new java.util.LinkedHashMap<>();
-		java.util.Map<String, Integer> ids = new java.util.LinkedHashMap<>();
+		Map<String, long[]> summed = new LinkedHashMap<>();
+		Map<String, Integer> ids = new LinkedHashMap<>();
 		synchronized (lock)
 		{
 			for (JsonObject t : tasksIn(fromMs, toMs, onlyTask, includeOpen))
 			{
-				for (java.util.Map.Entry<String, JsonElement> it : obj(t, "items").entrySet())
+				for (var it : obj(t, "items").entrySet())
 				{
 					if (!it.getValue().isJsonObject())
 					{
@@ -2446,14 +2476,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * count the same thing. Matched without case: the journal has "Shadow Wyrm"
 	 * and "Malevolent Mage" as the game spelled them at the time.
 	 */
-	private static final java.util.Set<String> SUPERIORS = new java.util.HashSet<>();
+	private static final Set<String> SUPERIORS = new HashSet<>();
 
 	static
 	{
-		try (java.io.InputStream in = LocalStore.class.getResourceAsStream("/chronicle/store_superiors.json"))
+		try (InputStream in = LocalStore.class.getResourceAsStream("/chronicle/store_superiors.json"))
 		{
 			for (JsonElement e : new com.google.gson.JsonParser().parse(
-				new java.io.InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonArray())
+				new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonArray())
 			{
 				SUPERIORS.add(e.getAsString());
 			}
@@ -2490,9 +2520,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				tasks++;
 				kills += asLong(t.get("kills"));
-				for (java.util.Map.Entry<String, JsonElement> m : obj(t, "monsters").entrySet())
+				for (var m : obj(t, "monsters").entrySet())
 				{
-					if (SUPERIORS.contains(m.getKey().toLowerCase(java.util.Locale.ROOT)))
+					if (SUPERIORS.contains(m.getKey().toLowerCase(Locale.ROOT)))
 					{
 						superiors += asLong(m.getValue());
 					}
@@ -2513,8 +2543,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 			JsonObject sl = obj(root, "slayer");
 			JsonArray tasks = taskArray();
-			java.util.List<SlayerTask> out =
-				new java.util.ArrayList<>(tasks.size());
+			List<SlayerTask> out =
+				new ArrayList<>(tasks.size());
 			long totalKills = 0;
 			long totalValue = 0;
 			for (int i = tasks.size() - 1; i >= 0; i--)
@@ -2548,9 +2578,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** Lifetime gp per consumable counter key, accumulated at each bite or dose. */
-	java.util.Map<String, Long> consumableValues()
+	Map<String, Long> consumableValues()
 	{
-		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		Map<String, Long> out = new LinkedHashMap<>();
 		synchronized (lock)
 		{
 			if (root != null)
@@ -2562,22 +2592,22 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** The per-item side of the uncollected ledger. */
-	java.util.List<UntakenRow> untakenItems()
+	List<UntakenRow> untakenItems()
 	{
 		return untakenRows("untaken_items", false);
 	}
 
-	java.util.List<UntakenRow> untakenSources()
+	List<UntakenRow> untakenSources()
 	{
 		return untakenRows("untaken", true);
 	}
 
-	private java.util.List<UntakenRow> untakenRows(String key, boolean kills)
+	private List<UntakenRow> untakenRows(String key, boolean kills)
 	{
-		java.util.List<UntakenRow> out = new java.util.ArrayList<>();
+		List<UntakenRow> out = new ArrayList<>();
 		synchronized (lock)
 		{
-			for (java.util.Map.Entry<String, JsonElement> e : obj(root, key).entrySet())
+			for (var e : obj(root, key).entrySet())
 			{
 				if (!e.getValue().isJsonObject())
 				{
@@ -2625,7 +2655,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			JsonObject cl = sub(root, "collection_log");
 			JsonObject items = sub(cl, "clog_items");
 			boolean known = false;
-			for (java.util.Map.Entry<String, JsonElement> e : items.entrySet())
+			for (var e : items.entrySet())
 			{
 				if (e.getKey().equalsIgnoreCase(name))
 				{
@@ -2639,7 +2669,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				long fin = cl.has("finished") ? cl.get("finished").getAsLong() : 0;
 				cl.addProperty("finished", fin + 1);
 			}
-			root.addProperty("updated_at", nowSec());
+			touch();
 		}
 	}
 
@@ -2680,8 +2710,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				if (src.has(mapKey) && src.get(mapKey).isJsonObject())
 				{
-					for (java.util.Map.Entry<String, JsonElement> e
-						: src.getAsJsonObject(mapKey).entrySet())
+					for (var e : src.getAsJsonObject(mapKey).entrySet())
 					{
 						raise(merged, e.getKey(), asLong(e.getValue()));
 					}
@@ -2708,15 +2737,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				continue;
 			}
-			for (java.util.Map.Entry<String, JsonElement> pg : src.getAsJsonObject(key).entrySet())
+			for (var pg : src.getAsJsonObject(key).entrySet())
 			{
 				if (!pg.getValue().isJsonObject())
 				{
 					continue;
 				}
 				JsonObject tgt = sub(all, pg.getKey());
-				for (java.util.Map.Entry<String, JsonElement> ln
-					: pg.getValue().getAsJsonObject().entrySet())
+				for (var ln : pg.getValue().getAsJsonObject().entrySet())
 				{
 					long n = asLong(ln.getValue());
 					if (least ? n > 0 && (!tgt.has(ln.getKey()) || n < asLong(tgt.get(ln.getKey())))
@@ -2756,7 +2784,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	private static String str(JsonObject o, String key, String def)
 	{
-		return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : def;
+		return present(o, key) ? o.get(key).getAsString() : def;
 	}
 
 	/**
@@ -2784,8 +2812,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			if (in.has("trackers") && in.get("trackers").isJsonObject())
 			{
 				JsonObject tr = sub(root, "trackers");
-				for (java.util.Map.Entry<String, JsonElement> e
-					: in.getAsJsonObject("trackers").entrySet())
+				for (var e : in.getAsJsonObject("trackers").entrySet())
 				{
 					long v = asLong(e.getValue());
 					if (v <= 0)
@@ -2804,8 +2831,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			if (in.has("drops") && in.get("drops").isJsonObject())
 			{
 				JsonObject drops = root.getAsJsonObject("drops");
-				for (java.util.Map.Entry<String, JsonElement> e
-					: in.getAsJsonObject("drops").entrySet())
+				for (var e : in.getAsJsonObject("drops").entrySet())
 				{
 					if (!e.getValue().isJsonObject())
 					{
@@ -2824,7 +2850,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					floorNumber(cur, inc, "value");
 					floorNumber(cur, inc, "last_seen");
 					// first_seen only ever moves earlier
-					if (inc.has("first_seen") && !inc.get("first_seen").isJsonNull())
+					if (present(inc, "first_seen"))
 					{
 						long incFirst = asLong(inc.get("first_seen"));
 						long curFirst = asLong(cur.get("first_seen"));
@@ -2834,7 +2860,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 						}
 					}
 					// a PB is the lowest time; the compare is flipped
-					if (inc.has("pb") && !inc.get("pb").isJsonNull())
+					if (present(inc, "pb"))
 					{
 						double incPb = inc.get("pb").getAsDouble();
 						if (incPb > 0 && (!cur.has("pb") || incPb < cur.get("pb").getAsDouble()))
@@ -2848,21 +2874,20 @@ class LocalStore implements chronicle.counters.GatheredLedger
 							? cur.getAsJsonObject("items") : new JsonObject();
 						// The bag is keyed by item id and an export may know only names, so
 						// match on name first; otherwise one herb ends up on two lines.
-						java.util.Map<String, String> byName = new java.util.HashMap<>();
-						for (java.util.Map.Entry<String, JsonElement> be : bag.entrySet())
+						Map<String, String> byName = new HashMap<>();
+						for (var be : bag.entrySet())
 						{
 							if (be.getValue().isJsonObject())
 							{
 								JsonObject b = be.getValue().getAsJsonObject();
-								if (b.has("name") && !b.get("name").isJsonNull())
+								if (present(b, "name"))
 								{
 									byName.put(b.get("name").getAsString()
-										.toLowerCase(java.util.Locale.ROOT), be.getKey());
+										.toLowerCase(Locale.ROOT), be.getKey());
 								}
 							}
 						}
-						for (java.util.Map.Entry<String, JsonElement> ie
-							: inc.getAsJsonObject("items").entrySet())
+						for (var ie : inc.getAsJsonObject("items").entrySet())
 						{
 							if (!ie.getValue().isJsonObject())
 							{
@@ -2870,7 +2895,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 							}
 							JsonObject incItem = ie.getValue().getAsJsonObject();
 							String incName = str(incItem, "name", ie.getKey());
-							String key = byName.get(incName.toLowerCase(java.util.Locale.ROOT));
+							String key = byName.get(incName.toLowerCase(Locale.ROOT));
 							if (key == null)
 							{
 								// No name match: file it under its id when the entry
@@ -2893,7 +2918,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 							{
 								curItem.add("id", incItem.get("id"));
 							}
-							byName.put(incName.toLowerCase(java.util.Locale.ROOT), key);
+							byName.put(incName.toLowerCase(Locale.ROOT), key);
 						}
 						cur.add("items", bag);
 					}
@@ -2907,7 +2932,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			if (in.has("feed") && in.get("feed").isJsonArray())
 			{
 				JsonArray feed = root.getAsJsonArray("feed");
-				java.util.Set<String> seen = new java.util.HashSet<>();
+				Set<String> seen = new HashSet<>();
 				for (JsonElement e : feed)
 				{
 					if (e.isJsonObject())
@@ -2925,7 +2950,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					events++;
 				}
 				// an import interleaves, and the panel reads the feed in stored order
-				java.util.List<JsonObject> all = new java.util.ArrayList<>(feed.size());
+				List<JsonObject> all = new ArrayList<>(feed.size());
 				for (JsonElement e : feed)
 				{
 					if (e.isJsonObject())
@@ -2945,8 +2970,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			if (in.has("chat_kcs") && in.get("chat_kcs").isJsonObject())
 			{
 				JsonObject mine = sub(root, "chat_kcs");
-				for (java.util.Map.Entry<String, JsonElement> e
-					: in.getAsJsonObject("chat_kcs").entrySet())
+				for (var e : in.getAsJsonObject("chat_kcs").entrySet())
 				{
 					raise(mine, e.getKey(), asLong(e.getValue()));
 				}
@@ -2956,7 +2980,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			if (in.has("gathered_items") && in.get("gathered_items").isJsonArray())
 			{
 				JsonArray have = arr(root, "gathered_items");
-				java.util.Set<Integer> seen = new java.util.HashSet<>();
+				Set<Integer> seen = new HashSet<>();
 				for (JsonElement g : have)
 				{
 					seen.add(g.getAsInt());
@@ -2987,16 +3011,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			if (in.has("untaken_pairs") && in.get("untaken_pairs").isJsonObject())
 			{
 				JsonObject pairs = sub(root, "untaken_pairs");
-				for (java.util.Map.Entry<String, JsonElement> e
-					: in.getAsJsonObject("untaken_pairs").entrySet())
+				for (var e : in.getAsJsonObject("untaken_pairs").entrySet())
 				{
 					if (!e.getValue().isJsonObject())
 					{
 						continue;
 					}
 					JsonObject bag = sub(pairs, e.getKey());
-					for (java.util.Map.Entry<String, JsonElement> ie
-						: e.getValue().getAsJsonObject().entrySet())
+					for (var ie : e.getValue().getAsJsonObject().entrySet())
 					{
 						if (!ie.getValue().isJsonObject())
 						{
@@ -3066,9 +3088,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 			dedupeSourceBags();
 			dedupeFeed();
-			root.addProperty("updated_at", nowSec());
+			touch();
 		}
-		return sources + " sources · " + String.format(java.util.Locale.UK, "%,d", events)
+		return sources + " sources · " + String.format(Locale.UK, "%,d", events)
 			+ " journal entries · " + counters + " counters";
 	}
 
@@ -3115,7 +3137,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			return;
 		}
 		JsonObject cur = sub(seg, key);
-		for (java.util.Map.Entry<String, JsonElement> e : inc.getAsJsonObject(key).entrySet())
+		for (var e : inc.getAsJsonObject(key).entrySet())
 		{
 			if (e.getValue().isJsonObject())
 			{
@@ -3169,9 +3191,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			"killerName", "area", "skill", "task", "monster",
 			"name", "quest", "diary", "achievement"})
 		{
-			if (d.has(field) && !d.get(field).isJsonNull())
+			if (present(d, field))
 			{
-				return d.get(field).getAsString().toLowerCase(java.util.Locale.ROOT);
+				return d.get(field).getAsString().toLowerCase(Locale.ROOT);
 			}
 		}
 		// an imported line can carry only a marker; then the payload is the identity
@@ -3189,7 +3211,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private int dedupeFeed()
 	{
 		JsonArray feed = arr(root, "feed");
-		java.util.Map<String, JsonObject> best = new java.util.LinkedHashMap<>();
+		Map<String, JsonObject> best = new LinkedHashMap<>();
 		int absorbed = 0;
 		for (JsonElement e : feed)
 		{
@@ -3214,14 +3236,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 		if (absorbed > 0)
 		{
-			setFeed(new java.util.ArrayList<>(best.values()), Integer.MAX_VALUE);
+			setFeed(new ArrayList<>(best.values()), Integer.MAX_VALUE);
 		}
 		return absorbed;
 	}
 
-	private void setFeed(java.util.List<JsonObject> all, int cap)
+	private void setFeed(List<JsonObject> all, int cap)
 	{
-		all.sort(java.util.Comparator.comparingLong(o -> asLong(o.get("ts"))));
+		all.sort(Comparator.comparingLong(o -> asLong(o.get("ts"))));
 		JsonArray rebuilt = new JsonArray();
 		for (int i = Math.max(0, all.size() - cap); i < all.size(); i++)
 		{
@@ -3239,7 +3261,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	/** Raise {@code cur[key]} to {@code inc[key]} when the incoming one is higher. */
 	private static void floorNumber(JsonObject cur, JsonObject inc, String key)
 	{
-		if (inc.has(key) && !inc.get(key).isJsonNull())
+		if (present(inc, key))
 		{
 			raise(cur, key, asLong(inc.get(key)));
 		}
@@ -3261,7 +3283,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			return;
 		}
 		JsonObject cur = sub(root, name);
-		for (java.util.Map.Entry<String, JsonElement> e : in.getAsJsonObject(name).entrySet())
+		for (var e : in.getAsJsonObject(name).entrySet())
 		{
 			if (e.getValue().isJsonObject())
 			{
@@ -3279,7 +3301,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** Items one source was left holding, richest first. */
-	java.util.List<BagItem> untakenItemsOf(String source)
+	List<BagItem> untakenItemsOf(String source)
 	{
 		synchronized (lock)
 		{
@@ -3288,12 +3310,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** Sources that left a given item on the ground, most first. */
-	java.util.List<UntakenRow> untakenSourcesOf(String item)
+	List<UntakenRow> untakenSourcesOf(String item)
 	{
-		java.util.List<UntakenRow> out = new java.util.ArrayList<>();
+		List<UntakenRow> out = new ArrayList<>();
 		synchronized (lock)
 		{
-			for (java.util.Map.Entry<String, JsonElement> e : obj(root, "untaken_pairs").entrySet())
+			for (var e : obj(root, "untaken_pairs").entrySet())
 			{
 				if (!e.getValue().isJsonObject())
 				{
@@ -3312,15 +3334,15 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** One task segment's own loot, richest first. */
-	java.util.List<BagItem> slayerTaskItems(int index)
+	List<BagItem> slayerTaskItems(int index)
 	{
 		return bagOf(obj(segmentAt(index), "items"));
 	}
 
-	private static java.util.List<BagItem> bagOf(JsonObject bag)
+	private static List<BagItem> bagOf(JsonObject bag)
 	{
-		java.util.List<BagItem> out = new java.util.ArrayList<>();
-		for (java.util.Map.Entry<String, JsonElement> e : bag.entrySet())
+		List<BagItem> out = new ArrayList<>();
+		for (var e : bag.entrySet())
 		{
 			JsonObject r = e.getValue().getAsJsonObject();
 			out.add(new BagItem(r.has("id") ? r.get("id").getAsInt() : -1, e.getKey(),
@@ -3331,13 +3353,13 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** What a task was actually made of: {monster: kills}, most killed first. */
-	java.util.List<UntakenRow> slayerTaskMonsters(int index)
+	List<UntakenRow> slayerTaskMonsters(int index)
 	{
-		java.util.List<UntakenRow> out = new java.util.ArrayList<>();
+		List<UntakenRow> out = new ArrayList<>();
 		JsonObject seg = segmentAt(index);
 		if (seg != null && seg.has("monsters") && seg.get("monsters").isJsonObject())
 		{
-			for (java.util.Map.Entry<String, JsonElement> e : seg.getAsJsonObject("monsters").entrySet())
+			for (var e : seg.getAsJsonObject("monsters").entrySet())
 			{
 				out.add(new UntakenRow(e.getKey(), asLong(e.getValue()), 0));
 			}
@@ -3361,12 +3383,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	/** Pets the journal has seen drop, newest first. Source and kc survive only on
 	 *  rows imported from an older record: a PET event carries the name alone. */
-	java.util.List<PetRow> pets()
+	List<PetRow> pets()
 	{
-		java.util.List<PetRow> out = new java.util.ArrayList<>();
+		List<PetRow> out = new ArrayList<>();
 		synchronized (lock)
 		{
-			java.util.Set<String> seen = new java.util.HashSet<>();
+			Set<String> seen = new HashSet<>();
 			JsonArray feed = arr(root, "feed");
 			for (int i = feed.size() - 1; i >= 0; i--)
 			{
@@ -3381,13 +3403,13 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					continue;
 				}
 				String name = str(d, "petName", null);
-				if (name == null || name.isEmpty() || !seen.add(name.toLowerCase(java.util.Locale.ROOT)))
+				if (name == null || name.isEmpty() || !seen.add(name.toLowerCase(Locale.ROOT)))
 				{
 					continue;
 				}
 				out.add(new PetRow(name,
 					str(d, "source", null),
-					d.has("killCount") && !d.get("killCount").isJsonNull() ? asLong(d.get("killCount")) : 0,
+					asLong(d.get("killCount")),
 					asLong(e.get("ts"))));
 			}
 		}
@@ -3395,7 +3417,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	@lombok.AllArgsConstructor(access = lombok.AccessLevel.PACKAGE)
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class PetRow
 	{
 		final String name;
@@ -3422,7 +3444,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return 0;
 		}
-		for (java.util.Map.Entry<String, JsonElement> se : obj(root, "untaken").entrySet())
+		for (var se : obj(root, "untaken").entrySet())
 		{
 			if (!pairs.has(se.getKey()))
 			{
@@ -3430,14 +3452,13 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 		}
 		JsonObject rebuilt = new JsonObject();
-		for (java.util.Map.Entry<String, JsonElement> pe : pairs.entrySet())
+		for (var pe : pairs.entrySet())
 		{
 			if (!pe.getValue().isJsonObject())
 			{
 				continue;
 			}
-			for (java.util.Map.Entry<String, JsonElement> ie
-				: pe.getValue().getAsJsonObject().entrySet())
+			for (var ie : pe.getValue().getAsJsonObject().entrySet())
 			{
 				if (!ie.getValue().isJsonObject())
 				{
@@ -3451,7 +3472,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 		JsonObject was = root.getAsJsonObject("untaken_items");
 		int corrected = 0;
-		for (java.util.Map.Entry<String, JsonElement> e : rebuilt.entrySet())
+		for (var e : rebuilt.entrySet())
 		{
 			JsonElement before = was.get(e.getKey());
 			if (before == null || !before.equals(e.getValue()))
@@ -3459,7 +3480,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				corrected++;
 			}
 		}
-		for (java.util.Map.Entry<String, JsonElement> e : was.entrySet())
+		for (var e : was.entrySet())
 		{
 			if (!rebuilt.has(e.getKey()))
 			{
@@ -3502,7 +3523,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				continue;
 			}
 			JsonObject seg = te.getAsJsonObject();
-			if (!isOpen(seg) || !seg.has("task") || seg.get("task").isJsonNull()
+			if (!isOpen(seg) || !present(seg, "task")
 				|| !seg.has("monsters") || !seg.get("monsters").isJsonObject())
 			{
 				continue;
@@ -3510,8 +3531,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			String task = seg.get("task").getAsString();
 			JsonObject mons = seg.getAsJsonObject("monsters");
 			long offTask = 0;
-			java.util.List<String> drop = new java.util.ArrayList<>();
-			for (java.util.Map.Entry<String, JsonElement> me : mons.entrySet())
+			List<String> drop = new ArrayList<>();
+			for (var me : mons.entrySet())
 			{
 				if (!SlayerTaskBook.onTask(me.getKey(), SlayerTaskBook.UNKNOWN_ID, task))
 				{
@@ -3548,16 +3569,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		for (String s : drops.keySet())
 		{
 			JsonObject bag = obj(obj(drops, s), "items");
-			java.util.Map<String, String> keep = new java.util.HashMap<>();
-			java.util.List<String> drop = new java.util.ArrayList<>();
-			for (java.util.Map.Entry<String, JsonElement> ie : bag.entrySet())
+			Map<String, String> keep = new HashMap<>();
+			List<String> drop = new ArrayList<>();
+			for (var ie : bag.entrySet())
 			{
 				if (!ie.getValue().isJsonObject())
 				{
 					continue;
 				}
 				JsonObject it = ie.getValue().getAsJsonObject();
-				String name = str(it, "name", ie.getKey()).toLowerCase(java.util.Locale.ROOT);
+				String name = str(it, "name", ie.getKey()).toLowerCase(Locale.ROOT);
 				String held = keep.get(name);
 				if (held == null)
 				{
@@ -3593,9 +3614,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	// the combat level an earlier build left inside a pickpocket key
-	private static final java.util.regex.Pattern KEY_LEVEL =
-		java.util.regex.Pattern.compile("\\(level[\\s-]*\\d*\\)?",
-			java.util.regex.Pattern.CASE_INSENSITIVE);
+	private static final Pattern KEY_LEVEL =
+		Pattern.compile("\\(level[\\s-]*\\d*\\)?",
+			Pattern.CASE_INSENSITIVE);
 
 	/**
 	 * Fold the counter keys an earlier build minted wrong into the keys the mint
@@ -3609,8 +3630,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	{
 		JsonObject tr = obj(root, "trackers");
 		int folded = 0;
-		for (java.util.Map.Entry<String, JsonElement> e
-			: new java.util.ArrayList<>(tr.entrySet()))
+		for (var e : new ArrayList<>(tr.entrySet()))
 		{
 			String key = e.getKey();
 			String into;
@@ -3651,18 +3671,17 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	{
 		synchronized (lock)
 		{
-			return root != null && root.has("combat_level") && !root.get("combat_level").isJsonNull()
-				? (int) asLong(root.get("combat_level")) : 0;
+			return root != null ? (int) asLong(root.get("combat_level")) : 0;
 		}
 	}
 
 	/** The character sheet's skills: {skill: [level, xp]}, as last gathered. */
-	java.util.Map<String, long[]> skillSheet()
+	Map<String, long[]> skillSheet()
 	{
-		java.util.Map<String, long[]> out = new java.util.LinkedHashMap<>();
+		Map<String, long[]> out = new LinkedHashMap<>();
 		synchronized (lock)
 		{
-			for (java.util.Map.Entry<String, JsonElement> e : obj(root, "skills").entrySet())
+			for (var e : obj(root, "skills").entrySet())
 			{
 				if (!e.getValue().isJsonObject())
 				{
@@ -3711,11 +3730,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * {@link #spineCounters} merges them into a copy of the trackers for each line;
 	 * nothing here reaches the trackers, so the Stats tab never sees them.
 	 */
-	java.util.Map<String, Long> spineExtras()
+	Map<String, Long> spineExtras()
 	{
 		long loots = 0;
 		long value = 0;
-		java.util.List<SourceRow> sources = dropSources();
+		List<SourceRow> sources = dropSources();
 		for (SourceRow r : sources)
 		{
 			loots += r.loots;
@@ -3730,7 +3749,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		// is the reconciliation's, which applies the Kill Log, the chat line and the
 		// anchors over the page counters, and that is the figure the list draws.
 		JsonObject cl = clogSnapshot();
-		java.util.Map<String, Long> reconciled =
+		Map<String, Long> reconciled =
 			reconciledKills(cl, sources, chatKillCounts(), anchoredKills());
 		long kills = spineKills(cl, sources, reconciled, KILLS_VERSION);
 		long left = 0;
@@ -3744,7 +3763,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 		SlayerJourney journey = slayerJourney();
 		int finished = clogFraction()[0];
-		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		Map<String, Long> out = new LinkedHashMap<>();
 		out.put("dropsReceived", loots);
 		out.put("lootValue", value);
 		out.put("lootLeftCount", left);
@@ -3761,9 +3780,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * {@link #spineExtras spine extras} laid beside them. A fresh copy; the trackers
 	 * themselves are untouched.
 	 */
-	java.util.Map<String, Long> spineCounters()
+	Map<String, Long> spineCounters()
 	{
-		java.util.Map<String, Long> out = trackersSnapshot();
+		Map<String, Long> out = trackersSnapshot();
 		out.putAll(spineExtras());
 		return out;
 	}
@@ -3777,26 +3796,26 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * the Kill Log at all, so a panel test could watch a page print the ledger's
 	 * number while the real client printed the game's.
 	 */
-	static java.util.Map<String, Long> reconciledKills(JsonObject clog,
-		java.util.List<SourceRow> sources, java.util.Map<String, Long> chat,
-		java.util.Map<String, Long> anchored)
+	static Map<String, Long> reconciledKills(JsonObject clog,
+		List<SourceRow> sources, Map<String, Long> chat,
+		Map<String, Long> anchored)
 	{
 		return reconciledKills(clog, sources, chat, anchored, KILLS_VERSION);
 	}
 
 	/** The same, as the given {@link #KILLS_VERSION} reckoned it. */
-	static java.util.Map<String, Long> reconciledKills(JsonObject clog,
-		java.util.List<SourceRow> sources, java.util.Map<String, Long> chat,
-		java.util.Map<String, Long> anchored, int version)
+	static Map<String, Long> reconciledKills(JsonObject clog,
+		List<SourceRow> sources, Map<String, Long> chat,
+		Map<String, Long> anchored, int version)
 	{
-		java.util.Map<String, Long> out = clogKillCounts(clog);
+		Map<String, Long> out = clogKillCounts(clog);
 		// What the game itself says about the encounter: the Kill Log, and the
 		// chat line it prints on the kill. The Kill Log only moves when the
 		// player opens an interface, so a number resting on it alone is frozen
 		// between visits; the chat line arrives on every kill, with nothing
 		// opened and nothing fetched. Both are the game counting and both only
 		// count up, so between the two the larger is the later reading.
-		java.util.Map<String, Long> stated = killLogCounts(clog);
+		Map<String, Long> stated = killLogCounts(clog);
 		foldChatCounts(stated, chat, out.keySet());
 		// A statement always beats the page counter, which need not be counting
 		// kills at all: Wintertodt's page counts rewards claimed and says 1,078
@@ -3844,8 +3863,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * source with nothing counted stays out. A page the ledger never saw loot from
 	 * is not here: {@code ChroniclePlugin.killCounts} lays those beside.
 	 */
-	static java.util.Map<String, Long> sourceKills(JsonObject clog,
-		java.util.List<SourceRow> sources)
+	static Map<String, Long> sourceKills(JsonObject clog,
+		List<SourceRow> sources)
 	{
 		return sourceKills(clog, sources, true);
 	}
@@ -3855,8 +3874,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * the ledger's own figures, 1 the reconciled figure of each fight the
 	 * ledger has seen loot from.
 	 */
-	static long spineKills(JsonObject clog, java.util.List<SourceRow> sources,
-		java.util.Map<String, Long> reconciled, int version)
+	static long spineKills(JsonObject clog, List<SourceRow> sources,
+		Map<String, Long> reconciled, int version)
 	{
 		long kills = 0;
 		if (version < 1)
@@ -3884,15 +3903,15 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * ledger's name up as it stands left 25 fights and 18,525 kills out of a
 	 * real record's sum, and a slayer task on any of them added nothing to it.
 	 */
-	static java.util.Set<String> spineKillKeys(JsonObject clog, java.util.List<SourceRow> sources,
-		java.util.Map<String, Long> reconciled)
+	static Set<String> spineKillKeys(JsonObject clog, List<SourceRow> sources,
+		Map<String, Long> reconciled)
 	{
-		java.util.Map<String, String> byKind = new java.util.HashMap<>();
+		Map<String, String> byKind = new HashMap<>();
 		for (String key : reconciled.keySet())
 		{
 			byKind.putIfAbsent(chatKind(key), key);
 		}
-		java.util.Set<String> out = new java.util.LinkedHashSet<>();
+		Set<String> out = new LinkedHashSet<>();
 		for (String name : sourceKills(clog, sources).keySet())
 		{
 			String key = reconciled.containsKey(name) ? name : byKind.get(chatKind(name));
@@ -3919,12 +3938,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			return adj;
 		}
 		JsonObject cl = clogSnapshot();
-		java.util.List<SourceRow> sources = dropSources();
-		java.util.Map<String, Long> chat = chatKillCounts();
-		java.util.Map<String, Long> anchored = anchoredKills();
-		java.util.Map<String, Long> was = reconciledKills(cl, sources, chat, anchored, from);
-		java.util.Map<String, Long> now = reconciledKills(cl, sources, chat, anchored, KILLS_VERSION);
-		for (java.util.Map.Entry<String, Long> e : now.entrySet())
+		List<SourceRow> sources = dropSources();
+		Map<String, Long> chat = chatKillCounts();
+		Map<String, Long> anchored = anchoredKills();
+		Map<String, Long> was = reconciledKills(cl, sources, chat, anchored, from);
+		Map<String, Long> now = reconciledKills(cl, sources, chat, anchored, KILLS_VERSION);
+		for (var e : now.entrySet())
 		{
 			Long w = was.get(e.getKey());
 			if (w != null && w.longValue() != e.getValue())
@@ -3986,28 +4005,28 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * carries the counter back in would re-admit exactly what those statements
 	 * were applied to overrule.
 	 */
-	static java.util.Map<String, Long> ledgerKills(JsonObject clog,
-		java.util.List<SourceRow> sources)
+	static Map<String, Long> ledgerKills(JsonObject clog,
+		List<SourceRow> sources)
 	{
 		return sourceKills(clog, sources, false);
 	}
 
-	private static java.util.Map<String, Long> sourceKills(JsonObject clog,
-		java.util.List<SourceRow> sources, boolean raiseToPage)
+	private static Map<String, Long> sourceKills(JsonObject clog,
+		List<SourceRow> sources, boolean raiseToPage)
 	{
-		java.util.Map<String, Long> paged = clogKillCounts(clog);
-		java.util.Map<String, String> byKind = new java.util.HashMap<>();
+		Map<String, Long> paged = clogKillCounts(clog);
+		Map<String, String> byKind = new HashMap<>();
 		for (String name : paged.keySet())
 		{
 			byKind.put(kindOf(name), name);
 		}
-		java.util.Map<String, Long> stated = killLogCounts(clog);
-		java.util.Map<String, Long> statedByKind = new java.util.HashMap<>();
-		for (java.util.Map.Entry<String, Long> e : stated.entrySet())
+		Map<String, Long> stated = killLogCounts(clog);
+		Map<String, Long> statedByKind = new HashMap<>();
+		for (var e : stated.entrySet())
 		{
 			statedByKind.putIfAbsent(kindOf(e.getKey()), e.getValue());
 		}
-		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		Map<String, Long> out = new LinkedHashMap<>();
 		for (SourceRow r : sources)
 		{
 			long kills = Math.max(r.kc, r.loots);
@@ -4107,7 +4126,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			a.addProperty("src", src);
 			a.addProperty("obs", observedFor(name));
 			all.add(name, a);
-			root.addProperty("updated_at", nowSec());
+			touch();
 		}
 	}
 
@@ -4121,7 +4140,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	{
 		String kind = kindOf(name);
 		long best = 0;
-		for (java.util.Map.Entry<String, JsonElement> e : obj(root, "drops").entrySet())
+		for (var e : obj(root, "drops").entrySet())
 		{
 			if (!e.getValue().isJsonObject() || !kindOf(e.getKey()).equals(kind))
 			{
@@ -4143,7 +4162,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			return;
 		}
 		String kind = kindOf(source);
-		for (java.util.Map.Entry<String, JsonElement> e : obj(root, "kc_anchors").entrySet())
+		for (var e : obj(root, "kc_anchors").entrySet())
 		{
 			if (!e.getValue().isJsonObject() || !kindOf(e.getKey()).equals(kind))
 			{
@@ -4158,12 +4177,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** Every anchored fight at its stated count plus what has been seen since. */
-	java.util.Map<String, Long> anchoredKills()
+	Map<String, Long> anchoredKills()
 	{
-		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		Map<String, Long> out = new LinkedHashMap<>();
 		synchronized (lock)
 		{
-			for (java.util.Map.Entry<String, JsonElement> e : obj(root, "kc_anchors").entrySet())
+			for (var e : obj(root, "kc_anchors").entrySet())
 			{
 				if (!e.getValue().isJsonObject())
 				{
@@ -4193,7 +4212,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 */
 	private void rebaseAnchors()
 	{
-		for (java.util.Map.Entry<String, JsonElement> e : obj(root, "kc_anchors").entrySet())
+		for (var e : obj(root, "kc_anchors").entrySet())
 		{
 			if (e.getValue().isJsonObject())
 			{
@@ -4234,7 +4253,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			Counts before = countsNow();
 			revision++;
 			sub(root, "chat_kcs").addProperty(subject, tally);
-			root.addProperty("updated_at", nowSec());
+			touch();
 			// and as an anchor, so the count keeps moving between announcements
 			anchorKill(subject, tally, "chat", rsn);
 			noteArrival(before, 1);
@@ -4242,7 +4261,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/** Every count the chat box has announced, by the name the game used. */
-	java.util.Map<String, Long> chatKillCounts()
+	Map<String, Long> chatKillCounts()
 	{
 		synchronized (lock)
 		{
@@ -4257,15 +4276,15 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * counting something else entirely (Wintertodt's counts rewards claimed), and
 	 * a loot tally counts rows rather than kills.
 	 */
-	static java.util.Map<String, Long> killLogCounts(JsonObject clog)
+	static Map<String, Long> killLogCounts(JsonObject clog)
 	{
 		return positives(clog, "slayer_kcs");
 	}
 
-	private static java.util.Map<String, Long> positives(JsonObject o, String key)
+	private static Map<String, Long> positives(JsonObject o, String key)
 	{
-		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
-		for (java.util.Map.Entry<String, JsonElement> e : obj(o, key).entrySet())
+		Map<String, Long> out = new LinkedHashMap<>();
+		for (var e : obj(o, key).entrySet())
 		{
 			long v = asLong(e.getValue());
 			if (v > 0)   // a non-numeric entry is not a kill count
@@ -4281,9 +4300,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * the positive numeric entries of its {@code kcs}, a non-numeric one being no
 	 * kill count. Empty with no log.
 	 */
-	static java.util.Map<String, Long> clogKillCounts(JsonObject clog)
+	static Map<String, Long> clogKillCounts(JsonObject clog)
 	{
-		java.util.Map<String, Long> out = positives(clog, "kcs");
+		Map<String, Long> out = positives(clog, "kcs");
 		// And where the page's own lines were captured, the LABELLED one wins. kcs
 		// holds whichever number came first on the page, which is not always the
 		// kills: Wintertodt's first line counts rewards claimed. Worse, a reading
@@ -4302,19 +4321,18 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * whose label says kills or completions. A page carrying only rewards claimed
 	 * or a best time has none, which is the honest answer for it.
 	 */
-	static java.util.Map<String, Long> pageKillLines(JsonObject clog)
+	static Map<String, Long> pageKillLines(JsonObject clog)
 	{
-		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
-		for (java.util.Map.Entry<String, JsonElement> pg : obj(clog, "kc_lines").entrySet())
+		Map<String, Long> out = new LinkedHashMap<>();
+		for (var pg : obj(clog, "kc_lines").entrySet())
 		{
 			if (!pg.getValue().isJsonObject())
 			{
 				continue;
 			}
-			for (java.util.Map.Entry<String, JsonElement> ln
-				: pg.getValue().getAsJsonObject().entrySet())
+			for (var ln : pg.getValue().getAsJsonObject().entrySet())
 			{
-				String label = ln.getKey().toLowerCase(java.util.Locale.ROOT);
+				String label = ln.getKey().toLowerCase(Locale.ROOT);
 				if (!label.contains("kill") && !label.contains("completion"))
 				{
 					continue;
@@ -4350,14 +4368,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * dropped: a source can be announced in chat long before it has a log page or
 	 * a loot row, and a first kill should not have to wait for one.
 	 */
-	static void foldChatCounts(java.util.Map<String, Long> out,
-		java.util.Map<String, Long> chat, java.util.Set<String> vocabulary)
+	static void foldChatCounts(Map<String, Long> out,
+		Map<String, Long> chat, Set<String> vocabulary)
 	{
 		if (out == null || chat == null || chat.isEmpty())
 		{
 			return;
 		}
-		java.util.Map<String, String> byKind = new java.util.HashMap<>();
+		Map<String, String> byKind = new HashMap<>();
 		for (String name : out.keySet())
 		{
 			byKind.putIfAbsent(chatKind(name), name);
@@ -4369,7 +4387,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			byKind.putIfAbsent(chatKind(name), name);
 		}
-		for (java.util.Map.Entry<String, Long> e : chat.entrySet())
+		for (var e : chat.entrySet())
 		{
 			String said = e.getKey();
 			String known = byKind.get(chatKind(said));
@@ -4405,19 +4423,19 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * has watched since are real. Abyssal demons read 1,798 from a stale log
 	 * beside 2,346 the ledger had actually seen.
 	 */
-	static void placeByKind(java.util.Map<String, Long> out,
-		java.util.Map<String, Long> stated, boolean floor)
+	static void placeByKind(Map<String, Long> out,
+		Map<String, Long> stated, boolean floor)
 	{
 		if (out == null || stated == null || stated.isEmpty())
 		{
 			return;
 		}
-		java.util.Map<String, String> byKind = new java.util.HashMap<>();
+		Map<String, String> byKind = new HashMap<>();
 		for (String name : out.keySet())
 		{
 			byKind.putIfAbsent(chatKind(name), name);
 		}
-		for (java.util.Map.Entry<String, Long> e : stated.entrySet())
+		for (var e : stated.entrySet())
 		{
 			String known = byKind.get(chatKind(e.getKey()));
 			String name = known != null ? known : e.getKey();
@@ -4446,7 +4464,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 */
 	static String kindOf(String name)
 	{
-		String n = name == null ? "" : name.trim().toLowerCase(java.util.Locale.ROOT);
+		String n = name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
 		// "Jellies" is the Kill Log's name for the ledger's "Jelly", and
 		// stripping one s leaves "jellie", which meets nothing. It is the only
 		// name on my own record that the bare rule cannot bridge, out of 32
@@ -4467,21 +4485,20 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	// figure while a page sits unvisited.
 	static int obtainedSlots(JsonObject cl)
 	{
-		java.util.Set<String> names = new java.util.HashSet<>();
-		for (java.util.Map.Entry<String, JsonElement> e : obj(cl, "clog_items").entrySet())
+		Set<String> names = new HashSet<>();
+		for (var e : obj(cl, "clog_items").entrySet())
 		{
-			names.add(e.getKey().toLowerCase(java.util.Locale.ROOT));
+			names.add(e.getKey().toLowerCase(Locale.ROOT));
 		}
-		for (java.util.Map.Entry<String, JsonElement> pg : obj(cl, "by_cat").entrySet())
+		for (var pg : obj(cl, "by_cat").entrySet())
 		{
 			if (!pg.getValue().isJsonObject())
 			{
 				continue;
 			}
-			for (java.util.Map.Entry<String, JsonElement> it
-				: pg.getValue().getAsJsonObject().entrySet())
+			for (var it : pg.getValue().getAsJsonObject().entrySet())
 			{
-				names.add(it.getKey().toLowerCase(java.util.Locale.ROOT));
+				names.add(it.getKey().toLowerCase(Locale.ROOT));
 			}
 		}
 		return names.size();
@@ -4562,7 +4579,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	{
 		// ROOT: a Turkish JVM lowercases I to a dotless ı, which the strip then eats.
 		String s = rsn == null ? ""
-			: rsn.trim().toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", "-");
+			: rsn.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-");
 		s = s.replaceAll("(^-+|-+$)", "");
 		return s.isEmpty() ? "profile" : s;
 	}
@@ -4574,9 +4591,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * <p>Raw counts only, and no dates and no name: the whole point is a page
 	 * somebody can hand over. One pass, one lock.
 	 */
-	java.util.Map<String, Long> journalFacts()
+	Map<String, Long> journalFacts()
 	{
-		java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+		Map<String, Long> out = new LinkedHashMap<>();
 		synchronized (lock)
 		{
 			if (root == null)
@@ -4588,7 +4605,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			long rows = 0;
 			long loots = 0;
 			long worth = 0;
-			for (java.util.Map.Entry<String, JsonElement> e : drops.entrySet())
+			for (var e : drops.entrySet())
 			{
 				if (!e.getValue().isJsonObject())
 				{
@@ -4653,7 +4670,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private static void writeAtomic(File dest, String content) throws IOException
 	{
 		File tmp = new File(dest.getParentFile(), dest.getName() + ".tmp");
-		try (java.io.FileOutputStream out = new java.io.FileOutputStream(tmp))
+		try (FileOutputStream out = new FileOutputStream(tmp))
 		{
 			out.write(content.getBytes(StandardCharsets.UTF_8));
 			// The move below is atomic over the file's name only; without forcing the
@@ -4673,18 +4690,18 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 
 	/** The slayer journey the journal computes for the panel, from its on-disk task array. */
-	@lombok.AllArgsConstructor(access = lombok.AccessLevel.PACKAGE)
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	public static final class SlayerJourney
 	{
 		public final int completedTasks;
 		public final long totalKills;
 		public final long totalValueGp;
 		public final long totalXpEst;
-		public final java.util.List<SlayerTask> tasks;
+		public final List<SlayerTask> tasks;
 	}
 
 	/** One task segment of the journey, newest first. */
-	@lombok.AllArgsConstructor(access = lombok.AccessLevel.PACKAGE)
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	public static final class SlayerTask
 	{
 		public final String task;

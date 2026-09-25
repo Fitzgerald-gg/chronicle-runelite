@@ -163,7 +163,7 @@ class HistoryLog
 	{
 		JsonObject line = new JsonObject();
 		line.addProperty("date", date);
-		for (Map.Entry<String, JsonElement> e : state.entrySet())
+		for (var e : state.entrySet())
 		{
 			line.add(e.getKey(), e.getValue());
 		}
@@ -303,7 +303,7 @@ class HistoryLog
 			return false;
 		}
 		long sum = 0;
-		for (Map.Entry<String, Long> e : skills.entrySet())
+		for (var e : skills.entrySet())
 		{
 			if (!"overall".equals(e.getKey()) && e.getValue() != null)
 			{
@@ -415,7 +415,7 @@ class HistoryLog
 		{
 			return null;
 		}
-		for (Map.Entry<LocalDate, Baseline> e : spine.entrySet())
+		for (var e : spine.entrySet())
 		{
 			Baseline b = e.getValue();
 			if (b == null)
@@ -456,7 +456,7 @@ class HistoryLog
 		{
 			return out;
 		}
-		for (Map.Entry<String, Long> e : end.entrySet())
+		for (var e : end.entrySet())
 		{
 			if (e.getValue() == null)
 			{
@@ -906,8 +906,7 @@ class HistoryLog
 	{
 		if (o.has(key) && o.get(key).isJsonObject())
 		{
-			for (Map.Entry<String, JsonElement> e
-				: o.getAsJsonObject(key).entrySet())
+			for (var e : o.getAsJsonObject(key).entrySet())
 			{
 				try
 				{
