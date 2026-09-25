@@ -902,11 +902,11 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private static long lookup(JsonObject clog, String map, String key)
 	{
-		if (clog == null || !clog.has(map) || !clog.get(map).isJsonObject())
+		if (clog == null)
 		{
 			return -1;
 		}
-		JsonElement v = getIgnoreCase(clog.getAsJsonObject(map), key);
+		JsonElement v = getIgnoreCase(obj(clog, map), key);
 		return v == null ? -1 : safeLong(v);
 	}
 
@@ -1090,11 +1090,11 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private String tabStanding(JsonObject cl, String tab)
 	{
-		if (cl == null || !cl.has("cat_counts") || !cl.get("cat_counts").isJsonObject())
+		if (cl == null)
 		{
 			return null;
 		}
-		JsonObject counts = cl.getAsJsonObject("cat_counts");
+		JsonObject counts = obj(cl, "cat_counts");
 		String key = low(tab);
 		long total = counts.has(key + "_total") ? safeLong(counts.get(key + "_total")) : 0;
 		if (total <= 0)
@@ -1167,11 +1167,11 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private static String pageHeaderTip(JsonObject cl, String page)
 	{
-		if (cl == null || !cl.has("kc_lines") || !cl.get("kc_lines").isJsonObject())
+		if (cl == null)
 		{
 			return null;
 		}
-		JsonElement found = getIgnoreCase(cl.getAsJsonObject("kc_lines"), page);
+		JsonElement found = getIgnoreCase(obj(cl, "kc_lines"), page);
 		if (found == null || !found.isJsonObject() || found.getAsJsonObject().size() == 0)
 		{
 			return null;
@@ -1195,11 +1195,11 @@ class ChroniclePanel extends PluginPanel
 	{
 		List<Map.Entry<String, Long>> out = new ArrayList<>();
 		JsonObject cl = clogNow();
-		if (cl == null || !cl.has(map) || !cl.get(map).isJsonObject())
+		if (cl == null)
 		{
 			return out;
 		}
-		JsonElement found = getIgnoreCase(cl.getAsJsonObject(map), LOG_PAGE_FOR.getOrDefault(boss, boss));
+		JsonElement found = getIgnoreCase(obj(cl, map), LOG_PAGE_FOR.getOrDefault(boss, boss));
 		if (found == null || !found.isJsonObject())
 		{
 			return out;
@@ -1249,9 +1249,9 @@ class ChroniclePanel extends PluginPanel
 			out.add(LocalStore.kindOf(b.name));
 		}
 		JsonObject cl = clogNow();
-		if (cl != null && cl.has("slayer_kcs") && cl.get("slayer_kcs").isJsonObject())
+		if (cl != null)
 		{
-			for (String said : cl.getAsJsonObject("slayer_kcs").keySet())
+			for (String said : obj(cl, "slayer_kcs").keySet())
 			{
 				out.add(LocalStore.kindOf(said));
 			}
@@ -15134,13 +15134,9 @@ class ChroniclePanel extends PluginPanel
 	/** The skill a sitting's xp mostly went to, where the line kept its split. */
 	private static String mostOf(JsonObject d)
 	{
-		if (!d.has("skills") || !d.get("skills").isJsonObject())
-		{
-			return null;
-		}
 		String top = null;
 		long most = 0;
-		for (Map.Entry<String, JsonElement> e : d.getAsJsonObject("skills").entrySet())
+		for (Map.Entry<String, JsonElement> e : obj(d, "skills").entrySet())
 		{
 			long xp = safeLong(e.getValue());
 			if (xp > most)
