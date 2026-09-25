@@ -24,15 +24,6 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.StatChanged;
 
-import static chronicle.counters.StatKeys.ASHES_SACRIFICED;
-import static chronicle.counters.StatKeys.BONES_SACRIFICED;
-import static chronicle.counters.StatKeys.COINS_FROM_ALCHEMY;
-import static chronicle.counters.StatKeys.DEMONIC_OFFERING_XP;
-import static chronicle.counters.StatKeys.DEMONIC_OFFERINGS_CAST;
-import static chronicle.counters.StatKeys.SINISTER_OFFERING_XP;
-import static chronicle.counters.StatKeys.OFFENSIVE_SPELLS_CAST;
-import static chronicle.counters.StatKeys.SINISTER_OFFERINGS_CAST;
-
 /**
  * Magic counters read off the local player's cast animation: alchemy coins, offensive
  * casts, and the two Arceuus offerings.
@@ -49,12 +40,12 @@ public class MagicStatTracker implements StatTracker
 	private static final int GFX_SINISTER = 1872;  // bones (blood + wrath runes)
 	// Colour to spell name. If the names ever swap, this map is the only edit.
 	private static final Map<Integer, String> OFFERING_GFX = Map.of(
-		GFX_DEMONIC, DEMONIC_OFFERINGS_CAST,
-		GFX_SINISTER, SINISTER_OFFERINGS_CAST);
+		GFX_DEMONIC, "demonicOfferingsCast",
+		GFX_SINISTER, "sinisterOfferingsCast");
 	// What each colour actually eats, probed in game.
 	private static final Map<Integer, String> OFFERING_SAC = Map.of(
-		GFX_DEMONIC, ASHES_SACRIFICED,
-		GFX_SINISTER, BONES_SACRIFICED);
+		GFX_DEMONIC, "ashesSacrificed",
+		GFX_SINISTER, "bonesSacrificed");
 	// An offering costs runes plus 1-3 bones/ashes. Exclude the runes and what's left is
 	// the sacrifice, which saves keeping a list of every bone and ash.
 	private static final Set<Integer> OFFERING_RUNES = Set.of(565, 566, 21880);   // blood, soul, wrath
@@ -129,7 +120,7 @@ public class MagicStatTracker implements StatTracker
 			}
 			lastCastAnim = anim;
 			lastCastTick = tick;
-			store.incrementStat(OFFENSIVE_SPELLS_CAST);
+			store.incrementStat("offensiveSpellsCast");
 			return;
 		}
 		if (anim == OFFERING_CAST_ANIM)
@@ -183,7 +174,7 @@ public class MagicStatTracker implements StatTracker
 		}
 		if (isAlchActiveNow())
 		{
-			store.incrementStatBy(COINS_FROM_ALCHEMY, gain);
+			store.incrementStatBy("coinsFromAlchemy", gain);
 		}
 		else
 		{
@@ -210,7 +201,7 @@ public class MagicStatTracker implements StatTracker
 				if (offeringXpThisTick > 0)
 				{
 					store.incrementStatBy(
-						castKey.equals(DEMONIC_OFFERINGS_CAST) ? DEMONIC_OFFERING_XP : SINISTER_OFFERING_XP,
+						castKey.equals("demonicOfferingsCast") ? "demonicOfferingXp" : "sinisterOfferingXp",
 						offeringXpThisTick);
 				}
 			}
@@ -222,7 +213,7 @@ public class MagicStatTracker implements StatTracker
 		{
 			if (alchSeenTick == client.getTickCount())
 			{
-				store.incrementStatBy(COINS_FROM_ALCHEMY, bufferedCoinGain);
+				store.incrementStatBy("coinsFromAlchemy", bufferedCoinGain);
 			}
 			bufferedCoinGain = 0;   // unmatched gain was some other income; drop it
 		}

@@ -374,7 +374,7 @@ public class SkillDeriver
 	{
 		if (msg.contains("into your herb sack"))
 		{
-			statStore.incrementStat(StatKeys.HERBS_SACKED);
+			statStore.incrementStat("herbsSacked");
 			Matcher sacked = HERB_SACKED.matcher(msg);
 			if (sacked.find())
 			{
@@ -388,20 +388,21 @@ public class SkillDeriver
 		}
 		if (msg.contains("You gently shoo the letvek"))
 		{
-			statStore.incrementStat(StatKeys.LETVEKS_SHOOED);
+			statStore.incrementStat("letveksShooed");
 			return true;
 		}
 		if (msg.contains("You fill the bucket with sap"))
 		{
+			// an evergreen gives the same line; the tree the last click named decides
 			if (objectTarget.toLowerCase(Locale.ROOT).contains("bloodwood"))
 			{
-				statStore.incrementStat(StatKeys.BLOODWOOD_SAP_BUCKETS_FILLED);
+				statStore.incrementStat("bloodwoodSapBucketsFilled");
 			}
 			return true;
 		}
 		if (msg.contains("The glowing fish scatter"))
 		{
-			statStore.incrementStat(StatKeys.SPIRIT_POOLS_HARPOONED);
+			statStore.incrementStat("spiritPoolsHarpooned");
 			return true;
 		}
 		if (msg.contains("You resurrect "))
@@ -409,12 +410,12 @@ public class SkillDeriver
 			Matcher raised = THRALL_RAISED.matcher(msg);
 			if (raised.find())
 			{
-				statStore.incrementStat(StatKeys.THRALLS_SUMMONED);
+				statStore.incrementStat("thrallsSummoned");
 				statStore.incrementStat(camel(raised.group(1)) + "ThrallsSummoned");
 			}
 			else if (msg.contains("thrall"))
 			{
-				statStore.incrementStat(StatKeys.THRALLS_SUMMONED);
+				statStore.incrementStat("thrallsSummoned");
 			}
 			return true;
 		}
@@ -426,7 +427,7 @@ public class SkillDeriver
 				int n = tanned.group(1).equals("your") ? 1 : intOr(tanned.group(1), 0);
 				if (n > 0)
 				{
-					statStore.incrementStatBy(StatKeys.HIDES_TANNED, n);
+					statStore.incrementStatBy("hidesTanned", n);
 					String hide = tanned.group(2).trim().toLowerCase(Locale.ROOT);
 					if (n > 1 && hide.endsWith("s"))
 					{
@@ -446,7 +447,7 @@ public class SkillDeriver
 		// untyped because the line's naming of it is unconfirmed.
 		if (msg.contains("You put the") && msg.contains("vial"))
 		{
-			statStore.incrementStat(StatKeys.UNFINISHED_POTIONS_MADE);
+			statStore.incrementStat("unfinishedPotionsMade");
 			return true;
 		}
 		return false;
@@ -676,7 +677,7 @@ public class SkillDeriver
 			int gp = valueOf(gained, n);
 			if (gp > 0)
 			{
-				out.add(entry(StatKeys.RESOURCES_GATHERED_VALUE, gp));
+				out.add(entry("resourcesGatheredValue", gp));
 			}
 			// only token-resolved gathers reach here: the ledger stays bounded to
 			// logs, ores, fish and gems.
@@ -742,7 +743,7 @@ public class SkillDeriver
 		String consumed = name(consumedId).toLowerCase(Locale.ROOT);
 		if (ALTAR_ESSENCE.contains(consumed))
 		{
-			out.add(entry(StatKeys.ESSENCE_CRAFTED, consumedQty));
+			out.add(entry("essenceCrafted", consumedQty));
 		}
 	}
 

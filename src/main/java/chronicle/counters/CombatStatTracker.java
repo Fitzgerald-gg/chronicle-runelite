@@ -23,19 +23,8 @@ import net.runelite.api.Skill;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.StatChanged;
 
-import static chronicle.counters.StatKeys.SPECIAL_ATTACKS_USED;
-import static chronicle.counters.StatKeys.HITS_BLOCKED;
-import static chronicle.counters.StatKeys.HITS_MISSED;
 import static chronicle.counters.StatKeys.HIGHEST_HIT;
-import static chronicle.counters.StatKeys.HIGHEST_HIT_TAKEN;
 import static chronicle.counters.StatKeys.DAMAGE_DEALT;
-import static chronicle.counters.StatKeys.DAMAGE_DEALT_MELEE;
-import static chronicle.counters.StatKeys.DAMAGE_DEALT_RANGED;
-import static chronicle.counters.StatKeys.DAMAGE_DEALT_MAGIC;
-import static chronicle.counters.StatKeys.DAMAGE_TAKEN;
-import static chronicle.counters.StatKeys.DEATHS;
-import static chronicle.counters.StatKeys.POISON_DAMAGE_TAKEN;
-import static chronicle.counters.StatKeys.VENOM_DAMAGE_TAKEN;
 
 /**
  * Lifetime combat counters: damage dealt and taken, biggest hits, blocks, misses, deaths.
@@ -71,7 +60,7 @@ public class CombatStatTracker implements StatTracker
 		int cur = client.getVarpValue(VarPlayer.SPECIAL_ATTACK_PERCENT);
 		if (prevSpecEnergy >= 0 && cur < prevSpecEnergy)
 		{
-			store.incrementStat(SPECIAL_ATTACKS_USED);
+			store.incrementStat("specialAttacksUsed");
 		}
 		prevSpecEnergy = cur;
 	}
@@ -111,13 +100,13 @@ public class CombatStatTracker implements StatTracker
 			case HitsplatID.DAMAGE_ME:
 				if (landedOnSelf)
 				{
-					store.incrementStatBy(DAMAGE_TAKEN, amount);
+					store.incrementStatBy("damageTaken", amount);
 				}
 				break;
 
 			case HitsplatID.BLOCK_ME:
 				// a block on us is one we blocked, a block on the target is one we missed
-				store.incrementStat(landedOnSelf ? HITS_BLOCKED : HITS_MISSED);
+				store.incrementStat(landedOnSelf ? "hitsBlocked" : "hitsMissed");
 				break;
 
 			default:
@@ -125,21 +114,21 @@ public class CombatStatTracker implements StatTracker
 		}
 	}
 
-	// DAMAGE_TAKEN stays DAMAGE_ME-only so its running total still lines up with history.
+	// damageTaken stays DAMAGE_ME-only so its running total still lines up with history.
 	// The hit-taken record and the poison/venom bleed are tallied here instead.
 	private void recordDamageToSelf(int type, int amount)
 	{
 		if (type == HitsplatID.POISON)
 		{
-			store.incrementStatBy(POISON_DAMAGE_TAKEN, amount);
+			store.incrementStatBy("poisonDamageTaken", amount);
 		}
 		else if (type == HitsplatID.VENOM)
 		{
-			store.incrementStatBy(VENOM_DAMAGE_TAKEN, amount);
+			store.incrementStatBy("venomDamageTaken", amount);
 		}
-		if (DAMAGE_SPLATS.contains(type) && amount > store.getStat(HIGHEST_HIT_TAKEN))
+		if (DAMAGE_SPLATS.contains(type) && amount > store.getStat("highestHitTaken"))
 		{
-			store.setStat(HIGHEST_HIT_TAKEN, amount);
+			store.setStat("highestHitTaken", amount);
 		}
 	}
 
@@ -154,7 +143,7 @@ public class CombatStatTracker implements StatTracker
 
 		if (event.getMessage().contains("Oh dear, you are dead!"))
 		{
-			store.incrementStat(DEATHS);
+			store.incrementStat("deaths");
 		}
 	}
 
@@ -170,15 +159,15 @@ public class CombatStatTracker implements StatTracker
 		String style = null;
 		if (sk == Skill.ATTACK || sk == Skill.STRENGTH)
 		{
-			style = DAMAGE_DEALT_MELEE;
+			style = "damageDealtMelee";
 		}
 		else if (sk == Skill.RANGED)
 		{
-			style = DAMAGE_DEALT_RANGED;
+			style = "damageDealtRanged";
 		}
 		else if (sk == Skill.MAGIC)
 		{
-			style = DAMAGE_DEALT_MAGIC;
+			style = "damageDealtMagic";
 		}
 		if (style != null)
 		{
@@ -194,7 +183,7 @@ public class CombatStatTracker implements StatTracker
 	 * <p>Reached by every damage splat, max included. That makes the running
 	 * totals step up from the day it shipped, because every max hit before it was
 	 * dropped on the floor: the figures are right from here and short by all of
-	 * those behind. DAMAGE_TAKEN is left on the plain splat, where the comment
+	 * those behind. damageTaken is left on the plain splat, where the comment
 	 * beside it explains its own reason.
 	 */
 	private void recordDamageDealt(Actor target, int amount)

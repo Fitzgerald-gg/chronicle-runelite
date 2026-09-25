@@ -33,8 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static chronicle.counters.StatKeys.*;
-
 /**
  * Chat-free skilling detection for every non-combat skill. Each positive XP drop
  * (StatChanged) becomes one raw tuple that SkillDeriver turns into typed counters:
@@ -218,7 +216,7 @@ public class SkillingStatTracker implements StatTracker
 					tickGainedQty = d;      // +10 darts, +N runes, +1 bar/bow/gem/log/fish
 					if (e.getKey() == ItemID.WEEDS && rakeTtl > 0)
 					{
-						statStore.incrementStatBy(PATCHES_RAKED, Math.min(d, RAKE_MAX_PER_EVENT));
+						statStore.incrementStatBy("patchesRaked", Math.min(d, RAKE_MAX_PER_EVENT));
 						// one click clears a patch over several swings, so the weed that
 						// just landed keeps the window open for the ones behind it
 						rakeTtl = RAKE_TTL_TICKS;

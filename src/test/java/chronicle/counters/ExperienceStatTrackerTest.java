@@ -16,7 +16,7 @@ import net.runelite.api.events.StatChanged;
 import org.junit.Before;
 import org.junit.Test;
 
-import static chronicle.counters.StatKeys.TOTAL_XP_GAINED;
+import static chronicle.counters.CounterTestKeys.TOTAL_XP_GAINED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 

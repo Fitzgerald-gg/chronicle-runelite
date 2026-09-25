@@ -18,8 +18,6 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
 
-import static chronicle.counters.StatKeys.AMMO_CONSUMED;
-
 /**
  * Counts ranged ammo spent out of the worn-ammo slot: arrows, bolts, javelins.
  *
@@ -82,7 +80,7 @@ public class RangedStatTracker implements StatTracker
 			int consumed = pendingConsume - movedToPack;
 			if (consumed > 0 && consumed <= MAX_PER_TICK)
 			{
-				store.incrementStatBy(AMMO_CONSUMED, consumed);
+				store.incrementStatBy("ammoConsumed", consumed);
 			}
 			pendingConsume = 0;
 		}

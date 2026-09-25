@@ -20,7 +20,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
-import static chronicle.counters.StatKeys.AMMO_CONSUMED;
+import static chronicle.counters.CounterTestKeys.AMMO_CONSUMED;
 import static org.junit.Assert.assertEquals;
 
 /**

@@ -11,7 +11,7 @@ package chronicle.counters;
 import org.junit.Test;
 
 import static chronicle.counters.MovementStatTracker.matchDestinationKey;
-import static chronicle.counters.StatKeys.*;
+import static chronicle.counters.CounterTestKeys.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 

@@ -8,6 +8,8 @@
  */
 package chronicle.counters;
 
+import com.google.gson.JsonObject;
+import java.util.Map;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Player;
@@ -21,8 +23,6 @@ import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.Text;
-
-import static chronicle.counters.StatKeys.*;
 
 /**
  * Tallies tiles covered on foot (split run vs walk) and every teleport, attributed to
@@ -73,144 +73,11 @@ public class MovementStatTracker implements StatTracker
 	// nexus row is keybind-prefixed ("5 :  Camelot"). ORDER IS LOAD-BEARING: any
 	// substring that contains another comes first, and a diary switch destination
 	// (Grand Exchange, Seers', Yanille) comes before its base town. Some places carry
-	// a second alias where the nexus row and the spell/item name differ.
-	private static final String[][] DESTINATIONS = {
-		// contained-substring pairs: the longer name first
-		{"ape atoll dungeon", TELEPORTS_APE_ATOLL_DUNGEON},
-		{"ape atoll", TELEPORTS_APE_ATOLL},
-		{"marim", TELEPORTS_APE_ATOLL},                 // the POH portal-chamber name for Ape Atoll
-		{"west ardougne", TELEPORTS_WEST_ARDOUGNE},
-		{"ardougne", TELEPORTS_ARDOUGNE},
-		// diary secondary-destination switches: before their base town
-		{"grand exchange", TELEPORTS_GRAND_EXCHANGE},   // Varrock medium-diary switch
-		{"seers", TELEPORTS_SEERS_VILLAGE},             // Camelot right-click option
-		{"yanille", TELEPORTS_YANILLE},                 // Watchtower hard-diary switch
-		// standard towns
-		{"varrock", TELEPORTS_VARROCK},
-		{"camelot", TELEPORTS_CAMELOT},
-		{"watchtower", TELEPORTS_WATCHTOWER},
-		{"lumbridge", TELEPORTS_LUMBRIDGE},
-		{"falador", TELEPORTS_FALADOR},
-		{"kourend", TELEPORTS_KOUREND},
-		{"fortis colosseum", TELEPORTS_COLOSSEUM},   // before "fortis" (the city)
-		{"civitas", TELEPORTS_FORTIS},
-		{"fortis", TELEPORTS_FORTIS},
-		{"trollheim", TELEPORTS_TROLLHEIM},
-		{"boat", TELEPORTS_BOAT},
-		// Ancient Magicks
-		{"paddewwa", TELEPORTS_PADDEWWA},
-		{"senntisten", TELEPORTS_SENNTISTEN},
-		{"kharyrll", TELEPORTS_KHARYRLL},
-		{"lassar", TELEPORTS_LASSAR},
-		{"dareeyak", TELEPORTS_DAREEYAK},
-		{"carrallanger", TELEPORTS_CARRALLANGER},
-		{"annakarl", TELEPORTS_ANNAKARL},
-		{"ghorrock", TELEPORTS_GHORROCK},
-		// Lunar
-		{"moonclan", TELEPORTS_MOONCLAN},
-		{"lunar isle", TELEPORTS_MOONCLAN},             // nexus row name
-		{"ourania", TELEPORTS_OURANIA},
-		{"waterbirth", TELEPORTS_WATERBIRTH},
-		{"barbarian", TELEPORTS_BARBARIAN_OUTPOST},
-		{"khazard", TELEPORTS_KHAZARD},
-		{"fishing guild", TELEPORTS_FISHING_GUILD},
-		{"catherby", TELEPORTS_CATHERBY},
-		{"ice plateau", TELEPORTS_ICE_PLATEAU},
-		// Arceuus
-		{"arceuus library", TELEPORTS_ARCEUUS_LIBRARY},
-		{"draynor manor", TELEPORTS_DRAYNOR_MANOR},
-		{"battlefront", TELEPORTS_BATTLEFRONT},
-		{"mind altar", TELEPORTS_MIND_ALTAR},
-		{"salve graveyard", TELEPORTS_SALVE_GRAVEYARD},
-		{"fenkenstrain", TELEPORTS_FENKENSTRAIN},
-		{"harmony island", TELEPORTS_HARMONY_ISLAND},
-		{"cemetery", TELEPORTS_CEMETERY},
-		{"barrows", TELEPORTS_BARROWS},
-		{"respawn", TELEPORTS_RESPAWN},
-		// tablet / basalt / scroll destinations (nexus rows; the item names differ)
-		{"pollnivneach", TELEPORTS_POLLNIVNEACH},
-		{"troll stronghold", TELEPORTS_TROLL_STRONGHOLD},
-		{"stony basalt", TELEPORTS_TROLL_STRONGHOLD},
-		{"weiss", TELEPORTS_WEISS},
-		{"icy basalt", TELEPORTS_WEISS},
-		// scroll-of-redirection house tabs, which break as "break <place> teleport"
-		{"rimmington", TELEPORTS_RIMMINGTON},
-		{"taverley", TELEPORTS_TAVERLEY},
-		{"rellekka", TELEPORTS_RELLEKKA},
-		{"brimhaven", TELEPORTS_BRIMHAVEN},
-		{"hosidius", TELEPORTS_HOSIDIUS},
-		{"prifddinas", TELEPORTS_PRIFDDINAS},
-		{"teleport crystal", TELEPORTS_PRIFDDINAS},   // "Activate" names no place; the item name does
-		// house: the spell says "Teleport to House", the construction/max cape "Tele to POH"
-		{"house on the hill", TELEPORTS_FOSSIL_ISLAND},   // before "house" (the POH)
-		{"house", TELEPORTS_HOUSE},
-		{"poh", TELEPORTS_HOUSE},
-		{"spirit tree", TELEPORTS_SPIRIT_TREE},
-		{"otto's grotto", TELEPORTS_OTTOS_GROTTO},      // the Fishing cape's other option
-
-		// jewellery destinations: worn or rubbed items, and the POH jewellery box
-		{"castle wars", TELEPORTS_CASTLE_WARS},
-		{"ferox", TELEPORTS_FEROX_ENCLAVE},
-		{"emir", TELEPORTS_EMIRS_ARENA},
-		{"duel arena", TELEPORTS_EMIRS_ARENA},         // older wording of the same place
-		{"edgeville", TELEPORTS_EDGEVILLE},
-		{"karamja", TELEPORTS_KARAMJA},
-		{"draynor", TELEPORTS_DRAYNOR},                // "draynor manor" matched above
-		{"al kharid", TELEPORTS_AL_KHARID},
-		{"burthorpe", TELEPORTS_BURTHORPE},
-		{"corporeal", TELEPORTS_CORPOREAL_BEAST},
-		{"tears of guthix", TELEPORTS_TEARS_OF_GUTHIX},
-		{"wintertodt", TELEPORTS_WINTERTODT_CAMP},
-		{"warriors' guild", TELEPORTS_WARRIORS_GUILD},
-		{"champions' guild", TELEPORTS_CHAMPIONS_GUILD},
-		{"monastery", TELEPORTS_MONASTERY},
-		{"ranging guild", TELEPORTS_RANGING_GUILD},
-		{"mining guild", TELEPORTS_MINING_GUILD},
-		{"woodcutting guild", TELEPORTS_WOODCUTTING_GUILD},
-		{"cooking guild", TELEPORTS_COOKING_GUILD},
-		{"crafting guild", TELEPORTS_CRAFTING_GUILD},
-		{"farming guild", TELEPORTS_FARMING_GUILD},
-		{"miscellania", TELEPORTS_MISCELLANIA},
-		{"dondakan", TELEPORTS_DONDAKANS_ROCK},        // ring of wealth's Between a Rock option
-		{"chaos temple", TELEPORTS_CHAOS_TEMPLE},
-		{"bandit camp", TELEPORTS_BANDIT_CAMP},
-		{"lava maze", TELEPORTS_LAVA_MAZE},
-		{"wizards' tower", TELEPORTS_WIZARDS_TOWER},
-		{"outpost", TELEPORTS_THE_OUTPOST},            // "barbarian outpost" matched above
-		{"eyrie", TELEPORTS_EAGLES_EYRIE},             // Eagle's Eyrie, necklace of passage
-		{"ver sinhaza", TELEPORTS_VER_SINHAZA},
-		{"darkmeyer", TELEPORTS_DARKMEYER},
-		{"slepe", TELEPORTS_SLEPE},                    // Drakan's medallion's third option
-		{"lithkren", TELEPORTS_LITHKREN},              // before "digsite", which the pendant's name carries
-		{"fossil island", TELEPORTS_FOSSIL_ISLAND},    // its "house on the hill" alias sits in the house block above
-		{"digsite", TELEPORTS_DIGSITE},                // after lithkren and fossil island
-		{"xeric", TELEPORTS_KOUREND},
-		{"slayer ring", TELEPORTS_SLAYER_DUNGEONS},
-		{"pvp arena", TELEPORTS_EMIRS_ARENA},
-		{"ring of returning", TELEPORTS_HOUSE},        // its only destination
-		{"aldarin", TELEPORTS_ALDARIN},                // another redirected house tab
-		// everyday teleport items
-		{"ectophial", TELEPORTS_ECTOFUNTUS},
-		{"seed pod", TELEPORTS_GRAND_TREE},             // the royal seed pod; its option is "Commune"
-		{"chronicle", TELEPORTS_CHAMPIONS_GUILD},      // lands at the guild's door
-		{"kharedst", TELEPORTS_KOUREND},               // district tokens above win when present
-		{"book of the dead", TELEPORTS_KOUREND},
-		{"air altar", TELEPORTS_ELEMENTAL_ALTARS},
-		{"water altar", TELEPORTS_ELEMENTAL_ALTARS},
-		{"earth altar", TELEPORTS_ELEMENTAL_ALTARS},
-		{"fire altar", TELEPORTS_ELEMENTAL_ALTARS},
-		{"foundry", TELEPORTS_GIANTS_FOUNDRY},
-		{"obelisk", TELEPORTS_OBELISK},
-		// capes and items whose own name carries the destination
-		{"strength cape", TELEPORTS_WARRIORS_GUILD},
-		{"crafting cape", TELEPORTS_CRAFTING_GUILD},
-		{"farming cape", TELEPORTS_FARMING_GUILD},
-		{"hunter cape", TELEPORTS_HUNTER_GUILD},
-		{"quest point cape", TELEPORTS_LEGENDS_GUILD},
-		{"achievement diary cape", TELEPORTS_DIARY_REGION},
-		{"music cape", TELEPORTS_FALO},
-		{"sailing cape", TELEPORTS_PANDEMONIUM},
-	};
+	// a second alias where the nexus row and the spell/item name differ. The rows,
+	// and the teleport-jewellery family by item name, live in counters_teleports.json.
+	private static final JsonObject TELEPORTS = Tables.load("counters_teleports.json");
+	private static final Map<String, String> DESTINATIONS = Tables.map(TELEPORTS, "destinations");
+	private static final String[] JEWELLERY = Tables.strings(TELEPORTS.get("jewellery"));
 
 	private final StatStore statStore;
 	private final Client client;
@@ -294,7 +161,7 @@ public class MovementStatTracker implements StatTracker
 			if (matchDestinationKey(row) != null)
 			{
 				armTeleport(row, false);
-				pendingMethod = TELEPORTS_VIA_JEWELLERY;
+				pendingMethod = "teleportsViaJewellery";
 			}
 			return;
 		}
@@ -326,7 +193,7 @@ public class MovementStatTracker implements StatTracker
 			if (optLow.equals("teleport menu") || matchDestinationKey(optLow) != null)
 			{
 				armTeleport(optLow + " " + tgtLow, false);
-				pendingMethod = TELEPORTS_VIA_JEWELLERY;
+				pendingMethod = "teleportsViaJewellery";
 			}
 			return;
 		}
@@ -449,7 +316,7 @@ public class MovementStatTracker implements StatTracker
 				rubTick = client.getTickCount();
 			}
 			armTeleport(optLow + " " + tgtLow, false);
-			pendingMethod = TELEPORTS_VIA_JEWELLERY;
+			pendingMethod = "teleportsViaJewellery";
 			return;
 		}
 
@@ -496,14 +363,14 @@ public class MovementStatTracker implements StatTracker
 	// the teleport-jewellery family, by item name
 	private static boolean isTeleportJewellery(String tgtLow)
 	{
-		return tgtLow.contains("ring of dueling") || tgtLow.contains("games necklace")
-			|| tgtLow.contains("amulet of glory") || tgtLow.contains("amulet of eternal glory")
-			|| tgtLow.contains("combat bracelet") || tgtLow.contains("skills necklace")
-			|| tgtLow.contains("ring of wealth") || tgtLow.contains("burning amulet")
-			|| tgtLow.contains("necklace of passage") || tgtLow.contains("digsite pendant")
-			|| tgtLow.contains("xeric's talisman") || tgtLow.contains("slayer ring")
-			|| tgtLow.contains("ring of returning") || tgtLow.contains("drakan's medallion")
-			|| tgtLow.contains("ring of the elements") || tgtLow.contains("giantsoul amulet");
+		for (String j : JEWELLERY)
+		{
+			if (tgtLow.contains(j))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// wearing, removing or checking jewellery isn't teleporting with it
@@ -514,29 +381,31 @@ public class MovementStatTracker implements StatTracker
 			|| option.startsWith("destroy") || isInventoryManagement(option);
 	}
 
+	// The means of travel, ticked alongside the destination: a jewellery hop to
+	// Castle Wars bumps both.
 	private static String methodOf(String optLow, String tgtLow)
 	{
 		if (optLow.startsWith("break"))
 		{
-			return TELEPORTS_VIA_TABLET;
+			return "teleportsViaTablet";
 		}
 		// the whole word: a spell's option is "Cast" or "Cast <spell>", and
 		// "Castle Wars" on a ring of dueling is a place, not a spellbook
 		if (optLow.equals("cast") || optLow.startsWith("cast "))
 		{
-			return TELEPORTS_VIA_SPELL;
+			return "teleportsViaSpell";
 		}
 		if (tgtLow.contains("scroll"))
 		{
-			return TELEPORTS_VIA_SCROLL;
+			return "teleportsViaScroll";
 		}
 		if (isTeleportCape(tgtLow) || optLow.contains("tele to poh"))
 		{
-			return TELEPORTS_VIA_CAPE;
+			return "teleportsViaCape";
 		}
 		if (isTeleportJewellery(tgtLow))
 		{
-			return TELEPORTS_VIA_JEWELLERY;
+			return "teleportsViaJewellery";
 		}
 		return null;
 	}
@@ -603,7 +472,7 @@ public class MovementStatTracker implements StatTracker
 			rubTick = -1;
 		}
 		String method = pendingMethod != null ? pendingMethod
-			: (rubbed ? TELEPORTS_VIA_JEWELLERY : null);
+			: (rubbed ? "teleportsViaJewellery" : null);
 		armTeleport(place, false);
 		pendingMethod = method;
 		return true;
@@ -679,8 +548,8 @@ public class MovementStatTracker implements StatTracker
 	// whether the pending is one whose destination is chosen from a chat menu
 	private boolean awaitsAMenu()
 	{
-		return TELEPORTS_VIA_CAPE.equals(pendingMethod)
-			|| TELEPORTS_VIA_JEWELLERY.equals(pendingMethod)
+		return "teleportsViaCape".equals(pendingMethod)
+			|| "teleportsViaJewellery".equals(pendingMethod)
 			|| rubTick >= 0
 			|| "spirit tree".equals(pendingLabel);
 	}
@@ -730,22 +599,7 @@ public class MovementStatTracker implements StatTracker
 	// prefixed ("5 :  Camelot"), which the substring match ignores.
 	private String nexusRowText(int index)
 	{
-		Widget textList = client.getWidget(InterfaceID.TelenexusTeleport.TEXT1);
-		if (textList == null || index < 0)
-		{
-			return "";
-		}
-		Widget[] cells = textList.getChildren();
-		if (cells == null || index >= cells.length)
-		{
-			return "";
-		}
-		Widget cell = cells[index];
-		if (cell == null || cell.getText() == null)
-		{
-			return "";
-		}
-		return Text.removeTags(cell.getText()).trim();
+		return index < 0 ? "" : rowOfList(InterfaceID.TelenexusTeleport.TEXT1, index);
 	}
 
 	@Override
@@ -771,7 +625,7 @@ public class MovementStatTracker implements StatTracker
 
 			if (step > 0 && step < 3)
 			{
-				statStore.incrementStatBy(isRunStep(step) ? DISTANCE_RAN : DISTANCE_WALKED, step);
+				statStore.incrementStatBy(isRunStep(step) ? "distanceRan" : "distanceWalked", step);
 			}
 			else if (jumped && teleportPending())
 			{
@@ -824,7 +678,7 @@ public class MovementStatTracker implements StatTracker
 	// credit the pending teleport to its place, or to the Nexus catch-all
 	private void creditPendingTeleport()
 	{
-		statStore.incrementStat(TELEPORTS_TOTAL);
+		statStore.incrementStat("teleportsTotal");
 		String key = matchDestinationKey(pendingLabel);
 		String credited;
 		if (key != null)
@@ -833,7 +687,7 @@ public class MovementStatTracker implements StatTracker
 		}
 		else if (pendingFromNexus)
 		{
-			credited = TELEPORTS_NEXUS;   // a nexus place with no key of its own
+			credited = "teleportsNexus";   // a nexus place with no key of its own
 		}
 		else
 		{
@@ -873,8 +727,8 @@ public class MovementStatTracker implements StatTracker
 		}
 		if (event.getActor().getAnimation() == FAIRY_RING_ANIM)
 		{
-			statStore.incrementStat(TELEPORTS_TOTAL);
-			statStore.incrementStat(TELEPORTS_FAIRY_RING);
+			statStore.incrementStat("teleportsTotal");
+			statStore.incrementStat("teleportsFairyRing");
 			// the ring is the journey. Drop any stale pending before it claims this
 			// landing as well
 			clearPending();
@@ -917,11 +771,11 @@ public class MovementStatTracker implements StatTracker
 			return null;
 		}
 		String clean = label.toLowerCase(java.util.Locale.ROOT);
-		for (String[] destination : DESTINATIONS)
+		for (Map.Entry<String, String> d : DESTINATIONS.entrySet())
 		{
-			if (clean.contains(destination[0]))
+			if (clean.contains(d.getKey()))
 			{
-				return destination[1];
+				return d.getValue();
 			}
 		}
 		return null;

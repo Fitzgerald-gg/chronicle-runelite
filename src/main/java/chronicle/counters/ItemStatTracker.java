@@ -16,13 +16,6 @@ import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.client.game.ItemManager;
 
-import static chronicle.counters.StatKeys.CABBAGES_PICKED;
-import static chronicle.counters.StatKeys.EXAMINES;
-import static chronicle.counters.StatKeys.FLAX_GATHERED;
-import static chronicle.counters.StatKeys.ITEMS_DISCARDED;
-import static chronicle.counters.StatKeys.ITEMS_DROPPED_VALUE;
-import static chronicle.counters.StatKeys.RESOURCES_DROPPED_VALUE;
-
 /**
  * Item interactions with no attempt count of their own: examines, drops (and the value
  * binned), cabbage and flax picks. All of them arrive as a menu click or a line of chat.
@@ -58,11 +51,11 @@ public class ItemStatTracker implements StatTracker
 		final String option = event.getMenuOption();
 		if ("Examine".equals(option))
 		{
-			statStore.incrementStat(EXAMINES);
+			statStore.incrementStat("examines");
 		}
 		else if ("Drop".equals(option))
 		{
-			statStore.incrementStat(ITEMS_DISCARDED);
+			statStore.incrementStat("itemsDiscarded");
 			recordDroppedValue(event);
 		}
 	}
@@ -100,13 +93,13 @@ public class ItemStatTracker implements StatTracker
 		// clamp: StatStore takes an int, and a full stack of anything valuable overflows one
 		final long value = (long) each * qty;
 		final int banked = value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
-		statStore.incrementStatBy(ITEMS_DROPPED_VALUE, banked);
+		statStore.incrementStatBy("itemsDroppedValue", banked);
 		// the total above counts every bin, bank clear-outs included. this second figure
 		// sits beside gathered value and only counts what this account pulled out of the
 		// world itself.
 		if (gatheredLedger != null && gatheredLedger.wasGathered(canonical))
 		{
-			statStore.incrementStatBy(RESOURCES_DROPPED_VALUE, banked);
+			statStore.incrementStatBy("resourcesDroppedValue", banked);
 		}
 	}
 
@@ -138,11 +131,11 @@ public class ItemStatTracker implements StatTracker
 			final String picked = message.substring(from, dot);
 			if ("cabbage".equals(picked))
 			{
-				statStore.incrementStat(CABBAGES_PICKED);
+				statStore.incrementStat("cabbagesPicked");
 			}
 			else if ("flax".equals(picked))
 			{
-				statStore.incrementStat(FLAX_GATHERED);
+				statStore.incrementStat("flaxGathered");
 			}
 		}
 	}

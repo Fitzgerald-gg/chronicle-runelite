@@ -1,6 +1,7 @@
 package chronicle;
 
 import chronicle.counters.CombatStatTracker;
+import chronicle.counters.CounterTestKeys;
 import chronicle.counters.StatKeys;
 import chronicle.counters.StatStore;
 import net.runelite.api.Actor;
@@ -115,6 +116,6 @@ public class MaxHitTest
 		e.setHitsplat(splat);
 		t.onHitsplatApplied(e);
 		assertEquals("the taken total is still DAMAGE_ME only",
-			0, store.getStat(StatKeys.DAMAGE_TAKEN));
+			0, store.getStat(CounterTestKeys.DAMAGE_TAKEN));
 	}
 }

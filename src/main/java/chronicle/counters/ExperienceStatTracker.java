@@ -19,8 +19,6 @@ import net.runelite.api.Skill;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.StatChanged;
 
-import static chronicle.counters.StatKeys.TOTAL_XP_GAINED;
-
 /**
  * One running total of XP gained, across every skill including combat. The journal holds
  * the lifetime figure between sessions.
@@ -95,7 +93,7 @@ public class ExperienceStatTracker implements StatTracker
 		int gained = xp - prev;
 		if (gained > 0)
 		{
-			store.incrementStatBy(TOTAL_XP_GAINED, gained);
+			store.incrementStatBy("totalXpGained", gained);
 			count(skill, gained);
 		}
 	}
@@ -148,7 +146,7 @@ public class ExperienceStatTracker implements StatTracker
 		sessionXp.merge(skill, (long) gained, Long::sum);
 	}
 
-	// Cleared on the same event that clears TOTAL_XP_GAINED (the plugin's own logout
+	// Cleared on the same event that clears totalXpGained (the plugin's own logout
 	// handler runs off this same arrival at the login screen), so the per-skill rows
 	// always add up to the total they sit under.
 	private synchronized void clearSession()

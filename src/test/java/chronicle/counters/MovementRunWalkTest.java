@@ -18,8 +18,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
-import static chronicle.counters.StatKeys.DISTANCE_RAN;
-import static chronicle.counters.StatKeys.DISTANCE_WALKED;
+import static chronicle.counters.CounterTestKeys.DISTANCE_RAN;
+import static chronicle.counters.CounterTestKeys.DISTANCE_WALKED;
 import static org.junit.Assert.assertEquals;
 
 /**

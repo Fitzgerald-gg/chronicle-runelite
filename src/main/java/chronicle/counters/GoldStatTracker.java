@@ -19,9 +19,6 @@ import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.InterfaceID;
 
-import static chronicle.counters.StatKeys.COINS_EARNED_AT_SHOPS;
-import static chronicle.counters.StatKeys.COINS_SPENT_AT_SHOPS;
-
 /**
  * Splits coin movement at a shop into money spent and money earned.
  *
@@ -83,11 +80,11 @@ public class GoldStatTracker implements StatTracker
 		int change = coins - coinsLastTick;
 		if (change < 0)
 		{
-			statStore.incrementStatBy(COINS_SPENT_AT_SHOPS, -change);
+			statStore.incrementStatBy("coinsSpentAtShops", -change);
 		}
 		else if (change > 0)
 		{
-			statStore.incrementStatBy(COINS_EARNED_AT_SHOPS, change);
+			statStore.incrementStatBy("coinsEarnedAtShops", change);
 		}
 		coinsLastTick = coins;
 	}

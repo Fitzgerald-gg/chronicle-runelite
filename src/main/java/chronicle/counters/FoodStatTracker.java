@@ -35,16 +35,6 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.Text;
 import net.runelite.http.api.item.ItemPrice;
 
-import static chronicle.counters.StatKeys.BEERS_DRUNK;
-import static chronicle.counters.StatKeys.DIVINE_POTION_DAMAGE;
-import static chronicle.counters.StatKeys.CONSUMED_VALUE;
-import static chronicle.counters.StatKeys.FOOD_CONSUMED_VALUE;
-import static chronicle.counters.StatKeys.FOOD_EATEN;
-import static chronicle.counters.StatKeys.HITPOINTS_REGENERATED;
-import static chronicle.counters.StatKeys.POTION_DOSES;
-import static chronicle.counters.StatKeys.POTIONS_CONSUMED_VALUE;
-import static chronicle.counters.StatKeys.VIALS_SHATTERED;
-
 /**
  * Counts eating, drinking and passive hitpoint regeneration.
  *
@@ -233,7 +223,7 @@ public class FoodStatTracker implements StatTracker
 		{
 			if (lastConsumed == null || !isSingleHpHeal(lastConsumed))
 			{
-				store.incrementStat(HITPOINTS_REGENERATED);
+				store.incrementStat("hitpointsRegenerated");
 			}
 			else
 			{
@@ -342,13 +332,14 @@ public class FoodStatTracker implements StatTracker
 				{
 					continue;
 				}
-				store.incrementStat(FOOD_EATEN);
+				// the floor under the typed <food>Eaten keys, so it shares their wording
+				store.incrementStat("foodEaten");
 				// Priced at the bite off the client's own GE feed, like drops at the kill.
 				int price = itemManager.getItemPrice(itemManager.canonicalize(before.getKey()));
 				if (price > 0)
 				{
-					store.incrementStatBy(CONSUMED_VALUE, price);
-					store.incrementStatBy(FOOD_CONSUMED_VALUE, price);
+					store.incrementStatBy("consumedValue", price);
+					store.incrementStatBy("foodConsumedValue", price);
 				}
 				String typed = perFoodKey(itemName(before.getKey()));
 				if (!typed.isEmpty())
@@ -544,8 +535,8 @@ public class FoodStatTracker implements StatTracker
 		{
 			return;
 		}
-		store.incrementStatBy(CONSUMED_VALUE, perDose);
-		store.incrementStatBy(POTIONS_CONSUMED_VALUE, perDose);
+		store.incrementStatBy("consumedValue", perDose);
+		store.incrementStatBy("potionsConsumedValue", perDose);
 		if (!typed.isEmpty() && consumableSink != null)
 		{
 			consumableSink.accept(typed, perDose);
@@ -782,12 +773,12 @@ public class FoodStatTracker implements StatTracker
 
 			if (drunk.equals("beer"))
 			{
-				store.incrementStat(BEERS_DRUNK);
+				store.incrementStat("beersDrunk");
 			}
 
 			if (message.contains("You drink some of the") || message.contains("You drink some of your"))
 			{
-				store.incrementStat(POTION_DOSES);
+				store.incrementStat("potionDoses");
 				String potion = potionName(message);
 				// Per-potion tally beside the aggregate, keyed by the name as drunk so the
 				// history runs on: "restore prayer potion" -> restorePrayerPotionDoses.
@@ -803,14 +794,14 @@ public class FoodStatTracker implements StatTracker
 				if (message.contains("divine"))
 				{
 					// Divine potions always self-inflict a flat 10 damage.
-					store.incrementStatBy(DIVINE_POTION_DAMAGE, 10);
+					store.incrementStatBy("divinePotionDamage", 10);
 				}
 			}
 		}
 
 		if (message.contains("You quickly smash the empty vial"))
 		{
-			store.incrementStat(VIALS_SHATTERED);
+			store.incrementStat("vialsShattered");
 		}
 	}
 

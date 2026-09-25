@@ -11,8 +11,6 @@ package chronicle.counters;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
 
-import static chronicle.counters.StatKeys.ANIMALS_PETTED;
-
 /**
  * Pet-petting, counted off the "Pet" menu click and settled a tick later.
  */
@@ -43,7 +41,7 @@ public class NPCStatTracker implements StatTracker
 		// the pet animation runs over two ticks, so bank on the even one or a held click credits twice
 		if (pendingPet && evenTick)
 		{
-			statStore.incrementStat(ANIMALS_PETTED);
+			statStore.incrementStat("animalsPetted");
 			pendingPet = false;
 		}
 

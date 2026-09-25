@@ -27,7 +27,7 @@ import net.runelite.http.api.item.ItemPrice;
 import org.junit.Test;
 import org.mockito.Mockito;
 
-import static chronicle.counters.StatKeys.CONSUMED_VALUE;
+import static chronicle.counters.CounterTestKeys.CONSUMED_VALUE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;

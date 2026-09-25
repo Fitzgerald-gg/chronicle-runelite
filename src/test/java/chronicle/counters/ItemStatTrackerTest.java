@@ -20,8 +20,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
-import static chronicle.counters.StatKeys.ITEMS_DROPPED_VALUE;
-import static chronicle.counters.StatKeys.RESOURCES_DROPPED_VALUE;
+import static chronicle.counters.CounterTestKeys.ITEMS_DROPPED_VALUE;
+import static chronicle.counters.CounterTestKeys.RESOURCES_DROPPED_VALUE;
 import static org.junit.Assert.assertEquals;
 
 /**
