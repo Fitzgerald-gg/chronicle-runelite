@@ -1418,7 +1418,6 @@ public class PanelPreviewTest
 			return store != null ? store.lootRollFrom() : 0;
 		}
 
-		@Override
 		java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, boolean includeOpen)
 		{
 			return store != null ? store.onTaskLoot(fromMs, toMs, includeOpen)
@@ -1445,7 +1444,6 @@ public class PanelPreviewTest
 			return store != null ? store.taskNames() : new java.util.ArrayList<>();
 		}
 
-		@Override
 		long[] onTaskTally(long fromMs, long toMs, boolean includeOpen)
 		{
 			return store != null ? store.onTaskTally(fromMs, toMs, includeOpen)
@@ -1843,12 +1841,6 @@ public class PanelPreviewTest
 					store.anchoredKills());
 			}
 			return kcs;
-		}
-
-		@Override
-		java.util.Map<String, Long> ledgerKills()
-		{
-			return ledgerKcs;
 		}
 
 		final Map<String, Long> ledgerKcs = new LinkedHashMap<>();

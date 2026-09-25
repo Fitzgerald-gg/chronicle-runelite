@@ -58,6 +58,23 @@ public class KillCountsTest
 		return plugin;
 	}
 
+	// The ledger's sources the collection log has no page for, split the way the
+	// plugin's ledgerKills() once did it.
+	private Map<String, Long> ledgerOnly()
+	{
+		com.google.gson.JsonObject cl = store.clogSnapshot();
+		java.util.Set<String> paged = LocalStore.clogKillCounts(cl).keySet();
+		Map<String, Long> out = new java.util.LinkedHashMap<>();
+		for (Map.Entry<String, Long> e : LocalStore.sourceKills(cl, store.dropSources()).entrySet())
+		{
+			if (!paged.contains(e.getKey()))
+			{
+				out.put(e.getKey(), e.getValue());
+			}
+		}
+		return out;
+	}
+
 	private static final String JOURNAL = "{\"schema\":1,\"rsn\":\"Tester\","
 		+ "\"drops\":{"
 		// ordinary slayer monsters: no kill-count line, only their loot events
@@ -165,7 +182,7 @@ public class KillCountsTest
 	public void theLedgersOwnSourcesStandApartAtTheSameFigures() throws Exception
 	{
 		ChroniclePlugin plugin = plugin(JOURNAL);
-		Map<String, Long> own = plugin.ledgerKills();
+		Map<String, Long> own = ledgerOnly();
 		// the sources the log has no page for, and only those
 		assertEquals(own.toString(), 2, own.size());
 		assertEquals(Long.valueOf(622), own.get("Nechryael"));
@@ -184,7 +201,7 @@ public class KillCountsTest
 		ChroniclePlugin plugin = plugin("{\"schema\":1,\"rsn\":\"Tester\","
 			+ "\"drops\":{\"Nechryael\":{\"loots\":3,\"value\":10}}}");
 		assertEquals(java.util.Collections.singletonMap("Nechryael", 3L), plugin.killCounts());
-		assertEquals(java.util.Collections.singletonMap("Nechryael", 3L), plugin.ledgerKills());
+		assertEquals(java.util.Collections.singletonMap("Nechryael", 3L), ledgerOnly());
 	}
 
 	@Test
@@ -202,7 +219,7 @@ public class KillCountsTest
 		assertEquals(kc.toString(),
 			java.util.Collections.singletonMap("Deranged Archaeologist", 10L), kc);
 		// both spellings are paged, so the ledger's own list is empty
-		assertEquals(plugin.ledgerKills().toString(), 0, plugin.ledgerKills().size());
+		assertEquals(ledgerOnly().toString(), 0, ledgerOnly().size());
 		// the per-source base holds the one entry too, and the summary sums it once
 		Map<String, Long> perSource = LocalStore.sourceKills(store.clogSnapshot(), store.dropSources());
 		assertEquals(perSource.toString(),

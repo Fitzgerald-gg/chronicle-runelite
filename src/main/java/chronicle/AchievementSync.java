@@ -17,7 +17,6 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import net.runelite.api.Client;
 import net.runelite.api.Quest;
-import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 
 /**
@@ -41,29 +40,10 @@ public class AchievementSync
 		"ardougne", "desert", "falador", "fremennik", "kandarin",
 		"kourend", "lumbridge", "morytania", "varrock", "western", "wilderness",
 	};
-	private static final int[][] DIARY_VARBITS = {
-		{VarbitID.ARDOUGNE_DIARY_EASY_COMPLETE, VarbitID.ARDOUGNE_DIARY_MEDIUM_COMPLETE,
-			VarbitID.ARDOUGNE_DIARY_HARD_COMPLETE, VarbitID.ARDOUGNE_DIARY_ELITE_COMPLETE},
-		{VarbitID.DESERT_DIARY_EASY_COMPLETE, VarbitID.DESERT_DIARY_MEDIUM_COMPLETE,
-			VarbitID.DESERT_DIARY_HARD_COMPLETE, VarbitID.DESERT_DIARY_ELITE_COMPLETE},
-		{VarbitID.FALADOR_DIARY_EASY_COMPLETE, VarbitID.FALADOR_DIARY_MEDIUM_COMPLETE,
-			VarbitID.FALADOR_DIARY_HARD_COMPLETE, VarbitID.FALADOR_DIARY_ELITE_COMPLETE},
-		{VarbitID.FREMENNIK_DIARY_EASY_COMPLETE, VarbitID.FREMENNIK_DIARY_MEDIUM_COMPLETE,
-			VarbitID.FREMENNIK_DIARY_HARD_COMPLETE, VarbitID.FREMENNIK_DIARY_ELITE_COMPLETE},
-		{VarbitID.KANDARIN_DIARY_EASY_COMPLETE, VarbitID.KANDARIN_DIARY_MEDIUM_COMPLETE,
-			VarbitID.KANDARIN_DIARY_HARD_COMPLETE, VarbitID.KANDARIN_DIARY_ELITE_COMPLETE},
-		{VarbitID.KOUREND_DIARY_EASY_COMPLETE, VarbitID.KOUREND_DIARY_MEDIUM_COMPLETE,
-			VarbitID.KOUREND_DIARY_HARD_COMPLETE, VarbitID.KOUREND_DIARY_ELITE_COMPLETE},
-		{VarbitID.LUMBRIDGE_DIARY_EASY_COMPLETE, VarbitID.LUMBRIDGE_DIARY_MEDIUM_COMPLETE,
-			VarbitID.LUMBRIDGE_DIARY_HARD_COMPLETE, VarbitID.LUMBRIDGE_DIARY_ELITE_COMPLETE},
-		{VarbitID.MORYTANIA_DIARY_EASY_COMPLETE, VarbitID.MORYTANIA_DIARY_MEDIUM_COMPLETE,
-			VarbitID.MORYTANIA_DIARY_HARD_COMPLETE, VarbitID.MORYTANIA_DIARY_ELITE_COMPLETE},
-		{VarbitID.VARROCK_DIARY_EASY_COMPLETE, VarbitID.VARROCK_DIARY_MEDIUM_COMPLETE,
-			VarbitID.VARROCK_DIARY_HARD_COMPLETE, VarbitID.VARROCK_DIARY_ELITE_COMPLETE},
-		{VarbitID.WESTERN_DIARY_EASY_COMPLETE, VarbitID.WESTERN_DIARY_MEDIUM_COMPLETE,
-			VarbitID.WESTERN_DIARY_HARD_COMPLETE, VarbitID.WESTERN_DIARY_ELITE_COMPLETE},
-		{VarbitID.WILDERNESS_DIARY_EASY_COMPLETE, VarbitID.WILDERNESS_DIARY_MEDIUM_COMPLETE,
-			VarbitID.WILDERNESS_DIARY_HARD_COMPLETE, VarbitID.WILDERNESS_DIARY_ELITE_COMPLETE},
+	// Each row's four completion varbits are consecutive ids, easy first, so a row
+	// is its easy varbit and a tier is read at that id plus its index.
+	private static final int[] DIARY_VARBITS = {
+		4458, 4483, 4462, 4491, 4475, 7925, 4495, 4487, 4479, 4471, 4466,
 	};
 
 	private static final String[] CA_TIERS = {
@@ -78,7 +58,7 @@ public class AchievementSync
 	 * bit N%32 of CA_TASK_COMPLETED_(N/32), and the bundled table is keyed by that
 	 * same id, so the two line up without a lookup table between them.
 	 *
-	 * <p>Read by name rather than by arithmetic on the first id. Only the first
+	 * <p>Listed one by one rather than by arithmetic on the first id. Only the first
 	 * thirteen are contiguous, 3116 to 3128; the remaining eight were allotted as
 	 * tasks were added over the years and land at 3387, 3718, 3773, 3774, 4204,
 	 * 4496, 4721 and 5673. A loop over a base would walk straight off the end of
@@ -86,24 +66,11 @@ public class AchievementSync
 	 * it found there would tick a combat achievement at random.
 	 */
 	private static final int[] CA_TASK_COMPLETED = {
-		VarPlayerID.CA_TASK_COMPLETED_0, VarPlayerID.CA_TASK_COMPLETED_1,
-		VarPlayerID.CA_TASK_COMPLETED_2, VarPlayerID.CA_TASK_COMPLETED_3,
-		VarPlayerID.CA_TASK_COMPLETED_4, VarPlayerID.CA_TASK_COMPLETED_5,
-		VarPlayerID.CA_TASK_COMPLETED_6, VarPlayerID.CA_TASK_COMPLETED_7,
-		VarPlayerID.CA_TASK_COMPLETED_8, VarPlayerID.CA_TASK_COMPLETED_9,
-		VarPlayerID.CA_TASK_COMPLETED_10, VarPlayerID.CA_TASK_COMPLETED_11,
-		VarPlayerID.CA_TASK_COMPLETED_12, VarPlayerID.CA_TASK_COMPLETED_13,
-		VarPlayerID.CA_TASK_COMPLETED_14, VarPlayerID.CA_TASK_COMPLETED_15,
-		VarPlayerID.CA_TASK_COMPLETED_16, VarPlayerID.CA_TASK_COMPLETED_17,
-		VarPlayerID.CA_TASK_COMPLETED_18, VarPlayerID.CA_TASK_COMPLETED_19,
-		VarPlayerID.CA_TASK_COMPLETED_20,
+		3116, 3117, 3118, 3119, 3120, 3121, 3122, 3123, 3124, 3125, 3126, 3127, 3128,
+		3387, 3718, 3773, 3774, 4204, 4496, 4721, 5673,
 	};
 
-	private static final int[] CA_TIER_STATUS = {
-		VarbitID.CA_TIER_STATUS_EASY, VarbitID.CA_TIER_STATUS_MEDIUM,
-		VarbitID.CA_TIER_STATUS_HARD, VarbitID.CA_TIER_STATUS_ELITE,
-		VarbitID.CA_TIER_STATUS_MASTER, VarbitID.CA_TIER_STATUS_GRANDMASTER,
-	};
+	private static final int[] CA_TIER_STATUS = {12863, 12864, 12865, 12866, 12867, 12868};
 
 	private final Client client;
 	// RuneLite's own, injected: the Hub rejects a plugin that builds its own.
@@ -195,7 +162,7 @@ public class AchievementSync
 			JsonObject region = new JsonObject();
 			for (int t = 0; t < DIARY_TIERS.length; t++)
 			{
-				region.addProperty(DIARY_TIERS[t], client.getVarbitValue(DIARY_VARBITS[r][t]) != 0);
+				region.addProperty(DIARY_TIERS[t], client.getVarbitValue(DIARY_VARBITS[r] + t) != 0);
 			}
 			diaries.add(DIARY_REGIONS[r], region);
 		}

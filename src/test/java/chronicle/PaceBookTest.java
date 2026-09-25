@@ -62,7 +62,6 @@ public class PaceBookTest
 		// dividing by the 301 calendar days would say 332 xp a day
 		assertEquals(1, p.activeDays);
 		assertEquals(100_000.0, p.xpPerActiveDay, 0.001);
-		assertEquals(1, p.spanDays);
 		assertEquals(TODAY, p.lastActive);
 		// one active day gives a pace but no horizon
 		assertFalse(p.hasHorizon());
@@ -83,7 +82,6 @@ public class PaceBookTest
 		// by calendar days: 150,000 over 302, or 497 a day
 		assertEquals(2, p.activeDays);
 		assertEquals(75_000.0, p.xpPerActiveDay, 0.001);
-		assertEquals(2, p.spanDays);
 		assertEquals(TODAY, p.lastActive);
 		assertTrue(p.hasHorizon());
 	}
@@ -102,7 +100,6 @@ public class PaceBookTest
 		assertEquals(500.0, p.xpPerActiveDay, 0.001);
 		assertEquals(Integer.valueOf(50), p.targetLevel);
 		assertEquals(101_333L, p.targetXp);
-		assertEquals(1_333L, p.xpRemaining);
 		// 1,333 at 500 a day rounds up
 		assertEquals(3, p.daysOfPlay);
 		assertTrue(p.hasHorizon());
@@ -121,7 +118,6 @@ public class PaceBookTest
 
 		assertEquals(2, p.activeDays);
 		// two active days spread over three weeks
-		assertEquals(21, p.spanDays);
 		assertTrue(p.hasHorizon());
 	}
 
@@ -139,7 +135,6 @@ public class PaceBookTest
 
 		assertEquals(0, p.activeDays);
 		assertEquals(0.0, p.xpPerActiveDay, 0.001);
-		assertEquals(0, p.spanDays);
 		assertFalse(p.hasHorizon());
 		assertTrue(p.dormant());
 		// lastActive looks past the 30-day window
@@ -194,7 +189,6 @@ public class PaceBookTest
 
 		assertEquals(7, p.activeDays);
 		assertEquals(10_000.0, p.xpPerActiveDay, 0.001);
-		assertEquals(7, p.spanDays);
 	}
 
 	@Test
@@ -229,7 +223,6 @@ public class PaceBookTest
 		PaceBook.Pace done = PaceBook.forSkill(spine, SKILL, 200_000_000L, TODAY);
 		assertNull(done.targetLevel);
 		assertEquals(0L, done.targetXp);
-		assertEquals(0L, done.xpRemaining);
 		assertFalse(done.hasHorizon());
 		// nothing left to chase is not dormancy
 		assertFalse(done.dormant());

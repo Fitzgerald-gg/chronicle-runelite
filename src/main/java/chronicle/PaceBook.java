@@ -4,11 +4,12 @@
 package chronicle;
 
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import lombok.RequiredArgsConstructor;
+import net.runelite.api.Experience;
 
 /**
  * Pace and horizon for one skill, off the journal's calendar spine.
@@ -39,14 +40,12 @@ class PaceBook
 	}
 
 	/** A skill's rate, the mark ahead of it, and the basis the rate stands on. */
+	@RequiredArgsConstructor
 	static final class Pace
 	{
 		final double xpPerActiveDay;
 
 		final int activeDays;
-
-		// calendar days those active days are spread over, inclusive
-		final long spanDays;
 
 		// null when the mark ahead is the 200m ceiling, or when the skill is done
 		final Integer targetLevel;
@@ -54,28 +53,12 @@ class PaceBook
 		// 0 when there is nothing left ahead
 		final long targetXp;
 
-		final long xpRemaining;
-
 		// active days away, 0 when there is no horizon
 		final long daysOfPlay;
 
 		// last day the skill moved anywhere in the spine, recency window ignored;
 		// null if the record has never seen it move
 		final LocalDate lastActive;
-
-		private Pace(double xpPerActiveDay, int activeDays, long spanDays,
-			Integer targetLevel, long targetXp, long xpRemaining, long daysOfPlay,
-			LocalDate lastActive)
-		{
-			this.xpPerActiveDay = xpPerActiveDay;
-			this.activeDays = activeDays;
-			this.spanDays = spanDays;
-			this.targetLevel = targetLevel;
-			this.targetXp = targetXp;
-			this.xpRemaining = xpRemaining;
-			this.daysOfPlay = daysOfPlay;
-			this.lastActive = lastActive;
-		}
 
 		boolean hasHorizon()
 		{
@@ -110,8 +93,6 @@ class PaceBook
 		long remaining = targetXp > 0 ? targetXp - xp : 0;
 
 		List<Long> gains = new ArrayList<>();
-		LocalDate newestActive = null;
-		LocalDate oldestActive = null;
 		LocalDate lastActive = null;
 
 		if (spine != null && skill != null && asOf != null)
@@ -145,11 +126,6 @@ class PaceBook
 						if (gains.size() < MAX_ACTIVE_DAYS && !laterDate.isBefore(cutoff))
 						{
 							gains.add(gain);
-							if (newestActive == null)
-							{
-								newestActive = laterDate;
-							}
-							oldestActive = laterDate;
 						}
 					}
 				}
@@ -172,19 +148,12 @@ class PaceBook
 		}
 		int activeDays = gains.size();
 		double pace = activeDays > 0 ? (double) total / activeDays : 0.0;
-		long span = activeDays > 0
-			? ChronoUnit.DAYS.between(oldestActive, newestActive) + 1 : 0;
 
-		if (activeDays < MIN_ACTIVE_DAYS || pace <= 0 || remaining <= 0)
-		{
-			// the rate and the mark ahead still stand; only the projection is
-			// withheld, which the caller reads off daysOfPlay
-			return new Pace(pace, activeDays, span, targetLevel, targetXp,
-				Math.max(0, remaining), 0, lastActive);
-		}
-		long daysOfPlay = (long) Math.ceil(remaining / pace);
-		return new Pace(pace, activeDays, span, targetLevel, targetXp, remaining,
-			daysOfPlay, lastActive);
+		// short of a horizon the rate and the mark ahead still stand; only the
+		// projection is withheld, which the caller reads off daysOfPlay
+		long daysOfPlay = activeDays < MIN_ACTIVE_DAYS || pace <= 0 || remaining <= 0
+			? 0 : (long) Math.ceil(remaining / pace);
+		return new Pace(pace, activeDays, targetLevel, targetXp, daysOfPlay, lastActive);
 	}
 
 	// the next level while one remains, then the 200m ceiling, then 0 for done
@@ -201,50 +170,17 @@ class PaceBook
 		return xpForLevel(levelAt(xp) + 1);
 	}
 
-	// the game's own xp formula, evaluated once at class load
-	private static final long[] XP_FOR_LEVEL = curve(MAX_LEVEL);
-
-	private static long[] curve(int top)
-	{
-		long[] table = new long[top + 1];
-		double points = 0;
-		for (int level = 1; level < top; level++)
-		{
-			points += Math.floor(level + 300.0 * Math.pow(2.0, level / 7.0));
-			table[level + 1] = (long) Math.floor(points / 4.0);
-		}
-		return table;   // table[1] stays 0: level 1 starts at 0 xp
-	}
-
 	/** Xp at {@code level}, clamped to the 1-99 the curve covers. */
 	static long xpForLevel(int level)
 	{
-		return XP_FOR_LEVEL[Math.max(1, Math.min(MAX_LEVEL, level))];
+		return Experience.getXpForLevel(Math.max(1, Math.min(MAX_LEVEL, level)));
 	}
 
 	/** The level {@code xp} has reached; anything past 99 reads as 99. */
 	static int levelAt(long xp)
 	{
-		return levelAt(xp, XP_FOR_LEVEL);
+		return Math.min(MAX_LEVEL, virtualLevelAt(xp));
 	}
-
-	private static int levelAt(long xp, long[] table)
-	{
-		for (int level = table.length - 1; level > 1; level--)
-		{
-			if (xp >= table[level])
-			{
-				return level;
-			}
-		}
-		return 1;
-	}
-
-	// The same curve carried on past 99, which is what a virtual level is: the
-	// game stops naming them at 99 and the formula does not stop.
-	private static final int MAX_VIRTUAL_LEVEL = 126;
-
-	private static final long[] XP_FOR_VIRTUAL = curve(MAX_VIRTUAL_LEVEL);
 
 	/**
 	 * The level {@code xp} has reached, counting past 99.
@@ -255,6 +191,7 @@ class PaceBook
 	 */
 	static int virtualLevelAt(long xp)
 	{
-		return levelAt(xp, XP_FOR_VIRTUAL);
+		// Experience throws on negative xp, which reads here as level 1
+		return Experience.getLevelForXp((int) Math.max(0, Math.min(xp, Integer.MAX_VALUE)));
 	}
 }

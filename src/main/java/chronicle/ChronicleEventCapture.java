@@ -27,6 +27,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
 import net.runelite.api.ChatMessageType;
@@ -224,7 +225,10 @@ public class ChronicleEventCapture
 	// (usually from its own GameTick), so the spawn can't decide; reconcileKillLoot()
 	// matches them up at GameTick.
 	private final Map<TileItem, GroundLoot> pendingSelf = new IdentityHashMap<>();
-	private final List<UntakenItem> untakenBatch = new ArrayList<>();
+	// Left-behind stacks awaiting their LOOT_UNTAKEN event. Each keeps the account
+	// that earned it: the batch is gathered before a logout and sent after the next
+	// login, which may belong to somebody else.
+	private final List<GroundLoot> untakenBatch = new ArrayList<>();
 	// Stacks that were tracked when the scene unloaded. Only these can come back on
 	// a new object; anything else spawning is a fresh drop, even where it is the
 	// same thing on the same tile as one we already hold.
@@ -249,6 +253,7 @@ public class ChronicleEventCapture
 	private static final int DROP_WINDOW_TICKS = 2;
 	private final List<RecentDrop> recentDrops = new ArrayList<>();
 
+	@RequiredArgsConstructor
 	private static final class RecentDrop
 	{
 		private final int id;
@@ -256,73 +261,29 @@ public class ChronicleEventCapture
 		// where the player stood at the click: the drop lands there, and a running
 		// player has moved on by the time the spawn is read
 		private final WorldPoint at;
-
-		private RecentDrop(int id, int tick, WorldPoint at)
-		{
-			this.id = id;
-			this.tick = tick;
-			this.at = at;
-		}
 	}
 
 	// a kill of ours, remembered long enough for its ground items to find it.
+	@RequiredArgsConstructor
 	private static final class RecentKill
 	{
 		private final int tick;
 		private final String source;
-
-		private RecentKill(int tick, String source)
-		{
-			this.tick = tick;
-			this.source = source;
-		}
 	}
 
 	// an NPC death seen in scene, ours or anyone's, remembered long enough for a
 	// stack to find the kill it fell from by tile. Index and tick together identify
 	// the NPC that died; an index alone is reused once the NPC despawns.
+	@RequiredArgsConstructor
 	private static final class RecentDeath
 	{
 		private final int tick;
 		private final int index;
 		private final String name;
 		private final WorldArea footprint;   // the tiles the NPC occupied at death
-
-		private RecentDeath(int tick, int index, String name, WorldArea footprint)
-		{
-			this.tick = tick;
-			this.index = index;
-			this.name = name;
-			this.footprint = footprint;
-		}
 	}
 
-	private static final class UntakenItem
-	{
-		private final int id;
-		private final int qty;
-		private final String source;
-		// the account that earned it. The batch is gathered before a logout and sent
-		// after the next login, which may belong to somebody else.
-		private final String owner;
-		// the kill it fell from, so the flush can count how many kills left
-		// something: the tick of the kill, plus the index of the NPC that died when
-		// the stack was matched to its death by tile; -1 each when unknown
-		private final int killTick;
-		private final int killIndex;
-
-		private UntakenItem(int id, int qty, String source, String owner, int killTick,
-			int killIndex)
-		{
-			this.id = id;
-			this.qty = qty;
-			this.source = source;
-			this.owner = owner;
-			this.killTick = killTick;
-			this.killIndex = killIndex;
-		}
-	}
-
+	@RequiredArgsConstructor
 	private static final class GroundLoot
 	{
 		private final int id;
@@ -340,22 +301,6 @@ public class ChronicleEventCapture
 			boolean group, String owner, WorldPoint at)
 		{
 			this(id, qty, despawnTick, spawnTick, group, owner, at, null, -1, -1);
-		}
-
-		private GroundLoot(int id, int qty, int despawnTick, int spawnTick,
-			boolean group, String owner, WorldPoint at, String source, int killTick,
-			int killIndex)
-		{
-			this.id = id;
-			this.qty = qty;
-			this.despawnTick = despawnTick;
-			this.spawnTick = spawnTick;
-			this.group = group;
-			this.owner = owner;
-			this.at = at;
-			this.source = source;
-			this.killTick = killTick;
-			this.killIndex = killIndex;
 		}
 
 		// the same stack, stamped with the kill it fell from: its source name and
@@ -467,7 +412,7 @@ public class ChronicleEventCapture
 		Map<String, JsonArray> bySource = new HashMap<>();
 		// the distinct kills each source's stacks fell from, by kill identity
 		Map<String, Set<String>> killsBySource = new HashMap<>();
-		for (UntakenItem it : untakenBatch)
+		for (GroundLoot it : untakenBatch)
 		{
 			if (!owner.equals(it.owner))
 			{
@@ -551,8 +496,7 @@ public class ChronicleEventCapture
 			GroundLoot g = e.getValue();
 			if (g.despawnTick > 0 && now > g.despawnTick + TIMEOUT_GRACE)
 			{
-				untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner, g.killTick,
-					g.killIndex));
+				untakenBatch.add(g);
 				gone.add(e.getKey());
 			}
 		}
@@ -840,8 +784,7 @@ public class ChronicleEventCapture
 		boolean left = g.despawnTick > 0 && now >= g.despawnTick - 1;
 		if (left)
 		{
-			untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner, g.killTick,
-				g.killIndex));
+			untakenBatch.add(g);
 		}
 	}
 
@@ -869,18 +812,12 @@ public class ChronicleEventCapture
 	}
 
 	// immutable slayer-task snapshot for the panel.
+	@RequiredArgsConstructor
 	static final class SlayerView
 	{
 		final String task;
 		final int remaining;
 		final int initial;
-
-		SlayerView(String task, int remaining, int initial)
-		{
-			this.task = task;
-			this.remaining = remaining;
-			this.initial = initial;
-		}
 	}
 
 	// Tag an NPC-loot event with the slayer task live at the moment of the kill, but
@@ -1642,11 +1579,7 @@ public class ChronicleEventCapture
 		}
 		if (state == GameState.HOPPING || state == GameState.LOGIN_SCREEN)
 		{
-			for (GroundLoot g : groundLoot.values())
-			{
-				untakenBatch.add(new UntakenItem(g.id, g.qty, g.source, g.owner, g.killTick,
-					g.killIndex));
-			}
+			untakenBatch.addAll(groundLoot.values());
 			groundLoot.clear();
 			unloaded.clear();
 		}

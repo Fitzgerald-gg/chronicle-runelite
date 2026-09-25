@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import lombok.RequiredArgsConstructor;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 
@@ -92,21 +93,16 @@ final class RecapPicture
 	}
 
 	/** One figure across the top: what it is, the figure, and a line under it. */
+	@RequiredArgsConstructor
 	static final class Tile
 	{
 		final String label;
 		final String figure;
 		final String under;
-
-		Tile(String label, String figure, String under)
-		{
-			this.label = label;
-			this.figure = figure;
-			this.under = under;
-		}
 	}
 
 	/** A skill's standing at either end of the period; start null where the record cannot say. */
+	@RequiredArgsConstructor
 	static final class SkillLine
 	{
 		final net.runelite.api.Skill skill;
@@ -116,17 +112,6 @@ final class RecapPicture
 		final Long xpStart;
 		final long xpEnd;
 
-		SkillLine(net.runelite.api.Skill skill, String name, Integer levelStart, int levelEnd,
-			Long xpStart, long xpEnd)
-		{
-			this.skill = skill;
-			this.name = name;
-			this.levelStart = levelStart;
-			this.levelEnd = levelEnd;
-			this.xpStart = xpStart;
-			this.xpEnd = xpEnd;
-		}
-
 		long gained()
 		{
 			return xpStart == null ? 0 : Math.max(0, xpEnd - xpStart);
@@ -134,6 +119,7 @@ final class RecapPicture
 	}
 
 	/** A boss's kill count at either end, or only what moved where that is all that is known. */
+	@RequiredArgsConstructor
 	static final class BossLine
 	{
 		final String name;
@@ -141,30 +127,15 @@ final class RecapPicture
 		final Long start;
 		final Long end;
 		final long gained;
-
-		BossLine(String name, int sprite, Long start, Long end, long gained)
-		{
-			this.name = name;
-			this.sprite = sprite;
-			this.start = start;
-			this.end = end;
-			this.gained = gained;
-		}
 	}
 
 	/** A plain line: a name, its figure, and a gp figure beside it where there is one. */
+	@RequiredArgsConstructor
 	static final class Named
 	{
 		final String name;
 		final String figure;
 		final String gp;
-
-		Named(String name, String figure, String gp)
-		{
-			this.name = name;
-			this.figure = figure;
-			this.gp = gp;
-		}
 	}
 
 	private RecapPicture()
@@ -189,6 +160,7 @@ final class RecapPicture
 		}
 	}
 
+	@RequiredArgsConstructor
 	private static final class Block
 	{
 		final String title;
@@ -196,12 +168,6 @@ final class RecapPicture
 		// whether this block may lose rows off its end when the page is full
 		final boolean trims;
 		int dropped;
-
-		Block(String title, boolean trims)
-		{
-			this.title = title;
-			this.trims = trims;
-		}
 	}
 
 	private static Font regular()
@@ -264,76 +230,65 @@ final class RecapPicture
 		return right - w;
 	}
 
-	/** A name on the left, a figure on the right, a gp figure beside it in the accent. */
-	private static Piece line(String name, String figure, String gp, Color nameColor)
-	{
-		return new Piece()
-		{
-			public int height()
-			{
-				return ROW;
-			}
-
-			public void draw(Graphics2D g, int x, int y, int w)
-			{
-				int base = y + 15;
-				int right = x + w;
-				if (gp != null && !gp.isEmpty())
-				{
-					right = rightText(g, gp, regular(), ACCENT, right, base) - 8;
-				}
-				if (figure != null && !figure.isEmpty())
-				{
-					right = rightText(g, figure, regular(), VALUE, right, base) - 8;
-				}
-				text(g, cut(name, regular(), right - x), regular(), nameColor, x, base);
-			}
-		};
-	}
-
-	private static Piece line(Named n)
-	{
-		return line(n.name, n.figure, n.gp, TEXT);
-	}
-
-	/** Grey small text, wrapped to the card: an aside the reader should still see. */
-	private static List<Piece> note(String s, int w)
+	/** Each a name on the left, a figure on the right, a gp figure beside it in the accent. */
+	private static List<Piece> lines(List<Named> all)
 	{
 		List<Piece> out = new ArrayList<>();
-		for (String l : wrap(s, small(), w, " "))
+		for (Named n : all)
 		{
 			out.add(new Piece()
 			{
 				public int height()
 				{
-					return NOTE_ROW;
+					return ROW;
 				}
 
-				public void draw(Graphics2D g, int x, int y, int w2)
+				public void draw(Graphics2D g, int x, int y, int w)
 				{
-					text(g, l, small(), DIM, x, y + 11);
+					int base = y + 15;
+					int right = x + w;
+					if (n.gp != null && !n.gp.isEmpty())
+					{
+						right = rightText(g, n.gp, regular(), ACCENT, right, base) - 8;
+					}
+					if (n.figure != null && !n.figure.isEmpty())
+					{
+						right = rightText(g, n.figure, regular(), VALUE, right, base) - 8;
+					}
+					text(g, cut(n.name, regular(), right - x), regular(), TEXT, x, base);
 				}
 			});
 		}
 		return out;
 	}
 
+	/** Grey small text, wrapped to the card: an aside the reader should still see. */
+	private static List<Piece> note(String s, int w)
+	{
+		return rows(wrap(s, small(), w, " "), small(), DIM, NOTE_ROW, 11);
+	}
+
 	/** Names run on as one paragraph, broken only between names. */
 	private static List<Piece> names(List<String> all, int w)
 	{
+		return rows(wrap(String.join(" · ", all), regular(), w, " · "), regular(), TEXT, ROW - 2, 14);
+	}
+
+	private static List<Piece> rows(List<String> lines, Font f, Color c, int h, int base)
+	{
 		List<Piece> out = new ArrayList<>();
-		for (String l : wrap(String.join(" · ", all), regular(), w, " · "))
+		for (String l : lines)
 		{
 			out.add(new Piece()
 			{
 				public int height()
 				{
-					return ROW - 2;
+					return h;
 				}
 
-				public void draw(Graphics2D g, int x, int y, int w2)
+				public void draw(Graphics2D g, int x, int y, int w)
 				{
-					text(g, l, regular(), TEXT, x, y + 14);
+					text(g, l, f, c, x, y + base);
 				}
 			});
 		}
@@ -383,21 +338,6 @@ final class RecapPicture
 			public void draw(Graphics2D g, int x, int y, int w)
 			{
 				text(g, s.toUpperCase(java.util.Locale.ROOT), small(), DIM, x, y + 15);
-			}
-		};
-	}
-
-	private static Piece spacer(int h)
-	{
-		return new Piece()
-		{
-			public int height()
-			{
-				return h;
-			}
-
-			public void draw(Graphics2D g, int x, int y, int w)
-			{
 			}
 		};
 	}
@@ -504,10 +444,7 @@ final class RecapPicture
 		if (!f.monsters.isEmpty() || f.monstersNote != null)
 		{
 			Block b = new Block("Monsters", true);
-			for (Named n : f.monsters)
-			{
-				b.pieces.add(line(n));
-			}
+			b.pieces.addAll(lines(f.monsters));
 			if (f.monstersNote != null)
 			{
 				b.pieces.addAll(note(f.monstersNote, inner));
@@ -517,25 +454,16 @@ final class RecapPicture
 		if (!f.loot.isEmpty() || f.lootNote != null)
 		{
 			Block b = new Block("Loot", true);
-			for (Named n : f.loot)
-			{
-				b.pieces.add(line(n));
-			}
+			b.pieces.addAll(lines(f.loot));
 			if (!f.sources.isEmpty())
 			{
 				b.pieces.add(subhead("Where it came from"));
-				for (Named n : f.sources)
-				{
-					b.pieces.add(line(n));
-				}
+				b.pieces.addAll(lines(f.sources));
 			}
 			if (!f.items.isEmpty())
 			{
 				b.pieces.add(subhead("Dearest"));
-				for (Named n : f.items)
-				{
-					b.pieces.add(line(n));
-				}
+				b.pieces.addAll(lines(f.items));
 			}
 			if (f.lootNote != null)
 			{
@@ -546,30 +474,21 @@ final class RecapPicture
 		if (!f.slayer.isEmpty() || !f.clues.isEmpty())
 		{
 			Block b = new Block(f.slayer.isEmpty() ? "Clues" : "Slayer", true);
-			for (Named n : f.slayer)
-			{
-				b.pieces.add(line(n));
-			}
+			b.pieces.addAll(lines(f.slayer));
 			if (!f.clues.isEmpty())
 			{
 				if (!f.slayer.isEmpty())
 				{
 					b.pieces.add(subhead("Clues"));
 				}
-				for (Named n : f.clues)
-				{
-					b.pieces.add(line(n));
-				}
+				b.pieces.addAll(lines(f.clues));
 			}
 			right.add(b);
 		}
 		for (Map.Entry<String, List<Named>> e : f.trackers.entrySet())
 		{
 			Block b = new Block(e.getKey(), true);
-			for (Named n : e.getValue())
-			{
-				b.pieces.add(line(n));
-			}
+			b.pieces.addAll(lines(e.getValue()));
 			right.add(b);
 		}
 		if (f.trackersNote != null)

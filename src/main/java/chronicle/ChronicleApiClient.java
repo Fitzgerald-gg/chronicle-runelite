@@ -18,6 +18,7 @@ import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -63,6 +64,7 @@ public class ChronicleApiClient
 		this.gson = gson;
 	}
 
+	@RequiredArgsConstructor
 	public static final class PushResult
 	{
 		public final boolean ok;
@@ -71,15 +73,6 @@ public class ChronicleApiClient
 		public final int changed;
 		@Nullable
 		public final String error;
-
-		PushResult(boolean ok, int code, int accepted, int changed, @Nullable String error)
-		{
-			this.ok = ok;
-			this.code = code;
-			this.accepted = accepted;
-			this.changed = changed;
-			this.error = error;
-		}
 	}
 
 	// The account's stable hash (RuneLite client.getAccountHash()), set by the
@@ -113,15 +106,12 @@ public class ChronicleApiClient
 	 */
 	public void pushStats(String baseUrl, String token, String name,
 		Map<String, Integer> stats, @Nullable String accountType,
-		@Nullable JsonObject skills, @Nullable Consumer<PushResult> onDone)
+		@Nullable JsonObject skills, Consumer<PushResult> onDone)
 	{
 		HttpUrl url = resolve(baseUrl, "api/counters/" + token);
 		if (url == null)
 		{
-			if (onDone != null)
-			{
-				onDone.accept(new PushResult(false, -1, 0, 0, "bad server URL"));
-			}
+			onDone.accept(new PushResult(false, -1, 0, 0, "bad server URL"));
 			return;
 		}
 
@@ -151,21 +141,13 @@ public class ChronicleApiClient
 			payload.add("skills", skills);
 		}
 
-		Request request = new Request.Builder()
-			.url(url)
-			.post(RequestBody.create(JSON, gson.toJson(payload)))
-			.build();
-
-		http.newCall(request).enqueue(new Callback()
+		post(url, payload, new Callback()
 		{
 			@Override
 			public void onFailure(Call call, IOException e)
 			{
 				log.debug("stat push failed", e);
-				if (onDone != null)
-				{
-					onDone.accept(new PushResult(false, -1, 0, 0, e.getMessage()));
-				}
+				onDone.accept(new PushResult(false, -1, 0, 0, e.getMessage()));
 			}
 
 			@Override
@@ -175,10 +157,6 @@ public class ChronicleApiClient
 				{
 					int code = r.code();
 					JsonObject body = parse(r);
-					if (onDone == null)
-					{
-						return;
-					}
 					if (code == 200)
 					{
 						int accepted = body != null ? optInt(body, "accepted") : 0;
@@ -194,10 +172,7 @@ public class ChronicleApiClient
 				catch (Exception ex)
 				{
 					log.debug("stat push parse error", ex);
-					if (onDone != null)
-					{
-						onDone.accept(new PushResult(false, -1, 0, 0, ex.getMessage()));
-					}
+					onDone.accept(new PushResult(false, -1, 0, 0, ex.getMessage()));
 				}
 			}
 		});
@@ -218,11 +193,7 @@ public class ChronicleApiClient
 			log.debug("postEvent: bad server URL {}", baseUrl);
 			return;
 		}
-		Request request = new Request.Builder()
-			.url(url)
-			.post(RequestBody.create(JSON, gson.toJson(event)))
-			.build();
-		http.newCall(request).enqueue(new Callback()
+		post(url, event, new Callback()
 		{
 			@Override
 			public void onFailure(Call call, IOException e)
@@ -258,11 +229,7 @@ public class ChronicleApiClient
 		}
 		JsonObject payload = gson.toJsonTree(snapshot).getAsJsonObject();
 		payload.addProperty("playerName", name);
-		Request request = new Request.Builder()
-			.url(url)
-			.post(RequestBody.create(JSON, gson.toJson(payload)))
-			.build();
-		http.newCall(request).enqueue(new Callback()
+		post(url, payload, new Callback()
 		{
 			@Override
 			public void onFailure(Call call, IOException e)
@@ -289,29 +256,19 @@ public class ChronicleApiClient
 		HttpUrl url = resolve(baseUrl, "api/achievements/" + token);
 		if (url == null)
 		{
-			if (onDone != null)
-			{
-				onDone.accept(false);
-			}
+			onDone.accept(false);
 			return;
 		}
 		JsonObject payload = new JsonObject();
 		payload.addProperty("playerName", name);
 		payload.add("achievements", achievements);
-		Request request = new Request.Builder()
-			.url(url)
-			.post(RequestBody.create(JSON, gson.toJson(payload)))
-			.build();
-		http.newCall(request).enqueue(new Callback()
+		post(url, payload, new Callback()
 		{
 			@Override
 			public void onFailure(Call call, IOException e)
 			{
 				log.debug("achievement push failed", e);
-				if (onDone != null)
-				{
-					onDone.accept(false);
-				}
+				onDone.accept(false);
 			}
 
 			@Override
@@ -319,12 +276,15 @@ public class ChronicleApiClient
 			{
 				boolean ok = response.isSuccessful();
 				response.close();
-				if (onDone != null)
-				{
-					onDone.accept(ok);
-				}
+				onDone.accept(ok);
 			}
 		});
+	}
+
+	private void post(HttpUrl url, JsonObject body, Callback cb)
+	{
+		http.newCall(new Request.Builder().url(url).post(RequestBody.create(JSON, gson.toJson(body)))
+			.build()).enqueue(cb);
 	}
 
 	@Nullable

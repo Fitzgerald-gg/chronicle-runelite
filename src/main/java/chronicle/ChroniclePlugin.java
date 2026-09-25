@@ -8,18 +8,23 @@
  */
 package chronicle;
 
+import chronicle.counters.ExperienceStatTracker.SkillGain;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.inject.Provides;
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
 import java.io.File;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import javax.inject.Inject;
+import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -42,6 +47,7 @@ import net.runelite.client.plugins.loottracker.LootTrackerPlugin;
 import net.runelite.client.plugins.slayer.SlayerPlugin;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
+import net.runelite.http.api.loottracker.LootRecordType;
 
 @Slf4j
 @PluginDescriptor(
@@ -124,7 +130,7 @@ public class ChroniclePlugin extends Plugin
 	// The calendar spine, parsed off the EDT and published whole. The History tab
 	// re-reads it on every pill, stepper and date click, and the file is unbounded.
 	private volatile String historyCacheRsn;
-	private volatile java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> historyCache;
+	private volatile TreeMap<LocalDate, HistoryLog.Baseline> historyCache;
 	private volatile boolean historyLoading;
 
 	private ChroniclePanel panel;
@@ -185,7 +191,9 @@ public class ChroniclePlugin extends Plugin
 		panel = new ChroniclePanel(this);
 		navButton = NavigationButton.builder()
 			.tooltip("Chronicle")
-			.icon(buildIcon())
+			// a small open book, distinct from the text-badge icons on the rail
+			.icon(net.runelite.client.util.ImageUtil.loadImageResource(ChroniclePlugin.class,
+				"plugin_nav_icon.png"))
 			.priority(9)
 			.panel(panel)
 			.build();
@@ -255,7 +263,7 @@ public class ChroniclePlugin extends Plugin
 		final ChroniclePanel dying = panel;
 		if (dying != null)
 		{
-			javax.swing.SwingUtilities.invokeLater(dying::shutdown);
+			SwingUtilities.invokeLater(dying::shutdown);
 		}
 		panel = null;
 		pendingLoginSetup = false;
@@ -273,7 +281,7 @@ public class ChroniclePlugin extends Plugin
 			// The toggle path is the EDT one, where the flush (an fsync and a move)
 			// has to leave the thread. The other arm is defence against a caller that
 			// does not exist today rather than one that does.
-			if (javax.swing.SwingUtilities.isEventDispatchThread())
+			if (SwingUtilities.isEventDispatchThread())
 			{
 				executor.submit(() -> localStore.flush(localDir()));
 			}
@@ -451,28 +459,17 @@ public class ChroniclePlugin extends Plugin
 		// laying out and painting fifteen hundred components that say exactly
 		// what they said before.
 		int moved = 0;
-		long r = localStore.revision();
-		if (r != lastLootRevision)
+		// index i is the panel's bit 1 << i: MOVED_RECORD, MOVED_COUNTERS,
+		// MOVED_SKILLS, MOVED_CLOG
+		long[] now = {localStore.revision(), statStore.revision(), skillRevision,
+			clogCapture.revision()};
+		for (int i = 0; i < now.length; i++)
 		{
-			lastLootRevision = r;
-			moved |= ChroniclePanel.MOVED_RECORD;
-		}
-		r = statStore.revision();
-		if (r != lastCounterRevision)
-		{
-			lastCounterRevision = r;
-			moved |= ChroniclePanel.MOVED_COUNTERS;
-		}
-		r = clogCapture.revision();
-		if (r != lastClogRevision)
-		{
-			lastClogRevision = r;
-			moved |= ChroniclePanel.MOVED_CLOG;
-		}
-		if (skillRevision != lastSkillRevision)
-		{
-			lastSkillRevision = skillRevision;
-			moved |= ChroniclePanel.MOVED_SKILLS;
+			if (now[i] != lastRevision[i])
+			{
+				lastRevision[i] = now[i];
+				moved |= 1 << i;
+			}
 		}
 		if (moved != 0)
 		{
@@ -533,7 +530,7 @@ public class ChroniclePlugin extends Plugin
 			ChroniclePanel p = panel;
 			if (p != null)
 			{
-				javax.swing.SwingUtilities.invokeLater(p::resetAccountCaches);
+				SwingUtilities.invokeLater(p::resetAccountCaches);
 			}
 			clientThread.invoke(this::refreshLocal);
 		});
@@ -560,7 +557,7 @@ public class ChroniclePlugin extends Plugin
 			final ChroniclePanel asking = panel;
 			if (asking != null)
 			{
-				javax.swing.SwingUtilities.invokeLater(asking::promptImport);
+				SwingUtilities.invokeLater(asking::promptImport);
 			}
 			return;
 		}
@@ -744,7 +741,7 @@ public class ChroniclePlugin extends Plugin
 	// The journal's lifetime counters, clamped to the wire's int shape.
 	private Map<String, Integer> journalAbsolutes(String rsn)
 	{
-		Map<String, Integer> out = new java.util.HashMap<>();
+		Map<String, Integer> out = new HashMap<>();
 		// The previous account's model stays mounted until the next load lands. Unguarded,
 		// this read hands its totals to another account's push.
 		if (rsn == null || !localStore.isReadyFor(rsn))
@@ -840,27 +837,35 @@ public class ChroniclePlugin extends Plugin
 		return statStore.snapshotAll();
 	}
 
-	// Per-skill level and xp for the push, keyed by lowercase skill name, plus an
-	// "overall" total. Client thread only, the skill accessors require it.
+	// Per-skill {level, xp}, keyed by lowercase skill name, plus an "overall"
+	// total. Client thread only, the skill accessors require it.
+	private Map<String, long[]> readSkills()
+	{
+		Map<String, long[]> out = new java.util.LinkedHashMap<>();
+		for (Skill s : Skill.values())
+		{
+			if (s != Skill.OVERALL)
+			{
+				// ROOT locale: a Turkish JVM lowercases MINING to "mınıng".
+				out.put(s.name().toLowerCase(Locale.ROOT),
+					new long[]{client.getRealSkillLevel(s), client.getSkillExperience(s)});
+			}
+		}
+		out.put("overall", new long[]{client.getTotalLevel(), client.getOverallExperience()});
+		return out;
+	}
+
+	// readSkills as JSON, for the push and the character sheet.
 	private JsonObject harvestSkills()
 	{
 		JsonObject skills = new JsonObject();
-		for (Skill s : Skill.values())
+		for (Map.Entry<String, long[]> e : readSkills().entrySet())
 		{
-			if (s == Skill.OVERALL)
-			{
-				continue;
-			}
 			JsonObject o = new JsonObject();
-			o.addProperty("level", client.getRealSkillLevel(s));
-			o.addProperty("xp", client.getSkillExperience(s));
-			// ROOT locale: a Turkish JVM lowercases MINING to "mınıng".
-			skills.add(s.name().toLowerCase(java.util.Locale.ROOT), o);
+			o.addProperty("level", e.getValue()[0]);
+			o.addProperty("xp", e.getValue()[1]);
+			skills.add(e.getKey(), o);
 		}
-		JsonObject overall = new JsonObject();
-		overall.addProperty("level", client.getTotalLevel());
-		overall.addProperty("xp", client.getOverallExperience());
-		skills.add("overall", overall);
 		return skills;
 	}
 
@@ -1045,7 +1050,7 @@ public class ChroniclePlugin extends Plugin
 
 	// This session's xp split by skill, biggest first, each with its own rate. Held in
 	// memory by the experience tracker alone: it never enters the journal or the push.
-	java.util.List<chronicle.counters.ExperienceStatTracker.SkillGain> sessionSkillXp()
+	List<SkillGain> sessionSkillXp()
 	{
 		// Guarded for the panel's test doubles, which stand in for the plugin without
 		// Guice ever filling this field.
@@ -1053,7 +1058,7 @@ public class ChroniclePlugin extends Plugin
 		return c == null ? java.util.Collections.emptyList() : c.sessionSkillXp();
 	}
 
-	java.util.List<LocalStore.SourceRow> dropSources()
+	List<LocalStore.SourceRow> dropSources()
 	{
 		return localStore.dropSources();
 	}
@@ -1065,7 +1070,7 @@ public class ChroniclePlugin extends Plugin
 	}
 
 	/** The dated loot roll over a window, both days included. */
-	LocalStore.LootWindow lootBetween(java.time.LocalDate from, java.time.LocalDate to)
+	LocalStore.LootWindow lootBetween(LocalDate from, LocalDate to)
 	{
 		return localStore.lootBetween(from, to);
 	}
@@ -1075,12 +1080,12 @@ public class ChroniclePlugin extends Plugin
 		return localStore.itemDays(name);
 	}
 
-	java.util.Map<String, long[]> dayTotals()
+	Map<String, long[]> dayTotals()
 	{
 		return localStore.dayTotals();
 	}
 
-	java.util.List<LocalStore.BagItem> sourceItems(String source)
+	List<LocalStore.BagItem> sourceItems(String source)
 	{
 		return localStore.sourceItems(source);
 	}
@@ -1111,7 +1116,7 @@ public class ChroniclePlugin extends Plugin
 	}
 
 	/** The feed as the journal holds it, newest first. */
-	java.util.List<JsonObject> feedNewest(int n)
+	List<JsonObject> feedNewest(int n)
 	{
 		return localStore.feedNewest(n);
 	}
@@ -1128,15 +1133,15 @@ public class ChroniclePlugin extends Plugin
 	 * grown: handed a line that is newer every time it looks, it would re-read
 	 * the whole history on every draw for ever.
 	 */
-	java.util.List<JsonObject> feedWithSitting(int n)
+	List<JsonObject> feedWithSitting(int n)
 	{
-		java.util.List<JsonObject> kept = localStore.feedNewest(n);
+		List<JsonObject> kept = localStore.feedNewest(n);
 		JsonObject live = liveSessionLine();
 		if (live == null)
 		{
 			return kept;
 		}
-		java.util.List<JsonObject> out = new java.util.ArrayList<>(kept.size() + 1);
+		List<JsonObject> out = new ArrayList<>(kept.size() + 1);
 		out.add(live);
 		out.addAll(kept);
 		return out;
@@ -1149,7 +1154,7 @@ public class ChroniclePlugin extends Plugin
 	}
 
 	/** What one source paid this sitting. */
-	java.util.List<LocalStore.BagItem> sessionSourceItems(String source)
+	List<LocalStore.BagItem> sessionSourceItems(String source)
 	{
 		return localStore.sessionSourceItems(source);
 	}
@@ -1164,7 +1169,7 @@ public class ChroniclePlugin extends Plugin
 		return localStore.sessionLootValue();
 	}
 
-	java.util.List<LocalStore.RecentDrop> recentDrops()
+	List<LocalStore.RecentDrop> recentDrops()
 	{
 		return localStore.recentDrops();
 	}
@@ -1176,14 +1181,14 @@ public class ChroniclePlugin extends Plugin
 
 	// The spine as last parsed. The panel's rebuild calls this on the EDT: never read
 	// disk here. A cold cache asks the executor and the panel rebuilds when it lands.
-	java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> historyBaselines()
+	TreeMap<LocalDate, HistoryLog.Baseline> historyBaselines()
 	{
 		String rsn = localName;
 		if (rsn == null)
 		{
-			return new java.util.TreeMap<>();
+			return new TreeMap<>();
 		}
-		java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> cached = historyCache;
+		TreeMap<LocalDate, HistoryLog.Baseline> cached = historyCache;
 		if (cached != null && rsn.equals(historyCacheRsn))
 		{
 			return cached;
@@ -1203,7 +1208,7 @@ public class ChroniclePlugin extends Plugin
 				}
 			});
 		}
-		return new java.util.TreeMap<>();
+		return new TreeMap<>();
 	}
 
 	// Executor only: the spine read the EDT must not do, published to the panel.
@@ -1212,7 +1217,7 @@ public class ChroniclePlugin extends Plugin
 		// Older builds appended at login, rollover and logout alike, so a long-running
 		// account carries several lines for the same day. Fold them before reading.
 		historyLog.compact(localDir(), rsn);
-		java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> read =
+		TreeMap<LocalDate, HistoryLog.Baseline> read =
 			historyLog.read(localDir(), rsn);
 		// An account switch can overtake the read; don't hand the panel the previous
 		// player's calendar under the current player's name.
@@ -1301,33 +1306,13 @@ public class ChroniclePlugin extends Plugin
 			localStore.anchoredKills());
 	}
 
-	// The ledger's sources the collection log has no page for, at the figures
-	// killCounts carries for them. The panel sorts its own boards by kind now and
-	// no longer asks; this stays as the one place that answers "which of these
-	// did the log never hear of", which is a question about the record itself.
-	Map<String, Long> ledgerKills()
-	{
-		JsonObject cl = localStore.clogSnapshot();
-		java.util.Set<String> paged = LocalStore.clogKillCounts(cl).keySet();
-		Map<String, Long> out = new java.util.LinkedHashMap<>();
-		for (Map.Entry<String, Long> e
-			: LocalStore.sourceKills(cl, localStore.dropSources()).entrySet())
-		{
-			if (!paged.contains(e.getKey()))
-			{
-				out.put(e.getKey(), e.getValue());
-			}
-		}
-		return out;
-	}
-
 	/**
 	 * The skill sheet as it stands, not as last written. Falls back to the
 	 * journal's copy before the first tick of a session, and while logged out.
 	 */
-	java.util.Map<String, long[]> skillSheet()
+	Map<String, long[]> skillSheet()
 	{
-		java.util.Map<String, long[]> now = liveSkills;
+		Map<String, long[]> now = liveSkills;
 		return now.isEmpty() ? localStore.skillSheet() : now;
 	}
 
@@ -1347,95 +1332,85 @@ public class ChroniclePlugin extends Plugin
 	}
 
 	/** Every item the slayer journey logged inside a window, ranked by value. */
-	java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, boolean includeOpen)
-	{
-		return localStore.onTaskLoot(fromMs, toMs, includeOpen);
-	}
-
-	java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task,
+	List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task,
 		boolean includeOpen)
 	{
 		return localStore.onTaskLoot(fromMs, toMs, task, includeOpen);
 	}
 
-	java.util.List<LocalStore.BagItem> allLoot()
+	List<LocalStore.BagItem> allLoot()
 	{
 		return localStore.allLoot();
 	}
 
 	/** Every task name the journey holds, newest first, without repeats. */
-	java.util.List<String> taskNames()
+	List<String> taskNames()
 	{
 		return localStore.taskNames();
 	}
 
 	/** The kills behind that loot, and how many of them were a superior. */
-	long[] onTaskTally(long fromMs, long toMs, boolean includeOpen)
-	{
-		return localStore.onTaskTally(fromMs, toMs, includeOpen);
-	}
-
 	long[] onTaskTally(long fromMs, long toMs, String onlyTask, boolean includeOpen)
 	{
 		return localStore.onTaskTally(fromMs, toMs, onlyTask, includeOpen);
 	}
 
-	java.util.Map<String, Long> journalFacts()
+	Map<String, Long> journalFacts()
 	{
 		return localStore.journalFacts();
 	}
 
-	java.util.Map<String, Long> chatKills()
+	Map<String, Long> chatKills()
 	{
 		return localStore.chatKillCounts();
 	}
 
-	java.util.Map<String, Long> anchoredKills()
+	Map<String, Long> anchoredKills()
 	{
 		return localStore.anchoredKills();
 	}
 
-	java.util.Map<String, long[]> onTaskItems(long fromMs, long toMs)
+	Map<String, long[]> onTaskItems(long fromMs, long toMs)
 	{
 		return localStore.onTaskItems(fromMs, toMs);
 	}
 
-	java.util.Map<String, Long> onTaskKills(long fromMs, long toMs)
+	Map<String, Long> onTaskKills(long fromMs, long toMs)
 	{
 		return localStore.onTaskKills(fromMs, toMs);
 	}
 
-	java.util.List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
+	List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
 	{
 		return localStore.onTaskItemByTask(itemName, fromMs, toMs);
 	}
 
-	java.util.List<LocalStore.Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
+	List<LocalStore.Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
 	{
 		return localStore.onTaskAssignments(npc, fromMs, toMs);
 	}
 
-	java.util.List<LocalStore.BagItem> untakenItemsOf(String source)
+	List<LocalStore.BagItem> untakenItemsOf(String source)
 	{
 		return localStore.untakenItemsOf(source);
 	}
 
-	java.util.List<LocalStore.UntakenRow> untakenSourcesOf(String item)
+	List<LocalStore.UntakenRow> untakenSourcesOf(String item)
 	{
 		return localStore.untakenSourcesOf(item);
 	}
 
-	java.util.List<LocalStore.BagItem> slayerTaskItems(int index)
+	List<LocalStore.BagItem> slayerTaskItems(int index)
 	{
 		return localStore.slayerTaskItems(index);
 	}
 
-	java.util.List<LocalStore.UntakenRow> slayerTaskMonsters(int index)
+	List<LocalStore.UntakenRow> slayerTaskMonsters(int index)
 	{
 		return localStore.slayerTaskMonsters(index);
 	}
 
-	java.util.List<LocalStore.PetRow> pets()
+	List<LocalStore.PetRow> pets()
 	{
 		return localStore.pets();
 	}
@@ -1443,39 +1418,39 @@ public class ChroniclePlugin extends Plugin
 	// The pace of a skill, measured over the days it actually moved.
 	PaceBook.Pace pace(String skill)
 	{
-		java.util.TreeMap<java.time.LocalDate, HistoryLog.Baseline> spine = historyBaselines();
+		TreeMap<LocalDate, HistoryLog.Baseline> spine = historyBaselines();
 		long xp = 0;
 		try
 		{
-			xp = client.getSkillExperience(Skill.valueOf(skill.toUpperCase(java.util.Locale.ROOT)));
+			xp = client.getSkillExperience(Skill.valueOf(skill.toUpperCase(Locale.ROOT)));
 		}
 		catch (RuntimeException ignored)
 		{
 			// not a real skill name, or the client is unreadable. No pace.
 		}
-		// The spine files skills lowercase (harvestSkills writes them that way); the panel
+		// The spine files skills lowercase (readSkills writes them that way); the panel
 		// asks with its own capitalisation. Normalise, or nothing ever matches.
-		return PaceBook.forSkill(spine, skill.toLowerCase(java.util.Locale.ROOT), xp);
+		return PaceBook.forSkill(spine, skill.toLowerCase(Locale.ROOT), xp);
 	}
 
-	java.util.List<LocalStore.UntakenRow> untakenSources()
+	List<LocalStore.UntakenRow> untakenSources()
 	{
 		return localStore.untakenSources();
 	}
 
-	java.util.List<LocalStore.UntakenRow> untakenItems()
+	List<LocalStore.UntakenRow> untakenItems()
 	{
 		return localStore.untakenItems();
 	}
 
-	java.util.Map<String, Long> consumableValues()
+	Map<String, Long> consumableValues()
 	{
 		return localStore.consumableValues();
 	}
 
 	// Dryness, computed from the journal's own collection log and kill counts against
 	// the bundled wiki rate book. The panel fetches once per session.
-	void fetchGrinds(java.util.function.Consumer<java.util.List<GrindBook.GrindRow>> onDone)
+	void fetchGrinds(java.util.function.Consumer<List<GrindBook.GrindRow>> onDone)
 	{
 		final String rsn = localName;
 		if (rsn == null || !localStore.isReadyFor(rsn))
@@ -1484,7 +1459,7 @@ public class ChroniclePlugin extends Plugin
 			return;
 		}
 		final JsonObject clog = localStore.clogSnapshot();
-		final java.util.List<LocalStore.SourceRow> sources = localStore.dropSources();
+		final List<LocalStore.SourceRow> sources = localStore.dropSources();
 		executor.submit(() -> onDone.accept(grindBook.grinds(clog, sources)));
 	}
 
@@ -1494,7 +1469,7 @@ public class ChroniclePlugin extends Plugin
 	// two more: the lifetime counters their attempts are in, and the skill sheet the
 	// grid reads its levels off. And the achievements the sheet has always carried,
 	// which say whether a pet behind an unlock is a chase at all yet.
-	java.util.Map<String, GrindBook.PetChase> petChases(java.util.Collection<String> pets)
+	Map<String, GrindBook.PetChase> petChases(java.util.Collection<String> pets)
 	{
 		final String rsn = localName;
 		if (rsn == null || !localStore.isReadyFor(rsn))
@@ -1560,11 +1535,11 @@ public class ChroniclePlugin extends Plugin
 		// What the xp was: the split never entered the journal, so a closed
 		// sitting could say +412k and never what it was.
 		JsonObject skills = new JsonObject();
-		for (chronicle.counters.ExperienceStatTracker.SkillGain g : sessionSkillXp())
+		for (SkillGain g : sessionSkillXp())
 		{
 			if (g.xp > 0)
 			{
-				skills.addProperty(g.skill.name().toLowerCase(java.util.Locale.ROOT), g.xp);
+				skills.addProperty(g.skill.name().toLowerCase(Locale.ROOT), g.xp);
 			}
 		}
 		if (skills.size() > 0)
@@ -1626,7 +1601,7 @@ public class ChroniclePlugin extends Plugin
 	// beat the journal's lifetime record. Otherwise an old peak reads as a session feat.
 	Map<String, Integer> sessionDisplayCounters()
 	{
-		Map<String, Integer> out = new java.util.HashMap<>(sessionView());
+		Map<String, Integer> out = new HashMap<>(sessionView());
 		for (String key : LocalStore.MAX_KEYS)
 		{
 			Integer val = out.get(key);
@@ -1660,7 +1635,7 @@ public class ChroniclePlugin extends Plugin
 	Map<String, Integer> sessionView()
 	{
 		Map<String, Integer> abs = harvest();
-		Map<String, Integer> out = new java.util.HashMap<>(abs.size());
+		Map<String, Integer> out = new HashMap<>(abs.size());
 		for (Map.Entry<String, Integer> en : abs.entrySet())
 		{
 			if (LocalStore.MAX_KEYS.contains(en.getKey()) || en.getValue() > 0)
@@ -1671,19 +1646,9 @@ public class ChroniclePlugin extends Plugin
 		return out;
 	}
 
-	// Cached once per client run; every flush, load and history append asks for it.
-	private static volatile File journalDir;
-
 	private static File localDir()
 	{
-		File cached = journalDir;
-		if (cached != null)
-		{
-			return cached;
-		}
-		File dir = new File(net.runelite.client.RuneLite.RUNELITE_DIR, "chronicle");
-		journalDir = dir;
-		return dir;
+		return new File(net.runelite.client.RuneLite.RUNELITE_DIR, "chronicle");
 	}
 
 	// Client thread. Copies the current character sheet into the journal.
@@ -1734,6 +1699,7 @@ public class ChroniclePlugin extends Plugin
 	}
 
 	/** One Loot Tracker source as parsed off the client thread: raw ids and quantities. */
+	@lombok.RequiredArgsConstructor
 	private static final class RawSource
 	{
 		final String source;
@@ -1741,15 +1707,7 @@ public class ChroniclePlugin extends Plugin
 		final long firstMs;
 		final long lastMs;
 		// {item id, quantity} pairs, in the order the tracker stored them.
-		final java.util.List<long[]> items = new java.util.ArrayList<>();
-
-		RawSource(String source, int kills, long firstMs, long lastMs)
-		{
-			this.source = source;
-			this.kills = kills;
-			this.firstMs = firstMs;
-			this.lastMs = lastMs;
-		}
+		final List<long[]> items = new ArrayList<>();
 	}
 
 	// Client thread. The config scan and JSON parse read no game state and are the
@@ -1768,7 +1726,7 @@ public class ChroniclePlugin extends Plugin
 		final String profileKey = configManager.getRSProfileKey();
 		executor.submit(() ->
 		{
-			final java.util.List<RawSource> parsed;
+			final List<RawSource> parsed;
 			try
 			{
 				parsed = readLootTrackerArchive(profileKey);
@@ -1796,10 +1754,10 @@ public class ChroniclePlugin extends Plugin
 		{
 			return false;
 		}
-		for (net.runelite.http.api.loottracker.LootRecordType t
-			: net.runelite.http.api.loottracker.LootRecordType.values())
+		for (LootRecordType t
+			: LootRecordType.values())
 		{
-			if (t == net.runelite.http.api.loottracker.LootRecordType.PLAYER)
+			if (t == LootRecordType.PLAYER)
 			{
 				continue;
 			}
@@ -1812,10 +1770,10 @@ public class ChroniclePlugin extends Plugin
 	}
 
 	// Executor: the config-archive scan and its JSON parse, no game state.
-	private java.util.List<RawSource> readLootTrackerArchive(String profileKey)
+	private List<RawSource> readLootTrackerArchive(String profileKey)
 	{
-		java.util.List<RawSource> out = new java.util.ArrayList<>();
-		java.util.List<String> keys;
+		List<RawSource> out = new ArrayList<>();
+		List<String> keys;
 		try
 		{
 			keys = configManager.getRSProfileConfigurationKeys(
@@ -1892,7 +1850,7 @@ public class ChroniclePlugin extends Plugin
 	}
 
 	// Client thread, for the ItemManager naming and pricing. Flag set on success.
-	private void adoptLootTrackerArchive(String rsn, java.util.List<RawSource> parsed)
+	private void adoptLootTrackerArchive(String rsn, List<RawSource> parsed)
 	{
 		try
 		{
@@ -1901,12 +1859,12 @@ public class ChroniclePlugin extends Plugin
 			{
 				return;
 			}
-			java.util.List<LocalStore.LootSeed> seeds = new java.util.ArrayList<>(parsed.size());
+			List<LocalStore.LootSeed> seeds = new ArrayList<>(parsed.size());
 			long events = 0;
 			for (RawSource src : parsed)
 			{
-				java.util.List<LocalStore.BagItem> items =
-					new java.util.ArrayList<>(src.items.size());
+				List<LocalStore.BagItem> items =
+					new ArrayList<>(src.items.size());
 				for (long[] drop : src.items)
 				{
 					int canon = localStore.items().canonicalize((int) drop[0]);
@@ -1933,7 +1891,7 @@ public class ChroniclePlugin extends Plugin
 			{
 				localStore.floorLootTracker(seeds, rsn);
 				chat("Chronicle: adopted " + seeds.size() + " sources · "
-					+ String.format(java.util.Locale.UK, "%,d", events)
+					+ String.format(Locale.UK, "%,d", events)
 					+ " loot events from your Loot Tracker.");
 				refreshPanel();
 			}
@@ -1958,13 +1916,10 @@ public class ChroniclePlugin extends Plugin
 		}
 		// Long: the "overall" entry is total xp, past Integer.MAX_VALUE well before a
 		// maxed account, and it would wrap negative into a stream nothing rewrites.
-		final Map<String, Long> skills = new java.util.HashMap<>();
-		for (Map.Entry<String, com.google.gson.JsonElement> e : harvestSkills().entrySet())
+		final Map<String, Long> skills = new HashMap<>();
+		for (Map.Entry<String, long[]> e : readSkills().entrySet())
 		{
-			if (e.getValue().isJsonObject() && e.getValue().getAsJsonObject().has("xp"))
-			{
-				skills.put(e.getKey(), e.getValue().getAsJsonObject().get("xp").getAsLong());
-			}
+			skills.put(e.getKey(), e.getValue()[1]);
 		}
 		// A copy of the trackers with the journal's own totals (loot events, loot
 		// left on the floor, kills, slayer tasks, clog slots) laid beside them: the
@@ -1978,7 +1933,7 @@ public class ChroniclePlugin extends Plugin
 		// be made to do it; if it happens again, this line and the next tick's
 		// sheet are the two things to read.
 		long sittingXp = 0;
-		for (chronicle.counters.ExperienceStatTracker.SkillGain g : sessionSkillXp())
+		for (SkillGain g : sessionSkillXp())
 		{
 			sittingXp += g.xp;
 		}
@@ -1991,7 +1946,7 @@ public class ChroniclePlugin extends Plugin
 		executor.submit(() ->
 		{
 			HistoryLog.Adjust unwritten = historyLog.append(localDir(), rsn, skills, counters, kcs,
-				LocalStore.KILLS_VERSION, adj, java.time.LocalDate.now());
+				LocalStore.KILLS_VERSION, adj, LocalDate.now());
 			if (unwritten != null)
 			{
 				localStore.restorePendingAdjust(rsn, unwritten);
@@ -2045,7 +2000,7 @@ public class ChroniclePlugin extends Plugin
 			{
 				String txt = new String(java.nio.file.Files.readAllBytes(file.toPath()),
 					java.nio.charset.StandardCharsets.UTF_8);
-				com.google.gson.JsonElement el = gson.fromJson(txt, com.google.gson.JsonElement.class);
+				JsonElement el = gson.fromJson(txt, JsonElement.class);
 				in = el != null && el.isJsonObject() ? el.getAsJsonObject() : null;
 			}
 			catch (Exception e)
@@ -2082,10 +2037,7 @@ public class ChroniclePlugin extends Plugin
 
 	// Each store's revision as of the last draw asked for, kept apart so a draw
 	// can be asked for only of the boards that show what moved.
-	private long lastLootRevision;
-	private long lastCounterRevision;
-	private long lastClogRevision;
-	private long lastSkillRevision;
+	private final long[] lastRevision = new long[4];
 
 	/**
 	 * Every skill's level and experience as the CLIENT has them this tick.
@@ -2095,7 +2047,7 @@ public class ChroniclePlugin extends Plugin
 	 * jumped on logout. This is read off the client on the client thread, which
 	 * is the only thread allowed to, and handed to the panel as a finished map.
 	 */
-	private volatile java.util.Map<String, long[]> liveSkills =
+	private volatile Map<String, long[]> liveSkills =
 		java.util.Collections.emptyMap();
 
 	private volatile long skillRevision;
@@ -2103,21 +2055,8 @@ public class ChroniclePlugin extends Plugin
 	// Client thread only.
 	private void takeLiveSkills()
 	{
-		java.util.Map<String, long[]> out = new java.util.LinkedHashMap<>();
-		long overall = 0;
-		for (Skill s : Skill.values())
-		{
-			if (s == Skill.OVERALL)
-			{
-				continue;
-			}
-			long xp = client.getSkillExperience(s);
-			out.put(s.name().toLowerCase(java.util.Locale.ROOT),
-				new long[]{client.getRealSkillLevel(s), xp});
-			overall += xp;
-		}
-		out.put("overall", new long[]{client.getTotalLevel(), client.getOverallExperience()});
-		java.util.Map<String, long[]> was = liveSkills;
+		Map<String, long[]> out = readSkills();
+		Map<String, long[]> was = liveSkills;
 		long[] wasOverall = was.get("overall");
 		liveSkills = out;
 		if (wasOverall == null || wasOverall[1] != client.getOverallExperience()
@@ -2169,30 +2108,5 @@ public class ChroniclePlugin extends Plugin
 		}
 		s = s.trim();
 		return s.isEmpty() ? null : s;
-	}
-
-	private static BufferedImage buildIcon()
-	{
-		// A small open book, distinct from the text-badge icons on the rail.
-		BufferedImage img = new BufferedImage(24, 24, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = img.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-		g.setColor(new Color(0x1E, 0x1B, 0x16));
-		g.fillRoundRect(1, 1, 22, 22, 6, 6);
-		Color gold = new Color(0xC8, 0xA2, 0x5A);
-		g.setColor(gold);
-		// two page leaves meeting at a spine
-		g.fillPolygon(new int[]{4, 11, 11, 4}, new int[]{7, 5, 17, 19}, 4);
-		g.fillPolygon(new int[]{20, 13, 13, 20}, new int[]{7, 5, 17, 19}, 4);
-		g.setColor(new Color(0x1E, 0x1B, 0x16));
-		// page lines
-		g.drawLine(6, 9, 10, 8);
-		g.drawLine(6, 12, 10, 11);
-		g.drawLine(14, 8, 18, 9);
-		g.drawLine(14, 11, 18, 12);
-		g.setColor(gold);
-		g.drawLine(12, 5, 12, 18);   // spine
-		g.dispose();
-		return img;
 	}
 }
