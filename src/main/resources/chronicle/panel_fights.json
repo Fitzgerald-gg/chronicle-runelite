@@ -1,0 +1,47 @@
+{
+ "logPage": {
+  "TzTok-Jad": "The Fight Caves",
+  "TzKal-Zuk": "The Inferno",
+  "Sol Heredit": "Fortis Colosseum",
+  "The Corrupted Gauntlet": "The Gauntlet"
+ },
+ "paysOut": {
+  "The Gauntlet": ["Crystalline Hunllef"],
+  "The Corrupted Gauntlet": ["Corrupted Hunllef"],
+  "Grotesque Guardians": ["Dusk", "Dawn"],
+  "The Royal Titans": ["Eldric the Ice King", "Branda the Fire Queen"],
+  "Nightmare": ["The Nightmare"],
+  "Barrows Chests": ["Barrows"]
+ },
+ "foughtAs": {
+  "Barrows Chests": ["Ahrim the Blighted", "Dharok the Wretched", "Guthan the Infested", "Karil the Tainted", "Torag the Corrupted", "Verac the Defiled"],
+  "Nightmare": ["The Nightmare"],
+  "The Gauntlet": ["Crystalline Hunllef"],
+  "The Corrupted Gauntlet": ["Corrupted Hunllef"],
+  "Grotesque Guardians": ["Dusk", "Dawn"],
+  "The Royal Titans": ["Branda the Fire Queen", "Eldric the Ice King"],
+  "Chambers of Xeric": ["Great Olm", "Tekton", "Vespula", "Vasa Nistirio", "Muttadile", "Abyssal portal", "Ice demon", "Skeletal Mystic", "Lizardman shaman", "Deathly mage", "Deathly ranger", "Vanguard", "Guardian", "Vespine soldier"],
+  "Chambers of Xeric: Challenge Mode": ["Great Olm", "Tekton", "Vespula", "Vasa Nistirio", "Muttadile", "Abyssal portal", "Ice demon", "Skeletal Mystic", "Lizardman shaman", "Deathly mage", "Deathly ranger", "Vanguard", "Guardian", "Vespine soldier"],
+  "Theatre of Blood": ["The Maiden of Sugadinti", "Pestilent Bloat", "Nylocas Vasilias", "Sotetseg", "Xarpus", "Verzik Vitur", "Nylocas Hagios", "Nylocas Ischyros", "Nylocas Toxobolos"],
+  "Theatre of Blood: Hard Mode": ["The Maiden of Sugadinti", "Pestilent Bloat", "Nylocas Vasilias", "Sotetseg", "Xarpus", "Verzik Vitur", "Nylocas Hagios", "Nylocas Ischyros", "Nylocas Toxobolos"],
+  "Tombs of Amascut": ["Akkha", "Ba-Ba", "Kephri", "Zebak", "Tumeken's Warden", "Elidinis' Warden", "Akkha's Shadow", "Baboon Brawler", "Scarab Mage"],
+  "Tombs of Amascut: Expert Mode": ["Akkha", "Ba-Ba", "Kephri", "Zebak", "Tumeken's Warden", "Elidinis' Warden", "Akkha's Shadow", "Baboon Brawler", "Scarab Mage"],
+  "General Graardor": ["Sergeant Strongstack", "Sergeant Steelwill", "Sergeant Grimspike"],
+  "Commander Zilyana": ["Starlight", "Growler", "Bree"],
+  "Kree'arra": ["Wingman Skree", "Flight Kilisa", "Flockleader Geerin"],
+  "K'ril Tsutsaroth": ["Balfrug Kreeyath", "Tstanon Karlak", "Zakl'n Gritch"],
+  "Nex": ["Fumus", "Umbra", "Cruor", "Glacies"],
+  "Corporeal Beast": ["Dark core"],
+  "Vorkath": ["Zombified Spawn"],
+  "Cerberus": ["Summoned Soul"],
+  "Araxxor": ["Araxyte"],
+  "Callisto": ["Callisto cub"],
+  "Artio": ["Callisto cub"],
+  "Venenatis": ["Venenatis spiderling"],
+  "Spindel": ["Venenatis spiderling"],
+  "Vet'ion": ["Skeleton Hellhound", "Greater Skeleton Hellhound"],
+  "Calvar'ion": ["Skeleton Hellhound", "Greater Skeleton Hellhound"],
+  "TzTok-Jad": ["Tz-Kih", "Tz-Kek", "Tok-Xil", "Yt-MejKot", "Ket-Zek", "Yt-HurKot"],
+  "TzKal-Zuk": ["Jal-MejRah", "Jal-Ak", "Jal-AkRek-Mej", "Jal-AkRek-Xil", "Jal-AkRek-Ket", "Jal-ImKot", "Jal-Xil", "Jal-Zek", "Jal-MejJak", "JalTok-Jad"]
+ }
+}
