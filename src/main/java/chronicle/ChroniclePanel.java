@@ -7163,6 +7163,14 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
+	private void statRows(JPanel p, List<Entry<String, Long>> rows)
+	{
+		for (Entry<String, Long> e : rows)
+		{
+			p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
+		}
+	}
+
 	private String rowValue(Entry<String, Long> e)
 	{
 		String base = value(e);
@@ -7246,10 +7254,7 @@ class ChroniclePanel extends PluginPanel
 				{
 					p.add(ghostRow(sec.getKey(), ""));
 				}
-				for (Entry<String, Long> e : rows)
-				{
-					p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
-				}
+				statRows(p, rows);
 			}
 			p.add(vgap(4));
 		}
@@ -7438,10 +7443,7 @@ class ChroniclePanel extends PluginPanel
 			if (!foldable)
 			{
 				p.add(group(sec));
-				for (Entry<String, Long> e : rows)
-				{
-					p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
-				}
+				statRows(p, rows);
 				continue;
 			}
 
@@ -7487,10 +7489,7 @@ class ChroniclePanel extends PluginPanel
 					&& addCraftNested(p, sec, rows, counters);
 				if (!nested)
 				{
-					for (Entry<String, Long> e : rows)
-					{
-						p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
-					}
+					statRows(p, rows);
 					// A section with no typed rows opens to its floors, one row
 					// each: bones buried and bones offered are separate verbs and
 					// can't share a row.
@@ -10975,10 +10974,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		rows.sort(StatRegistry::compareRows);
 		addPaceLine(p, craft);
-		for (Entry<String, Long> e : rows)
-		{
-			p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
-		}
+		statRows(p, rows);
 		if (!ground.isEmpty())
 		{
 			p.add(vgap(6));
