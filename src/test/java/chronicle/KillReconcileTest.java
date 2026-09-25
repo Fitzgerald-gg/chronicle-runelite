@@ -89,7 +89,7 @@ public class KillReconcileTest
 	public void theLedgerFloorDoesNotReadmitThePageCounter()
 	{
 		List<LocalStore.SourceRow> sources = new ArrayList<>();
-		sources.add(new LocalStore.SourceRow("Wintertodt", 0, 10, 0L, null, 0L, 0L));
+		sources.add(new LocalStore.SourceRow("Wintertodt", 0, 10, 0L, null, 0L, 0L, java.util.Collections.emptySet(), 0, 0));
 		assertEquals("the page counter is not evidence of kills",
 			447L, reconciled(clog(1078L, null, 447L), sources));
 	}
@@ -99,7 +99,7 @@ public class KillReconcileTest
 	public void theLedgerStillFloors()
 	{
 		List<LocalStore.SourceRow> sources = new ArrayList<>();
-		sources.add(new LocalStore.SourceRow("Wintertodt", 900, 900, 0L, null, 0L, 0L));
+		sources.add(new LocalStore.SourceRow("Wintertodt", 900, 900, 0L, null, 0L, 0L, java.util.Collections.emptySet(), 0, 0));
 		assertEquals(900L, reconciled(clog(1078L, 447L, null), sources));
 	}
 }

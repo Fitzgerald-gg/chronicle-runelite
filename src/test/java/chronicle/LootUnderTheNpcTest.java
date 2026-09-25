@@ -49,7 +49,7 @@ public class LootUnderTheNpcTest
 
 	private static void add(PanelPreviewTest.StubPlugin stub, String name, long value)
 	{
-		stub.sources.add(new LocalStore.SourceRow(name, 0, 1, value, null, 0, 0));
+		stub.sources.add(new LocalStore.SourceRow(name, 0, 1, value, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		stub.bags.put(name, new ArrayList<>());
 	}
 

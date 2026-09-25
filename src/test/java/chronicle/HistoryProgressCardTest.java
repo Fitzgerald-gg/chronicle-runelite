@@ -3481,9 +3481,9 @@ public class HistoryProgressCardTest
 		s.ledgerKcs.put("Nechryael", 622L);
 		s.ledgerKcs.put("Man", 4L);
 		s.sources = Arrays.asList(
-			new LocalStore.SourceRow("Zulrah", 108, 108, 5_000_000L, null, 0, 0),
-			new LocalStore.SourceRow("Nechryael", 622, 622, 3_400_000L, null, 0, 0),
-			new LocalStore.SourceRow("Man", 4, 4, 120L, null, 0, 0));
+			new LocalStore.SourceRow("Zulrah", 108, 108, 5_000_000L, null, 0, 0, java.util.Collections.emptySet(), 0, 0),
+			new LocalStore.SourceRow("Nechryael", 622, 622, 3_400_000L, null, 0, 0, java.util.Collections.emptySet(), 0, 0),
+			new LocalStore.SourceRow("Man", 4, 4, 120L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		ChroniclePanel p = panel(s);
 		set(p, "histFacet", "PvM");
 		set(p, "histGranularity", "Lifetime");
@@ -3724,8 +3724,8 @@ public class HistoryProgressCardTest
 		PanelPreviewTest.StubPlugin st = stub(true);
 		st.sources = Arrays.asList(
 			new LocalStore.SourceRow("Guardians of the Rift", 4_955, 4_955,
-				39_768_743L, null, 0, 0),
-			new LocalStore.SourceRow("Vorkath", 156, 143, 81_000_000L, null, 0, 0));
+				39_768_743L, null, 0, 0, java.util.Collections.emptySet(), 0, 0),
+			new LocalStore.SourceRow("Vorkath", 156, 143, 81_000_000L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		st.bags.put("Guardians of the Rift", Arrays.asList(
 			new LocalStore.BagItem(0, "Abyssal pearls", 4_000, 39_768_743L)));
 
@@ -3756,9 +3756,9 @@ public class HistoryProgressCardTest
 		// sat in the journal under a card saying no loot had reached it.
 		PanelPreviewTest.StubPlugin st = stub(true);
 		st.sources = Arrays.asList(
-			new LocalStore.SourceRow("Reward cart (Wintertodt)", 97, 97, 4_550_382L, null, 0, 0),
-			new LocalStore.SourceRow("Reward pool (Tempoross)", 114, 114, 2_269_132L, null, 0, 0),
-			new LocalStore.SourceRow("Casket (Tempoross)", 25, 25, 230_772L, null, 0, 0));
+			new LocalStore.SourceRow("Reward cart (Wintertodt)", 97, 97, 4_550_382L, null, 0, 0, java.util.Collections.emptySet(), 0, 0),
+			new LocalStore.SourceRow("Reward pool (Tempoross)", 114, 114, 2_269_132L, null, 0, 0, java.util.Collections.emptySet(), 0, 0),
+			new LocalStore.SourceRow("Casket (Tempoross)", 25, 25, 230_772L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		com.google.gson.JsonObject cl = st.clog != null ? st.clog
 			: new com.google.gson.JsonObject();
 		com.google.gson.JsonObject log = new com.google.gson.JsonObject();
@@ -3790,8 +3790,8 @@ public class HistoryProgressCardTest
 		// loot: a crystalline bear's shards are the bear's.
 		PanelPreviewTest.StubPlugin st = stub(true);
 		st.sources = Arrays.asList(
-			new LocalStore.SourceRow("Corrupted Hunllef", 3, 3, 95_036L, null, 0, 0),
-			new LocalStore.SourceRow("Corrupted Rat", 18, 18, 0L, null, 0, 0));
+			new LocalStore.SourceRow("Corrupted Hunllef", 3, 3, 95_036L, null, 0, 0, java.util.Collections.emptySet(), 0, 0),
+			new LocalStore.SourceRow("Corrupted Rat", 18, 18, 0L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 
 		ChroniclePanel p = panel(st);
 		List<String> card = bossHover(p, "The Corrupted Gauntlet");
@@ -4396,7 +4396,7 @@ public class HistoryProgressCardTest
 			priced(23_962, "Crystal shard"), priced(23_957, "Crystal tool seed")));
 		s.kcs.put("Zalcano", 2_024L);
 		s.sources = Arrays.asList(
-			new LocalStore.SourceRow("Zalcano", 2_024, 2_024, 81_900_000L, null, 0, 0));
+			new LocalStore.SourceRow("Zalcano", 2_024, 2_024, 81_900_000L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		s.bags.put("Zalcano", Arrays.asList(
 			// the dearest carries no id, the way the imported rows do
 			new LocalStore.BagItem(0, "Crystal tool seed", 2, 46_173_662L),
@@ -4457,7 +4457,7 @@ public class HistoryProgressCardTest
 			priced(1_061, "Chef's hat"), priced(12_020, "Gnome scarf")));
 		s.kcs.put("Gnome Restaurant", 40L);
 		s.sources = Arrays.asList(
-			new LocalStore.SourceRow("Gnome", 2, 2, 177L, null, 0, 0));
+			new LocalStore.SourceRow("Gnome", 2, 2, 177L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		s.bags.put("Gnome", Arrays.asList(
 			new LocalStore.BagItem(0, "Chef's hat", 1, 355L)));
 		ChroniclePanel p = panel(s);
@@ -4477,7 +4477,7 @@ public class HistoryProgressCardTest
 		Mockito.when(s.items().search("")).thenReturn(new ArrayList<>());
 		s.kcs.put("Zalcano", 2_024L);
 		s.sources = Arrays.asList(
-			new LocalStore.SourceRow("Zalcano", 2_024, 2_024, 81_900_000L, null, 0, 0));
+			new LocalStore.SourceRow("Zalcano", 2_024, 2_024, 81_900_000L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		s.bags.put("Zalcano", Arrays.asList(
 			new LocalStore.BagItem(0, "Crystal tool seed", 2, 46_173_662L)));
 		ChroniclePanel p = panel(s);

@@ -182,7 +182,7 @@ public class EveryListOpensTest
 		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
 		for (int i = 1; i <= 45; i++)
 		{
-			stub.sources.add(new LocalStore.SourceRow("Source " + i, 10, 10, 1_000L * i, null, 0, 0));
+			stub.sources.add(new LocalStore.SourceRow("Source " + i, 10, 10, 1_000L * i, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 			List<LocalStore.BagItem> bag = new ArrayList<>();
 			bag.add(new LocalStore.BagItem(995, "Coins", 100L * i, 100L * i));
 			stub.bags.put("Source " + i, bag);

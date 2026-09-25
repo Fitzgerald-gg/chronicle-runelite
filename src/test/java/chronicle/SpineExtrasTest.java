@@ -110,7 +110,7 @@ public class SpineExtrasTest
 			+ "\"collection_log\":{\"kcs\":{\"Tormented Demons\":1310,\"Vorkath\":19,"
 			+ "\"Soul Wars\":346}}}");
 		LocalStore store = mounted();
-		Map<String, Long> perSource = store.sourceKills();
+		Map<String, Long> perSource = LocalStore.sourceKills(store.clogSnapshot(), store.dropSources());
 		assertEquals(Long.valueOf(622), perSource.get("Nechryael"));
 		assertEquals(Long.valueOf(1310), perSource.get("Tormented Demons"));
 		assertEquals(Long.valueOf(156), perSource.get("Vorkath"));

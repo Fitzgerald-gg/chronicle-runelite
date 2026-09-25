@@ -41,7 +41,7 @@ public class PetUnlockGateTest
 
 	private void ledger(String source, int n)
 	{
-		ledger.add(new LocalStore.SourceRow(source, n, n, 0L, null, 0L, 0L));
+		ledger.add(new LocalStore.SourceRow(source, n, n, 0L, null, 0L, 0L, java.util.Collections.emptySet(), 0, 0));
 	}
 
 	private void diary(String region, String tier, boolean done)

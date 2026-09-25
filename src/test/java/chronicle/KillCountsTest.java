@@ -204,7 +204,7 @@ public class KillCountsTest
 		// both spellings are paged, so the ledger's own list is empty
 		assertEquals(plugin.ledgerKills().toString(), 0, plugin.ledgerKills().size());
 		// the per-source base holds the one entry too, and the summary sums it once
-		Map<String, Long> perSource = store.sourceKills();
+		Map<String, Long> perSource = LocalStore.sourceKills(store.clogSnapshot(), store.dropSources());
 		assertEquals(perSource.toString(),
 			java.util.Collections.singletonMap("Deranged Archaeologist", 10L), perSource);
 		assertEquals(Long.valueOf(10), store.spineExtras().get("kills"));

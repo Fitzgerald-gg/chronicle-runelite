@@ -56,7 +56,7 @@ public class FoughtAsTest
 	private static String timeRow(String source, Map<String, Long> minutes) throws Exception
 	{
 		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
-		stub.sources.add(new LocalStore.SourceRow(source, 0, 0, 1_000L, null, 0, 0));
+		stub.sources.add(new LocalStore.SourceRow(source, 0, 0, 1_000L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		stub.bags.put(source, new ArrayList<>());
 		java.time.LocalDate cursor = java.time.LocalDate.of(2026, 6, 15);
 		stub.history.clear();

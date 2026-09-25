@@ -68,7 +68,7 @@ public class GrindBookTest
 	public void ledgerKillsCount()
 	{
 		List<LocalStore.SourceRow> ledger = new ArrayList<>();
-		ledger.add(new LocalStore.SourceRow("Zalcano", 2023, 2000, 1L, null, 0, 0));
+		ledger.add(new LocalStore.SourceRow("Zalcano", 2023, 2000, 1L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		GrindBook.PetChase c = chases(new JsonObject(), ledger).get("smolcano");
 		assertEquals(59.3, c.percentileDry, 0.05);
 	}

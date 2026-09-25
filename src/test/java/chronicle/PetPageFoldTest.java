@@ -68,9 +68,9 @@ public class PetPageFoldTest
 		clog.add("clog_items", items);
 		s.clog = clog;
 		s.sources.add(new LocalStore.SourceRow("Reward pool (Tempoross)", 114, 114,
-			4_112_005L, null, 0, 0));
+			4_112_005L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		s.sources.add(new LocalStore.SourceRow("Casket (Tempoross)", 25, 25,
-			812_400L, null, 0, 0));
+			812_400L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		// an owned pet, with the provenance line the page folds away
 		s.petRows.add(new LocalStore.PetRow("Pet kraken", "Kraken", 2_147,
 			java.time.Instant.parse("2024-11-08T20:14:00Z").toEpochMilli()));

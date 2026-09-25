@@ -107,7 +107,7 @@ public class ChatKillCountTest
 		out.put("Wintertodt", 447L);
 		Map<String, Long> chat = new LinkedHashMap<>();
 		chat.put("subdued Wintertodt", 448L);
-		LocalStore.foldChatCounts(out, chat);
+		LocalStore.foldChatCounts(out, chat, java.util.Collections.emptySet());
 		assertEquals(Long.valueOf(448), out.get("Wintertodt"));
 		assertEquals("it was carried in twice, under two names", 1, out.size());
 	}
@@ -119,7 +119,7 @@ public class ChatKillCountTest
 		out.put("Zulrah", 600L);
 		Map<String, Long> chat = new LinkedHashMap<>();
 		chat.put("Zulrah", 501L);
-		LocalStore.foldChatCounts(out, chat);
+		LocalStore.foldChatCounts(out, chat, java.util.Collections.emptySet());
 		assertEquals(Long.valueOf(600), out.get("Zulrah"));
 	}
 
@@ -134,7 +134,7 @@ public class ChatKillCountTest
 		chat.put("Gauntlet", 32L);          // the log says "The Gauntlet"
 		chat.put("Barrows", 512L);          // the log says "Barrows Chests"
 		chat.put("Tempoross", 456L);        // said the same way
-		LocalStore.foldChatCounts(out, chat);
+		LocalStore.foldChatCounts(out, chat, java.util.Collections.emptySet());
 		assertEquals(Long.valueOf(32), out.get("The Gauntlet"));
 		assertEquals(Long.valueOf(512), out.get("Barrows Chests"));
 		assertEquals(Long.valueOf(456), out.get("Tempoross"));
@@ -150,7 +150,7 @@ public class ChatKillCountTest
 		Map<String, Long> out = new LinkedHashMap<>();
 		Map<String, Long> chat = new LinkedHashMap<>();
 		chat.put("Amoxliatl", 1L);
-		LocalStore.foldChatCounts(out, chat);
+		LocalStore.foldChatCounts(out, chat, java.util.Collections.emptySet());
 		assertEquals(Long.valueOf(1), out.get("Amoxliatl"));
 	}
 
@@ -159,8 +159,8 @@ public class ChatKillCountTest
 	{
 		Map<String, Long> out = new LinkedHashMap<>();
 		out.put("Zulrah", 600L);
-		LocalStore.foldChatCounts(out, new LinkedHashMap<>());
-		LocalStore.foldChatCounts(out, null);
+		LocalStore.foldChatCounts(out, new LinkedHashMap<>(), java.util.Collections.emptySet());
+		LocalStore.foldChatCounts(out, null, java.util.Collections.emptySet());
 		assertEquals(1, out.size());
 		assertEquals(Long.valueOf(600), out.get("Zulrah"));
 	}

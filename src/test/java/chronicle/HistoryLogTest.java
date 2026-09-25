@@ -11,6 +11,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
@@ -74,8 +75,8 @@ public class HistoryLogTest
 		Map<String, Long> opening = new HashMap<>();
 		opening.put("tilesWalked", 10L);
 		opening.put("logsChopped", 7L);
-		log.append(dir, RSN, map("attack", 100L), opening, java.util.Collections.emptyMap());
-		log.append(dir, RSN, map("attack", 140L), map("tilesWalked", 90L), java.util.Collections.emptyMap());
+		log.append(dir, RSN, map("attack", 100L), opening, java.util.Collections.emptyMap(), LocalStore.KILLS_VERSION, null, LocalDate.now(ZoneId.systemDefault()));
+		log.append(dir, RSN, map("attack", 140L), map("tilesWalked", 90L), java.util.Collections.emptyMap(), LocalStore.KILLS_VERSION, null, LocalDate.now(ZoneId.systemDefault()));
 
 		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
 		assertEquals(1, got.size());
@@ -243,7 +244,7 @@ public class HistoryLogTest
 	public void figuresBeyondAnIntSurviveTheRoundTrip()
 	{
 		log.append(dir, RSN, map("overall", 4_600_000_000L),
-			java.util.Collections.emptyMap(), java.util.Collections.emptyMap());
+			java.util.Collections.emptyMap(), java.util.Collections.emptyMap(), LocalStore.KILLS_VERSION, null, LocalDate.now(ZoneId.systemDefault()));
 		assertEquals(4_600_000_000L, (long) log.read(dir, RSN)
 			.lastEntry().getValue().skills.get("overall"));
 	}
@@ -279,8 +280,8 @@ public class HistoryLogTest
 	@Test
 	public void anAppendWithoutAnAccountWritesNothing()
 	{
-		log.append(dir, null, map("attack", 1L), map("tilesWalked", 1L), java.util.Collections.emptyMap());
-		log.append(dir, "", map("attack", 1L), map("tilesWalked", 1L), java.util.Collections.emptyMap());
+		log.append(dir, null, map("attack", 1L), map("tilesWalked", 1L), java.util.Collections.emptyMap(), LocalStore.KILLS_VERSION, null, LocalDate.now(ZoneId.systemDefault()));
+		log.append(dir, "", map("attack", 1L), map("tilesWalked", 1L), java.util.Collections.emptyMap(), LocalStore.KILLS_VERSION, null, LocalDate.now(ZoneId.systemDefault()));
 
 		String[] written = dir.list();
 		assertEquals(0, written == null ? 0 : written.length);
@@ -308,11 +309,11 @@ public class HistoryLogTest
 	public void severalAppendsInOneDayLeaveOneLine() throws Exception
 	{
 		log.append(dir, RSN, map("attack", 100L), map("tilesWalked", 1L),
-			java.util.Collections.emptyMap());
+			java.util.Collections.emptyMap(), LocalStore.KILLS_VERSION, null, LocalDate.now(ZoneId.systemDefault()));
 		log.append(dir, RSN, map("attack", 140L), map("tilesWalked", 2L),
-			java.util.Collections.emptyMap());
+			java.util.Collections.emptyMap(), LocalStore.KILLS_VERSION, null, LocalDate.now(ZoneId.systemDefault()));
 		log.append(dir, RSN, map("attack", 180L), map("tilesWalked", 3L),
-			java.util.Collections.emptyMap());
+			java.util.Collections.emptyMap(), LocalStore.KILLS_VERSION, null, LocalDate.now(ZoneId.systemDefault()));
 		assertEquals(1, lineCount());
 		assertEquals(180L, (long) log.read(dir, RSN).firstEntry().getValue().skills.get("attack"));
 	}
@@ -322,7 +323,7 @@ public class HistoryLogTest
 	{
 		rawLine(RSN, dayLine("2020-01-01", 5L), true);
 		log.append(dir, RSN, map("attack", 200L), map("tilesWalked", 1L),
-			java.util.Collections.emptyMap());
+			java.util.Collections.emptyMap(), LocalStore.KILLS_VERSION, null, LocalDate.now(ZoneId.systemDefault()));
 		assertEquals(2, lineCount());
 		assertEquals(2, log.read(dir, RSN).size());
 		assertEquals(5L, (long) log.read(dir, RSN)
@@ -402,8 +403,8 @@ public class HistoryLogTest
 	@Test
 	public void theFirstAppendAfterMidnightClosesYesterdayAtThatState() throws Exception
 	{
-		log.append(dir, RSN, map("attack", 100L), map("tilesWalked", 10L), map("zulrah", 5L), D);
-		log.append(dir, RSN, map("attack", 140L), map("tilesWalked", 90L), map("zulrah", 8L),
+		log.append(dir, RSN, map("attack", 100L), map("tilesWalked", 10L), map("zulrah", 5L), LocalStore.KILLS_VERSION, null, D);
+		log.append(dir, RSN, map("attack", 140L), map("tilesWalked", 90L), map("zulrah", 8L), LocalStore.KILLS_VERSION, null,
 			D.plusDays(1));
 
 		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
@@ -416,7 +417,7 @@ public class HistoryLogTest
 		assertEquals(140L, (long) got.get(D.plusDays(1)).skills.get("attack"));
 
 		// the 02:00 logout moves only today; yesterday's close stands
-		log.append(dir, RSN, map("attack", 180L), map("tilesWalked", 120L), map("zulrah", 9L),
+		log.append(dir, RSN, map("attack", 180L), map("tilesWalked", 120L), map("zulrah", 9L), LocalStore.KILLS_VERSION, null,
 			D.plusDays(1));
 		got = log.read(dir, RSN);
 		assertEquals(2, lineCount());
@@ -430,7 +431,7 @@ public class HistoryLogTest
 	public void aFreshProcessNeverRewritesAnEarlierDay() throws Exception
 	{
 		rawLine(RSN, dayLine(D.minusDays(1).toString(), 5L), true);
-		log.append(dir, RSN, map("attack", 200L), map("tilesWalked", 1L), none(), D);
+		log.append(dir, RSN, map("attack", 200L), map("tilesWalked", 1L), none(), LocalStore.KILLS_VERSION, null, D);
 
 		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
 		assertEquals(2, got.size());
@@ -443,12 +444,12 @@ public class HistoryLogTest
 	@Test
 	public void anImportEndsTheOpenDay() throws Exception
 	{
-		log.append(dir, RSN, map("attack", 100L), none(), none(), D);
+		log.append(dir, RSN, map("attack", 100L), none(), none(), LocalStore.KILLS_VERSION, null, D);
 		File source = new File(dir, "source.jsonl");
 		Files.write(source.toPath(), java.util.Collections.singletonList(
 			dayLine(D.minusDays(3).toString(), 1L)), StandardCharsets.UTF_8);
 		assertEquals(1, log.importSpine(dir, RSN, source));
-		log.append(dir, RSN, map("attack", 140L), none(), none(), D.plusDays(1));
+		log.append(dir, RSN, map("attack", 140L), none(), none(), LocalStore.KILLS_VERSION, null, D.plusDays(1));
 
 		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
 		assertEquals(100L, (long) got.get(D).skills.get("attack"));
@@ -605,7 +606,7 @@ public class HistoryLogTest
 	{
 		rawLine(RSN, "{\"date\":\"2026-01-01\",\"skills\":{\"attack\":50},\"counters\":{}}", true);
 		rawLine(RSN, "{\"date\":\"2026-01-02\",\"skills\":{", false);
-		log.append(dir, RSN, map("attack", 70L), map("tilesWalked", 1L), none(), LocalDate.parse("2026-01-03"));
+		log.append(dir, RSN, map("attack", 70L), map("tilesWalked", 1L), none(), LocalStore.KILLS_VERSION, null, LocalDate.parse("2026-01-03"));
 		assertEquals(70L, (long) log.read(dir, RSN).get(LocalDate.parse("2026-01-03")).skills.get("attack"));
 	}
 
@@ -656,9 +657,9 @@ public class HistoryLogTest
 	public void theDayTurnsOnlyAfterALineUnderAnEarlierDay()
 	{
 		assertFalse("before the login's first line", log.dayTurned(RSN));
-		log.append(dir, RSN, map("attack", 1L), none(), none(), LocalDate.now().minusDays(1));
+		log.append(dir, RSN, map("attack", 1L), none(), none(), LocalStore.KILLS_VERSION, null, LocalDate.now().minusDays(1));
 		assertTrue(log.dayTurned(RSN));
-		log.append(dir, RSN, map("attack", 2L), none(), none(), LocalDate.now());
+		log.append(dir, RSN, map("attack", 2L), none(), none(), LocalStore.KILLS_VERSION, null, LocalDate.now());
 		assertFalse(log.dayTurned(RSN));
 		assertFalse(log.dayTurned(null));
 	}

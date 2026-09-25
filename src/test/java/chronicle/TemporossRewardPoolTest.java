@@ -72,8 +72,8 @@ public class TemporossRewardPoolTest
 	private static List<LocalStore.SourceRow> ledger()
 	{
 		List<LocalStore.SourceRow> out = new ArrayList<>();
-		out.add(new LocalStore.SourceRow(POOL, 114, 114, 2_269_132L, null, 0, 0));
-		out.add(new LocalStore.SourceRow("Casket (Tempoross)", 25, 25, 230_772L, null, 0, 0));
+		out.add(new LocalStore.SourceRow(POOL, 114, 114, 2_269_132L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
+		out.add(new LocalStore.SourceRow("Casket (Tempoross)", 25, 25, 230_772L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		return out;
 	}
 

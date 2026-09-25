@@ -597,17 +597,17 @@ public class PanelPreviewTest
 		s.sessionWindow.items.add(new String[]{"Rune bar", "12", "304113"});
 		s.sessionWindow.leftItems.add(new String[]{"Bones", "9", "44120"});
 
-		s.sources.add(new LocalStore.SourceRow("Abyssal demons", 4_112, 3_890, 61_204_113L, null, 0, 0));
-		s.sources.add(new LocalStore.SourceRow("Nechryael", 2_204, 2_090, 24_113_005L, null, 0, 0));
-		s.sources.add(new LocalStore.SourceRow("Commander Zilyana", 214, 214, 88_204_113L, 74.2, 0, 0));
-		s.sources.add(new LocalStore.SourceRow("Crazy archaeologist", 88, 88, 1_204_113L, 31.8, 0, 0));
-		s.sources.add(new LocalStore.SourceRow("Thermonuclear smoke devil", 1_402, 1_390, 19_113_205L, 22.2, 0, 0));
-		s.sources.add(new LocalStore.SourceRow("Brutal black dragon", 950, 921, 15_204_113L, null, 0, 0));
+		s.sources.add(new LocalStore.SourceRow("Abyssal demons", 4_112, 3_890, 61_204_113L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
+		s.sources.add(new LocalStore.SourceRow("Nechryael", 2_204, 2_090, 24_113_005L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
+		s.sources.add(new LocalStore.SourceRow("Commander Zilyana", 214, 214, 88_204_113L, 74.2, 0, 0, java.util.Collections.emptySet(), 0, 0));
+		s.sources.add(new LocalStore.SourceRow("Crazy archaeologist", 88, 88, 1_204_113L, 31.8, 0, 0, java.util.Collections.emptySet(), 0, 0));
+		s.sources.add(new LocalStore.SourceRow("Thermonuclear smoke devil", 1_402, 1_390, 19_113_205L, 22.2, 0, 0, java.util.Collections.emptySet(), 0, 0));
+		s.sources.add(new LocalStore.SourceRow("Brutal black dragon", 950, 921, 15_204_113L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		// Tempoross three ways: the subdue count, the reward pool searches those
 		// permits bought, and the caskets one of those searches handed over. Tiny
 		// tempor is priced off the middle one alone.
-		s.sources.add(new LocalStore.SourceRow("Reward pool (Tempoross)", 114, 114, 4_112_005L, null, 0, 0));
-		s.sources.add(new LocalStore.SourceRow("Casket (Tempoross)", 25, 25, 812_400L, null, 0, 0));
+		s.sources.add(new LocalStore.SourceRow("Reward pool (Tempoross)", 114, 114, 4_112_005L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
+		s.sources.add(new LocalStore.SourceRow("Casket (Tempoross)", 25, 25, 812_400L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 
 		List<LocalStore.BagItem> bag = new ArrayList<>();
 		bag.add(new LocalStore.BagItem(4151, "Abyssal whip", 3, 5_406_000L));

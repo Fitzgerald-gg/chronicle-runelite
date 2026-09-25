@@ -35,7 +35,7 @@ public class LedgerObtainedTest
 	{
 		Set<String> names = new HashSet<>();
 		Collections.addAll(names, looted);
-		return new LocalStore.SourceRow(source, kc, kc, 0L, null, 0L, 0L, names);
+		return new LocalStore.SourceRow(source, kc, kc, 0L, null, 0L, 0L, names, 0, 0);
 	}
 
 	private static Set<String> chased(JsonObject clog, List<LocalStore.SourceRow> sources)
@@ -66,7 +66,7 @@ public class LedgerObtainedTest
 	public void theLogAloneStillChasesIt()
 	{
 		List<LocalStore.SourceRow> sources = new ArrayList<>();
-		sources.add(new LocalStore.SourceRow("Vorkath", 156, 156, 0L, null, 0L, 0L));
+		sources.add(new LocalStore.SourceRow("Vorkath", 156, 156, 0L, null, 0L, 0L, java.util.Collections.emptySet(), 0, 0));
 		assertTrue(chased(clog("Vorkath", 156), sources).contains("Vorkath / Draconic visage"));
 	}
 

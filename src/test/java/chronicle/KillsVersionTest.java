@@ -155,7 +155,7 @@ public class KillsVersionTest
 	private static List<LocalStore.SourceRow> wintertodtLedger()
 	{
 		List<LocalStore.SourceRow> rows = new ArrayList<>();
-		rows.add(new LocalStore.SourceRow("Wintertodt", 0, 15, 0L, null, 0, 0));
+		rows.add(new LocalStore.SourceRow("Wintertodt", 0, 15, 0L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		return rows;
 	}
 
@@ -198,8 +198,8 @@ public class KillsVersionTest
 		cl.getAsJsonObject("kcs").addProperty("Tempoross", 46);
 		cl.getAsJsonObject("slayer_kcs").addProperty("Bloodvelds", 3_748);
 		List<LocalStore.SourceRow> ledger = wintertodtLedger();
-		ledger.add(new LocalStore.SourceRow("Bloodveld", 0, 504, 0L, null, 0, 0));
-		ledger.add(new LocalStore.SourceRow("Zalcano", 2_023, 2_024, 0L, null, 0, 0));
+		ledger.add(new LocalStore.SourceRow("Bloodveld", 0, 504, 0L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
+		ledger.add(new LocalStore.SourceRow("Zalcano", 2_023, 2_024, 0L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		Map<String, Long> chat = new LinkedHashMap<>();
 		chat.put("Zalcano", 2_023L);
 		Map<String, Long> got = LocalStore.reconciledKills(cl, ledger, chat, new HashMap<>(),

@@ -65,7 +65,7 @@ public class SearchDoorsTest
 	public void build() throws Exception
 	{
 		stub = PanelPreviewTest.fixtureStub();
-		stub.sources.add(new LocalStore.SourceRow("Zulrah", 300, 300, 50_000_000L, null, 0, 0));
+		stub.sources.add(new LocalStore.SourceRow("Zulrah", 300, 300, 50_000_000L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		List<LocalStore.BagItem> scales = new ArrayList<>();
 		scales.add(new LocalStore.BagItem(12934, "Zulrah's scales", 30_000, 6_000_000L));
 		stub.bags.put("Zulrah", scales);
@@ -353,8 +353,8 @@ public class SearchDoorsTest
 	@Test
 	public void theFightNamedExactlyComesFirst() throws Exception
 	{
-		stub.sources.add(new LocalStore.SourceRow("Vampyre kraken", 0, 424, 19_800_000L, null, 0, 0));
-		stub.sources.add(new LocalStore.SourceRow("Kraken", 117, 117, 1_000_000L, null, 0, 0));
+		stub.sources.add(new LocalStore.SourceRow("Vampyre kraken", 0, 424, 19_800_000L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
+		stub.sources.add(new LocalStore.SourceRow("Kraken", 117, 117, 1_000_000L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		SwingUtilities.invokeAndWait(() -> panel = new ChroniclePanel(stub));
 		assertEquals("Kraken", left(firstDoor(search("kraken"))));
 	}
@@ -517,7 +517,7 @@ public class SearchDoorsTest
 	@Test
 	public void aBossIsListedOnceNotAgainUnderItsReward() throws Exception
 	{
-		stub.sources.add(new LocalStore.SourceRow("Reward pool (Tempoross)", 0, 455, 3_000_000L, null, 0, 0));
+		stub.sources.add(new LocalStore.SourceRow("Reward pool (Tempoross)", 0, 455, 3_000_000L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		SwingUtilities.invokeAndWait(() -> panel = new ChroniclePanel(stub));
 		List<String> fights = group(search("tempoross"), "Bosses and monsters");
 		assertEquals(fights.toString(), "Tempoross", fights.get(0));

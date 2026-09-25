@@ -74,22 +74,9 @@ class HistoryLog
 	// Keyed per account: two characters played on the same day each still get a line.
 	private final Map<String, String> lastAppendedDate = new ConcurrentHashMap<>();
 
-	/** Append today's closing baseline. Called at login-load, day rollover and logout. */
-	synchronized void append(File dir, String rsn, Map<String, Long> skills,
-		Map<String, Long> counters, Map<String, Long> kcs)
-	{
-		append(dir, rsn, skills, counters, kcs, LocalDate.now(ZoneId.systemDefault()));
-	}
-
-	/** The same, with no adjustment to carry. */
-	synchronized void append(File dir, String rsn, Map<String, Long> skills,
-		Map<String, Long> counters, Map<String, Long> kcs, LocalDate today)
-	{
-		append(dir, rsn, skills, counters, kcs, LocalStore.KILLS_VERSION, null, today);
-	}
-
 	/**
-	 * The dated form: {@code today} is the day this state belongs to. When this
+	 * Append today's closing baseline. Called at login-load, day rollover and
+	 * logout. {@code today} is the day this state belongs to. When this
 	 * process last appended under an earlier date, nothing has closed that day
 	 * since, so the state is written under it first (its close) and then under
 	 * {@code today} (today's opening baseline, to be replaced as the day goes).
@@ -111,25 +98,10 @@ class HistoryLog
 		String slug = LocalStore.slug(rsn);
 		String date = today.toString();
 		JsonObject state = new JsonObject();
-		JsonObject sk = new JsonObject();
-		if (skills != null)
-		{
-			skills.forEach(sk::addProperty);
-		}
-		state.add("skills", sk);
-		JsonObject ct = new JsonObject();
-		if (counters != null)
-		{
-			counters.forEach(ct::addProperty);
-		}
-		state.add("counters", ct);
+		state.add("skills", tree(skills));
+		state.add("counters", tree(counters));
 		// kcs arrived after the rest. Older lines on the stream carry none.
-		JsonObject kc = new JsonObject();
-		if (kcs != null)
-		{
-			kcs.forEach(kc::addProperty);
-		}
-		state.add("kcs", kc);
+		state.add("kcs", tree(kcs));
 		state.addProperty("kv", kv);
 		try
 		{
@@ -291,15 +263,11 @@ class HistoryLog
 			JsonObject o = new JsonObject();
 			if (!kcs.isEmpty())
 			{
-				JsonObject k = new JsonObject();
-				kcs.forEach(k::addProperty);
-				o.add("kcs", k);
+				o.add("kcs", tree(kcs));
 			}
 			if (!counters.isEmpty())
 			{
-				JsonObject c = new JsonObject();
-				counters.forEach(c::addProperty);
-				o.add("counters", c);
+				o.add("counters", tree(counters));
 			}
 			return o;
 		}
@@ -314,6 +282,16 @@ class HistoryLog
 			}
 			return a;
 		}
+	}
+
+	private static JsonObject tree(Map<String, Long> m)
+	{
+		JsonObject o = new JsonObject();
+		if (m != null)
+		{
+			m.forEach(o::addProperty);
+		}
+		return o;
 	}
 
 	// Whether the skills a line lists account for the overall it carries.
@@ -774,20 +752,12 @@ class HistoryLog
 				{
 					continue;
 				}
-				String date;
-				try
-				{
-					JsonObject o = gson.fromJson(line, JsonObject.class);
-					date = o != null && o.has("date") ? o.get("date").getAsString() : null;
-				}
-				catch (RuntimeException torn)
-				{
-					unreadable++;   // same torn line the reader skips
-					continue;
-				}
+				String date = dateOf(line);
 				if (date == null)
 				{
-					unreadable++;   // a line with no day has no place to be put
+					// same torn line the reader skips; a line with no day has no
+					// place to be put
+					unreadable++;
 					continue;
 				}
 				seen++;
@@ -846,6 +816,19 @@ class HistoryLog
 		log.debug("history spine: dropped {} repeated day lines, {} dates in order",
 			dropped, keep.size());
 		return dropped;
+	}
+
+	private String dateOf(String line)
+	{
+		try
+		{
+			JsonObject o = gson.fromJson(line, JsonObject.class);
+			return o != null && o.has("date") ? o.get("date").getAsString() : null;
+		}
+		catch (RuntimeException torn)
+		{
+			return null;   // half-written line, skipped as on read
+		}
 	}
 
 	TreeMap<LocalDate, Baseline> read(File dir, String rsn)
@@ -919,7 +902,7 @@ class HistoryLog
 		}
 	}
 
-	private static void fill(JsonObject o, String key, Map<String, Long> into)
+	static void fill(JsonObject o, String key, Map<String, Long> into)
 	{
 		if (o.has(key) && o.get(key).isJsonObject())
 		{
@@ -972,16 +955,7 @@ class HistoryLog
 					{
 						continue;
 					}
-					String date;
-					try
-					{
-						JsonObject o = gson.fromJson(line, JsonObject.class);
-						date = o != null && o.has("date") ? o.get("date").getAsString() : null;
-					}
-					catch (RuntimeException torn)
-					{
-						continue;   // half-written source line, skipped as on read
-					}
+					String date = dateOf(line);
 					if (date == null || !have.add(date))
 					{
 						continue;
