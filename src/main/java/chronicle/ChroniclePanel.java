@@ -58,6 +58,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.BooleanSupplier;
+import java.util.function.LongFunction;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import javax.swing.BorderFactory;
@@ -1018,13 +1019,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (rolledKcs == null)
 		{
-			Window w = window();
 			rolledKcs = new LinkedHashMap<>();
 			// The sitting keeps its own entry in this same shape, so it is
 			// counted the same way rather than declining to answer.
-			LocalStore.LootWindow win = sessionPeriod()
-				? plugin.sessionLootWindow() : plugin.lootBetween(w.start, w.end);
-			for (String[] r : win.sources)
+			for (String[] r : lootWindow().sources)
 			{
 				long n = safeParse(r[1]);
 				if (n > 0)
@@ -7343,9 +7341,7 @@ class ChroniclePanel extends PluginPanel
 		if (tab == Tab.TRACKERS && !allTrackers)
 		{
 			// the whole sheet in one place, which was reachable only by typing
-			JPanel every = ghostRow("every counter in one place", "");
-			link(every, this::openAllTrackers);
-			p.add(every);
+			p.add(moreRow("every counter in one place", this::openAllTrackers));
 		}
 		p.add(vgap(4));
 
@@ -8198,6 +8194,11 @@ class ChroniclePanel extends PluginPanel
 	static long filedAt(JsonObject e)
 	{
 		return "SESSION".equals(typeOf(e)) ? sittingStart(e) : safeLong(e.get("ts"));
+	}
+
+	private static long noon(LocalDate d)
+	{
+		return d.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
 	}
 
 	private static LocalDate dayOf(long ms)
@@ -9483,11 +9484,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		long[] ms = windowMs();
 		long[] tally = plugin.onTaskTally(ms[0], ms[1], null, wholeRecord());
-		long paid = 0;
-		for (LocalStore.BagItem b : plugin.onTaskLoot(ms[0], ms[1], null, wholeRecord()))
-		{
-			paid += b.value;
-		}
+		long paid = tallyOf(plugin.onTaskLoot(ms[0], ms[1], null, wholeRecord()))[1];
 		return tip("Slayer", new String[]{"Tasks tracked", "Kills on task", "On-task loot"},
 			new String[]{fmt(tally[2]), fmt(tally[0]), gps(paid)});
 	}
@@ -11071,11 +11068,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel periodRow()
 	{
 		final Window w = window();
-		JPanel r = new JPanel(new BorderLayout());
-		r.setBackground(DARKER);
-		r.setBorder(pad(3, 8, 3, 8));
-		r.setAlignmentX(Component.LEFT_ALIGNMENT);
-		r.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+		JPanel r = stepStrip();
 		// The sitting is now and can be nothing else, so the row states its scope
 		// rather than offering to change it. It still draws, at the same height in
 		// the same place, because a control that vanishes on one tab moves every
@@ -11094,15 +11087,6 @@ class ChroniclePanel extends PluginPanel
 		// cursor off it would name a day and go on calling it "This session".
 		if ((!"Lifetime".equals(histGranularity) && !sessionPeriod()) || histFrom != null)
 		{
-			JLabel back = new JLabel("<");
-			JLabel fwd = new JLabel(">");
-			for (JLabel arrow : new JLabel[]{back, fwd})
-			{
-				arrow.setFont(FontManager.getRunescapeBoldFont());
-				arrow.setBorder(pad(0, 6, 0, 6));
-			}
-			back.setForeground(accent());
-			link(back, () -> stepPeriod(-1));
 			// The log has no forward. A reader arrives on the present window and
 			// returns to it every time they pick a period, so this arrow spent
 			// most of its life computing the next granule, finding it after today
@@ -11111,14 +11095,7 @@ class ChroniclePanel extends PluginPanel
 			// the live one beside it. Drawn dim and inert instead, which is the
 			// rule the row already keeps for Lifetime and for the sitting, and
 			// still drawn so the label between them does not slide.
-			boolean ahead = canStepForward();
-			fwd.setForeground(ahead ? accent() : dim());
-			if (ahead)
-			{
-				link(fwd, () -> stepPeriod(1));
-			}
-			r.add(back, BorderLayout.WEST);
-			r.add(fwd, BorderLayout.EAST);
+			arrows(r, () -> stepPeriod(-1), canStepForward(), () -> stepPeriod(1), null);
 		}
 		JLabel lbl = new JLabel(w.label, JLabel.CENTER);
 		lbl.setFont(FontManager.getRunescapeFont());
@@ -11127,6 +11104,42 @@ class ChroniclePanel extends PluginPanel
 		link(lbl, () -> periodMenu().show(r, 0, r.getHeight()));
 		r.add(lbl, BorderLayout.CENTER);
 		return r;
+	}
+
+	/** The strip the period and the calendar's month sit on. */
+	private static JPanel stepStrip()
+	{
+		JPanel r = new JPanel(new BorderLayout());
+		r.setBackground(DARKER);
+		r.setBorder(pad(3, 8, 3, 8));
+		r.setAlignmentX(Component.LEFT_ALIGNMENT);
+		r.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+		return r;
+	}
+
+	/** "<" and ">" on a strip, around {@code title} where there is one; ">" dim and inert unless {@code ahead}. */
+	private void arrows(JPanel r, Runnable back, boolean ahead, Runnable forward, JLabel title)
+	{
+		JLabel b = new JLabel("<");
+		JLabel fwd = new JLabel(">");
+		for (JLabel arrow : new JLabel[]{b, fwd})
+		{
+			arrow.setFont(FontManager.getRunescapeBoldFont());
+			arrow.setBorder(pad(0, 6, 0, 6));
+		}
+		b.setForeground(accent());
+		link(b, back);
+		fwd.setForeground(ahead ? accent() : dim());
+		if (ahead)
+		{
+			link(fwd, forward);
+		}
+		r.add(b, BorderLayout.WEST);
+		if (title != null)
+		{
+			r.add(title, BorderLayout.CENTER);
+		}
+		r.add(fwd, BorderLayout.EAST);
 	}
 
 	/**
@@ -11807,8 +11820,8 @@ class ChroniclePanel extends PluginPanel
 	private List<JsonObject> milestones;
 
 	private static final long[] TOTAL_LEVELS = {1000, 1500, 2000, 2200, 2277, 2376};
-	private static final int[] NINETY_NINES = {5, 10, 15, 20};
-	private static final int[] COMBAT_LEVELS = {100, 126};
+	private static final long[] NINETY_NINES = {5, 10, 15, 20};
+	private static final long[] COMBAT_LEVELS = {100, 126};
 	private static final long[] SKILL_XP = {10_000_000L, 50_000_000L, 100_000_000L, 200_000_000L};
 	private static final long[] OVERALL_XP = {100_000_000L, 250_000_000L, 500_000_000L, 1_000_000_000L};
 	private static final long[] LOG_SLOTS = {500, 1000, 1500};
@@ -11835,8 +11848,7 @@ class ChroniclePanel extends PluginPanel
 					Map<String, Long> now = standings(day.getValue(), keys);
 					if (prev != null)
 					{
-						long ts = day.getKey().atTime(12, 0).atZone(ZoneId.systemDefault())
-							.toInstant().toEpochMilli();
+						long ts = noon(day.getKey());
 						crossings(prev, now, ts, milestones);
 					}
 					// A partial line speaks only for the axes it can: it carries
@@ -11894,54 +11906,31 @@ class ChroniclePanel extends PluginPanel
 	private static void crossings(Map<String, Long> prev, Map<String, Long> now, long ts,
 		List<JsonObject> into)
 	{
-		for (long t : TOTAL_LEVELS)
+		cross(prev, now, ts, into, "total", TOTAL_LEVELS, t -> "Total level " + fmt(t));
+		cross(prev, now, ts, into, "nines", NINETY_NINES, t -> ordinal(t) + " 99");
+		cross(prev, now, ts, into, "combat", COMBAT_LEVELS, t -> "Combat level " + t);
+		for (String key : now.keySet())
 		{
-			if (crossed(prev, now, "total", t))
+			if (key.startsWith("xp:"))
 			{
-				into.add(milestone(ts, "Total level " + fmt(t)));
+				cross(prev, now, ts, into, key, SKILL_XP, t -> threshold(t) + " xp in "
+					+ StatRegistry.prettify(key.substring(3)));
 			}
 		}
-		for (int t : NINETY_NINES)
+		cross(prev, now, ts, into, "overall", OVERALL_XP, t -> threshold(t) + " xp overall");
+		cross(prev, now, ts, into, "slots", LOG_SLOTS, t -> fmt(t) + " collection log slots");
+	}
+
+	private static void cross(Map<String, Long> prev, Map<String, Long> now, long ts,
+		List<JsonObject> into, String key, long[] at, LongFunction<String> text)
+	{
+		Long before = prev.get(key);
+		Long after = now.get(key);
+		for (long t : at)
 		{
-			if (crossed(prev, now, "nines", t))
+			if (before != null && after != null && before < t && after >= t)
 			{
-				into.add(milestone(ts, ordinal(t) + " 99"));
-			}
-		}
-		for (int t : COMBAT_LEVELS)
-		{
-			if (crossed(prev, now, "combat", t))
-			{
-				into.add(milestone(ts, "Combat level " + t));
-			}
-		}
-		for (Map.Entry<String, Long> e : now.entrySet())
-		{
-			if (!e.getKey().startsWith("xp:"))
-			{
-				continue;
-			}
-			for (long t : SKILL_XP)
-			{
-				if (crossed(prev, now, e.getKey(), t))
-				{
-					into.add(milestone(ts, threshold(t) + " xp in "
-						+ StatRegistry.prettify(e.getKey().substring(3))));
-				}
-			}
-		}
-		for (long t : OVERALL_XP)
-		{
-			if (crossed(prev, now, "overall", t))
-			{
-				into.add(milestone(ts, threshold(t) + " xp overall"));
-			}
-		}
-		for (long t : LOG_SLOTS)
-		{
-			if (crossed(prev, now, "slots", t))
-			{
-				into.add(milestone(ts, fmt(t) + " collection log slots"));
+				into.add(milestone(ts, text.apply(t)));
 			}
 		}
 	}
@@ -11950,14 +11939,6 @@ class ChroniclePanel extends PluginPanel
 	private static String threshold(long xp)
 	{
 		return xp % 1_000_000_000L == 0 ? xp / 1_000_000_000L + "B" : xp / 1_000_000L + "M";
-	}
-
-	private static boolean crossed(Map<String, Long> prev, Map<String, Long> now, String key,
-		long threshold)
-	{
-		Long before = prev.get(key);
-		Long after = now.get(key);
-		return before != null && after != null && before < threshold && after >= threshold;
 	}
 
 	private static JsonObject milestone(long ts, String text)
@@ -11971,10 +11952,10 @@ class ChroniclePanel extends PluginPanel
 		return e;
 	}
 
-	private static String ordinal(int n)
+	private static String ordinal(long n)
 	{
-		int last = n % 10;
-		int tens = n % 100;
+		long last = n % 10;
+		long tens = n % 100;
 		String suffix = tens >= 11 && tens <= 13 ? "th"
 			: last == 1 ? "st" : last == 2 ? "nd" : last == 3 ? "rd" : "th";
 		return n + suffix;
@@ -12249,19 +12230,13 @@ class ChroniclePanel extends PluginPanel
 		Object[] xp = saysXp ? null : dayXp(day);
 		if (saysXp && sat[2] > 0)
 		{
-			String most = null;
-			long top = 0;
 			Map<String, Long> by = sat[7] == sat[1] && daySkills != null ? daySkills.get(day) : null;
-			for (Map.Entry<String, Long> e : by == null ? new LinkedHashMap<String, Long>().entrySet()
-				: by.entrySet())
+			String most = by == null ? null : topOf(by);
+			if (most != null)
 			{
-				if (e.getValue() > top)
-				{
-					top = e.getValue();
-					most = StatRegistry.prettify(e.getKey());
-				}
+				most = StatRegistry.prettify(most);
 			}
-			if (most == null)
+			else
 			{
 				Object[] spine = dayXp(day);
 				most = spine != null ? (String) spine[1] : null;
@@ -12760,11 +12735,7 @@ class ChroniclePanel extends PluginPanel
 		long[] tally = plugin.onTaskTally(ms[0], ms[1], null, f.whole);
 		if (tally[2] > 0)
 		{
-			long paid = 0;
-			for (LocalStore.BagItem b : plugin.onTaskLoot(ms[0], ms[1], null, f.whole))
-			{
-				paid += b.value;
-			}
+			long paid = tallyOf(plugin.onTaskLoot(ms[0], ms[1], null, f.whole))[1];
 			f.slayer.add(new RecapPicture.Named("Tasks", fmt(tally[2]), null));
 			if (tally[1] > 0)
 			{
@@ -12880,9 +12851,8 @@ class ChroniclePanel extends PluginPanel
 	private void recapFeats(RecapPicture.Facts f)
 	{
 		Map<String, List<String>> named = new LinkedHashMap<>();
-		Map<String, Long> deaths = new LinkedHashMap<>();
 		for (String k : new String[]{"Milestones", "Collection log", "Pets", "Personal bests",
-			"Quests", "Diaries", "Combat achievements"})
+			"Quests", "Diaries", "Combat achievements", "Deaths"})
 		{
 			named.put(k, new ArrayList<>());
 		}
@@ -12941,8 +12911,8 @@ class ChroniclePanel extends PluginPanel
 				case "DEATH":
 					if (!f.whole)
 					{
-						deaths.merge(d.has("killerName") ? d.get("killerName").getAsString() : "Unknown",
-							1L, Long::sum);
+						named.get("Deaths").add(d.has("killerName")
+							? d.get("killerName").getAsString() : "Unknown");
 					}
 					break;
 				default:
@@ -12979,15 +12949,6 @@ class ChroniclePanel extends PluginPanel
 			{
 				f.feats.put(e.getKey(), counted(e.getValue()));
 			}
-		}
-		if (!deaths.isEmpty())
-		{
-			List<String> out = new ArrayList<>();
-			for (Map.Entry<String, Long> e : deaths.entrySet())
-			{
-				out.add(e.getKey() + (e.getValue() > 1 ? " ×" + e.getValue() : ""));
-			}
-			f.feats.put("Deaths", out);
 		}
 	}
 
@@ -13028,25 +12989,9 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private void recapTiles(RecapPicture.Facts f)
 	{
-		long minutes = 0;
-		int sittings = 0;
-		if (f.session)
-		{
-			minutes = plugin.sessionElapsedMinutes();
-			sittings = minutes > 0 ? 1 : 0;
-		}
-		else
-		{
-			for (Map.Entry<LocalDate, long[]> d : daysPlayed().entrySet())
-			{
-				if (insideWindow(d.getKey().atTime(12, 0).atZone(ZoneId.systemDefault())
-					.toInstant().toEpochMilli()))
-				{
-					minutes += d.getValue()[0];
-					sittings += d.getValue()[1];
-				}
-			}
-		}
+		long[] sat = sittingsInWindow(new LocalDate[1]);
+		long minutes = sat[0];
+		int sittings = (int) sat[1];
 		// The whole record's time is the game's own count where that is the
 		// larger, as on the sheet: the sittings are only the hours this record
 		// has watched, and 88 hours beside 256M xp reads as a mistake.
@@ -13142,58 +13087,65 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private JPanel recapPlate()
+	/**
+	 * The period's {minutes, sittings, busiest day's minutes}, the busiest day
+	 * itself into {@code busiest}. A sitting in progress is ONE sitting and is
+	 * measured by its own clock: daysPlayed is keyed by day, and a day's noon
+	 * falls outside the sitting's own window, so reading it there counted the
+	 * whole day or nothing at all.
+	 */
+	private long[] sittingsInWindow(LocalDate[] busiest)
 	{
-		JPanel plate = card(wholeRecord() ? "The whole record" : window().label);
-		int rows = 0;
-
-		// The sittings. A sitting in progress is ONE sitting and is measured by
-		// its own clock: daysPlayed is keyed by day, and a day's noon falls
-		// outside the sitting's own window, so reading it there counted the
-		// whole day or nothing at all.
-		long minutes = 0;
-		int sittings = 0;
-		LocalDate busiest = null;
-		long busiestMinutes = 0;
+		long[] sat = new long[3];
 		if (sessionPeriod())
 		{
-			minutes = plugin.sessionElapsedMinutes();
-			sittings = minutes > 0 ? 1 : 0;
+			sat[0] = plugin.sessionElapsedMinutes();
+			sat[1] = sat[0] > 0 ? 1 : 0;
 		}
 		else
 		{
 			for (Map.Entry<LocalDate, long[]> d : daysPlayed().entrySet())
 			{
-				if (!insideWindow(d.getKey().atTime(12, 0).atZone(ZoneId.systemDefault())
-					.toInstant().toEpochMilli()))
+				if (!insideWindow(noon(d.getKey())))
 				{
 					continue;
 				}
-				minutes += d.getValue()[0];
-				sittings += d.getValue()[1];
-				if (d.getValue()[0] > busiestMinutes)
+				sat[0] += d.getValue()[0];
+				sat[1] += d.getValue()[1];
+				if (d.getValue()[0] > sat[2])
 				{
-					busiestMinutes = d.getValue()[0];
-					busiest = d.getKey();
+					sat[2] = d.getValue()[0];
+					busiest[0] = d.getKey();
 				}
 			}
 		}
+		return sat;
+	}
+
+	private JPanel recapPlate()
+	{
+		JPanel plate = card(wholeRecord() ? "The whole record" : window().label);
+		int held = plate.getComponentCount();
+
+		LocalDate[] busiest = new LocalDate[1];
+		long[] sat = sittingsInWindow(busiest);
+		long minutes = sat[0];
+		int sittings = (int) sat[1];
 		if (sittings > 0)
 		{
-			rows += plateRow(plate, "Played", hoursMinutes(minutes) + " · " + fmt(sittings)
+			plateRow(plate, "Played", hoursMinutes(minutes) + " · " + fmt(sittings)
 				+ (sittings == 1 ? " sitting" : " sittings"), () ->
 			{
 				journalLens = "Sessions";
 				applyTab(View.JOURNAL);
 			});
 		}
-		if (busiest != null && sittings > 1)
+		if (busiest[0] != null && sittings > 1)
 		{
-			final LocalDate day = busiest;
-			rows += plateRow(plate, "Busiest day", TASK_DAY.format(day.atStartOfDay(
-				ZoneId.systemDefault()).toInstant()) + " · " + hoursMinutes(busiestMinutes),
-				() -> openJournalOn(day.atTime(12, 0).atZone(ZoneId.systemDefault())
-					.toInstant().toEpochMilli()));
+			final LocalDate day = busiest[0];
+			plateRow(plate, "Busiest day", TASK_DAY.format(day.atStartOfDay(
+				ZoneId.systemDefault()).toInstant()) + " · " + hoursMinutes(sat[2]),
+				() -> openJournalOn(noon(day)));
 		}
 
 		// the xp and the levels, off the spine
@@ -13201,7 +13153,7 @@ class ChroniclePanel extends PluginPanel
 		if (xp != null && xp[0] > 0)
 		{
 			String most = periodXpMost();
-			rows += plateRow(plate, wholeRecord() ? "Xp" : "Xp gained",
+			plateRow(plate, wholeRecord() ? "Xp" : "Xp gained",
 				(wholeRecord() ? "" : "+") + gp(xp[0]) + " xp"
 					+ (most != null ? ", most in " + most : ""),
 				() -> applyTab(View.SHEET));
@@ -13209,7 +13161,7 @@ class ChroniclePanel extends PluginPanel
 		long[] levels = periodLevels();
 		if (levels != null)
 		{
-			rows += plateRow(plate, wholeRecord() ? "Total level" : "Levels",
+			plateRow(plate, wholeRecord() ? "Total level" : "Levels",
 				wholeRecord() ? fmt(levels[0]) : "+" + fmt(levels[0]) + " · " + fmt(levels[1]) + " now",
 				() -> applyTab(View.SHEET));
 		}
@@ -13218,7 +13170,7 @@ class ChroniclePanel extends PluginPanel
 		long[] loot = periodLoot();
 		if (loot[0] > 0)
 		{
-			rows += plateRow(plate, "Drops", fmt(loot[0]) + " · " + gps(loot[1]),
+			plateRow(plate, "Drops", fmt(loot[0]) + " · " + gps(loot[1]),
 				() -> applyTab(View.DROPS));
 		}
 		String[] dearest = periodDearest();
@@ -13228,11 +13180,11 @@ class ChroniclePanel extends PluginPanel
 			Line said = new Line();
 			said.name(item);
 			said.fixed(" · " + gps(Long.parseLong(dearest[1])));
-			rows += plateRow(plate, "Dearest drop", said, () -> openItem(item));
+			plateRow(plate, "Dearest drop", said, () -> openItem(item));
 		}
 		if (loot[2] > 0)
 		{
-			rows += plateRow(plate, "Left behind", fmt(loot[2]) + " · " + gps(loot[3]), () ->
+			plateRow(plate, "Left behind", fmt(loot[2]) + " · " + gps(loot[3]), () ->
 			{
 				dropsLeftBehind = true;
 				applyTab(View.DROPS);
@@ -13251,13 +13203,13 @@ class ChroniclePanel extends PluginPanel
 		long food = counters.getOrDefault("foodEaten", 0L);
 		if (food > 0)
 		{
-			rows += plateRow(plate, "Food", fmt(food)
+			plateRow(plate, "Food", fmt(food)
 				+ splitSpend("foodConsumedValue", counters), toLiving);
 		}
 		long doses = counters.getOrDefault("potionDoses", 0L);
 		if (doses > 0)
 		{
-			rows += plateRow(plate, "Potions", count(doses, "dose")
+			plateRow(plate, "Potions", count(doses, "dose")
 				+ splitSpend("potionsConsumedValue", counters), toLiving);
 		}
 
@@ -13269,18 +13221,14 @@ class ChroniclePanel extends PluginPanel
 			Line said = new Line();
 			said.name(who);
 			said.fixed(" · " + killed[1]);
-			rows += plateRow(plate, "Killed most", said, () -> openSourceLoose(who));
+			plateRow(plate, "Killed most", said, () -> openSourceLoose(who));
 		}
 		long[] ms = windowMs();
 		long[] tally = plugin.onTaskTally(ms[0], ms[1], null, wholeRecord());
 		if (tally[2] > 0)
 		{
-			long paid = 0;
-			for (LocalStore.BagItem b : plugin.onTaskLoot(ms[0], ms[1], null, wholeRecord()))
-			{
-				paid += b.value;
-			}
-			rows += plateRow(plate, "Tasks", fmt(tally[2]) + tail(paid), () ->
+			long paid = tallyOf(plugin.onTaskLoot(ms[0], ms[1], null, wholeRecord()))[1];
+			plateRow(plate, "Tasks", fmt(tally[2]) + tail(paid), () ->
 			{
 				slayerLens = "Tasks";
 				applyTab(View.SLAYER);
@@ -13304,15 +13252,15 @@ class ChroniclePanel extends PluginPanel
 				firstNamed.putIfAbsent(type, name);
 			}
 		}
-		rows += feedPlateRow(plate, lines, firstNamed, "COLLECTION", "Log slot", "Log slots", "Log");
-		rows += feedPlateRow(plate, lines, firstNamed, "PET", "Pet", "Pets", "Feats");
-		rows += feedPlateRow(plate, lines, firstNamed, "QUEST", "Quest", "Quests", "Feats");
-		rows += feedPlateRow(plate, lines, firstNamed, "DIARY", "Diary", "Diaries", "Feats");
-		rows += feedPlateRow(plate, lines, firstNamed, "COMBAT_ACHIEVEMENT", "Combat achievement",
+		feedPlateRow(plate, lines, firstNamed, "COLLECTION", "Log slot", "Log slots", "Log");
+		feedPlateRow(plate, lines, firstNamed, "PET", "Pet", "Pets", "Feats");
+		feedPlateRow(plate, lines, firstNamed, "QUEST", "Quest", "Quests", "Feats");
+		feedPlateRow(plate, lines, firstNamed, "DIARY", "Diary", "Diaries", "Feats");
+		feedPlateRow(plate, lines, firstNamed, "COMBAT_ACHIEVEMENT", "Combat achievement",
 			"Combat achievements", "Feats");
-		rows += feedPlateRow(plate, lines, firstNamed, "DEATH", "Death", "Deaths", "Deaths");
+		feedPlateRow(plate, lines, firstNamed, "DEATH", "Death", "Deaths", "Deaths");
 
-		if (rows == 0)
+		if (plate.getComponentCount() == held)
 		{
 			plate.add(note(wholeRecord() ? "Nothing on the record yet."
 				: "Nothing inside " + periodInSentence() + "."));
@@ -13338,12 +13286,11 @@ class ChroniclePanel extends PluginPanel
 		return tail(spend);
 	}
 
-	private int plateRow(JPanel plate, String left, String right, Runnable go)
+	private void plateRow(JPanel plate, String left, String right, Runnable go)
 	{
 		JPanel r = row(left, right);
 		link(r, go);
 		plate.add(r);
-		return 1;
 	}
 
 	/**
@@ -13352,7 +13299,7 @@ class ChroniclePanel extends PluginPanel
 	 * or task name squeezed it to "Comb..." beside a figure nobody could then
 	 * place. The hover keeps the whole line.
 	 */
-	private int plateRow(JPanel plate, String left, Line right, Runnable go)
+	private void plateRow(JPanel plate, String left, Line right, Runnable go)
 	{
 		String whole = right.whole();
 		String fitted = fitLine(right, right.names, NAME_FLOOR, rowMetrics(),
@@ -13363,17 +13310,16 @@ class ChroniclePanel extends PluginPanel
 			((JPanel) plate.getComponent(plate.getComponentCount() - 1))
 				.setToolTipText(left + ": " + whole);
 		}
-		return 1;
 	}
 
 	/** One kind of feed line on the plate: its count and the first one named; a door to its lens. */
-	private int feedPlateRow(JPanel plate, Map<String, long[]> lines, Map<String, String> named,
+	private void feedPlateRow(JPanel plate, Map<String, long[]> lines, Map<String, String> named,
 		String type, String one, String many, String lens)
 	{
 		long[] n = lines.get(type);
 		if (n == null || n[0] == 0)
 		{
-			return 0;
+			return;
 		}
 		String name = named.get(type);
 		// the count, and the first one the period named, or for a death who dealt it
@@ -13384,7 +13330,7 @@ class ChroniclePanel extends PluginPanel
 			right.fixed(" · ");
 			right.name(name);
 		}
-		return plateRow(plate, n[0] == 1 ? one : many, right, () ->
+		plateRow(plate, n[0] == 1 ? one : many, right, () ->
 		{
 			journalLens = lens;
 			applyTab(View.JOURNAL);
@@ -13459,6 +13405,12 @@ class ChroniclePanel extends PluginPanel
 			}
 			by.putAll(gains);
 		}
+		String top = topOf(by);
+		return top == null ? null : StatRegistry.prettify(top);
+	}
+
+	private static String topOf(Map<String, Long> by)
+	{
 		String top = null;
 		long most = 0;
 		for (Map.Entry<String, Long> e : by.entrySet())
@@ -13469,7 +13421,7 @@ class ChroniclePanel extends PluginPanel
 				top = e.getKey();
 			}
 		}
-		return top == null ? null : StatRegistry.prettify(top);
+		return top;
 	}
 
 	/** The period's levels as {gained, standing}, or the standing alone on the whole record. */
@@ -13626,17 +13578,8 @@ class ChroniclePanel extends PluginPanel
 		}
 		Map<String, Long> moved = HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
 			closingNow(s.closing.kcs, plugin.killCounts()));
-		String top = null;
-		long most = 0;
-		for (Map.Entry<String, Long> e : moved.entrySet())
-		{
-			if (e.getValue() > most)
-			{
-				most = e.getValue();
-				top = e.getKey();
-			}
-		}
-		return top == null ? null : new String[]{top, fmt(most)};
+		String top = topOf(moved);
+		return top == null ? null : new String[]{top, fmt(moved.get(top))};
 	}
 
 	/**
@@ -13650,44 +13593,30 @@ class ChroniclePanel extends PluginPanel
 		p.add(backRow());
 		p.add(vgap(4));
 		JPanel book = card("Records");
-		int rows = 0;
+		int held = book.getComponentCount();
 
 		// the longest sitting
-		long[] best = {0, 0};
-		long[] then = {0, 0};
+		long[][] best = {{0, 0}, {0, 0}};
 		for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
 		{
-			if (!"SESSION".equals(typeOf(e)))
+			if ("SESSION".equals(typeOf(e)))
 			{
-				continue;
-			}
-			long mins = sessionMinutes(e);
-			long ts = sittingStart(e);
-			if (mins > best[0])
-			{
-				then = best;
-				best = new long[]{mins, ts};
-			}
-			else if (mins > then[0])
-			{
-				then = new long[]{mins, ts};
+				rank(best, sessionMinutes(e), sittingStart(e));
 			}
 		}
-		if (best[0] > 0)
+		if (best[0][0] > 0)
 		{
-			rows += recordRow(book, "Longest sitting", hoursMinutes(best[0]), best[1],
-				then[0] > 0 ? "Was " + hoursMinutes(then[0]) + " · " + dated(then[1]) : null);
+			recordRow(book, "Longest sitting", hoursMinutes(best[0][0]), best[0][1],
+				best[1][0] > 0 ? "Was " + hoursMinutes(best[1][0]) + " · " + dated(best[1][1]) : null);
 		}
 
 		// the spine, day against the day before it
 		TreeMap<LocalDate, HistoryLog.Baseline> spine = historySpine;
 		if (spine != null && spine.size() > 1)
 		{
-			long[] bigXp = {0, 0};
-			long[] thenXp = {0, 0};
+			long[][] bigXp = {{0, 0}, {0, 0}};
 			String bigSkill = null;
-			long[] bigKills = {0, 0};
-			long[] thenKills = {0, 0};
+			long[][] bigKills = {{0, 0}, {0, 0}};
 			int run = 0;
 			int longest = 0;
 			LocalDate runEnd = null;
@@ -13704,19 +13633,11 @@ class ChroniclePanel extends PluginPanel
 				prevDay = day.getKey();
 				if (before != null)
 				{
-					long ts = day.getKey().atTime(12, 0).atZone(ZoneId.systemDefault())
-						.toInstant().toEpochMilli();
+					long ts = noon(day.getKey());
 					Object[] xp = dayXp(day.getKey());
-					long gained = xp == null ? 0 : (Long) xp[0];
-					if (gained > bigXp[0])
+					if (rank(bigXp, xp == null ? 0 : (Long) xp[0], ts))
 					{
-						thenXp = bigXp;
-						bigXp = new long[]{gained, ts};
 						bigSkill = (String) xp[1];
-					}
-					else if (gained > thenXp[0])
-					{
-						thenXp = new long[]{gained, ts};
 					}
 					long kills = 0;
 					for (Map.Entry<String, Long> k : day.getValue().kcs.entrySet())
@@ -13727,86 +13648,58 @@ class ChroniclePanel extends PluginPanel
 							kills += k.getValue() - was;
 						}
 					}
-					if (kills > bigKills[0])
-					{
-						thenKills = bigKills;
-						bigKills = new long[]{kills, ts};
-					}
-					else if (kills > thenKills[0])
-					{
-						thenKills = new long[]{kills, ts};
-					}
+					rank(bigKills, kills, ts);
 				}
 				before = day;
 			}
-			if (bigXp[0] > 0)
+			if (bigXp[0][0] > 0)
 			{
-				rows += recordRow(book, "Biggest day", "+" + gp(bigXp[0]) + " xp", bigXp[1],
+				recordRow(book, "Biggest day", "+" + gp(bigXp[0][0]) + " xp", bigXp[0][1],
 					(bigSkill != null ? "Most in " + bigSkill : "")
-						+ (thenXp[0] > 0 ? (bigSkill != null ? " · " : "") + "was +" + gp(thenXp[0])
-						+ " · " + dated(thenXp[1]) : ""));
+						+ (bigXp[1][0] > 0 ? (bigSkill != null ? " · " : "") + "was +" + gp(bigXp[1][0])
+						+ " · " + dated(bigXp[1][1]) : ""));
 			}
-			if (bigKills[0] > 0)
+			if (bigKills[0][0] > 0)
 			{
-				rows += recordRow(book, "Most kills in a day", fmt(bigKills[0]), bigKills[1],
-					thenKills[0] > 0 ? "Was " + fmt(thenKills[0]) + " · " + dated(thenKills[1]) : null);
+				recordRow(book, "Most kills in a day", fmt(bigKills[0][0]), bigKills[0][1],
+					bigKills[1][0] > 0 ? "Was " + fmt(bigKills[1][0]) + " · " + dated(bigKills[1][1]) : null);
 			}
 			if (longest > 1 && runEnd != null)
 			{
-				rows += recordRow(book, "Longest run of days written",
-					fmt(longest) + " days", runEnd.atTime(12, 0).atZone(ZoneId.systemDefault())
-						.toInstant().toEpochMilli(), null);
+				recordRow(book, "Longest run of days written",
+					fmt(longest) + " days", noon(runEnd), null);
 			}
 		}
 
 		// the roll by day
-		long[] rich = {0, 0, 0};
-		long[] thenRich = {0, 0};
-		long[] busy = {0, 0, 0};
-		long[] thenBusy = {0, 0};
+		long[][] rich = {{0, 0}, {0, 0}};
+		long[][] busy = {{0, 0}, {0, 0}};
 		for (Map.Entry<String, long[]> d : dayTotals().entrySet())
 		{
 			long ts;
 			try
 			{
-				ts = LocalDate.parse(d.getKey(), ROLL_DAY).atTime(12, 0)
-					.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+				ts = noon(LocalDate.parse(d.getKey(), ROLL_DAY));
 			}
 			catch (RuntimeException e)
 			{
 				continue;
 			}
 			long[] t = d.getValue();
-			if (t[1] > rich[0])
-			{
-				thenRich = new long[]{rich[0], rich[1]};
-				rich = new long[]{t[1], ts, t[0]};
-			}
-			else if (t[1] > thenRich[0])
-			{
-				thenRich = new long[]{t[1], ts};
-			}
-			if (t[0] > busy[0])
-			{
-				thenBusy = new long[]{busy[0], busy[1]};
-				busy = new long[]{t[0], ts, t[1]};
-			}
-			else if (t[0] > thenBusy[0])
-			{
-				thenBusy = new long[]{t[0], ts};
-			}
+			rank(rich, t[1], ts, t[0]);
+			rank(busy, t[0], ts, t[1]);
 		}
-		if (rich[0] > 0)
+		if (rich[0][0] > 0)
 		{
-			rows += recordRow(book, "Richest day", gps(rich[0]), rich[1],
-				count(rich[2], "drop") + (thenRich[0] > 0 ? " · was " + gp(thenRich[0]) + " · "
-					+ dated(thenRich[1]) : ""));
+			recordRow(book, "Richest day", gps(rich[0][0]), rich[0][1],
+				count(rich[0][2], "drop") + (rich[1][0] > 0 ? " · was " + gp(rich[1][0]) + " · "
+					+ dated(rich[1][1]) : ""));
 		}
-		if (busy[0] > 0)
+		if (busy[0][0] > 0)
 		{
-			rows += recordRow(book, "Most drops in a day", fmt(busy[0]), busy[1],
-				gps(busy[2]) + (thenBusy[0] > 0 ? " · was " + fmt(thenBusy[0]) + " · "
-					+ dated(thenBusy[1]) : ""));
+			recordRow(book, "Most drops in a day", fmt(busy[0][0]), busy[0][1],
+				gps(busy[0][2]) + (busy[1][0] > 0 ? " · was " + fmt(busy[1][0]) + " · "
+					+ dated(busy[1][1]) : ""));
 		}
 
 		// the one record the counters keep, undated
@@ -13814,9 +13707,8 @@ class ChroniclePanel extends PluginPanel
 		if (hit > 0)
 		{
 			book.add(row("Highest hit", fmt(hit)));
-			rows++;
 		}
-		if (rows == 0)
+		if (book.getComponentCount() == held)
 		{
 			book.add(note("No record set yet."));
 		}
@@ -13834,7 +13726,7 @@ class ChroniclePanel extends PluginPanel
 		return TASK_DAY.format(Instant.ofEpochMilli(ms));
 	}
 
-	private int recordRow(JPanel book, String left, String figure, long ts, String hover)
+	private void recordRow(JPanel book, String left, String figure, long ts, String hover)
 	{
 		JPanel r = row(left, figure + " · " + dated(ts));
 		if (hover != null && !hover.isEmpty())
@@ -13842,7 +13734,22 @@ class ChroniclePanel extends PluginPanel
 			r.setToolTipText(hover);
 		}
 		book.add(r);
-		return 1;
+	}
+
+	/** Files {@code e} = {value, ts, ...} into {best, runner-up}; true when it is the new best. */
+	private static boolean rank(long[][] top, long... e)
+	{
+		if (e[0] > top[0][0])
+		{
+			top[1] = top[0];
+			top[0] = e;
+			return true;
+		}
+		if (e[0] > top[1][0])
+		{
+			top[1] = e;
+		}
+		return false;
 	}
 
 	/**
@@ -13855,41 +13762,20 @@ class ChroniclePanel extends PluginPanel
 		JPanel p = column();
 		p.add(backRow());
 		p.add(vgap(4));
-		JPanel head = new JPanel(new BorderLayout());
-		head.setBackground(DARKER);
-		head.setBorder(pad(3, 8, 3, 8));
-		head.setAlignmentX(Component.LEFT_ALIGNMENT);
-		head.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
-		JLabel back = new JLabel("<");
-		JLabel fwd = new JLabel(">");
-		for (JLabel arrow : new JLabel[]{back, fwd})
-		{
-			arrow.setFont(FontManager.getRunescapeBoldFont());
-			arrow.setBorder(pad(0, 6, 0, 6));
-		}
-		back.setForeground(accent());
-		link(back, () ->
-		{
-			calendarMonth = calendarMonth.minusMonths(1);
-			rebuildInPlace();
-		});
-		boolean ahead = calendarMonth.isBefore(YearMonth.now());
-		fwd.setForeground(ahead ? accent() : dim());
-		if (ahead)
-		{
-			link(fwd, () ->
-			{
-				calendarMonth = calendarMonth.plusMonths(1);
-				rebuildInPlace();
-			});
-		}
+		JPanel head = stepStrip();
 		JLabel title = new JLabel(MONTH_YEAR.format(calendarMonth.atDay(1)
 			.atStartOfDay(ZoneId.systemDefault()).toInstant()).toUpperCase(Locale.ROOT), JLabel.CENTER);
 		title.setFont(FontManager.getRunescapeFont());
 		title.setForeground(accent());
-		head.add(back, BorderLayout.WEST);
-		head.add(title, BorderLayout.CENTER);
-		head.add(fwd, BorderLayout.EAST);
+		arrows(head, () ->
+		{
+			calendarMonth = calendarMonth.minusMonths(1);
+			rebuildInPlace();
+		}, calendarMonth.isBefore(YearMonth.now()), () ->
+		{
+			calendarMonth = calendarMonth.plusMonths(1);
+			rebuildInPlace();
+		}, title);
 		p.add(head);
 		p.add(vgap(4));
 
@@ -13953,7 +13839,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			if (!future && (onSpine || t != null))
 			{
-				final long ts = day.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+				final long ts = noon(day);
 				link(cell, () -> openJournalOn(ts));
 			}
 			cell.add(n, BorderLayout.CENTER);
@@ -14031,8 +13917,7 @@ class ChroniclePanel extends PluginPanel
 		List<JsonObject> feed = new ArrayList<>();
 		for (JsonObject e : all)
 		{
-			boolean kind = wanted.isEmpty() || (e.has("type")
-				&& wanted.contains(e.get("type").getAsString()));
+			boolean kind = wanted.isEmpty() || wanted.contains(typeOf(e));
 			// The period governs this board too: a dated feed read under a
 			// month's heading must list that month and not everything.
 			if (kind && insideWindow(filedAt(e)))
@@ -14169,9 +14054,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		// The way to what the journal holds: the one page that was reachable
 		// only by typing its name into the search box.
-		JPanel holds = ghostRow("what the journal holds", "");
-		link(holds, this::openInfo);
-		plate.add(holds);
+		plate.add(moreRow("what the journal holds", this::openInfo));
 		p.add(plate);
 
 		// One margin note, when the record has something to remark on.
@@ -14326,13 +14209,6 @@ class ChroniclePanel extends PluginPanel
 		return Math.min(cap, prev[b.length()]);
 	}
 
-	/** Whether a query names a source outright, in its own spelling or the plural. */
-	private static boolean namesExactly(String q, String name)
-	{
-		return name.equalsIgnoreCase(q)
-			|| (q.endsWith("s") && name.equalsIgnoreCase(q.substring(0, q.length() - 1)));
-	}
-
 	/** One thing a search found: its row, where it goes, and how well it answered. */
 	private static final class Hit
 	{
@@ -14459,6 +14335,32 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	/** The best of several names' answers; -1 when none answers. */
+	/**
+	 * A skill or a page in Go to, when the query is close to its name or is
+	 * one of its other names typed whole.
+	 */
+	private static void goTo(List<Hit> go, String ql, String name, String figure, Runnable to,
+		long weight, String... also)
+	{
+		// A close answer only: "king" found inside Cooking took Enter from King
+		// Black Dragon, which it names outright.
+		int sc = matchScore(ql, name);
+		sc = sc > 2 ? -1 : sc;
+		// another name only as typed whole: "logs" is the item kind, not the
+		// plural of the log's nickname
+		for (String a : also)
+		{
+			if (a.equals(ql))
+			{
+				sc = 0;
+			}
+		}
+		if (sc >= 0)
+		{
+			go.add(new Hit(name, figure, null, null, to, sc, weight));
+		}
+	}
+
 	private static int bestScore(String ql, String... names)
 	{
 		int best = -1;
@@ -14634,29 +14536,14 @@ class ChroniclePanel extends PluginPanel
 		{
 			String key = low(sk.name());
 			String name = StatRegistry.prettify(key);
-			String[] also = SKILL_ALIASES.getOrDefault(key, new String[0]);
-			// A close answer only: "king" found inside Cooking took Enter from King
-			// Black Dragon, which it names outright.
-			int sc = bestScore(ql, name);
-			sc = sc > 2 ? -1 : sc;
-			for (String a : also)
-			{
-				if (a.equals(ql))
-				{
-					sc = 0;
-				}
-			}
-			if (sc < 0)
-			{
-				continue;
-			}
 			long[] cur = sheet.get(key);
 			Runnable to = sk == Skill.SLAYER ? () ->
 			{
 				slayerLens = "Tasks";
 				applyTab(View.SLAYER);
 			} : () -> openSkill(name);
-			go.add(new Hit(name, cur != null && cur[0] > 0 ? "level " + cur[0] : "", null, null, to, sc, 2));
+			goTo(go, ql, name, cur != null && cur[0] > 0 ? "level " + cur[0] : "", to, 2,
+				SKILL_ALIASES.getOrDefault(key, new String[0]));
 		}
 		JsonObject quests = obj(achievements(), "quests");
 		long questsDone = 0;
@@ -14664,59 +14551,39 @@ class ChroniclePanel extends PluginPanel
 		{
 			questsDone += "FINISHED".equals(quests.get(name).getAsString()) ? 1 : 0;
 		}
-		Object[][] pages = {
-			{"Quests", quests.size() > 0 ? fmt(questsDone) + " / " + fmt(quests.size()) : "",
-				(Runnable) () -> openSheetPage("quests"), new String[]{"quest"}},
-			{"Collection log", plugin.clogAvailable() > 0
-				? fmt(plugin.clogFinished()) + " / " + fmt(plugin.clogAvailable()) : "",
-				(Runnable) () -> openSheetPage("log"), new String[]{"clog", "log"}},
-			{"Achievement diaries", "", (Runnable) () -> openSheetPage("diaries"),
-				new String[]{"diary", "diaries"}},
-			{"Combat achievements", "", (Runnable) () -> openSheetPage("combat"),
-				new String[]{"ca", "cas", "combat tasks"}},
-			{"Clues", "", (Runnable) () -> openSheetPage("clues"),
-				new String[]{"clue", "clue scrolls", "caskets", "treasure trails"}},
-			{"Records", "", (Runnable) this::openRecords,
-				new String[]{"record", "best", "bests", "pb", "personal best"}},
-			{"Calendar", "", (Runnable) this::openCalendar, new String[]{"days", "days written"}},
-			{"Recap", "", (Runnable) () ->
-			{
-				subByTab.put(Tab.RECORD, "Recap");
-				applyTab(Tab.RECORD);
-				rebuild();
-			}, new String[]{"summary"}},
-			{"All trackers", "", (Runnable) this::openAllTrackers, new String[]{"trackers", "counters"}},
-			{"Kill log", "", (Runnable) () ->
-			{
-				slayerLens = "Monsters";
-				applyTab(View.SLAYER);
-			}, new String[]{"killlog", "kill count", "kc"}},
-			{"Left behind", "", (Runnable) () ->
-			{
-				applyTab(View.DROPS);
-				dropsLeftBehind = true;
-				rebuild();
-			}, new String[]{"untaken", "left on the floor"}},
-			{"Info", "what the journal holds", (Runnable) this::openInfo, new String[]{"journal holds"}},
-		};
-		for (Object[] pg : pages)
+		goTo(go, ql, "Quests", quests.size() > 0 ? fmt(questsDone) + " / " + fmt(quests.size()) : "",
+			() -> openSheetPage("quests"), 1, "quest");
+		goTo(go, ql, "Collection log", plugin.clogAvailable() > 0
+			? fmt(plugin.clogFinished()) + " / " + fmt(plugin.clogAvailable()) : "",
+			() -> openSheetPage("log"), 1, "clog", "log");
+		goTo(go, ql, "Achievement diaries", "", () -> openSheetPage("diaries"), 1,
+			"diary", "diaries");
+		goTo(go, ql, "Combat achievements", "", () -> openSheetPage("combat"), 1,
+			"ca", "cas", "combat tasks");
+		goTo(go, ql, "Clues", "", () -> openSheetPage("clues"), 1,
+			"clue", "clue scrolls", "caskets", "treasure trails");
+		goTo(go, ql, "Records", "", this::openRecords, 1,
+			"record", "best", "bests", "pb", "personal best");
+		goTo(go, ql, "Calendar", "", this::openCalendar, 1, "days", "days written");
+		goTo(go, ql, "Recap", "", () ->
 		{
-			int sc = matchScore(ql, (String) pg[0]);
-			sc = sc > 2 ? -1 : sc;
-			// another name for the page only as typed whole: "logs" is the item
-			// kind, not the plural of the log's nickname
-			for (String a : (String[]) pg[3])
-			{
-				if (a.equals(ql))
-				{
-					sc = 0;
-				}
-			}
-			if (sc >= 0)
-			{
-				go.add(new Hit((String) pg[0], (String) pg[1], null, null, (Runnable) pg[2], sc, 1));
-			}
-		}
+			subByTab.put(Tab.RECORD, "Recap");
+			applyTab(Tab.RECORD);
+			rebuild();
+		}, 1, "summary");
+		goTo(go, ql, "All trackers", "", this::openAllTrackers, 1, "trackers", "counters");
+		goTo(go, ql, "Kill log", "", () ->
+		{
+			slayerLens = "Monsters";
+			applyTab(View.SLAYER);
+		}, 1, "killlog", "kill count", "kc");
+		goTo(go, ql, "Left behind", "", () ->
+		{
+			applyTab(View.DROPS);
+			dropsLeftBehind = true;
+			rebuild();
+		}, 1, "untaken", "left on the floor");
+		goTo(go, ql, "Info", "what the journal holds", this::openInfo, 1, "journal holds");
 		String kind = ItemKinds.named(q);
 		if (kind != null && !ql.isEmpty())
 		{
@@ -15845,17 +15712,9 @@ class ChroniclePanel extends PluginPanel
 	private static String xpShort(long n)
 	{
 		long a = Math.abs(n);
-		if (a >= 1_000_000_000L)
-		{
-			return String.format(Locale.UK, "%.2fB", n / 1_000_000_000.0);
-		}
-		if (a >= 1_000_000L)
-		{
-			return String.format(Locale.UK, "%.1fM", n / 1_000_000.0);
-		}
 		if (a >= 100_000L)
 		{
-			return String.format(Locale.UK, "%dk", n / 1_000);
+			return gp(n);
 		}
 		if (a >= 1_000L)
 		{
