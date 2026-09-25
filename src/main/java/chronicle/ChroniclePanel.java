@@ -748,11 +748,14 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
+	// The three fight tables below are bundled in panel_fights.json.
+	private static final JsonObject FIGHTS = table("panel_fights.json");
+
 	/**
 	 * Where the hiscores and the collection log name one fight differently. One
 	 * page counts both Gauntlets, and each of them is its own row on the board.
 	 */
-	private static final Map<String, String> LOG_PAGE_FOR = new LinkedHashMap<>();
+	private static final Map<String, String> LOG_PAGE_FOR = strMap(FIGHTS, "logPage");
 	// Where a fight's takings are filed under another name entirely. NOT the
 	// creatures inside it -- a crystalline bear's shards are not the
 	// Gauntlet's loot -- but the payout at the end of it, which the ledger
@@ -772,38 +775,47 @@ class ChroniclePanel extends PluginPanel
 	// on them were spent on it.
 	private static final Map<String, List<String>> FOUGHT_AS = new LinkedHashMap<>();
 
-	// The three tables are bundled in panel_fights.json, in the order they are read.
 	static
 	{
+		obj(FIGHTS, "paysOut").entrySet().forEach(e -> PAYS_OUT.put(e.getKey(), strs(e.getValue())));
+		obj(FIGHTS, "foughtAs").entrySet().forEach(e ->
+			FOUGHT_AS.put(LocalStore.kindOf(e.getKey()), strs(e.getValue())));
+	}
+
+	/**
+	 * A table bundled beside the class, read once at class load. A missing
+	 * resource reads as an empty table, as a missing roster does.
+	 */
+	private static JsonObject table(String name)
+	{
 		try (java.io.Reader in = new InputStreamReader(ChroniclePanel.class.getResourceAsStream(
-			"panel_fights.json"), StandardCharsets.UTF_8))
+			name), StandardCharsets.UTF_8))
 		{
-			JsonObject t = new com.google.gson.JsonParser().parse(in).getAsJsonObject();
-			for (Map.Entry<String, JsonElement> e : t.getAsJsonObject("logPage").entrySet())
-			{
-				LOG_PAGE_FOR.put(e.getKey(), e.getValue().getAsString());
-			}
-			for (String part : new String[]{"paysOut", "foughtAs"})
-			{
-				for (Map.Entry<String, JsonElement> e : t.getAsJsonObject(part).entrySet())
-				{
-					List<String> npcs = new ArrayList<>();
-					e.getValue().getAsJsonArray().forEach(n -> npcs.add(n.getAsString()));
-					if (part.equals("paysOut"))
-					{
-						PAYS_OUT.put(e.getKey(), npcs);
-					}
-					else
-					{
-						FOUGHT_AS.put(LocalStore.kindOf(e.getKey()), npcs);
-					}
-				}
-			}
+			return new com.google.gson.JsonParser().parse(in).getAsJsonObject();
 		}
 		catch (java.io.IOException | RuntimeException ex)
 		{
-			// a missing resource leaves the tables empty, as a missing roster does
+			return new JsonObject();
 		}
+	}
+
+	// A bundled list of names, in the order it was written; empty where absent.
+	private static List<String> strs(JsonElement a)
+	{
+		List<String> out = new ArrayList<>();
+		if (a != null)
+		{
+			a.getAsJsonArray().forEach(n -> out.add(n.getAsString()));
+		}
+		return out;
+	}
+
+	// A bundled name-to-name table, in the order it was written.
+	private static Map<String, String> strMap(JsonObject t, String key)
+	{
+		Map<String, String> out = new LinkedHashMap<>();
+		obj(t, key).entrySet().forEach(e -> out.put(e.getKey(), e.getValue().getAsString()));
+		return out;
 	}
 
 	// Per build: the best kill count known for each KIND, from the chat lines and
@@ -1636,8 +1648,7 @@ class ChroniclePanel extends PluginPanel
 			// rewards, Soul Wars' - and the figure they carry is that source's
 			// count. So they open it, rather than being the only things on the
 			// sheet that say a number and do nothing when you press them.
-			final String open = source;
-			link(cell, () -> openActivity(open));
+			link(cell, () -> openActivity(source));
 		}
 		cell.add(icon, BorderLayout.WEST);
 		long moved = activityMoved(label, source);
@@ -2951,7 +2962,7 @@ class ChroniclePanel extends PluginPanel
 			strip.add(nested(row(StatRegistry.rowLabel(k.getKey()), fmt(k.getValue()))));
 			mounted++;
 		}
-		addMore(strip, listKey, kids.size(), cap);
+		addMore(strip, listKey, kids.size(), cap, true);
 		if (value - named >= 1)
 		{
 			strip.add(nested(ghostRow(
@@ -4096,10 +4107,7 @@ class ChroniclePanel extends PluginPanel
 			for (Map.Entry<String, BooleanSupplier> e
 				: choices.entrySet())
 			{
-				JMenuItem item = new JMenuItem(e.getKey());
-				item.setFont(small());
-				item.addActionListener(a -> reportCopy(take, e.getValue().getAsBoolean()));
-				menu.add(item);
+				menuItem(menu, e.getKey(), false, () -> reportCopy(take, e.getValue().getAsBoolean()));
 			}
 			menu.show(take, 0, take.getHeight());
 		});
@@ -7976,7 +7984,7 @@ class ChroniclePanel extends PluginPanel
 				}
 				card.add(nested(ghostRow(entry[0], entry[1])));
 			}
-			addMore(card, listKey, list.size(), cap);
+			addMore(card, listKey, list.size(), cap, true);
 			// only a count row can be short of its list: a gp row's drill names
 			// the items its value is made of, and the two are not the same unit
 			long unnamed = r.gp() ? 0 : r.value() - list.size();
@@ -8016,7 +8024,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			card.add(nested(row(r.label(), "+" + figure(r))));
 		}
-		addMore(card, stateKey, s.rows().size(), cap);
+		addMore(card, stateKey, s.rows().size(), cap, true);
 		if (s.ghost() > 0)
 		{
 			card.add(nested(ghostRow(s.ghostLabel(), "+" + fmt(s.ghost()))));
@@ -8038,13 +8046,7 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	// The tail under a capped list: what is still folded away, and the click
-	// that brings it.
-	private void addMore(JPanel card, String key, int size, int cap)
-	{
-		addMore(card, key, size, cap, true);
-	}
-
-	// The same tail, drawn at the indent of the rows it pages: one step in
+	// that brings it. Drawn at the indent of the rows it pages: one step in
 	// under a list or a section, and flush under the group's own rows.
 	private void addMore(JPanel card, String key, int size, int cap, boolean inset)
 	{
@@ -8094,46 +8096,15 @@ class ChroniclePanel extends PluginPanel
 		{
 			String what = lootFromSittings ? "loot" : "loot and kills";
 			note.append(note.length() == 0
-				? Character.toUpperCase(what.charAt(0)) + what.substring(1) + " since "
+				? prettyTier(what) + " since "
 				: " · " + what + " since ")
 				.append(loot.format(FULL_DAY));
 		}
 		return note.length() == 0 ? null : note.toString();
 	}
 
-	// Closed slayer segments dated inside [fromMs, toMs): a segment's ts is its
-	// completion instant, in epoch seconds.
-	private static long closedTasksBetween(LocalStore.SlayerJourney j, long fromMs, long toMs)
-	{
-		long n = 0;
-		for (LocalStore.SlayerTask t : j.tasks)
-		{
-			if (closedInside(t, fromMs, toMs))
-			{
-				n++;
-			}
-		}
-		return n;
-	}
-
-	// The kills those same segments hold, each task's own count as its completion
-	// set it, the kills the loot never saw included. The window is the one
-	// closedTasksBetween reads, so the two lines agree on which tasks are the
-	// period's.
-	private static long closedKillsBetween(LocalStore.SlayerJourney j, long fromMs, long toMs)
-	{
-		long n = 0;
-		for (LocalStore.SlayerTask t : j.tasks)
-		{
-			if (closedInside(t, fromMs, toMs))
-			{
-				n += t.kills;
-			}
-		}
-		return n;
-	}
-
-	// A segment closed inside the window; the one in hand is nobody's yet.
+	// A segment closed inside [fromMs, toMs); the one in hand is nobody's yet.
+	// A segment's ts is its completion instant, in epoch seconds.
 	private static boolean closedInside(LocalStore.SlayerTask t, long fromMs, long toMs)
 	{
 		long ms = (long) (t.ts * 1000);
@@ -8188,9 +8159,8 @@ class ChroniclePanel extends PluginPanel
 	// holds only what the record can actually name.
 	private static String feedName(JsonObject e)
 	{
-		String type = e.has("type") ? e.get("type").getAsString() : "";
 		JsonObject d = obj(e, "data");
-		switch (type)
+		switch (typeOf(e))
 		{
 			case "PET":
 				return has(d, "petName") ? d.get("petName").getAsString() : null;
@@ -8272,27 +8242,20 @@ class ChroniclePanel extends PluginPanel
 		return d.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 	}
 
+	// The panel's name tables below are bundled in panel_kinds.json, which is
+	// read before the first of them.
+	private static final JsonObject KINDS = table("panel_kinds.json");
+
 	// The feed's dated entry types the progress card counts, each under the
 	// summary key its line reads. Where the spine carries the key too (deaths,
 	// collection log slots) the feed's count lays over its delta; the rest
 	// never ride the spine and stand on the feed alone.
-	private static final Map<String, String> FEED_SUMMARY_KEYS = new LinkedHashMap<>();
-
-	static
-	{
-		FEED_SUMMARY_KEYS.put("COLLECTION", "clogSlotsObtained");
-		FEED_SUMMARY_KEYS.put("DEATH", "deaths");
-		FEED_SUMMARY_KEYS.put("PET", "petsObtained");
-		FEED_SUMMARY_KEYS.put("QUEST", "questsCompleted");
-		FEED_SUMMARY_KEYS.put("DIARY", "diariesCompleted");
-		FEED_SUMMARY_KEYS.put("COMBAT_ACHIEVEMENT", "combatAchievements");
-		FEED_SUMMARY_KEYS.put("LEVEL", "levelsGained");
-	}
+	private static final Map<String, String> FEED_SUMMARY_KEYS = strMap(KINDS, "feedSummaryKeys");
 
 	// whether the record was keeping sittings before this window opened
 	private static boolean sittingsCover(List<JsonObject> feed, long fromMs)
 	{
-		long oldest = oldestSessionTs(feed);
+		long oldest = oldestTs(feed, true);
 		return oldest > 0 && oldest <= fromMs;
 	}
 
@@ -8300,7 +8263,7 @@ class ChroniclePanel extends PluginPanel
 	// has been running, the sittings before it existed
 	private static long earliestDatedLoot(List<JsonObject> feed, long rollFrom)
 	{
-		long sittings = oldestSessionTs(feed);
+		long sittings = oldestTs(feed, true);
 		if (sittings <= 0)
 		{
 			return rollFrom;
@@ -8308,27 +8271,15 @@ class ChroniclePanel extends PluginPanel
 		return rollFrom <= 0 ? sittings : Math.min(sittings, rollFrom);
 	}
 
-	// a ranked breakdown as drill rows: what it was, then how many and what for
-	private List<String[]> itemLines(List<String[]> ranked)
+	// a ranked breakdown as drill rows: what it was, then how many and what for,
+	// a zero worth left unsaid unless every line is to carry one
+	private List<String[]> itemLines(List<String[]> ranked, boolean always)
 	{
 		List<String[]> out = new ArrayList<>();
 		for (String[] r : ranked)
 		{
-			long qty = safeParse(r[1]);
 			long val = safeParse(r[2]);
-			out.add(new String[]{r[0],
-				fmt(qty) + tail(val)});
-		}
-		return out;
-	}
-
-	private List<String[]> sourceLines(List<String[]> ranked)
-	{
-		List<String[]> out = new ArrayList<>();
-		for (String[] r : ranked)
-		{
-			out.add(new String[]{r[0], fmt(safeParse(r[1])) + " · "
-				+ gps(safeParse(r[2]))});
+			out.add(new String[]{r[0], fmt(safeParse(r[1])) + (always ? " · " + gps(val) : tail(val))});
 		}
 		return out;
 	}
@@ -8345,33 +8296,18 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	// The oldest sitting the record holds. A sitting is the only dated account of
-	// a take, so this is the day from which any loot figure can be drawn at all.
-	private static long oldestSessionTs(List<JsonObject> feed)
+	/**
+	 * The oldest entry of any type, or with sittings the oldest sitting the
+	 * record holds; 0 for none. A sitting is the only dated account of a take,
+	 * so its oldest is the day from which any loot figure can be drawn at all.
+	 */
+	private static long oldestTs(List<JsonObject> feed, boolean sittings)
 	{
 		long oldest = 0;
 		for (JsonObject e : feed)
 		{
-			long began = "SESSION".equals(typeOf(e)) ? sittingStart(e) : 0;
-			if (began > 0 && (oldest == 0 || began < oldest))
-			{
-				oldest = began;
-			}
-		}
-		return oldest;
-	}
-
-	/** The oldest entry of one type, or of any type when null; 0 for none. */
-	private static long oldestTs(List<JsonObject> feed, String type)
-	{
-		long oldest = 0;
-		for (JsonObject e : feed)
-		{
-			if (type != null && !type.equals(str(e, "type", "")))
-			{
-				continue;
-			}
-			long ts = safeLong(e.get("ts"));
+			long ts = !sittings ? safeLong(e.get("ts"))
+				: "SESSION".equals(typeOf(e)) ? sittingStart(e) : 0;
 			if (ts > 0 && (oldest == 0 || ts < oldest))
 			{
 				oldest = ts;
@@ -8557,19 +8493,10 @@ class ChroniclePanel extends PluginPanel
 
 	/**
 	 * The pickpocket targets, which the log has no page for at all, so they are
-	 * named here the way the teleport destinations are: a closed set the game
+	 * named in panel_kinds.json the way the teleport destinations are: a closed set the game
 	 * itself fixes, widened by what the record's own thieving counters say.
 	 */
-	private static final Set<String> PICKPOCKETED = new HashSet<>(
-		Arrays.asList("man", "woman", "farmer", "master farmer", "hero",
-			"paladin", "knight", "knight of ardougne", "ardougne knight", "watchman",
-			"yanille watchman", "guard", "market guard", "rogue", "bandit",
-			"desert bandit", "pollnivnian bandit", "bearded pollnivnian bandit",
-			"menaphite thug", "cave goblin", "h.a.m. member", "male h.a.m. member",
-			"female h.a.m. member", "elf", "vyre", "tzhaar-hur", "fremennik citizen",
-			"villager", "gnome", "gnome woman", "gnome child", "warrior woman",
-			"al kharid warrior", "al-kharid warrior", "wealthy citizen", "martin",
-			"martin the master gardener"));
+	private static final Set<String> PICKPOCKETED = new HashSet<>(strs(KINDS.get("pickpocketed")));
 
 	// The verbs the record counts a skill by, and the skill each of them means.
 	// A counter is minted per target ({@code guardPickpockets},
@@ -8643,14 +8570,7 @@ class ChroniclePanel extends PluginPanel
 
 	private String sourceKind(String name)
 	{
-		String known = sourceKinds.get(name);
-		if (known != null)
-		{
-			return known;
-		}
-		String kind = decideKind(name);
-		sourceKinds.put(name, kind);
-		return kind;
+		return sourceKinds.computeIfAbsent(name, this::decideKind);
 	}
 
 	/**
@@ -8694,20 +8614,15 @@ class ChroniclePanel extends PluginPanel
 	 * demon. These are the pages of it that are something killed; the rest of the
 	 * tab is ground a skill was trained on.
 	 */
-	private static final Set<String> MONSTER_PAGES = new HashSet<>(
-		Arrays.asList("Champion's Challenge", "Chompy Bird Hunting",
-			"Creature Creation", "Cyclopes", "Elder Chaos Druids", "Glough's Experiments",
-			"Revenants", "Slayer", "Tormented Demons", "TzHaar"));
+	private static final Set<String> MONSTER_PAGES = new HashSet<>(strs(KINDS.get("monsterPages")));
 
 	// The ledger counts sources the log has no page for. Most are monsters, but
 	// some are things opened and some are things caught, and neither belongs on
 	// a kill board. These words are what say so.
-	private static final String[] OPENED = {"chest", "casket", "clue scroll", "high gamble",
-		"treasure trail"};
-	private static final String[] GATHERED = {"impling", "salvage", "loot sack",
-		"reward pool", "reward cart", "ent trunk", "offerings", "herbiboar", "bird nest"};
+	private static final List<String> OPENED = strs(KINDS.get("opened"));
+	private static final List<String> GATHERED = strs(KINDS.get("gathered"));
 
-	private static boolean containsAny(String low, String[] words)
+	private static boolean containsAny(String low, List<String> words)
 	{
 		for (String w : words)
 		{
@@ -8855,10 +8770,6 @@ class ChroniclePanel extends PluginPanel
 	private void addKindBand(JPanel p, String kind, List<Map.Entry<String, Long>> rows,
 		Map<String, Long> worth, Map<String, Long> loose, boolean withIcons)
 	{
-		if (rows.isEmpty())
-		{
-			return;
-		}
 		String stateKey = "history:kind:" + kind;
 		boolean open = !foldOpen(stateKey);   // these stand open; the fold shuts them
 		p.add(quietHead(kind, open ? "" : fmt(rows.size()), stateKey));
@@ -9045,7 +8956,7 @@ class ChroniclePanel extends PluginPanel
 	/**
 	 * The skill a counted name belongs to, or null where none does: the
 	 * collection log's pages that are one skill's ground, which the log itself
-	 * does not say, so they are named here.
+	 * does not say, so they are named in panel_kinds.json.
 	 *
 	 * <p>The thieved and trapped names the record can answer for itself are not
 	 * asked here. They are all filed under Skilling, which is the second band of
@@ -9076,49 +8987,12 @@ class ChroniclePanel extends PluginPanel
 	 * a wrong skill icon is worse than the generic one it would replace, and so
 	 * are the treasure trails, which are a reward stream and not a skill.
 	 */
-	private static final Map<String, String> PAGE_SKILL = pageSkills();
-
-	private static Map<String, String> pageSkills()
-	{
-		Map<String, String> m = new LinkedHashMap<>();
-		m.put("Aerial Fishing", "FISHING");
-		m.put("Barracuda Trials", "SAILING");
-		m.put("Brimhaven Agility Arena", "AGILITY");
-		m.put("Camdozaal", "MINING");
-		m.put("Colossal Wyrm Agility", "AGILITY");
-		m.put("Fishing Trawler", "FISHING");
-		m.put("Forestry", "WOODCUTTING");
-		m.put("Giants' Foundry", "SMITHING");
-		m.put("Gnome Restaurant", "COOKING");
-		m.put("Guardians of the Rift", "RUNECRAFT");
-		m.put("Hallowed Sepulchre", "AGILITY");
-		m.put("Hunter Guild", "HUNTER");
-		m.put("Magic Training Arena", "MAGIC");
-		m.put("Mahogany Homes", "CONSTRUCTION");
-		m.put("Mastering Mixology", "HERBLORE");
-		m.put("Motherlode Mine", "MINING");
-		m.put("Ocean Encounters", "SAILING");
-		m.put("Rogues' Den", "THIEVING");
-		m.put("Rooftop Agility", "AGILITY");
-		m.put("Sailing Miscellaneous", "SAILING");
-		m.put("Sea Treasures", "SAILING");
-		m.put("Shades of Mort'ton", "FIREMAKING");
-		m.put("Shooting Stars", "MINING");
-		m.put("Tithe Farm", "FARMING");
-		m.put("Vale Totems", "FLETCHING");
-		m.put("Volcanic Mine", "MINING");
-		return m;
-	}
+	private static final Map<String, String> PAGE_SKILL = strMap(KINDS, "pageSkills");
 
 	// Hiscores order. An ORDER only. The grid is built from the client's own
 	// skill list, so a skill Jagex adds shows up without an edit here. Overall is
 	// drawn separately, as its own headline.
-	private static final String[] SKILL_ORDER_NAMES = {
-		"ATTACK", "HITPOINTS", "MINING", "STRENGTH", "AGILITY", "SMITHING",
-		"DEFENCE", "HERBLORE", "FISHING", "RANGED", "THIEVING", "COOKING",
-		"PRAYER", "CRAFTING", "FIREMAKING", "MAGIC", "FLETCHING", "WOODCUTTING",
-		"RUNECRAFT", "SLAYER", "FARMING", "CONSTRUCTION", "HUNTER",
-	};
+	private static final List<String> SKILL_ORDER_NAMES = strs(KINDS.get("skillOrder"));
 
 	// Every skill the client knows, in the order a player reads them.
 	private static List<Skill> skillOrder()
@@ -9263,18 +9137,17 @@ class ChroniclePanel extends PluginPanel
 		// Skills and PvM each carry a fixed set, the same rows whatever the
 		// period did. A figure reading zero is an answer; a row that vanishes
 		// when it has nothing to say leaves a reader wondering if it was asked.
-		if ("Skills".equals(histFacet) || "PvM".equals(histFacet))
+		if ("PvM".equals(histFacet))
 		{
-			HistoryLog.Levels shut = stand.closed;
-			boolean same = shut.drawn == opened.drawn;
-			if ("PvM".equals(histFacet))
-			{
-				card.add(row("Monsters slain", "+" + fmt(summaryValue(progress, "kills"))));
-				card.add(row("Deaths", "+" + fmt(summaryValue(progress, "deaths"))));
-				card.add(row("Slayer tasks completed",
-					"+" + fmt(summaryValue(progress, "slayerTasksCompleted"))));
-				return card;
-			}
+			card.add(row("Monsters slain", "+" + fmt(summaryValue(progress, "kills"))));
+			card.add(row("Deaths", "+" + fmt(summaryValue(progress, "deaths"))));
+			card.add(row("Slayer tasks completed",
+				"+" + fmt(summaryValue(progress, "slayerTasksCompleted"))));
+			return card;
+		}
+		boolean fixed = "Skills".equals(histFacet);
+		if (fixed || played[1] > 0)
+		{
 			card.add(row("Time played", hoursMinutes(played[0])));
 			// Not under the sitting, where the answer is one and saying so is the
 			// card telling the reader what the heading above it already did.
@@ -9282,22 +9155,10 @@ class ChroniclePanel extends PluginPanel
 			{
 				card.add(row("Sessions", fmt(played[1])));
 			}
+		}
+		if (fixed || xp > 0)
+		{
 			card.add(row("Experience", "+" + gp(xp), xp > 0 ? accent() : null));
-			card.add(row("99s reached",
-				fmt(same ? Math.max(0, shut.nines - opened.nines) : 0)));
-			return card;
-		}
-		if (played[1] > 0)
-		{
-			card.add(row("Time played", hoursMinutes(played[0])));
-			if (!sessionPeriod())
-			{
-				card.add(row("Sessions", fmt(played[1])));
-			}
-		}
-		if (xp > 0)
-		{
-			card.add(row("Experience", "+" + gp(xp), accent()));
 		}
 		// What the period moved is measured line to line, the two states the
 		// experience above was measured between; the sheet draws where the
@@ -9310,9 +9171,13 @@ class ChroniclePanel extends PluginPanel
 		// grid, where the whole sheet is already being read.
 		HistoryLog.Levels closed = stand.closed;
 		boolean paired = closed.drawn == opened.drawn;
-		if (paired && closed.nines > opened.nines)
+		if (fixed || paired && closed.nines > opened.nines)
 		{
-			card.add(row("99s reached", fmt(closed.nines - opened.nines)));
+			card.add(row("99s reached", fmt(paired ? Math.max(0, closed.nines - opened.nines) : 0)));
+		}
+		if (fixed)
+		{
+			return card;
 		}
 		for (String key : HEADLINE_KEYS)
 		{
@@ -9779,17 +9644,7 @@ class ChroniclePanel extends PluginPanel
 	private long bundledPoints()
 	{
 		bundledCombat = bundle(plugin.gson(), "osrs_combat_achievements.json", bundledCombat);
-		if (!bundledCombat.has("_meta") || !bundledCombat.get("_meta").isJsonObject())
-		{
-			return 0;
-		}
-		JsonObject meta = bundledCombat.getAsJsonObject("_meta");
-		if (!meta.has("totals") || !meta.get("totals").isJsonObject())
-		{
-			return 0;
-		}
-		JsonObject totals = meta.getAsJsonObject("totals");
-		return totals.has("points") ? safeLong(totals.get("points")) : 0;
+		return safeLong(obj(obj(bundledCombat, "_meta"), "totals").get("points"));
 	}
 
 	/**
@@ -9822,9 +9677,8 @@ class ChroniclePanel extends PluginPanel
 				continue;
 			}
 			seen++;
-			JsonObject data = e.has("data") && e.get("data").isJsonObject()
-				? e.getAsJsonObject("data") : null;
-			if (possible == 0 && data != null && data.has("totalPossiblePoints"))
+			JsonObject data = obj(e, "data");
+			if (possible == 0 && data.has("totalPossiblePoints"))
 			{
 				possible = data.get("totalPossiblePoints").getAsLong();
 			}
@@ -9849,18 +9703,14 @@ class ChroniclePanel extends PluginPanel
 	 */
 	private JPanel buildSheetPage()
 	{
-		if ("log".equals(sheetPage))
-		{
-			JPanel p = column();
-			p.add(backRow());
-			p.add(vgap(4));
-			p.add(buildLog());
-			return p;
-		}
 		JPanel p = column();
 		p.add(backRow());
 		p.add(vgap(4));
-		if ("clues".equals(sheetPage))
+		if ("log".equals(sheetPage))
+		{
+			p.add(buildLog());
+		}
+		else if ("clues".equals(sheetPage))
 		{
 			buildClues(p);
 		}
@@ -9983,10 +9833,8 @@ class ChroniclePanel extends PluginPanel
 	private Set<Integer> caDone()
 	{
 		Set<Integer> out = new HashSet<>();
-		JsonObject c = achievements().has("combat")
-			&& achievements().get("combat").isJsonObject()
-			? achievements().getAsJsonObject("combat") : null;
-		if (c == null || !c.has("tasksDone") || !c.get("tasksDone").isJsonArray())
+		JsonObject c = obj(achievements(), "combat");
+		if (!c.has("tasksDone") || !c.get("tasksDone").isJsonArray())
 		{
 			return out;
 		}
@@ -10121,8 +9969,7 @@ class ChroniclePanel extends PluginPanel
 				// every row: a finished tier used to say "done" and take its own
 				// task count away with it, and it was the one marker in the panel
 				// that was a word rather than a weight.
-				JPanel line = row(tier.substring(0, 1).toUpperCase(Locale.ROOT)
-						+ tier.substring(1),
+				JPanel line = row(prettyTier(tier),
 					fmt(n) + " tasks",
 					known && !got ? dim() : null,
 					known && !got);
@@ -10249,10 +10096,6 @@ class ChroniclePanel extends PluginPanel
 		}
 		for (Map.Entry<String, List<JsonObject>> e : bySource.entrySet())
 		{
-			if (e.getValue().isEmpty())
-			{
-				continue;
-			}
 			long got = 0;
 			for (JsonObject task : e.getValue())
 			{
@@ -10667,13 +10510,7 @@ class ChroniclePanel extends PluginPanel
 		JPopupMenu menu = new JPopupMenu();
 		for (String g : PERIODS)
 		{
-			JMenuItem item = new JMenuItem(g);
-			item.setFont(small());
-			if (g.equals(histGranularity) && histFrom == null)
-			{
-				item.setForeground(accent());
-			}
-			item.addActionListener(e ->
+			menuItem(menu, g, g.equals(histGranularity) && histFrom == null, () ->
 			{
 				// The cursor becomes the END of the window that was on screen,
 				// clamped to today. Every pick used to reset it to today, so a
@@ -10689,22 +10526,27 @@ class ChroniclePanel extends PluginPanel
 				histCursor = keep.isAfter(today) ? today : keep;
 				rebuildInPlace();
 			});
-			menu.add(item);
 		}
 		// Any two days, from the same list: at Lifetime there is no dateline to
 		// click, so this is the only way back to a window of one's own choosing.
 		menu.addSeparator();
-		JMenuItem exact = new JMenuItem("Exact dates");
-		exact.setFont(small());
-		if (histFrom != null)
-		{
-			exact.setForeground(accent());
-		}
-		exact.addActionListener(e -> onSetExactDates(
+		menuItem(menu, "Exact dates", histFrom != null, () -> onSetExactDates(
 			periodFrom != null ? periodFrom : LocalDate.now().minusDays(6),
 			periodTo != null ? periodTo : LocalDate.now()));
-		menu.add(exact);
 		return menu;
+	}
+
+	// One choice in a menu, lit where it is the current one; a click runs go.
+	private void menuItem(JPopupMenu menu, String text, boolean on, Runnable go)
+	{
+		JMenuItem item = new JMenuItem(text);
+		item.setFont(small());
+		if (on)
+		{
+			item.setForeground(accent());
+		}
+		item.addActionListener(e -> go.run());
+		menu.add(item);
 	}
 
 	/**
@@ -10715,38 +10557,21 @@ class ChroniclePanel extends PluginPanel
 	private JPopupMenu taskMenu()
 	{
 		JPopupMenu menu = new JPopupMenu();
-		JMenuItem all = new JMenuItem("Every task");
-		all.setFont(small());
-		if (lootTask == null)
-		{
-			all.setForeground(accent());
-		}
-		all.addActionListener(e ->
-		{
-			lootTask = null;
-			lootKind = null;
-			rebuildInPlace();
-		});
-		menu.add(all);
+		menuItem(menu, "Every task", lootTask == null, () -> pickTask(null));
 		menu.addSeparator();
 		for (String task : plugin.taskNames())
 		{
-			JMenuItem item = new JMenuItem(task);
-			item.setFont(small());
-			if (task.equals(lootTask))
-			{
-				item.setForeground(accent());
-			}
-			item.addActionListener(e ->
-			{
-				lootTask = task;
-				// the kinds under one task are not the kinds under all of them
-				lootKind = null;
-				rebuildInPlace();
-			});
-			menu.add(item);
+			menuItem(menu, task, task.equals(lootTask), () -> pickTask(task));
 		}
 		return menu;
+	}
+
+	private void pickTask(String task)
+	{
+		lootTask = task;
+		// the kinds under one task are not the kinds under all of them
+		lootKind = null;
+		rebuildInPlace();
 	}
 
 	/**
@@ -11602,7 +11427,7 @@ class ChroniclePanel extends PluginPanel
 				long filed = filedAt(e);
 				if (filed >= fromMs && filed < toMs)
 				{
-					String type = e.has("type") ? e.get("type").getAsString() : "";
+					String type = typeOf(e);
 					String key = FEED_SUMMARY_KEYS.get(type);
 					if (key != null)
 					{
@@ -11623,37 +11448,46 @@ class ChroniclePanel extends PluginPanel
 						// sitting, and the only account of the take that reaches
 						// back before the spine began carrying the journal's own
 						// totals.
-						JsonObject d = e.has("data") && e.get("data").isJsonObject()
-							? e.getAsJsonObject("data") : null;
-						if (d != null)
+						JsonObject d = obj(e, "data");
+						took[0] += safeLong(d.get("drops"));
+						took[1] += safeLong(d.get("dropsGp"));
+						took[2] += safeLong(d.get("left"));
+						took[3] += safeLong(d.get("leftGp"));
+						took[4] += safeLong(d.get("leftKills"));
+						if (d.has("leftKills"))
 						{
-							took[0] += safeLong(d.get("drops"));
-							took[1] += safeLong(d.get("dropsGp"));
-							took[2] += safeLong(d.get("left"));
-							took[3] += safeLong(d.get("leftGp"));
-							took[4] += safeLong(d.get("leftKills"));
-							if (d.has("leftKills"))
-							{
-								took[5]++;   // this sitting can speak for the floor
-							}
+							took[5]++;   // this sitting can speak for the floor
 						}
 					}
 				}
 			}
 			Map<String, Long> retro = new HashMap<>();
-			boolean[] sessionsHoldTheFloor = {false};
-			boolean[] sessionsSpeak = {false};
+			boolean sessionsHoldTheFloor = false;
+			boolean sessionsSpeak = false;
 			if (historyJourney != null)
 			{
-				retro.put("slayerTasksCompleted", closedTasksBetween(historyJourney, fromMs, toMs));
-				retro.put("slayerKills", closedKillsBetween(historyJourney, fromMs, toMs));
+				// The closed segments and the kills they hold, each task's own count
+				// as its completion set it, the kills the loot never saw included:
+				// one walk, so the two lines agree on which tasks are the period's.
+				long closedN = 0;
+				long closedKills = 0;
+				for (LocalStore.SlayerTask t : historyJourney.tasks)
+				{
+					if (closedInside(t, fromMs, toMs))
+					{
+						closedN++;
+						closedKills += t.kills;
+					}
+				}
+				retro.put("slayerTasksCompleted", closedN);
+				retro.put("slayerKills", closedKills);
 				List<String[]> tasks = closedTaskNames(historyJourney, fromMs, toMs);
 				if (!tasks.isEmpty())
 				{
 					named.put("slayerTasksCompleted", tasks);
 				}
 			}
-			long oldest = oldestTs(historyFeed, null);
+			long oldest = oldestTs(historyFeed, false);
 			boolean reachesBack = oldest > 0 && oldest < fromMs;
 			if (reachesBack)
 			{
@@ -11697,30 +11531,29 @@ class ChroniclePanel extends PluginPanel
 				}
 				if (dated != null)
 				{
-					LocalStore.LootWindow w = dated;
-					sessionsSpeak[0] = true;
-					sessionsHoldTheFloor[0] = true;   // the roll dates the floor too
-					retro.put("dropsReceived", w.loots);
-					retro.put("lootValue", w.value);
-					retro.put("lootLeftCount", w.left);
-					retro.put("lootLeftValue", w.leftValue);
-					retro.put("lootLeftKills", w.leftKills);
-					if (!w.items.isEmpty())
+					sessionsSpeak = true;
+					sessionsHoldTheFloor = true;   // the roll dates the floor too
+					retro.put("dropsReceived", dated.loots);
+					retro.put("lootValue", dated.value);
+					retro.put("lootLeftCount", dated.left);
+					retro.put("lootLeftValue", dated.leftValue);
+					retro.put("lootLeftKills", dated.leftKills);
+					if (!dated.items.isEmpty())
 					{
-						named.put("lootValue", itemLines(w.items));
+						named.put("lootValue", itemLines(dated.items, false));
 					}
-					if (!w.leftItems.isEmpty())
+					if (!dated.leftItems.isEmpty())
 					{
-						named.put("lootLeftCount", itemLines(w.leftItems));
+						named.put("lootLeftCount", itemLines(dated.leftItems, false));
 					}
-					if (!w.sources.isEmpty())
+					if (!dated.sources.isEmpty())
 					{
-						named.put("dropsReceived", sourceLines(w.sources));
+						named.put("dropsReceived", itemLines(dated.sources, true));
 					}
 				}
 				else if (sittingsCover(historyFeed, fromMs) && played[1] > 0 && took[0] > 0)
 				{
-					sessionsSpeak[0] = true;
+					sessionsSpeak = true;
 					retro.put("dropsReceived", took[0]);
 					retro.put("lootValue", took[1]);
 					retro.put("lootLeftCount", took[2]);
@@ -11729,7 +11562,7 @@ class ChroniclePanel extends PluginPanel
 					// and the floor is this period's only when every one of the
 					// sittings counted it: an older sitting that never did would
 					// be read as one that left nothing behind
-					sessionsHoldTheFloor[0] = took[5] == played[1];
+					sessionsHoldTheFloor = took[5] == played[1];
 				}
 			}
 			else
@@ -11795,8 +11628,8 @@ class ChroniclePanel extends PluginPanel
 			// period that opens before it cannot be told what it kept.
 			LocalDate leftFrom = HistoryLog.firstCarrying(
 				hist.headMap(at.getKey(), true), "lootLeftKills");
-			boolean leftDated = sessionsSpeak[0]
-				? sessionsHoldTheFloor[0]
+			boolean leftDated = sessionsSpeak
+				? sessionsHoldTheFloor
 				: (leftFrom != null && !leftFrom.isAfter(from.getKey()));
 			// A window is a delta between the spine's two ends. A lifetime has no
 			// earlier end, and a delta measured from the first line the record
@@ -14271,7 +14104,7 @@ class ChroniclePanel extends PluginPanel
 		// Deeper when the period starts before the newest four thousand lines
 		// reach: search reads the whole journal, and a hit it opened on an older
 		// day found the day empty.
-		if (all.size() >= 4000 && !wholeRecord() && windowMs()[0] < oldestTs(all, null))
+		if (all.size() >= 4000 && !wholeRecord() && windowMs()[0] < oldestTs(all, false))
 		{
 			all = plugin.feedWithSitting(JOURNAL_DEEP);
 		}
@@ -15407,7 +15240,7 @@ class ChroniclePanel extends PluginPanel
 
 	private static String feedLine(JsonObject e)
 	{
-		String type = e.has("type") ? e.get("type").getAsString() : "";
+		String type = typeOf(e);
 		JsonObject d = obj(e, "data");
 		switch (type)
 		{
