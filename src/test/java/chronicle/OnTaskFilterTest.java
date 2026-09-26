@@ -234,6 +234,20 @@ public class OnTaskFilterTest
 		assertEquals("10k gp", after(said, "Worth"));
 	}
 
+	/**
+	 * Under a period the head reads the period's tasks, as the rows beneath it
+	 * do: a lifetime's six hundred on task sat over a day that no task paid.
+	 */
+	@Test
+	public void anOnTaskHeadReadsItsPeriod() throws Exception
+	{
+		ChroniclePanel p = panel();
+		set(p, "onTaskOnly", true);
+		set(p, "histGranularity", "Day");
+		List<String> said = say(p, "buildItemDetail", "Fire rune");
+		assertEquals(said.toString(), "×0", after(said, "Obtained on task"));
+	}
+
 	/** The split is by task, because the record cannot say which monster. */
 	@Test
 	public void theItemSplitsByTaskNotByMonster() throws Exception

@@ -1493,7 +1493,7 @@ public class PanelPreviewTest
 		long[] itemDays(String name)
 		{
 			long[] said = itemDays.get(name);
-			return said != null ? said : store != null ? store.itemDays(name) : new long[3];
+			return said != null ? said : store != null ? store.itemDays(name) : new long[4];
 		}
 
 		@Override

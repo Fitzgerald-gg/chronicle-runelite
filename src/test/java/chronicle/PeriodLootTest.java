@@ -229,6 +229,7 @@ public class PeriodLootTest
 		assertEquals(50, qty(day, "Mad Angel", "Coins"));
 		assertEquals(7, qty(day, "Herbiboar", "Coins"));
 		assertEquals(2, qty(day, "Herbiboar", "Grimy guam leaf"));
+		assertTrue("a drop this build filed reads as unfiled", s.unfiledSources(today, today).isEmpty());
 		// and the sitting keeps the same
 		Map<String, List<LocalStore.BagItem>> sitting = s.itemsBySource(null, null);
 		assertEquals(day.get("Herbiboar").size(), sitting.get("Herbiboar").size());
@@ -435,6 +436,49 @@ public class PeriodLootTest
 		Map<String, List<LocalStore.BagItem>> d1 = store(journal(drops, obj(D1.toString(), day)))
 			.itemsBySource(D1, D1);
 		assertEquals(d1.toString(), 0, qty(d1, "O", "Old name") + qty(d1, "T", "Old name"));
+	}
+
+	/**
+	 * A drop worth nothing that an older build added to a source this build had
+	 * already filed is still that source's, on a day it had to itself.
+	 */
+	@Test
+	public void aWorthlessDropAddedLaterIsFiled() throws Exception
+	{
+		JsonObject src = total(2, 100);
+		src.addProperty("filed", 1);
+		src.add("items", obj("995", item("Coins", 100, 100)));
+		JsonObject heap = new JsonObject();
+		heap.add("995", item("Coins", 100, 100));
+		heap.add("526", item("Bones", 1, 0));
+		JsonObject day = total(2, 100);
+		day.add("sources", obj("Herbiboar", src));
+		day.add("items", heap);
+		assertEquals(1, qty(store(journal(new JsonObject(), obj(D1.toString(), day))).itemsBySource(D1, D1),
+			"Herbiboar", "Bones"));
+	}
+
+	/**
+	 * Drops an older build kept whole stay unfiled when this build files one more
+	 * for the same source that day: its drop count, not its rows, says so.
+	 */
+	@Test
+	public void unfiledDropsOutliveTheNextOne() throws Exception
+	{
+		JsonObject shared = new JsonObject();
+		shared.add("23866", bagItem("Crystal shard", 30, 0));
+		JsonObject drops = new JsonObject();
+		drops.add("Crystalline rat", src(shared.deepCopy()));
+		drops.add("Crystalline bat", src(shared.deepCopy()));
+		JsonObject srcs = new JsonObject();
+		srcs.add("Crystalline rat", total(3, 0));
+		srcs.add("Crystalline bat", total(2, 0));
+		JsonObject day = total(5, 0);
+		day.add("sources", srcs);
+		day.add("items", obj("23866", item("Crystal shard", 30, 0)));
+		LocalStore s = store(journal(drops, obj(LocalDate.now().toString(), day)));
+		s.record("LOOT", loot("Crystalline rat", 995, 5), RSN);
+		assertTrue(s.unfiledSources(LocalDate.now(), LocalDate.now()).contains("Crystalline rat"));
 	}
 
 	/** Monsters named apart only by case are kept apart, as the head keeps them. */
@@ -706,6 +750,47 @@ public class PeriodLootTest
 		List<String> shadowed = sourcePage(d, D1, D2, "Spiritual mage");
 		assertTrue(shadowed.toString(), shadowed.contains("Coins ×300"));
 		assertEquals(shadowed.toString(), "300 gp", after(shadowed, "Worth").split(" · ")[0]);
+	}
+
+	/** A period only the other spelling paid in is nothing for this one. */
+	@Test
+	public void aTwinsPeriodIsNotThisOnes() throws Exception
+	{
+		JsonObject a = total(1, 300);
+		a.add("sources", obj("Spiritual mage", total(1, 300)));
+		a.add("items", obj("995", item("Coins", 300, 300)));
+		JsonObject lower = new JsonObject();
+		lower.add("995", bagItem("Coins", 300, 300));
+		JsonObject upper = new JsonObject();
+		upper.add("995", bagItem("Coins", 500, 500));
+		JsonObject drops = new JsonObject();
+		drops.add("Spiritual mage", src(lower));
+		drops.add("Spiritual Mage", src(upper));
+		List<String> said = sourcePage(journal(drops, obj(D1.toString(), a)), D1, D1, "Spiritual Mage");
+		assertTrue(said.toString(), String.join(" ", said).contains("Nothing from Spiritual Mage inside"));
+		assertFalse(said.toString(), said.contains("Coins ×300"));
+	}
+
+	/** A picture of a period the roll does not reach at all says none of it is dated. */
+	@Test
+	public void aPictureOfAnUndatedPeriodSaysNoneOfIt() throws Exception
+	{
+		ChroniclePanel p = panel(D1.minusDays(9), D1.minusDays(8));
+		set(p, "drawingCopy", true);
+		String said = String.join(" ", page(p, "buildSourceDetail", "Mad Angel"));
+		assertTrue(said, said.contains("Loot is dated for none of"));
+	}
+
+	/** A picture inside the roll names its period, which the strip no longer does. */
+	@Test
+	public void aPictureNamesItsPeriod() throws Exception
+	{
+		ChroniclePanel p = panel(D1, D3);
+		set(p, "drawingCopy", true);
+		String said = String.join(" ", page(p, "buildSourceDetail", "Mad Angel"));
+		assertTrue(said, said.contains("The figures above are "));
+		set(p, "drawingCopy", false);
+		assertFalse(String.join(" ", page(p, "buildSourceDetail", "Mad Angel")).contains("The figures above"));
 	}
 
 	/** Lifetime is the ledger, as it was: every item, no Other. */

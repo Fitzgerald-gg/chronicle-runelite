@@ -74,12 +74,17 @@ public class ItemDaysTest
 	@Test
 	public void theRollSaysWhenAnItemLanded()
 	{
-		assertArrayEquals(new long[]{ms("2026-08-03"), ms("2026-09-10"), 2}, store.itemDays("Abyssal whip"));
-		assertArrayEquals(new long[]{ms("2026-09-11"), ms("2026-09-11"), 1}, store.itemDays("death rune"));
-		assertArrayEquals(new long[3], store.itemDays("Dragon warhammer"));
+		assertArrayEquals(new long[]{ms("2026-08-03"), ms("2026-09-10"), 2, 2}, store.itemDays("Abyssal whip"));
+		assertArrayEquals(new long[]{ms("2026-09-11"), ms("2026-09-11"), 1, 100}, store.itemDays("death rune"));
+		assertArrayEquals(new long[4], store.itemDays("Dragon warhammer"));
 	}
 
 	private static JPanel page(String granularity, long[] days) throws Exception
+	{
+		return page(granularity, days, false);
+	}
+
+	private static JPanel page(String granularity, long[] days, boolean picture) throws Exception
 	{
 		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
 		stub.itemDays.put("Abyssal whip", days);
@@ -92,6 +97,9 @@ public class ItemDaysTest
 				Field g = ChroniclePanel.class.getDeclaredField("histGranularity");
 				g.setAccessible(true);
 				g.set(p, granularity);
+				Field copy = ChroniclePanel.class.getDeclaredField("drawingCopy");
+				copy.setAccessible(true);
+				copy.set(p, picture);
 				Method m = ChroniclePanel.class.getDeclaredMethod("buildItemDetail", String.class);
 				m.setAccessible(true);
 				out[0] = (JPanel) m.invoke(p, "Abyssal whip");
@@ -119,6 +127,25 @@ public class ItemDaysTest
 		JPanel page = page("Lifetime", new long[]{ms("2026-09-11"), ms("2026-09-11"), 1});
 		assertEquals(FULL.format(LocalDate.parse("2026-09-11")), beside(page, "Dropped on"));
 		assertNull(beside(page, "Days it landed"));
+	}
+
+	/**
+	 * Where the dated days hold fewer than the record has had, the first of them
+	 * is the day the roll began and not the day the item first dropped.
+	 */
+	@Test
+	public void datesTheRollCannotStandBehindAreLeftOff() throws Exception
+	{
+		JPanel page = page("Lifetime", new long[]{ms("2026-08-03"), ms("2026-09-10"), 2, 0});
+		assertNull(beside(page, "First dropped"));
+	}
+
+	/** And a picture carries none: the first is near enough the install day. */
+	@Test
+	public void aPictureCarriesNoDropDates() throws Exception
+	{
+		JPanel page = page("Lifetime", new long[]{ms("2026-08-03"), ms("2026-09-10"), 2}, true);
+		assertNull(beside(page, "First dropped"));
 	}
 
 	@Test

@@ -678,6 +678,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			// period with what it paid it IN. The day's heap stays beside them:
 			// an older build reads only that.
 			JsonObject mine = sub(bySource, "items");
+			// how many of its drops the rows hold: one an older build adds is not
+			bump(bySource, "filed", 1);
 			for (JsonElement pe : priced)
 			{
 				JsonObject p = pe.getAsJsonObject();
@@ -823,28 +825,35 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	/**
 	 * When one item landed, off the dated roll: {first day, last day, days it
-	 * landed}, the days as millis at local midnight; zeros where it never did.
+	 * landed, how many the days hold}, the days as millis at local midnight;
+	 * zeros where it never did.
 	 */
 	long[] itemDays(String name)
 	{
 		String first = null;
 		String last = null;
 		int days = 0;
+		long held = 0;
 		synchronized (lock)
 		{
 			JsonObject all = obj(root, "loot_days");
 			for (String day : all.keySet())
 			{
-				if (!all.get(day).isJsonObject() || !dayHolds(all.getAsJsonObject(day), name))
+				JsonObject items = obj(obj(all, day), "items");
+				if (!dayHolds(obj(all, day), name))
 				{
 					continue;
+				}
+				for (String id : items.keySet())
+				{
+					held += name.equalsIgnoreCase(str(obj(items, id), "n", "")) ? asLong(obj(items, id).get("q")) : 0;
 				}
 				days++;
 				first = first == null || day.compareTo(first) < 0 ? day : first;
 				last = last == null || day.compareTo(last) > 0 ? day : last;
 			}
 		}
-		return days == 0 ? new long[3] : new long[]{dayMs(first), dayMs(last), days};
+		return days == 0 ? new long[4] : new long[]{dayMs(first), dayMs(last), days, held};
 	}
 
 	private static boolean dayHolds(JsonObject day, String name)
@@ -946,8 +955,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	}
 
 	/**
-	 * The sources that paid on a day in [from, to] the roll kept only as one
-	 * heap: drops no row of theirs holds, whatever they were worth.
+	 * The sources with a drop on a day in [from, to] that no row of theirs
+	 * holds, whatever it was worth: one the roll kept only in the day's heap.
 	 */
 	Set<String> unfiledSources(LocalDate from, LocalDate to)
 	{
@@ -964,7 +973,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				JsonObject srcs = obj(obj(all, day), "sources");
 				for (String source : srcs.keySet())
 				{
-					if (asLong(obj(srcs, source).get("loots")) > 0 && !obj(srcs, source).has("items"))
+					if (asLong(obj(srcs, source).get("loots")) > asLong(obj(srcs, source).get("filed")))
 					{
 						out.add(source);
 					}
@@ -996,11 +1005,13 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	/**
 	 * Files under its sources what a day's heap holds beyond their own rows,
 	 * where the record proves whose each item was: days written before the roll
-	 * kept items per source, and drops an older build adds to a day since. On a
-	 * day with one source the rest is all its own; on a day with several, an item
-	 * only one of them has ever dropped (by id or by name) is that one's. Written
-	 * only where it all finds an owner and every source then comes to exactly the
-	 * value the roll holds for it; any other day is left as it stands.
+	 * kept items per source, and drops an older build adds to a day since. Only a
+	 * source with drops its rows do not hold (its loots past its filed count) can
+	 * be owed any. On a day with one source the rest is all its own; on a day with
+	 * several, an item only one of them has ever dropped (by id or by name) is
+	 * that one's. Written only where it all finds an owed owner and every owed
+	 * source then comes to exactly the value the roll holds for it; any other day
+	 * is left as it stands.
 	 */
 	private int splitDays()
 	{
@@ -1038,7 +1049,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				{
 					continue days;
 				}
-				if (v > 0 || !obj(srcs, source).has("items"))
+				if (asLong(obj(srcs, source).get("loots")) > asLong(obj(srcs, source).get("filed")))
 				{
 					owed.put(source, v);
 				}
@@ -1090,6 +1101,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 			for (String source : owed.keySet())
 			{
+				obj(srcs, source).addProperty("filed", asLong(obj(srcs, source).get("loots")));
 				JsonObject its = sub(obj(srcs, source), "items");
 				JsonObject add = rows.getOrDefault(source, new JsonObject());
 				for (String id : add.keySet())

@@ -4716,13 +4716,13 @@ class ChroniclePanel extends PluginPanel
 	/** One name's row of a roll list, as {count, worth}, or zeros. */
 	private static long[] rowOf(List<String[]> rows, String name)
 	{
-		String[] r = rowFor(rows, name);
+		String[] r = rowFor(rows, name, false);
 		return r == null ? new long[]{0, 0} : new long[]{safeParse(r[1]), safeParse(r[2])};
 	}
 
-	// A name's row of a roll list: its own spelling first, then any case of it.
-	// The game has monsters whose names differ only by case, kept apart.
-	private static String[] rowFor(List<String[]> rows, String name)
+	// A name's row of a roll list: its own spelling, else (not exact) any case of
+	// it. The game has monsters whose names differ only by case, kept apart.
+	private static String[] rowFor(List<String[]> rows, String name, boolean exact)
 	{
 		String[] loose = null;
 		for (String[] r : rows)
@@ -4731,7 +4731,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				return r;
 			}
-			loose = loose == null && r[0].equalsIgnoreCase(name) ? r : loose;
+			loose = loose == null && !exact && r[0].equalsIgnoreCase(name) ? r : loose;
 		}
 		return loose;
 	}
@@ -5407,12 +5407,18 @@ class ChroniclePanel extends PluginPanel
 			img.addTo(slot);
 			head.add(slot);
 		}
-		long[] mine = taskItemsEver().get(properName(name));
-		final boolean hasTask = mine != null;
+		// offered on the account's whole record, read over the page's own window
+		final boolean hasTask = taskItemsEver().containsKey(properName(name));
+		long[] tw = windowMs();
+		long[] mine = inWindow == null ? taskItemsEver().get(properName(name))
+			: plugin.onTaskItems(tw[0], tw[1]).getOrDefault(properName(name), new long[2]);
 		if (hasTask && onTaskOnly)
 		{
 			head.add(row("Obtained on task", "×" + fmt(mine[0]), accent()));
-			head.add(row("All sources", "×" + fmt(qty)));
+			if (inWindow == null || lootSince() == null)
+			{
+				head.add(row("All sources", "×" + fmt(qty)));
+			}
 			// The same row the other reading carries. What it is NOT is a price
 			// frozen at the drop, for anything imported: a drop that lands now
 			// is priced once and written to both trees identically, but the
@@ -5435,10 +5441,14 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		// When it landed, off the dated roll. Lifetime standings, so they stay
-		// off a narrowed page rather than sitting under figures that are not.
-		if (inWindow == null)
+		// off a narrowed page rather than sitting under figures that are not; and
+		// only where the dated days hold every one, since a first dated day is
+		// otherwise the roll's and not the item's. Never in a picture: the first
+		// is near enough the day the plugin was installed.
+		if (inWindow == null && !drawingCopy)
 		{
 			long[] days = plugin.itemDays(name);
+			days[2] = days.length > 3 && days[3] < got ? 0 : days[2];
 			if (days[2] == 1)
 			{
 				head.add(row("Dropped on", dated(days[0])));
@@ -5452,10 +5462,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(head);
 		String since = inWindow == null || hasTask && onTaskOnly ? null : lootSince();
-		if (since != null)
+		if (inWindow != null && sinceLine(since) != null)
 		{
 			p.add(vgap(4));
-			p.add(note(since));
+			p.add(note(sinceLine(since)));
 		}
 		p.add(vgap(6));
 		if (hasTask)
@@ -5516,10 +5526,20 @@ class ChroniclePanel extends PluginPanel
 	private String lootSince()
 	{
 		long from = plugin.lootDetailFrom();
-		return sessionPeriod() || from > 0 && from <= startMs(window().start) ? null
+		Window w = window();
+		return sessionPeriod() || from > 0 && from <= startMs(w.start) ? null
 			: from <= 0 ? UNDATED
-			: drawingCopy ? "Loot is dated for only part of " + periodInSentence() + "."
-			: "Loot since " + dayOf(from).format(FULL_DAY);
+			: !drawingCopy ? "Loot since " + dayOf(from).format(FULL_DAY)
+			: "Loot is dated for " + (dayOf(from).isAfter(w.end) ? "none" : "only part") + " of "
+			+ periodInSentence() + ".";
+	}
+
+	// The since line, or in a picture, which leaves the period strip behind, the
+	// period the figures are.
+	private String sinceLine(String since)
+	{
+		return since != null || wholeRecord() || !drawingCopy ? since
+			: "The figures above are " + periodInSentence() + "'s.";
 	}
 
 	// A period's page with nothing in it, said once: a since line already says why.
@@ -5856,12 +5876,14 @@ class ChroniclePanel extends PluginPanel
 		// the whole record. The page below reads these in place of the ledger's
 		// lifetime figures, so clicking a source on a board narrowed to a week
 		// opens that week rather than silently opening everything.
+		// A source the ledger holds reads its own row alone: the roll files a drop
+		// under the ledger's very spelling, and another case of it is another monster.
+		String[] row = wholeRecord() ? null : rowFor(lootWindow().sources, sr != null ? sr.name : name, sr != null);
 		long[] inWindow = wholeRecord() ? null
-			: sourceInWindow(sr != null ? sr.name : name);
+			: row == null ? new long[2] : new long[]{safeParse(row[1]), safeParse(row[2])};
 		// Read before the row is built, because the copy hands back the WHOLE
 		// page: every loot line, not the twenty five the page mounts. A period
 		// reads its own items: the sitting and each day keep them per source.
-		String[] row = inWindow == null ? null : rowFor(lootWindow().sources, sr != null ? sr.name : name);
 		String own = row != null ? row[0] : sr != null ? sr.name : name;
 		final List<BagItem> bag = inWindow == null ? plugin.sourceItems(own)
 			: new ArrayList<>(periodItems().getOrDefault(own, new ArrayList<>()));
@@ -5936,7 +5958,7 @@ class ChroniclePanel extends PluginPanel
 			// Every timed kill, not the fastest: the period's average over the
 			// kills the boss timer spoke for.
 			double[] timed = inWindow == null ? new double[]{sr.timed, sr.timeSum}
-				: sourceTimesInWindow(sr.name);
+				: lootWindow().times.getOrDefault(own, new double[2]);
 			if (timed[0] > 0)
 			{
 				head.add(row("Average kill", pb(timed[1] / timed[0]) + " · "
@@ -6001,9 +6023,9 @@ class ChroniclePanel extends PluginPanel
 		}
 		spaced(p, head);
 		String since = inWindow == null ? null : lootSince();
-		if (since != null)
+		if (sinceLine(since) != null)
 		{
-			spaced(p, note(since), 5);
+			spaced(p, note(sinceLine(since)), 5);
 		}
 		if (sr != null)
 		{
