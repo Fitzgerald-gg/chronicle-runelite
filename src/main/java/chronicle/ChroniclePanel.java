@@ -5376,11 +5376,14 @@ class ChroniclePanel extends PluginPanel
 			srcs.clear();
 			other = inWindow[0];
 			otherValue = inWindow[1];
+			// the spelling the head read, so the rows are of the same item
+			String[] headRow = rowFor(lootWindow().items, name, false);
+			String spelled = headRow != null ? headRow[0] : name;
 			for (Map.Entry<String, List<BagItem>> e : periodItems().entrySet())
 			{
 				for (BagItem b : e.getValue())
 				{
-					if (b.name.equalsIgnoreCase(name))
+					if (b.name.equals(spelled))
 					{
 						srcs.add(new Object[]{e.getKey(), b.qty, b.value});
 						other -= b.qty;

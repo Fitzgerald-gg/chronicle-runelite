@@ -481,6 +481,81 @@ public class PeriodLootTest
 		assertTrue(s.unfiledSources(LocalDate.now(), LocalDate.now()).contains("Crystalline rat"));
 	}
 
+	/**
+	 * With two sources owed, a worthless item is left whole even where one bag
+	 * holds it: no total can catch a bag that misleads, and an older merge of
+	 * two same-named ids can make one mislead.
+	 */
+	@Test
+	public void aWorthlessItemBetweenTwoOwedIsLeftWhole() throws Exception
+	{
+		JsonObject aBag = new JsonObject();
+		aBag.add("995", bagItem("Coins", 50, 50));
+		aBag.add("2722", bagItem("Clue scroll (hard)", 1, 0));
+		JsonObject bBag = new JsonObject();
+		bBag.add("361", bagItem("Tuna", 1, 10));
+		JsonObject drops = new JsonObject();
+		drops.add("Mad Angel", src(aBag));
+		drops.add("Herbiboar", src(bBag));
+		JsonObject srcs = new JsonObject();
+		srcs.add("Mad Angel", total(1, 50));
+		srcs.add("Herbiboar", total(1, 10));
+		JsonObject heap = new JsonObject();
+		heap.add("995", item("Coins", 50, 50));
+		heap.add("2722", item("Clue scroll (hard)", 1, 0));
+		heap.add("361", item("Tuna", 1, 10));
+		JsonObject day = total(2, 60);
+		day.add("sources", srcs);
+		day.add("items", heap);
+		Map<String, List<LocalStore.BagItem>> d1 = store(journal(drops, obj(D1.toString(), day))).itemsBySource(D1, D1);
+		assertEquals(d1.toString(), 0, qty(d1, "Mad Angel", "Clue scroll (hard)") + qty(d1, "Mad Angel", "Coins"));
+	}
+
+	/** With one source owed, the rest is its own, whatever the bags hold. */
+	@Test
+	public void theOneOwedSourceTakesTheRest() throws Exception
+	{
+		JsonObject angel = total(1, 50);
+		angel.addProperty("filed", 1);
+		angel.add("items", obj("995", item("Coins", 50, 50)));
+		JsonObject srcs = new JsonObject();
+		srcs.add("Mad Angel", angel);
+		srcs.add("Herbiboar", total(1, 0));
+		JsonObject heap = new JsonObject();
+		heap.add("995", item("Coins", 50, 50));
+		heap.add("2722", item("Clue scroll (hard)", 1, 0));
+		JsonObject day = total(2, 50);
+		day.add("sources", srcs);
+		day.add("items", heap);
+		Map<String, List<LocalStore.BagItem>> d1 = store(journal(new JsonObject(), obj(D1.toString(), day)))
+			.itemsBySource(D1, D1);
+		assertEquals(1, qty(d1, "Herbiboar", "Clue scroll (hard)"));
+	}
+
+	/** An item renamed between two drops of one day is one item under the day's name. */
+	@Test
+	public void aRenameInsideADayIsOneName() throws Exception
+	{
+		String[] name = {"Old name"};
+		ItemManager im = Mockito.mock(ItemManager.class);
+		Mockito.when(im.canonicalize(Mockito.anyInt())).thenAnswer(i -> i.getArgument(0));
+		Mockito.when(im.getItemPrice(Mockito.anyInt())).thenReturn(10);
+		Mockito.when(im.getItemComposition(Mockito.anyInt())).thenAnswer(i ->
+		{
+			net.runelite.api.ItemComposition c = Mockito.mock(net.runelite.api.ItemComposition.class);
+			Mockito.when(c.getName()).thenReturn(name[0]);
+			return c;
+		});
+		LocalStore s = new LocalStore(im, new Gson());
+		s.load(dir.getRoot(), RSN);
+		s.record("LOOT", loot("Mad Angel", 100, 1), RSN);
+		name[0] = "New name";
+		s.record("LOOT", loot("Herbiboar", 100, 1), RSN);
+		Map<String, List<LocalStore.BagItem>> today = s.itemsBySource(LocalDate.now(), LocalDate.now());
+		assertEquals(1, qty(today, "Mad Angel", "New name"));
+		assertEquals(1, qty(today, "Herbiboar", "New name"));
+	}
+
 	/** Monsters named apart only by case are kept apart, as the head keeps them. */
 	@Test
 	public void namesApartOnlyByCaseStayApart() throws Exception
@@ -791,6 +866,31 @@ public class PeriodLootTest
 		assertTrue(said, said.contains("The figures above are "));
 		set(p, "drawingCopy", false);
 		assertFalse(String.join(" ", page(p, "buildSourceDetail", "Mad Angel")).contains("The figures above"));
+	}
+
+	/** An item page's rows are of the item the head counts, capitals and all. */
+	@Test
+	public void anItemsRowsAreOfTheHeadsSpelling() throws Exception
+	{
+		JsonObject a = total(1, 5);
+		a.add("sources", obj("Mad Angel", total(1, 5)));
+		a.add("items", obj("777", item("Mystery box", 1, 5)));
+		JsonObject b = total(1, 7);
+		b.add("sources", obj("Herbiboar", total(1, 7)));
+		b.add("items", obj("778", item("Mystery Box", 1, 7)));
+		JsonObject days = new JsonObject();
+		days.add(D1.toString(), a);
+		days.add(D2.toString(), b);
+		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.journalStub(journal(new JsonObject(), days).getPath(), RSN);
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
+		set(hold[0], "histGranularity", "Day");
+		set(hold[0], "histFrom", D1);
+		set(hold[0], "histTo", D2);
+		set(hold[0], "histCursor", D2);
+		List<String> said = page(hold[0], "buildItemDetail", "Mystery Box");
+		assertEquals(said.toString(), "Herbiboar", said.get(said.indexOf("FROM") + 1));
+		assertFalse(said.toString(), said.contains("Mad Angel"));
 	}
 
 	/** Lifetime is the ledger, as it was: every item, no Other. */

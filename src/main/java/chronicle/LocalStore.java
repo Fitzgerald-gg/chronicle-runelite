@@ -933,7 +933,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					for (String id : its.keySet())
 					{
 						JsonObject e = obj(its, id);
-						String label = str(e, "n", id);
+						// the name the day gives it, as the head reads it: an item
+						// renamed between two drops keeps one name in the day
+						String label = str(obj(obj(d, "items"), id), "n", str(e, "n", id));
 						long[] t = into.computeIfAbsent(label, k -> new long[2]);
 						t[0] += asLong(e.get("q"));
 						t[1] += asLong(e.get("v"));
@@ -1007,11 +1009,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	 * where the record proves whose each item was: days written before the roll
 	 * kept items per source, and drops an older build adds to a day since. Only a
 	 * source with drops its rows do not hold (its loots past its filed count) can
-	 * be owed any. On a day with one source the rest is all its own; on a day with
-	 * several, an item only one of them has ever dropped (by id or by name) is
-	 * that one's. Written only where it all finds an owed owner and every owed
-	 * source then comes to exactly the value the roll holds for it; any other day
-	 * is left as it stands.
+	 * be owed any. Where one source is owed, the rest is all its own; where several
+	 * are, an item worth something that only one of the day's sources has ever
+	 * dropped (by id or by name) is that one's. Written only where it all finds an
+	 * owed owner and every owed source then comes to exactly the value the roll
+	 * holds for it; any other day is left as it stands.
 	 */
 	private int splitDays()
 	{
@@ -1064,13 +1066,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				String id = r.getKey();
 				String name = str(obj(heap, id), "n", "");
-				String owner = null;
-				for (String source : srcs.keySet())
+				// Only an owed source has drops outside its rows, so one owed source
+				// owns all the rest. Among several, the bags say whose it is, and a
+				// worthless item is left: no total can catch a bag that misleads.
+				String owner = owed.size() == 1 ? owed.keySet().iterator().next() : null;
+				for (String source : owner != null ? new HashSet<String>() : srcs.keySet())
 				{
 					JsonObject bag = obj(obj(drops, source), "items");
-					if (srcs.size() == 1 || bag.has(id) || dropped(bag, name))
+					if (bag.has(id) || dropped(bag, name))
 					{
-						if (owner != null)
+						if (owner != null || r.getValue()[1] == 0)
 						{
 							continue days;   // two sources could have dropped it
 						}
