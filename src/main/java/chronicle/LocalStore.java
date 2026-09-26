@@ -887,13 +887,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	/**
 	 * Each source's own items over the days [from, to], or this sitting's when
-	 * {@code from} is null, ranked, under the source's name matched without case.
+	 * {@code from} is null, ranked, under the source's own spelling: the game has
+	 * monsters whose names differ only by case, and the roll keeps them apart.
 	 * A drop that fell on a day the roll kept only as one heap has no row here:
 	 * what the roll holds for a source less its rows is what went unitemised.
 	 */
 	Map<String, List<BagItem>> itemsBySource(LocalDate from, LocalDate to)
 	{
-		Map<String, Map<String, long[]>> by = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+		Map<String, Map<String, long[]>> by = new LinkedHashMap<>();
 		Map<String, Integer> ids = new HashMap<>();
 		synchronized (lock)
 		{
@@ -939,19 +940,67 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				}
 			}
 		}
-		Map<String, List<BagItem>> out = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+		Map<String, List<BagItem>> out = new LinkedHashMap<>();
 		by.forEach((source, items) -> out.put(source, bagRows(items, ids, 0)));
 		return out;
 	}
 
 	/**
-	 * Files each day's heap under its sources where the record proves whose each
-	 * item was, for days the roll kept only as one heap: on a day with one source
-	 * the heap is all its own, and on a day with several an item only one of them
-	 * has ever dropped is that one's. Written only where every source's rows then
-	 * come to exactly the value the roll holds for it; any other day keeps its
-	 * heap and its sources' totals. A day with several sources, any of them
-	 * already itemised, is the recorder's and is left alone.
+	 * The sources that paid on a day in [from, to] the roll kept only as one
+	 * heap: drops no row of theirs holds, whatever they were worth.
+	 */
+	Set<String> unfiledSources(LocalDate from, LocalDate to)
+	{
+		Set<String> out = new HashSet<>();
+		synchronized (lock)
+		{
+			JsonObject all = obj(root, "loot_days");
+			for (String day : all.keySet())
+			{
+				if (day.compareTo(from.format(DAY_KEY)) < 0 || day.compareTo(to.format(DAY_KEY)) > 0)
+				{
+					continue;
+				}
+				JsonObject srcs = obj(obj(all, day), "sources");
+				for (String source : srcs.keySet())
+				{
+					if (asLong(obj(srcs, source).get("loots")) > 0 && !obj(srcs, source).has("items"))
+					{
+						out.add(source);
+					}
+				}
+			}
+		}
+		return out;
+	}
+
+	/** The first day the roll still keeps by source, as epoch ms, or 0: older
+	 *  days keep only their totals once DETAIL_DAYS have passed. */
+	long lootDetailFrom()
+	{
+		synchronized (lock)
+		{
+			JsonObject all = obj(root, "loot_days");
+			String first = null;
+			for (String day : all.keySet())
+			{
+				if (obj(all, day).has("sources") && (first == null || day.compareTo(first) < 0))
+				{
+					first = day;
+				}
+			}
+			return first == null ? 0 : dayMs(first);
+		}
+	}
+
+	/**
+	 * Files under its sources what a day's heap holds beyond their own rows,
+	 * where the record proves whose each item was: days written before the roll
+	 * kept items per source, and drops an older build adds to a day since. On a
+	 * day with one source the rest is all its own; on a day with several, an item
+	 * only one of them has ever dropped (by id or by name) is that one's. Written
+	 * only where it all finds an owner and every source then comes to exactly the
+	 * value the roll holds for it; any other day is left as it stands.
 	 */
 	private int splitDays()
 	{
@@ -963,27 +1012,52 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			JsonObject srcs = obj(obj(all, day), "sources");
 			JsonObject heap = obj(obj(all, day), "items");
-			if (srcs.size() == 0 || heap.size() == 0)
+			// the heap less every source's rows, and what each source is owed
+			Map<String, long[]> rest = new LinkedHashMap<>();
+			for (String id : heap.keySet())
 			{
-				continue;
+				rest.put(id, new long[]{asLong(obj(heap, id).get("q")), asLong(obj(heap, id).get("v"))});
 			}
-			boolean single = srcs.size() == 1;
-			Map<String, JsonObject> rows = new HashMap<>();
+			Map<String, Long> owed = new HashMap<>();
 			for (String source : srcs.keySet())
 			{
-				if (!single && obj(srcs, source).has("items"))
+				JsonObject its = obj(obj(srcs, source), "items");
+				long v = asLong(obj(srcs, source).get("value"));
+				for (String id : its.keySet())
+				{
+					long[] r = rest.get(id);
+					if (r == null)
+					{
+						continue days;
+					}
+					r[0] -= asLong(obj(its, id).get("q"));
+					r[1] -= asLong(obj(its, id).get("v"));
+					v -= asLong(obj(its, id).get("v"));
+				}
+				if (v < 0)
 				{
 					continue days;
 				}
-				rows.put(source, new JsonObject());
+				if (v > 0 || !obj(srcs, source).has("items"))
+				{
+					owed.put(source, v);
+				}
 			}
-			for (String id : heap.keySet())
+			rest.values().removeIf(r -> r[0] == 0 && r[1] == 0);
+			if (owed.isEmpty() && rest.isEmpty())
 			{
+				continue;
+			}
+			Map<String, JsonObject> rows = new HashMap<>();
+			for (Map.Entry<String, long[]> r : rest.entrySet())
+			{
+				String id = r.getKey();
 				String name = str(obj(heap, id), "n", "");
 				String owner = null;
 				for (String source : srcs.keySet())
 				{
-					if (single || dropped(obj(obj(drops, source), "items"), name))
+					JsonObject bag = obj(obj(drops, source), "items");
+					if (srcs.size() == 1 || bag.has(id) || dropped(bag, name))
 					{
 						if (owner != null)
 						{
@@ -992,34 +1066,41 @@ class LocalStore implements chronicle.counters.GatheredLedger
 						owner = source;
 					}
 				}
-				if (owner == null)
+				if (owner == null || !owed.containsKey(owner) || r.getValue()[0] < 0 || r.getValue()[1] < 0)
 				{
 					continue days;
 				}
-				rows.get(owner).add(id, obj(heap, id).deepCopy());
+				JsonObject row = new JsonObject();
+				row.addProperty("n", name);
+				row.addProperty("q", r.getValue()[0]);
+				row.addProperty("v", r.getValue()[1]);
+				rows.computeIfAbsent(owner, k -> new JsonObject()).add(id, row);
 			}
-			for (String source : srcs.keySet())
+			for (Map.Entry<String, Long> o : owed.entrySet())
 			{
 				long v = 0;
-				for (var it : rows.get(source).entrySet())
+				for (String id : rows.getOrDefault(o.getKey(), new JsonObject()).keySet())
 				{
-					v += asLong(obj(rows.get(source), it.getKey()).get("v"));
+					v += asLong(obj(rows.get(o.getKey()), id).get("v"));
 				}
-				if (v != asLong(obj(srcs, source).get("value")))
+				if (v != o.getValue())
 				{
 					continue days;
 				}
 			}
-			boolean changed = false;
-			for (String source : srcs.keySet())
+			for (String source : owed.keySet())
 			{
-				if (!rows.get(source).equals(obj(srcs, source).get("items")))
+				JsonObject its = sub(obj(srcs, source), "items");
+				JsonObject add = rows.getOrDefault(source, new JsonObject());
+				for (String id : add.keySet())
 				{
-					obj(srcs, source).add("items", rows.get(source));
-					changed = true;
+					JsonObject own = sub(its, id);
+					own.addProperty("n", str(obj(add, id), "n", ""));
+					bump(own, "q", asLong(obj(add, id).get("q")));
+					bump(own, "v", asLong(obj(add, id).get("v")));
 				}
 			}
-			split += changed ? 1 : 0;
+			split++;
 		}
 		return split;
 	}

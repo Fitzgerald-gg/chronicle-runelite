@@ -1598,7 +1598,7 @@ public class PanelPreviewTest
 		// fixture's otherwise. Left to the plugin, this asked a store the stub
 		// never injects and threw on every source page opened under a period.
 		final java.util.Map<String, java.util.List<LocalStore.BagItem>> periodBags =
-			new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+			new java.util.LinkedHashMap<>();
 
 		@Override
 		java.util.Map<String, java.util.List<LocalStore.BagItem>> itemsBySource(
@@ -1608,10 +1608,26 @@ public class PanelPreviewTest
 			{
 				return store.itemsBySource(from, to);
 			}
-			java.util.Map<String, java.util.List<LocalStore.BagItem>> out =
-				new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-			periodBags.forEach((k, v) -> out.put(k, new ArrayList<>(v)));
+			// the sitting's, and only the sitting's: a page that asked for its
+			// days would find nothing here and show it
+			java.util.Map<String, java.util.List<LocalStore.BagItem>> out = new java.util.LinkedHashMap<>();
+			if (from == null)
+			{
+				periodBags.forEach((k, v) -> out.put(k, new ArrayList<>(v)));
+			}
 			return out;
+		}
+
+		@Override
+		java.util.Set<String> unfiledSources(java.time.LocalDate from, java.time.LocalDate to)
+		{
+			return store != null ? store.unfiledSources(from, to) : new java.util.HashSet<>();
+		}
+
+		@Override
+		long lootDetailFrom()
+		{
+			return store != null && lootRollDay == null ? store.lootDetailFrom() : lootRollFrom();
 		}
 
 		@Override

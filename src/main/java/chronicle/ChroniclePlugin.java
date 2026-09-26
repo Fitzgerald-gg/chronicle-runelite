@@ -1159,6 +1159,18 @@ public class ChroniclePlugin extends Plugin
 		return localStore.itemsBySource(from, to);
 	}
 
+	/** The sources that paid on a day in [from, to] the roll kept only as one heap. */
+	java.util.Set<String> unfiledSources(LocalDate from, LocalDate to)
+	{
+		return localStore.unfiledSources(from, to);
+	}
+
+	/** The first day the roll still keeps by source. */
+	long lootDetailFrom()
+	{
+		return localStore.lootDetailFrom();
+	}
+
 	int sessionLoots()
 	{
 		return localStore.sessionLoots();

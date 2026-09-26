@@ -2990,6 +2990,9 @@ class ChroniclePanel extends PluginPanel
 			StatRegistry.isGp(key) ? gps(v) : fmt(v));
 	}
 
+	private static final String UNDATED = "No loot has been dated yet. The roll keeps one entry a "
+		+ "day and starts with the next drop that lands.";
+
 	/**
 	 * The loot a window actually holds, off the dated roll rather than off the
 	 * ledger's running totals. A range the roll has nothing for shows nothing:
@@ -2999,9 +3002,6 @@ class ChroniclePanel extends PluginPanel
 	 * has no dated account of its loot and says so, naming the day one begins,
 	 * rather than reporting the part it can see as the whole.
 	 */
-	private static final String UNDATED = "No loot has been dated yet. The roll keeps one entry a "
-		+ "day and starts with the next drop that lands.";
-
 	private JPanel dropsInWindow(JPanel p)
 	{
 		Window win = window();
@@ -4716,14 +4716,24 @@ class ChroniclePanel extends PluginPanel
 	/** One name's row of a roll list, as {count, worth}, or zeros. */
 	private static long[] rowOf(List<String[]> rows, String name)
 	{
+		String[] r = rowFor(rows, name);
+		return r == null ? new long[]{0, 0} : new long[]{safeParse(r[1]), safeParse(r[2])};
+	}
+
+	// A name's row of a roll list: its own spelling first, then any case of it.
+	// The game has monsters whose names differ only by case, kept apart.
+	private static String[] rowFor(List<String[]> rows, String name)
+	{
+		String[] loose = null;
 		for (String[] r : rows)
 		{
-			if (r[0].equalsIgnoreCase(name))
+			if (r[0].equals(name))
 			{
-				return new long[]{safeParse(r[1]), safeParse(r[2])};
+				return r;
 			}
+			loose = loose == null && r[0].equalsIgnoreCase(name) ? r : loose;
 		}
-		return new long[]{0, 0};
+		return loose;
 	}
 
 	/** Open a source by a loose name (a task's plural, a kill-log row): exact,
@@ -5360,10 +5370,12 @@ class ChroniclePanel extends PluginPanel
 		// what each kept of it, and whatever the heap holds beyond them as Other.
 		final long[] inWindow = wholeRecord() ? null : itemInWindow(name);
 		long other = 0;
+		long otherValue = 0;
 		if (inWindow != null)
 		{
 			srcs.clear();
 			other = inWindow[0];
+			otherValue = inWindow[1];
 			for (Map.Entry<String, List<BagItem>> e : periodItems().entrySet())
 			{
 				for (BagItem b : e.getValue())
@@ -5372,6 +5384,7 @@ class ChroniclePanel extends PluginPanel
 					{
 						srcs.add(new Object[]{e.getKey(), b.qty, b.value});
 						other -= b.qty;
+						otherValue -= b.value;
 					}
 				}
 			}
@@ -5438,7 +5451,7 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		p.add(head);
-		String since = inWindow == null ? null : lootSince();
+		String since = inWindow == null || hasTask && onTaskOnly ? null : lootSince();
 		if (since != null)
 		{
 			p.add(vgap(4));
@@ -5486,7 +5499,7 @@ class ChroniclePanel extends PluginPanel
 			link(r, () -> openSource(src));
 			p.add(r);
 		}
-		addOther(p, "×" + fmt(other), other);
+		addOther(p, "×" + fmt(Math.max(0, other)) + tail(Math.max(0, otherValue)), other > 0 || otherValue > 0);
 		return p;
 	}
 
@@ -5497,12 +5510,16 @@ class ChroniclePanel extends PluginPanel
 		return sessionPeriod() ? plugin.itemsBySource(null, null) : plugin.itemsBySource(w.start, w.end);
 	}
 
-	// Where a period reaches back before the dated roll: the day it can be read from.
+	// Where a period reaches back before the roll keeps its loot by source: the
+	// day it can be read from. A picture says so without the day, which is near
+	// enough the day the plugin was installed.
 	private String lootSince()
 	{
-		long from = plugin.lootRollFrom();
+		long from = plugin.lootDetailFrom();
 		return sessionPeriod() || from > 0 && from <= startMs(window().start) ? null
-			: from <= 0 ? UNDATED : "Loot since " + dayOf(from).format(FULL_DAY);
+			: from <= 0 ? UNDATED
+			: drawingCopy ? "Loot is dated for only part of " + periodInSentence() + "."
+			: "Loot since " + dayOf(from).format(FULL_DAY);
 	}
 
 	// A period's page with nothing in it, said once: a since line already says why.
@@ -5512,12 +5529,12 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	// What a period paid on days the roll kept as one heap, not under a source.
-	private static void addOther(JPanel p, String figure, long n)
+	private static void addOther(JPanel p, String figure, boolean show)
 	{
-		if (n > 0)
+		if (show)
 		{
 			JPanel r = ghostRow("Other", figure);
-			r.setToolTipText("Dropped on days the record kept whole, before it filed drops by source");
+			r.setToolTipText("Dropped on days the record kept whole rather than by source");
 			p.add(r);
 		}
 	}
@@ -5826,11 +5843,13 @@ class ChroniclePanel extends PluginPanel
 		SourceRow found = null;
 		for (SourceRow r : sources())
 		{
-			if (r.name.equalsIgnoreCase(name))
+			// its own spelling first: the game has monsters named apart only by case
+			if (r.name.equals(name))
 			{
 				found = r;
 				break;
 			}
+			found = found == null && r.name.equalsIgnoreCase(name) ? r : found;
 		}
 		final SourceRow sr = found;
 		// What THIS period's roll says this source paid, where the period is not
@@ -5842,11 +5861,16 @@ class ChroniclePanel extends PluginPanel
 		// Read before the row is built, because the copy hands back the WHOLE
 		// page: every loot line, not the twenty five the page mounts. A period
 		// reads its own items: the sitting and each day keep them per source.
-		final List<BagItem> bag = inWindow == null ? plugin.sourceItems(sr != null ? sr.name : name)
-			: new ArrayList<>(periodItems().getOrDefault(sr != null ? sr.name : name, new ArrayList<>()));
+		String[] row = inWindow == null ? null : rowFor(lootWindow().sources, sr != null ? sr.name : name);
+		String own = row != null ? row[0] : sr != null ? sr.name : name;
+		final List<BagItem> bag = inWindow == null ? plugin.sourceItems(own)
+			: new ArrayList<>(periodItems().getOrDefault(own, new ArrayList<>()));
 		bag.sort(Comparator.comparingLong((BagItem b) -> b.value).reversed());
-		// what the period paid on days the roll kept only as one heap
+		// what the period paid on days the roll kept only as one heap, worth
+		// something or not
 		final long other = inWindow == null ? 0 : inWindow[1] - tallyOf(bag)[1];
+		final boolean unfiled = other > 0 || inWindow != null && !sessionPeriod()
+			&& plugin.unfiledSources(window().start, window().end).contains(own);
 		spaced(p, backRow(() -> copySourcePage(name)), 4);
 		JPanel head = card(name);
 		if (sr != null)
@@ -5985,7 +6009,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			addAssignments(p, sr.name);
 		}
-		if (!bag.isEmpty() || other > 0)
+		if (!bag.isEmpty() || unfiled)
 		{
 			JPanel grid = new JPanel(new GridLayout(0, 5, 3, 3));
 			grid.setBackground(DARK);
@@ -6018,7 +6042,7 @@ class ChroniclePanel extends PluginPanel
 				p.add(vgap(3));
 				p.add(expander(name, cap, bag.size()));
 			}
-			addOther(p, gps(other), other);
+			addOther(p, gps(Math.max(0, other)), unfiled);
 			return p;
 		}
 		return sr == null ? noted(p, "The journal has no drops from this source yet.")

@@ -52,7 +52,7 @@ The collection log is the one the game shows, split across the same five tabs, u
   <img src="docs/img/loot-slayer-drops.png" width="240" alt="Loot: Slayer drops">
 </p>
 
-**Loot** is every source and every item. Read it as received or left behind, by source or by item, with what each is worth. Received loot also reads by kind of item, and by kind it can be narrowed to what your slayer tasks paid. A source opens to its kill count, what it has paid per drop, your personal best and the day you set it, your average kill, the time you have spent there, and every item it has given. An item opens to when it first and last dropped, and where from. Either page can be copied as a picture.
+**Loot** is every source and every item. Read it as received or left behind, by source or by item, with what each is worth. Received loot also reads by kind of item, and by kind it can be narrowed to what your slayer tasks paid. A source opens to its kill count, what it has paid per drop, your personal best and the day you set it, your average kill, the time you have spent there, and every item it has given. An item opens to when it first and last dropped, and where from. Over a shorter period both pages list only what that period paid. Either page can be copied as a picture.
 
 **Slayer** keeps the current task on screen over three boards: the task-by-task journey with what each one paid and how many kills gave nothing, the game's own count per monster, and the drops the tasks produced. A task opens to the monsters you killed on it and what it paid, beside your usual and your best for that task.
 

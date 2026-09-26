@@ -617,7 +617,7 @@ public class SessionPeriodTest
 		assertTrue("no source list: " + sitting, from >= 0);
 		java.util.List<String> rows = sitting.subList(from + 1, sitting.size());
 		assertEquals("the sitting's sources, then what no source kept: " + sitting,
-			java.util.Arrays.asList("Nechryael", "Other", "\u00d74"),
+			java.util.Arrays.asList("Nechryael", "Other", "\u00d74 \u00b7 101k gp"),
 			java.util.Arrays.asList(rows.get(0), rows.get(2), rows.get(3)));
 		assertEquals("a source the sitting did not see listed under it: " + sitting,
 			4, rows.size());

@@ -227,7 +227,7 @@ public class PeriodLootTest
 		LocalDate today = LocalDate.now();
 		Map<String, List<LocalStore.BagItem>> day = s.itemsBySource(today, today);
 		assertEquals(50, qty(day, "Mad Angel", "Coins"));
-		assertEquals(7, qty(day, "herbiboar", "Coins"));
+		assertEquals(7, qty(day, "Herbiboar", "Coins"));
 		assertEquals(2, qty(day, "Herbiboar", "Grimy guam leaf"));
 		// and the sitting keeps the same
 		Map<String, List<LocalStore.BagItem>> sitting = s.itemsBySource(null, null);
@@ -325,6 +325,134 @@ public class PeriodLootTest
 		LocalDate today = LocalDate.now();
 		assertEquals(3, qty(s.itemsBySource(today, today), "Herbiboar", "Grimy guam leaf"));
 		assertEquals("3", s.lootBetween(today, today).items.get(0)[1]);
+	}
+
+	private File journal(JsonObject drops, JsonObject days) throws Exception
+	{
+		JsonObject root = new JsonObject();
+		root.addProperty("schema", 1);
+		root.addProperty("rsn", RSN);
+		root.add("drops", drops);
+		root.add("loot_days", days);
+		File d = dir.getRoot();
+		Files.write(new File(d, LocalStore.slug(RSN) + ".json").toPath(),
+			new Gson().toJson(root).getBytes(StandardCharsets.UTF_8));
+		return d;
+	}
+
+	/** A day's earlier sitting is the day's, not this sitting's. */
+	@Test
+	public void theSittingIsNotTheDay() throws Exception
+	{
+		JsonObject src = total(1, 1000);
+		src.add("items", obj("199", item("Grimy guam leaf", 10, 1000)));
+		JsonObject today = total(1, 1000);
+		today.add("sources", obj("Herbiboar", src));
+		today.add("items", obj("199", item("Grimy guam leaf", 10, 1000)));
+		LocalStore s = store(journal(new JsonObject(), obj(LocalDate.now().toString(), today)));
+		s.record("LOOT", loot("Herbiboar", 199, 2), RSN);
+		assertEquals(2, qty(s.itemsBySource(null, null), "Herbiboar", "Grimy guam leaf"));
+		assertEquals(12, qty(s.itemsBySource(LocalDate.now(), LocalDate.now()), "Herbiboar", "Grimy guam leaf"));
+	}
+
+	/**
+	 * A one-source day an older build added to after it was filed: what the
+	 * heap holds beyond the source's rows is its own, and is filed on load.
+	 */
+	@Test
+	public void aOneSourceDayAddedToSinceIsFiledAgain() throws Exception
+	{
+		JsonObject src = total(3, 300);
+		src.add("items", obj("199", item("Grimy guam leaf", 1, 100)));
+		JsonObject day = total(3, 300);
+		day.add("sources", obj("Herbiboar", src));
+		day.add("items", obj("199", item("Grimy guam leaf", 3, 300)));
+		LocalStore s = store(journal(new JsonObject(), obj(D1.toString(), day)));
+		assertEquals(3, qty(s.itemsBySource(D1, D1), "Herbiboar", "Grimy guam leaf"));
+	}
+
+	/**
+	 * The day this build arrived: one source filed by it, another only in the
+	 * heap from before. What is left is still provably whose, and is filed.
+	 */
+	@Test
+	public void aDayHalfFiledIsFinished() throws Exception
+	{
+		JsonObject angelBag = new JsonObject();
+		angelBag.add("995", bagItem("Coins", 5, 5));
+		angelBag.add("199", bagItem("Grimy guam leaf", 1, 100));
+		JsonObject herbiBag = new JsonObject();
+		herbiBag.add("361", bagItem("Tuna", 1, 20));
+		JsonObject drops = new JsonObject();
+		drops.add("Mad Angel", src(angelBag));
+		drops.add("Herbiboar", src(herbiBag));
+		JsonObject angel = total(2, 105);
+		angel.add("items", obj("995", item("Coins", 5, 5)));
+		JsonObject srcs = new JsonObject();
+		srcs.add("Mad Angel", angel);
+		srcs.add("Herbiboar", total(1, 20));
+		JsonObject heap = new JsonObject();
+		heap.add("995", item("Coins", 5, 5));
+		heap.add("199", item("Grimy guam leaf", 1, 100));
+		heap.add("361", item("Tuna", 1, 20));
+		JsonObject day = total(3, 125);
+		day.add("sources", srcs);
+		day.add("items", heap);
+		Map<String, List<LocalStore.BagItem>> d1 = store(journal(drops, obj(D1.toString(), day)))
+			.itemsBySource(D1, D1);
+		assertEquals(1, qty(d1, "Mad Angel", "Grimy guam leaf"));
+		assertEquals(5, qty(d1, "Mad Angel", "Coins"));
+		assertEquals(1, qty(d1, "Herbiboar", "Tuna"));
+	}
+
+	/**
+	 * Ownership reads a bag's ids as well as its names: an item renamed since
+	 * sits under its new name in one bag and its old one in another, and both
+	 * sources could have dropped it that day.
+	 */
+	@Test
+	public void aRenamedItemIsNobodysByItsOldName() throws Exception
+	{
+		JsonObject tBag = new JsonObject();
+		tBag.add("100", bagItem("New name", 2, 0));
+		tBag.add("995", bagItem("Coins", 50, 50));
+		JsonObject oBag = new JsonObject();
+		oBag.add("100", bagItem("Old name", 1, 0));
+		oBag.add("361", bagItem("Tuna", 1, 10));
+		JsonObject drops = new JsonObject();
+		drops.add("T", src(tBag));
+		drops.add("O", src(oBag));
+		JsonObject srcs = new JsonObject();
+		srcs.add("T", total(1, 50));
+		srcs.add("O", total(1, 10));
+		JsonObject heap = new JsonObject();
+		heap.add("100", item("Old name", 2, 0));
+		heap.add("995", item("Coins", 50, 50));
+		heap.add("361", item("Tuna", 1, 10));
+		JsonObject day = total(2, 60);
+		day.add("sources", srcs);
+		day.add("items", heap);
+		Map<String, List<LocalStore.BagItem>> d1 = store(journal(drops, obj(D1.toString(), day)))
+			.itemsBySource(D1, D1);
+		assertEquals(d1.toString(), 0, qty(d1, "O", "Old name") + qty(d1, "T", "Old name"));
+	}
+
+	/** Monsters named apart only by case are kept apart, as the head keeps them. */
+	@Test
+	public void namesApartOnlyByCaseStayApart() throws Exception
+	{
+		JsonObject a = total(1, 300);
+		a.add("sources", obj("Spiritual mage", total(1, 300)));
+		a.add("items", obj("995", item("Coins", 300, 300)));
+		JsonObject b = total(1, 500);
+		b.add("sources", obj("Spiritual Mage", total(1, 500)));
+		b.add("items", obj("995", item("Coins", 500, 500)));
+		JsonObject days = new JsonObject();
+		days.add(D1.toString(), a);
+		days.add(D2.toString(), b);
+		Map<String, List<LocalStore.BagItem>> both = store(journal(new JsonObject(), days)).itemsBySource(D1, D2);
+		assertEquals(300, qty(both, "Spiritual mage", "Coins"));
+		assertEquals(500, qty(both, "Spiritual Mage", "Coins"));
 	}
 
 	/** The split is made once: loading it again changes nothing. */
@@ -443,6 +571,143 @@ public class PeriodLootTest
 		assertFalse(inside.toString(), String.join(" ", inside).contains("Loot since "));
 	}
 
+	/**
+	 * Drops kept whole and worth nothing still say they were there: Other, not
+	 * "Nothing from" under a head that counts them.
+	 */
+	@Test
+	public void worthlessDropsKeptWholeAreStillOther() throws Exception
+	{
+		JsonObject shared = new JsonObject();
+		shared.add("23866", bagItem("Crystal shard", 30, 0));
+		JsonObject drops = new JsonObject();
+		drops.add("Crystalline rat", src(shared.deepCopy()));
+		drops.add("Crystalline bat", src(shared.deepCopy()));
+		JsonObject srcs = new JsonObject();
+		srcs.add("Crystalline rat", total(3, 0));
+		srcs.add("Crystalline bat", total(2, 0));
+		JsonObject day = total(5, 0);
+		day.add("sources", srcs);
+		day.add("items", obj("23866", item("Crystal shard", 30, 0)));
+		File d = journal(drops, obj(D1.toString(), day));
+		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.journalStub(d.getPath(), RSN);
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
+		set(hold[0], "histGranularity", "Day");
+		set(hold[0], "histCursor", D1);
+		List<String> said = page(hold[0], "buildSourceDetail", "Crystalline rat");
+		assertEquals(said.toString(), "0 gp", after(said, "Other"));
+		assertFalse(said.toString(), String.join(" ", said).contains("Nothing from"));
+	}
+
+	/** An item's Other carries its worth, so its rows come to the head's. */
+	@Test
+	public void anItemsOtherCarriesItsWorth() throws Exception
+	{
+		List<String> tuna = page(panel(D1, D3), "buildItemDetail", "Tuna");
+		assertTrue(tuna.toString(), after(tuna, "Other").startsWith("\u00d72 \u00b7 200"));
+	}
+
+	/** A copied picture says the loot is dated for part of the period, not the day. */
+	@Test
+	public void aPictureCarriesNoTrackingDate() throws Exception
+	{
+		ChroniclePanel p = panel(D1.minusDays(5), D3);
+		set(p, "drawingCopy", true);
+		String said = String.join(" ", page(p, "buildSourceDetail", "Mad Angel"));
+		assertFalse(said, said.contains("Loot since"));
+		assertTrue(said, said.contains("Loot is dated for only part of"));
+	}
+
+	/** The sitting's item page lists what each source dropped in the sitting. */
+	@Test
+	public void theSittingsItemPageIsTheSittings() throws Exception
+	{
+		JsonObject src = total(1, 1000);
+		src.add("items", obj("199", item("Grimy guam leaf", 10, 1000)));
+		JsonObject today = total(1, 1000);
+		today.add("sources", obj("Herbiboar", src));
+		today.add("items", obj("199", item("Grimy guam leaf", 10, 1000)));
+		JsonObject bag = new JsonObject();
+		bag.add("199", bagItem("Grimy guam leaf", 10, 1000));
+		File d = journal(obj("Herbiboar", src(bag)), obj(LocalDate.now().toString(), today));
+		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.journalStub(d.getPath(), RSN);
+		// the store that names what it records as the game does
+		stub.store = store(d);
+		stub.store.record("LOOT", loot("Herbiboar", 199, 2), RSN);
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
+		set(hold[0], "histGranularity", "Session");
+		List<String> said = page(hold[0], "buildItemDetail", "Grimy guam leaf");
+		String row = said.get(said.indexOf("FROM") + 2);
+		assertTrue("the sitting's source row is not the sitting's: " + said, row.startsWith("\u00d72"));
+	}
+
+	private List<String> sourcePage(File d, LocalDate from, LocalDate to, String name) throws Exception
+	{
+		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.journalStub(d.getPath(), RSN);
+		final ChroniclePanel[] hold = new ChroniclePanel[1];
+		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
+		set(hold[0], "histGranularity", "Day");
+		set(hold[0], "histFrom", from);
+		set(hold[0], "histTo", to);
+		set(hold[0], "histCursor", to);
+		return page(hold[0], "buildSourceDetail", name);
+	}
+
+	/**
+	 * Days past the four hundred keep only their totals, so a period reaching
+	 * back to them is read from the first day still kept by source, not the
+	 * first day the roll holds at all.
+	 */
+	@Test
+	public void aPeriodPastTheKeptDetailSaysWhereItStarts() throws Exception
+	{
+		JsonObject days = new JsonObject();
+		days.add(D1.minusDays(500).toString(), total(4, 4_000));   // pruned: totals only
+		JsonObject kept = total(1, 300);
+		kept.add("sources", obj("Mad Angel", total(1, 300)));
+		kept.add("items", obj("995", item("Coins", 300, 300)));
+		days.add(D1.toString(), kept);
+		JsonObject bag = new JsonObject();
+		bag.add("995", bagItem("Coins", 300, 300));
+		File d = journal(obj("Mad Angel", src(bag)), days);
+		String said = String.join(" ", sourcePage(d, D1.minusDays(10), D3, "Mad Angel"));
+		assertTrue(said, said.contains("Loot since " + D1.format(
+			java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.UK)).replace("Sep ", "Sept ")));
+	}
+
+	/** The page for one of two monsters named apart only by case is that one's. */
+	@Test
+	public void thePageForOneSpellingIsThatSpellings() throws Exception
+	{
+		JsonObject a = total(1, 300);
+		a.add("sources", obj("Spiritual mage", total(1, 300)));
+		a.add("items", obj("995", item("Coins", 300, 300)));
+		JsonObject b = total(1, 500);
+		b.add("sources", obj("Spiritual Mage", total(1, 500)));
+		b.add("items", obj("995", item("Coins", 500, 500)));
+		JsonObject days = new JsonObject();
+		days.add(D1.toString(), a);
+		days.add(D2.toString(), b);
+		JsonObject lower = new JsonObject();
+		lower.add("995", bagItem("Coins", 300, 300));
+		JsonObject upper = new JsonObject();
+		upper.add("995", bagItem("Coins", 500, 500));
+		JsonObject drops = new JsonObject();
+		drops.add("Spiritual mage", src(lower));
+		drops.add("Spiritual Mage", src(upper));
+		File d = journal(drops, days);
+		List<String> said = sourcePage(d, D1, D2, "Spiritual Mage");
+		assertTrue(said.toString(), said.contains("Coins ×500"));
+		assertFalse(said.toString(), said.contains("Coins ×300") || said.contains("Coins ×800"));
+		assertNull(said.toString(), after(said, "Other"));
+		// and the spelling the bigger one would shadow, looked up without case
+		List<String> shadowed = sourcePage(d, D1, D2, "Spiritual mage");
+		assertTrue(shadowed.toString(), shadowed.contains("Coins ×300"));
+		assertEquals(shadowed.toString(), "300 gp", after(shadowed, "Worth").split(" · ")[0]);
+	}
+
 	/** Lifetime is the ledger, as it was: every item, no Other. */
 	@Test
 	public void theLifetimePageIsTheLedger() throws Exception
@@ -460,7 +725,7 @@ public class PeriodLootTest
 		assertEquals(guam.toString(), "Herbiboar", guam.get(guam.indexOf("FROM") + 1));
 		assertNull(guam.toString(), after(guam, "Other"));
 		List<String> tuna = page(panel(D1, D3), "buildItemDetail", "Tuna");
-		assertEquals("the shared Tuna was put under a source: " + tuna, "×2", after(tuna, "Other"));
+		assertEquals("the shared Tuna was put under a source: " + tuna, "×2 · 200 gp", after(tuna, "Other"));
 		assertFalse(tuna.toString(), tuna.contains("Mad Angel"));
 	}
 }
