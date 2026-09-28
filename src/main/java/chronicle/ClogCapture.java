@@ -10,6 +10,7 @@ package chronicle;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -45,7 +46,7 @@ public class ClogCapture
 	};
 	private static final Pattern COUNT_LINE = Pattern.compile(":\\s*([\\d,]+)\\s*$");
 	private static final Pattern TIME_LINE = Pattern.compile(
-		"^(?<label>.+?):\\s*(?<h>\\d+:)?(?<m>\\d{1,3}):(?<s>\\d{2})(?:\\.\\d+)?\\s*$");
+		"^(?<label>.+?):\\s*(?:(?<h>\\d+):)?(?<m>\\d{1,3}):(?<s>\\d{2})(?:\\.\\d+)?\\s*$");
 
 	private static final int COLLECTION_LOG_SETUP = 7797;
 	private static final int COLLECTION_DELAYED_TRANSMIT = 4100;
@@ -59,11 +60,30 @@ public class ClogCapture
 	private final Map<String, Map<String, Integer>> kcLines = new HashMap<>();
 	private final Map<String, Map<String, Integer>> pbLines = new HashMap<>();
 	private final Map<String, Integer> slayerKcs = new HashMap<>();
+	private final Map<String, Integer> catCounts = new HashMap<>();
+	private final Map<String, Integer> clogItems = new HashMap<>();
 	private volatile int finished;
 	private volatile int available;
+	private volatile long revision;
 	private boolean dirty;
+	private boolean clogRetrieving;
+	private int clogFlushTick = -1;
+	private int killLogTicks = -1;
 
-	private void readCompletion()
+	@Inject
+	ClogCapture(Client client, ItemManager itemManager)
+	{
+		this.client = client;
+		this.itemManager = itemManager;
+	}
+
+	private void changed()
+	{
+		dirty = true;
+		revision++;
+	}
+
+	void primeFromVarps()
 	{
 		int obtained = client.getVarpValue(VARP_CLOG_OBTAINED);
 		int total = client.getVarpValue(VARP_CLOG_TOTAL);
@@ -71,18 +91,29 @@ public class ClogCapture
 		{
 			finished = obtained;
 			available = total;
-			dirty = true;
-			revision++;
+			changed();
 		}
-	}
-
-	void primeFromVarps()
-	{
-		readCompletion();
-		if (readCategoryCounts())
+		boolean counts = false;
+		for (int i = 0; i < CAT_NAMES.length; i++)
 		{
-			dirty = true;
-			revision++;
+			int tot = client.getVarpValue(VARP_CAT[i][1]);
+			if (tot <= 0)
+			{
+				continue;
+			}
+			int obt = client.getVarpValue(VARP_CAT[i][0]);
+			String ok = CAT_NAMES[i] + "_obtained";
+			String tk = CAT_NAMES[i] + "_total";
+			if (!Integer.valueOf(obt).equals(catCounts.get(ok)) || !Integer.valueOf(tot).equals(catCounts.get(tk)))
+			{
+				catCounts.put(ok, obt);
+				catCounts.put(tk, tot);
+				counts = true;
+			}
+		}
+		if (counts)
+		{
+			changed();
 		}
 	}
 
@@ -96,25 +127,19 @@ public class ClogCapture
 		return available;
 	}
 
-	private volatile long revision;
-
 	long revision()
 	{
 		return revision;
 	}
 
-	private int killLogTicks = -1;
-
-	private final Map<String, Integer> catCounts = new HashMap<>();
-	private final Map<String, Integer> clogItems = new HashMap<>();
-	private boolean clogRetrieving;
-	private int clogFlushTick = -1;
-
-	@Inject
-	ClogCapture(Client client, ItemManager itemManager)
+	boolean isDirty()
 	{
-		this.client = client;
-		this.itemManager = itemManager;
+		return dirty;
+	}
+
+	void clearDirty()
+	{
+		dirty = false;
 	}
 
 	@Subscribe
@@ -123,12 +148,7 @@ public class ClogCapture
 		GameState state = e.getGameState();
 		if (state == GameState.LOGGED_IN)
 		{
-			readCompletion();
-			if (readCategoryCounts())
-			{
-				dirty = true;
-				revision++;
-			}
+			primeFromVarps();
 		}
 		else if (state == GameState.LOGIN_SCREEN)
 		{
@@ -190,9 +210,8 @@ public class ClogCapture
 		}
 		try
 		{
-			int itemId = (int) args[1];
+			String name = itemName((int) args[1]);
 			int quantity = (int) args[2];
-			String name = itemName(itemId);
 			if (name != null)
 			{
 				clogItems.put(name, Math.max(1, quantity));
@@ -244,8 +263,7 @@ public class ClogCapture
 		clogRetrieving = false;
 		if (!clogItems.isEmpty())
 		{
-			dirty = true;
-			revision++;
+			changed();
 		}
 	}
 
@@ -253,10 +271,8 @@ public class ClogCapture
 	{
 		try
 		{
-			Widget names = client.getWidget(InterfaceID.KillLog.NAME);
-			Widget kills = client.getWidget(InterfaceID.KillLog.KILL);
-			Widget[] nameKids = childrenOf(names);
-			Widget[] killKids = childrenOf(kills);
+			Widget[] nameKids = childrenOf(client.getWidget(InterfaceID.KillLog.NAME));
+			Widget[] killKids = childrenOf(client.getWidget(InterfaceID.KillLog.KILL));
 			if (nameKids == null || killKids == null)
 			{
 				return;
@@ -267,12 +283,8 @@ public class ClogCapture
 			{
 				String mob = text(nameKids[i]);
 				String kcText = text(killKids[i]);
-				if (mob == null || mob.isEmpty() || kcText == null)
-				{
-					continue;
-				}
-				String digits = kcText.replaceAll("[^0-9]", "");
-				if (digits.isEmpty())
+				String digits = kcText == null ? "" : kcText.replaceAll("[^0-9]", "");
+				if (mob == null || mob.isEmpty() || digits.isEmpty())
 				{
 					continue;
 				}
@@ -287,8 +299,7 @@ public class ClogCapture
 			}
 			if (captured > 0)
 			{
-				dirty = true;
-				revision++;
+				changed();
 				log.debug("slayer-log captured {} species", captured);
 			}
 		}
@@ -347,7 +358,7 @@ public class ClogCapture
 			for (int i = 1; i < head.length; i++)
 			{
 				String line = text(head[i]);
-				if (line == null || line.toLowerCase(java.util.Locale.ROOT).startsWith("obtained"))
+				if (line == null || line.toLowerCase(Locale.ROOT).startsWith("obtained"))
 				{
 					continue;
 				}
@@ -357,12 +368,10 @@ public class ClogCapture
 					String label = t.group("label").trim();
 					if (!label.isEmpty())
 					{
-						long secs = Integer.parseInt(t.group("m")) * 60L
-							+ Integer.parseInt(t.group("s"));
+						long secs = Integer.parseInt(t.group("m")) * 60L + Integer.parseInt(t.group("s"));
 						if (t.group("h") != null)
 						{
-							secs += Integer.parseInt(
-								t.group("h").substring(0, t.group("h").length() - 1)) * 3600L;
+							secs += Integer.parseInt(t.group("h")) * 3600L;
 						}
 						if (secs > 0 && secs < Integer.MAX_VALUE)
 						{
@@ -376,18 +385,14 @@ public class ClogCapture
 				{
 					continue;
 				}
+				String label = line.substring(0, m.start()).trim();
+				if (label.isEmpty() || Character.isDigit(label.charAt(label.length() - 1)))
+				{
+					continue;
+				}
 				try
 				{
 					int n = Integer.parseInt(m.group(1).replace(",", ""));
-					String label = line.substring(0, m.start()).trim();
-					if (label.isEmpty())
-					{
-						continue;
-					}
-					if (Character.isDigit(label.charAt(label.length() - 1)))
-					{
-						continue;
-					}
 					lines.put(label, n);
 					if (first == null)
 					{
@@ -429,35 +434,12 @@ public class ClogCapture
 					}
 				}
 			}
-			dirty = true;
-			revision++;
+			changed();
 		}
 		catch (RuntimeException ex)
 		{
 			log.debug("clog scrape failed", ex);
 		}
-	}
-
-	private boolean readCategoryCounts()
-	{
-		boolean changed = false;
-		for (int i = 0; i < CAT_NAMES.length; i++)
-		{
-			int tot = client.getVarpValue(VARP_CAT[i][1]);
-			if (tot <= 0)
-			{
-				continue;
-			}
-			int obt = client.getVarpValue(VARP_CAT[i][0]);
-			String ok = CAT_NAMES[i] + "_obtained", tk = CAT_NAMES[i] + "_total";
-			if (!Integer.valueOf(obt).equals(catCounts.get(ok)) || !Integer.valueOf(tot).equals(catCounts.get(tk)))
-			{
-				catCounts.put(ok, obt);
-				catCounts.put(tk, tot);
-				changed = true;
-			}
-		}
-		return changed;
 	}
 
 	private String itemName(int id)
@@ -481,16 +463,6 @@ public class ClogCapture
 		}
 		String t = w.getText();
 		return t == null ? null : Text.removeTags(t).trim();
-	}
-
-	boolean isDirty()
-	{
-		return dirty;
-	}
-
-	void clearDirty()
-	{
-		dirty = false;
 	}
 
 	private void dropSceneState()

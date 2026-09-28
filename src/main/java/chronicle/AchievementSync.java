@@ -44,9 +44,8 @@ public class AchievementSync
 
 	private final Client client;
 	private final Gson gson;
-
+	private JsonObject bundledDiaries;
 	private volatile String lastSynced;
-
 	private volatile JsonObject cached;
 	private volatile int cachedTick = -1;
 
@@ -57,16 +56,12 @@ public class AchievementSync
 		this.gson = gson;
 	}
 
-	private JsonObject bundledDiaries;
-
 	private synchronized int tierSize(String tier, int fallback)
 	{
 		if (bundledDiaries == null)
 		{
 			try (InputStreamReader r = new InputStreamReader(
-				AchievementSync.class.getResourceAsStream(
-					"/chronicle/osrs_achievement_diaries.json"),
-				StandardCharsets.UTF_8))
+				AchievementSync.class.getResourceAsStream("/chronicle/osrs_achievement_diaries.json"), StandardCharsets.UTF_8))
 			{
 				bundledDiaries = gson.fromJson(r, JsonObject.class);
 			}
@@ -74,27 +69,15 @@ public class AchievementSync
 			{
 				bundledDiaries = new JsonObject();
 			}
-			if (bundledDiaries == null)
-			{
-				bundledDiaries = new JsonObject();
-			}
 		}
-		if (!bundledDiaries.has("diaries") || !bundledDiaries.get("diaries").isJsonObject())
+		try
+		{
+			return bundledDiaries.getAsJsonObject("diaries").getAsJsonObject("Karamja").getAsJsonArray(tier).size();
+		}
+		catch (RuntimeException e)
 		{
 			return fallback;
 		}
-		JsonObject all = bundledDiaries.getAsJsonObject("diaries");
-		for (String region : all.keySet())
-		{
-			if (!"karamja".equalsIgnoreCase(region))
-			{
-				continue;
-			}
-			JsonObject tiers = all.getAsJsonObject(region);
-			return tiers.has(tier) && tiers.get(tier).isJsonArray()
-				? tiers.getAsJsonArray(tier).size() : fallback;
-		}
-		return fallback;
 	}
 
 	JsonObject snapshot()
@@ -121,12 +104,9 @@ public class AchievementSync
 			diaries.add(DIARY_REGIONS[r], region);
 		}
 		JsonObject karamja = new JsonObject();
-		karamja.addProperty("easy",
-			client.getVarbitValue(VarbitID.KARAMJA_EASY_COUNT) >= tierSize("easy", 10));
-		karamja.addProperty("medium",
-			client.getVarbitValue(VarbitID.KARAMJA_MED_COUNT) >= tierSize("medium", 19));
-		karamja.addProperty("hard",
-			client.getVarbitValue(VarbitID.KARAMJA_HARD_COUNT) >= tierSize("hard", 10));
+		karamja.addProperty("easy", client.getVarbitValue(VarbitID.KARAMJA_EASY_COUNT) >= tierSize("easy", 10));
+		karamja.addProperty("medium", client.getVarbitValue(VarbitID.KARAMJA_MED_COUNT) >= tierSize("medium", 19));
+		karamja.addProperty("hard", client.getVarbitValue(VarbitID.KARAMJA_HARD_COUNT) >= tierSize("hard", 10));
 		karamja.addProperty("elite", client.getVarbitValue(VarbitID.KARAMJA_DIARY_ELITE_COMPLETE) != 0);
 		diaries.add("karamja", karamja);
 
@@ -142,10 +122,6 @@ public class AchievementSync
 		for (int word = 0; word < CA_TASK_COMPLETED.length; word++)
 		{
 			int bits = client.getVarpValue(CA_TASK_COMPLETED[word]);
-			if (bits == 0)
-			{
-				continue;
-			}
 			for (int bit = 0; bit < 32; bit++)
 			{
 				if ((bits & (1 << bit)) != 0)
