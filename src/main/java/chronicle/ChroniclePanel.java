@@ -2206,12 +2206,6 @@ class ChroniclePanel extends PluginPanel
 
 	private boolean onTaskOnly;
 
-	private List<BagItem> onTaskBag()
-	{
-		long[] w = windowMs();
-		return plugin.onTaskLoot(w[0], w[1], null, wholeRecord());
-	}
-
 	private boolean hasKindOnTask(String kind)
 	{
 		for (String name : taskItemsEver().keySet())
@@ -2269,7 +2263,8 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, lens);
 		if (canAskOnTask && onTaskOnly)
 		{
-			List<BagItem> taskBag = onTaskBag();
+			long[] w = windowMs();
+			List<BagItem> taskBag = plugin.onTaskLoot(w[0], w[1], null, wholeRecord());
 			if (taskBag.isEmpty())
 			{
 				return noted(p, inside("No task closed"));
@@ -3313,11 +3308,6 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	private long[] itemInWindow(String name)
-	{
-		return rowOf(lootWindow().items, name);
-	}
-
 	private double[] sourceTimesInWindow(String name)
 	{
 		Map<String, double[]> times = lootWindow().times;
@@ -3712,18 +3702,13 @@ class ChroniclePanel extends PluginPanel
 	static Image copyImage(JPanel page, boolean tall)
 	{
 		int cols = tall ? 1 : copyColumns(page.getComponentCount());
-		return pageImage(reflowed(page, cols), copyImageWidth(cols));
+		return pageImage(reflowed(page, cols), COPY_WIDTH * cols + COPY_GAP * (cols - 1));
 	}
 
 	private static int copyColumns(int rows)
 	{
 		int held = Math.max(0, Math.min(rows, COPY_MOST));
 		return Math.max(1, Math.min(COPY_COLUMNS, (held + COPY_ROWS - 1) / COPY_ROWS));
-	}
-
-	private static int copyImageWidth(int cols)
-	{
-		return COPY_WIDTH * cols + COPY_GAP * (cols - 1);
 	}
 
 	private static JPanel reflowed(JPanel page, int cols)
@@ -3807,7 +3792,7 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 		}
-		final long[] inWindow = wholeRecord() ? null : itemInWindow(name);
+		final long[] inWindow = wholeRecord() ? null : rowOf(lootWindow().items, name);
 		long other = 0;
 		long otherValue = 0;
 		if (inWindow != null)
@@ -4821,7 +4806,7 @@ class ChroniclePanel extends PluginPanel
 				line.append(pet.source);
 				if (pet.kc > 0)
 				{
-					line.append(isSkill(pet.source)
+					line.append(skill(pet.source.toUpperCase(Locale.ROOT)) != null
 						? ", " + fmt(pet.kc) + " xp"
 						: ", kc " + fmt(pet.kc));
 				}
@@ -4863,11 +4848,6 @@ class ChroniclePanel extends PluginPanel
 	private static String pct(double p, String under, String over)
 	{
 		return p < 1 ? under + "1%" : p > 99 ? over + "99%" : Math.round(p) + "%";
-	}
-
-	private static boolean isSkill(String source)
-	{
-		return skill(source.toUpperCase(Locale.ROOT)) != null;
 	}
 
 	private Map<String, LocalStore.PetRow> petsByName()
@@ -6671,7 +6651,7 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, grid, 3);
 		JPanel combat = combatLevelTile(gain, opened);
 		JPanel total = totalLevelTile(stand, opened);
-		total.setToolTipText(periodTip != null ? tipLine(periodTip, "Opens the records")
+		total.setToolTipText(periodTip != null ? periodTip.replace("</body>", dimLine("Opens the records") + "</body>")
 			: tip("Total level", "Opens", "the records"));
 		link(total, this::openRecords);
 		if (wholeRecord())
@@ -7295,11 +7275,6 @@ class ChroniclePanel extends PluginPanel
 			"Time played", hoursMinutes(played[0]),
 			"Sessions", fmt(played[1]),
 			"Experience", "+" + gp(xp));
-	}
-
-	private static String tipLine(String card, String line)
-	{
-		return card.replace("</body>", dimLine(line) + "</body>");
 	}
 
 	private static String tip(String title, String... lines)

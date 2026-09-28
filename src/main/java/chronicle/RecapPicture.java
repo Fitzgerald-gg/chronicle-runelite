@@ -10,11 +10,15 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
+import net.runelite.api.Skill;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import static chronicle.ChroniclePanel.fmt;
@@ -86,7 +90,7 @@ final class RecapPicture
 	@RequiredArgsConstructor
 	static final class SkillLine
 	{
-		final net.runelite.api.Skill skill;
+		final Skill skill;
 		final String name;
 		final Integer levelStart;
 		final int levelEnd;
@@ -243,7 +247,7 @@ final class RecapPicture
 		FontMetrics m = fm(f);
 		List<String> out = new ArrayList<>();
 		String cur = null;
-		for (String part : s.split(java.util.regex.Pattern.quote(sep)))
+		for (String part : s.split(Pattern.quote(sep)))
 		{
 			String tried = cur == null ? part : cur + sep + part;
 			if (cur != null && m.stringWidth(tried) > w)
@@ -265,7 +269,7 @@ final class RecapPicture
 
 	private static Piece subhead(String s)
 	{
-		return new Piece(20, true, (g, x, y, w) -> text(g, s.toUpperCase(java.util.Locale.ROOT), small(), DIM, x, y + 15));
+		return new Piece(20, true, (g, x, y, w) -> text(g, s.toUpperCase(Locale.ROOT), small(), DIM, x, y + 15));
 	}
 
 	private static Piece bossLine(BossLine b, boolean whole, Function<Integer, BufferedImage> sprites)
@@ -310,7 +314,7 @@ final class RecapPicture
 		return fmt(from) + ARROW + fmt(to);
 	}
 
-	static BufferedImage paint(Facts f, Function<net.runelite.api.Skill, BufferedImage> skillIcons,
+	static BufferedImage paint(Facts f, Function<Skill, BufferedImage> skillIcons,
 		Function<Integer, BufferedImage> sprites)
 	{
 		int contentW = COLUMNS * COL + (COLUMNS - 1) * GAP;
@@ -496,7 +500,7 @@ final class RecapPicture
 	{
 		g.setColor(CARD);
 		g.fillRect(x, y, w, TILE_H);
-		text(g, t.label.toUpperCase(java.util.Locale.ROOT), small(), DIM, x + PAD, y + PAD + 11);
+		text(g, t.label.toUpperCase(Locale.ROOT), small(), DIM, x + PAD, y + PAD + 11);
 		text(g, cut(t.figure, big(), w - 2 * PAD), big(), Color.WHITE, x + PAD, y + PAD + 16 + 30);
 		if (t.under != null && !t.under.isEmpty())
 		{
@@ -517,7 +521,7 @@ final class RecapPicture
 	}
 
 	private static void drawSkillsTable(Graphics2D g, Facts f,
-		Function<net.runelite.api.Skill, BufferedImage> icons, int x, int y, int w, int h, int inner)
+		Function<Skill, BufferedImage> icons, int x, int y, int w, int h, int inner)
 	{
 		g.setColor(CARD);
 		g.fillRect(x, y, w, h);
@@ -704,7 +708,7 @@ final class RecapPicture
 	private static int[] even(int bottom)
 	{
 		int[] b = new int[COLUMNS];
-		java.util.Arrays.fill(b, bottom);
+		Arrays.fill(b, bottom);
 		return b;
 	}
 
@@ -726,7 +730,7 @@ final class RecapPicture
 		int cy = y + PAD;
 		if (from == 0)
 		{
-			text(g, b.title.toUpperCase(java.util.Locale.ROOT), small(), ACCENT, x + PAD, cy + 13);
+			text(g, b.title.toUpperCase(Locale.ROOT), small(), ACCENT, x + PAD, cy + 13);
 			cy += HEAD;
 		}
 		for (int i = from; i < to; i++)
