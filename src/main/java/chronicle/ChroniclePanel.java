@@ -22,25 +22,41 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import java.awt.AlphaComposite;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Image;
+import java.awt.MouseInfo;
 import java.awt.Point;
+import java.awt.PointerInfo;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.SystemFlavorMap;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
+import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.awt.image.BufferedImage;
+import java.awt.image.RenderedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -48,7 +64,9 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.AbstractMap;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -63,12 +81,23 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.IntConsumer;
 import java.util.function.LongFunction;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.function.ToLongFunction;
 import java.util.regex.Pattern;
+import javax.imageio.ImageIO;
+import javax.imageio.stream.MemoryCacheImageOutputStream;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
@@ -79,17 +108,29 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
+import javax.swing.MenuElement;
+import javax.swing.MenuSelectionManager;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.Scrollable;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.Timer;
+import javax.swing.ToolTipManager;
+import javax.swing.border.Border;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.plaf.basic.BasicScrollBarUI;
 import lombok.RequiredArgsConstructor;
+import net.runelite.api.Experience;
 import net.runelite.api.Skill;
+import net.runelite.api.SpriteID;
+import net.runelite.client.game.SpriteManager;
 import net.runelite.client.hiscore.HiscoreSkill;
+import net.runelite.client.hiscore.HiscoreSkillType;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -172,7 +213,7 @@ class ChroniclePanel extends PluginPanel
 	private boolean showRecords;
 	private boolean showCalendar;
 	private YearMonth calendarMonth = YearMonth.now();
-	private final java.util.ArrayDeque<String[]> detailStack = new java.util.ArrayDeque<>();
+	private final ArrayDeque<String[]> detailStack = new ArrayDeque<>();
 	private String statsFamily = StatRegistry.FAMILIES[0];
 	private int dropsShown = ROW_CAP;
 	private String clogTab = "Bosses";
@@ -280,8 +321,8 @@ class ChroniclePanel extends PluginPanel
 			}
 		});
 		homeTicker.start();
-		javax.swing.ToolTipManager.sharedInstance().setInitialDelay(220);
-		javax.swing.ToolTipManager.sharedInstance().setDismissDelay(20_000);
+		ToolTipManager.sharedInstance().setInitialDelay(220);
+		ToolTipManager.sharedInstance().setDismissDelay(20_000);
 
 		band.setAlignmentX(Component.CENTER_ALIGNMENT);
 		band.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
@@ -514,7 +555,7 @@ class ChroniclePanel extends PluginPanel
 			for (HiscoreSkill s
 				: HiscoreSkill.values())
 			{
-				if (s.getType() == net.runelite.client.hiscore.HiscoreSkillType.BOSS)
+				if (s.getType() == HiscoreSkillType.BOSS)
 				{
 					out.add(new Boss(s.getName(), s.getSpriteId()));
 				}
@@ -529,7 +570,7 @@ class ChroniclePanel extends PluginPanel
 			bossRoster = out;
 			return out;
 		}
-		try (java.io.InputStream in = ChroniclePanel.class.getResourceAsStream("osrs_bosses.json"))
+		try (InputStream in = ChroniclePanel.class.getResourceAsStream("osrs_bosses.json"))
 		{
 			if (in != null)
 			{
@@ -1007,9 +1048,9 @@ class ChroniclePanel extends PluginPanel
 			case "Collections":
 				return HiscoreSkill.COLLECTIONS_LOGGED.getSpriteId();
 			case "Quests":
-				return net.runelite.api.SpriteID.TAB_QUESTS;
+				return SpriteID.TAB_QUESTS;
 			case "Diaries":
-				return net.runelite.api.SpriteID.TAB_QUESTS_GREEN_ACHIEVEMENT_DIARIES;
+				return SpriteID.TAB_QUESTS_GREEN_ACHIEVEMENT_DIARIES;
 			default:
 				return 0;
 		}
@@ -1390,8 +1431,8 @@ class ChroniclePanel extends PluginPanel
 		return plugin.lifetimeCounters();
 	}
 
-	private final java.util.concurrent.atomic.AtomicBoolean queued =
-		new java.util.concurrent.atomic.AtomicBoolean();
+	private final AtomicBoolean queued =
+		new AtomicBoolean();
 
 	private boolean everShown;
 
@@ -1487,7 +1528,7 @@ class ChroniclePanel extends PluginPanel
 		Point now = null;
 		try
 		{
-			java.awt.PointerInfo at = java.awt.MouseInfo.getPointerInfo();
+			PointerInfo at = MouseInfo.getPointerInfo();
 			if (at != null)
 			{
 				now = at.getLocation();
@@ -1515,7 +1556,7 @@ class ChroniclePanel extends PluginPanel
 
 	private static boolean popupShowing()
 	{
-		javax.swing.MenuElement[] path = javax.swing.MenuSelectionManager
+		MenuElement[] path = MenuSelectionManager
 			.defaultManager().getSelectedPath();
 		return path != null && path.length > 0;
 	}
@@ -1524,7 +1565,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		getWrappedPanel().addHierarchyListener(e ->
 		{
-			if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) == 0
+			if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) == 0
 				|| !getWrappedPanel().isShowing())
 			{
 				return;
@@ -1717,7 +1758,7 @@ class ChroniclePanel extends PluginPanel
 		boolean red = stalled != null;
 		Color ink = red ? ColorScheme.PROGRESS_ERROR_COLOR : accent();
 		bandFixes = !red;
-		for (java.awt.event.MouseListener l : band.getMouseListeners())
+		for (MouseListener l : band.getMouseListeners())
 		{
 			band.removeMouseListener(l);
 		}
@@ -2709,7 +2750,7 @@ class ChroniclePanel extends PluginPanel
 		};
 	}
 
-	private void more(JPanel p, int size, int cap, boolean inset, java.util.function.IntConsumer show)
+	private void more(JPanel p, int size, int cap, boolean inset, IntConsumer show)
 	{
 		if (size > cap)
 		{
@@ -2882,7 +2923,7 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 
-	private JPanel copyHeaderLater(String title, java.util.function.Consumer<JLabel> copy)
+	private JPanel copyHeaderLater(String title, Consumer<JLabel> copy)
 	{
 		JPanel r = row(title, "copy");
 		styled(part(r, BorderLayout.CENTER), small(), accent());
@@ -3331,7 +3372,7 @@ class ChroniclePanel extends PluginPanel
 		return find(rows, r -> r[0], name, exact);
 	}
 
-	private static <T> T find(List<T> rows, java.util.function.Function<T, String> named, String name,
+	private static <T> T find(List<T> rows, Function<T, String> named, String name,
 		boolean exact)
 	{
 		T loose = null;
@@ -3539,7 +3580,7 @@ class ChroniclePanel extends PluginPanel
 		try
 		{
 			Transferable payload = pngPayload(image);
-			java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+			Toolkit.getDefaultToolkit().getSystemClipboard()
 				.setContents(payload != null ? payload : clip(DataFlavor.imageFlavor, () -> image), null);
 			return true;
 		}
@@ -3567,16 +3608,16 @@ class ChroniclePanel extends PluginPanel
 	private static Transferable pngPayload(Image image)
 	{
 		if (PNG_BYTES == null || OSType.getOSType() != OSType.MacOS
-			|| !(image instanceof java.awt.image.RenderedImage))
+			|| !(image instanceof RenderedImage))
 		{
 			return null;
 		}
 		try
 		{
-			java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-			javax.imageio.stream.MemoryCacheImageOutputStream ios =
-				new javax.imageio.stream.MemoryCacheImageOutputStream(out);
-			if (!javax.imageio.ImageIO.write((java.awt.image.RenderedImage) image, "png", ios))
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			MemoryCacheImageOutputStream ios =
+				new MemoryCacheImageOutputStream(out);
+			if (!ImageIO.write((RenderedImage) image, "png", ios))
 			{
 				return null;
 			}
@@ -3587,7 +3628,7 @@ class ChroniclePanel extends PluginPanel
 				return null;
 			}
 			mapPngNative();
-			return clip(PNG_BYTES, () -> new java.io.ByteArrayInputStream(png));
+			return clip(PNG_BYTES, () -> new ByteArrayInputStream(png));
 		}
 		catch (Throwable ignored)
 		{
@@ -3601,8 +3642,8 @@ class ChroniclePanel extends PluginPanel
 		{
 			return;
 		}
-		((java.awt.datatransfer.SystemFlavorMap)
-			java.awt.datatransfer.SystemFlavorMap.getDefaultFlavorMap())
+		((SystemFlavorMap)
+			SystemFlavorMap.getDefaultFlavorMap())
 			.addUnencodedNativeForFlavor(PNG_BYTES, "public.png");
 		pngNativeMapped = true;
 	}
@@ -3624,7 +3665,7 @@ class ChroniclePanel extends PluginPanel
 			int lost = h < full ? pastTheEdge(page, h) : 0;
 			BufferedImage img = new BufferedImage(
 				w, h, BufferedImage.TYPE_INT_RGB);
-			java.awt.Graphics2D g = img.createGraphics();
+			Graphics2D g = img.createGraphics();
 			g.setColor(DARK);
 			g.fillRect(0, 0, w, h);
 			page.printAll(g);
@@ -3654,7 +3695,7 @@ class ChroniclePanel extends PluginPanel
 		return n;
 	}
 
-	private static void sayWhatDidNotFit(java.awt.Graphics2D g, int w, int h, int lost)
+	private static void sayWhatDidNotFit(Graphics2D g, int w, int h, int lost)
 	{
 		int band = 20;
 		g.setColor(DARKER);
@@ -3670,9 +3711,9 @@ class ChroniclePanel extends PluginPanel
 	private static void layOut(Component c)
 	{
 		c.doLayout();
-		if (c instanceof java.awt.Container)
+		if (c instanceof Container)
 		{
-			for (Component k : ((java.awt.Container) c).getComponents())
+			for (Component k : ((Container) c).getComponents())
 			{
 				layOut(k);
 			}
@@ -4506,7 +4547,7 @@ class ChroniclePanel extends PluginPanel
 
 	private static void overlayBar(JScrollPane scroll)
 	{
-		javax.swing.JScrollBar bar = scroll.getVerticalScrollBar();
+		JScrollBar bar = scroll.getVerticalScrollBar();
 		OverlayScrollBarUI ui = new OverlayScrollBarUI();
 		bar.setUI(ui);
 		scroll.addMouseWheelListener(e -> ui.wake());
@@ -4515,7 +4556,7 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	private static final class OverlayScrollBarUI
-		extends javax.swing.plaf.basic.BasicScrollBarUI
+		extends BasicScrollBarUI
 	{
 		private static final int IDLE_MS = 700;
 		private static final int STEP_MS = 40;
@@ -4563,24 +4604,24 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		@Override
-		protected void paintTrack(java.awt.Graphics g, JComponent c,
+		protected void paintTrack(Graphics g, JComponent c,
 			Rectangle bounds)
 		{
 		}
 
 		@Override
-		protected void paintThumb(java.awt.Graphics g, JComponent c,
+		protected void paintThumb(Graphics g, JComponent c,
 			Rectangle t)
 		{
 			if (alpha <= 0.02f || t.isEmpty())
 			{
 				return;
 			}
-			java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
-			g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
-				java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-			g2.setComposite(java.awt.AlphaComposite.getInstance(
-				java.awt.AlphaComposite.SRC_OVER, Math.min(1f, alpha)));
+			Graphics2D g2 = (Graphics2D) g.create();
+			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+				RenderingHints.VALUE_ANTIALIAS_ON);
+			g2.setComposite(AlphaComposite.getInstance(
+				AlphaComposite.SRC_OVER, Math.min(1f, alpha)));
 			g2.setColor(THUMB);
 			int h = Math.max(OVERLAY_BAR_W * 2, t.height - 4);
 			g2.fillRoundRect(t.x, t.y + 2, OVERLAY_BAR_W, h,
@@ -5001,7 +5042,7 @@ class ChroniclePanel extends PluginPanel
 			return taxonomy;
 		}
 		Map<String, Map<String, List<String>>> out = new LinkedHashMap<>();
-		try (java.io.InputStream in = ChroniclePanel.class.getResourceAsStream("clog_taxonomy.json"))
+		try (InputStream in = ChroniclePanel.class.getResourceAsStream("clog_taxonomy.json"))
 		{
 			if (in != null)
 			{
@@ -5669,7 +5710,7 @@ class ChroniclePanel extends PluginPanel
 				{
 					d = get();
 				}
-				catch (InterruptedException | java.util.concurrent.ExecutionException e)
+				catch (InterruptedException | ExecutionException e)
 				{
 					return;
 				}
@@ -5805,7 +5846,7 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	private static String countersSince(
-		java.util.SortedMap<LocalDate, Baseline> spine,
+		SortedMap<LocalDate, Baseline> spine,
 		LocalDate startLine, LocalDate lootFrom, boolean lootFromSittings)
 	{
 		LocalDate counters = HistoryLog.firstCarrying(spine, null);
@@ -6379,7 +6420,7 @@ class ChroniclePanel extends PluginPanel
 		figures.add(styled(new JLabel(fmt(figure)), FontManager.getRunescapeFont(), dim()));
 		if (worth > 0)
 		{
-			figures.add(javax.swing.Box.createHorizontalStrut(6));
+			figures.add(Box.createHorizontalStrut(6));
 			figures.add(styled(new JLabel(gp(worth)), FontManager.getRunescapeFont(), accent()));
 		}
 		r.add(figures, BorderLayout.EAST);
@@ -6851,7 +6892,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			lv[i] = l;
 		}
-		return net.runelite.api.Experience.getCombatLevel(lv[0], lv[1], lv[2], lv[3],
+		return Experience.getCombatLevel(lv[0], lv[1], lv[2], lv[3],
 			lv[5], lv[4], lv[6]);
 	}
 
@@ -7398,7 +7439,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		wear(label, "sprite:" + spriteId, w, h, done ->
 		{
-			net.runelite.client.game.SpriteManager sm = plugin.sprites();
+			SpriteManager sm = plugin.sprites();
 			if (sm != null)
 			{
 				sm.getSpriteAsync(spriteId, 0, done);
@@ -7408,7 +7449,7 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	private void wear(JLabel label, String key, int w, int h,
-		java.util.function.Predicate<java.util.function.Consumer<BufferedImage>> fetch)
+		Predicate<Consumer<BufferedImage>> fetch)
 	{
 		BufferedImage have = art.get(key);
 		if (have != null)
@@ -8000,7 +8041,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		if (histFrom != null && histTo != null)
 		{
-			long span = java.time.temporal.ChronoUnit.DAYS.between(histFrom, histTo) + 1;
+			long span = ChronoUnit.DAYS.between(histFrom, histTo) + 1;
 			histFrom = by < 0 ? histFrom.minusDays(span) : histFrom.plusDays(span);
 			histTo = by < 0 ? histTo.minusDays(span) : histTo.plusDays(span);
 		}
@@ -9804,7 +9845,7 @@ class ChroniclePanel extends PluginPanel
 		return top == null ? null : top.getKey();
 	}
 
-	private static <T> T most(Iterable<T> all, java.util.function.ToLongFunction<T> size)
+	private static <T> T most(Iterable<T> all, ToLongFunction<T> size)
 	{
 		T top = null;
 		long most = 0;
@@ -10389,7 +10430,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		JFileChooser fc = new JFileChooser();
 		fc.setDialogTitle("Import a Chronicle journal");
-		fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+		fc.setFileFilter(new FileNameExtensionFilter(
 			"Chronicle journal (*.json)", "json"));
 		if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
 		{
@@ -11255,7 +11296,7 @@ class ChroniclePanel extends PluginPanel
 
 	private static JPanel column()
 	{
-		JPanel p = new JPanel(new java.awt.GridBagLayout())
+		JPanel p = new JPanel(new GridBagLayout())
 		{
 			private final GridBagConstraints gbc = new GridBagConstraints();
 
@@ -11276,7 +11317,7 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private static final class ScrollColumn extends JPanel implements javax.swing.Scrollable
+	private static final class ScrollColumn extends JPanel implements Scrollable
 	{
 		private ScrollColumn()
 		{
@@ -11454,7 +11495,7 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private static javax.swing.border.Border pad(int t, int l, int b, int r)
+	private static Border pad(int t, int l, int b, int r)
 	{
 		return BorderFactory.createEmptyBorder(t, l, b, r);
 	}
@@ -11578,7 +11619,7 @@ class ChroniclePanel extends PluginPanel
 		try
 		{
 			over = e.getComponent().getMousePosition() != null;
-			pointerKnown = java.awt.MouseInfo.getPointerInfo() != null;
+			pointerKnown = MouseInfo.getPointerInfo() != null;
 		}
 		catch (RuntimeException ignored)
 		{
