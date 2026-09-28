@@ -8,21 +8,34 @@
  */
 package chronicle;
 
+import chronicle.counters.ChronicleCounters;
 import chronicle.counters.ExperienceStatTracker.SkillGain;
+import chronicle.counters.StatStore;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.inject.Provides;
 import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
@@ -31,22 +44,29 @@ import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
+import net.runelite.api.gameval.VarClientID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
+import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.SkillIconManager;
+import net.runelite.client.game.SpriteManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.PluginInstantiationException;
 import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.plugins.loottracker.LootTrackerPlugin;
 import net.runelite.client.plugins.slayer.SlayerPlugin;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.util.ImageUtil;
 import net.runelite.http.api.loottracker.LootRecordType;
 
 @Slf4j
@@ -95,10 +115,10 @@ public class ChroniclePlugin extends Plugin
 	private ChronicleEventCapture eventCapture;
 
 	@Inject
-	private chronicle.counters.ChronicleCounters counters;
+	private ChronicleCounters counters;
 
 	@Inject
-	private chronicle.counters.StatStore statStore;
+	private StatStore statStore;
 
 	@Inject
 	private ClogCapture clogCapture;
@@ -110,13 +130,13 @@ public class ChroniclePlugin extends Plugin
 	private LocalStore localStore;
 
 	@Inject
-	private net.runelite.client.game.SkillIconManager skillIcons;
+	private SkillIconManager skillIcons;
 
 	@Inject
-	private net.runelite.client.game.SpriteManager sprites;
+	private SpriteManager sprites;
 
 	@Inject
-	private com.google.gson.Gson gson;
+	private Gson gson;
 
 	private HistoryLog historyLog;
 
@@ -138,8 +158,9 @@ public class ChroniclePlugin extends Plugin
 
 	private volatile boolean lootImportRunning;
 
-	private static final java.util.Set<String> PUSH_EXCLUDE = new java.util.HashSet<>(
-		java.util.Arrays.asList("untakenLootValue", "untakenLootCount", "resourcesGatheredValue"));
+	private static final Set<String> PUSH_EXCLUDE = Set.of("untakenLootValue", "untakenLootCount", "resourcesGatheredValue");
+	private static final String KEY_PLAYTIME = "gamePlaytime";
+	private static final String KEY_PLAYTIME_AT = "gamePlaytimeAt";
 
 	private GrindBook grindBook;
 
@@ -147,6 +168,14 @@ public class ChroniclePlugin extends Plugin
 	private volatile String localName;
 	private volatile String captureWarning;
 	private volatile String captureWarningWhy;
+	private volatile long playtimeMinutes;
+	private volatile long playtimeAt;
+	private boolean playtimeLogged;
+	private volatile long sessionStartMs;
+	private long lastRollAttempt;
+	private final long[] lastRevision = new long[4];
+	private volatile Map<String, long[]> liveSkills = Collections.emptyMap();
+	private volatile long skillRevision;
 
 	@Provides
 	ChronicleConfig provideConfig(ConfigManager configManager)
@@ -162,8 +191,7 @@ public class ChroniclePlugin extends Plugin
 		panel = new ChroniclePanel(this);
 		navButton = NavigationButton.builder()
 			.tooltip("Chronicle")
-			.icon(net.runelite.client.util.ImageUtil.loadImageResource(ChroniclePlugin.class,
-				"plugin_nav_icon.png"))
+			.icon(ImageUtil.loadImageResource(ChroniclePlugin.class, "plugin_nav_icon.png"))
 			.priority(9)
 			.panel(panel)
 			.build();
@@ -223,10 +251,9 @@ public class ChroniclePlugin extends Plugin
 		}
 		panel = null;
 		pendingLoginSetup = false;
-		if (localName != null && localStore.isReadyFor(localName))
+		if (ready())
 		{
-			localStore.setCharacter(localName, null, 0, clogCapture.snapshot(), null);
-			localStore.setTrackers(sessionView(), localName);
+			bankSitting();
 			localStore.rebase(localName);
 			if (SwingUtilities.isEventDispatchThread())
 			{
@@ -271,7 +298,7 @@ public class ChroniclePlugin extends Plugin
 		}
 		captureWarning = now;
 		captureWarningWhy = why;
-		if (!java.util.Objects.equals(was, now))
+		if (!Objects.equals(was, now))
 		{
 			log.debug("capture warning: {}", now);
 			refreshPanel();
@@ -280,8 +307,7 @@ public class ChroniclePlugin extends Plugin
 
 	void turnOnMissingCapture()
 	{
-		for (Class<? extends Plugin> type : java.util.Arrays.asList(
-			SlayerPlugin.class, LootTrackerPlugin.class))
+		for (Class<? extends Plugin> type : List.of(SlayerPlugin.class, LootTrackerPlugin.class))
 		{
 			for (Plugin p : pluginManager.getPlugins())
 			{
@@ -294,7 +320,7 @@ public class ChroniclePlugin extends Plugin
 					pluginManager.setPluginEnabled(p, true);
 					pluginManager.startPlugin(p);
 				}
-				catch (net.runelite.client.plugins.PluginInstantiationException e)
+				catch (PluginInstantiationException e)
 				{
 					log.warn("could not start {}", type.getSimpleName(), e);
 				}
@@ -347,8 +373,7 @@ public class ChroniclePlugin extends Plugin
 			watchPlaytime();
 			boolean turned = localName != null && historyLog.dayTurned(localName)
 				&& System.currentTimeMillis() - lastRollAttempt >= 60_000L;
-			if (localName != null && localStore.isReadyFor(localName)
-				&& (localStore.hasFreshAdjust() || turned))
+			if (ready() && (localStore.hasFreshAdjust() || turned))
 			{
 				if (turned)
 				{
@@ -359,8 +384,7 @@ public class ChroniclePlugin extends Plugin
 			}
 		}
 		int moved = 0;
-		long[] now = {localStore.revision(), statStore.revision(), skillRevision,
-			clogCapture.revision()};
+		long[] now = {localStore.revision(), statStore.revision(), skillRevision, clogCapture.revision()};
 		for (int i = 0; i < now.length; i++)
 		{
 			if (now[i] != lastRevision[i])
@@ -369,23 +393,16 @@ public class ChroniclePlugin extends Plugin
 				moved |= 1 << i;
 			}
 		}
-		if (moved != 0)
+		ChroniclePanel p = panel;
+		if (moved != 0 && p != null)
 		{
-			ChroniclePanel p = panel;
-			if (p != null)
-			{
-				p.update(moved);
-			}
+			p.update(moved);
 		}
-		if (!pendingLoginSetup)
+		if (!pendingLoginSetup || client.getGameState() != GameState.LOGGED_IN)
 		{
 			return;
 		}
-		if (client.getGameState() != GameState.LOGGED_IN)
-		{
-			return;
-		}
-		String name = localPlayerName();
+		String name = ChronicleEventCapture.playerName(client);
 		if (name == null)
 		{
 			return;
@@ -418,10 +435,10 @@ public class ChroniclePlugin extends Plugin
 			configManager.setRSProfileConfiguration(GROUP, KEY_JOURNAL_NAME, who);
 			localStore.load(localDir(), who);
 			reloadHistory(who);
-			ChroniclePanel p = panel;
-			if (p != null)
+			ChroniclePanel open = panel;
+			if (open != null)
 			{
-				SwingUtilities.invokeLater(p::resetAccountCaches);
+				SwingUtilities.invokeLater(open::resetAccountCaches);
 			}
 			clientThread.invoke(this::refreshLocal);
 		});
@@ -527,16 +544,8 @@ public class ChroniclePlugin extends Plugin
 
 	private void pushCurrent()
 	{
-		if (!cloudActive())
-		{
-			return;
-		}
-		if (client.getGameState() != GameState.LOGGED_IN)
-		{
-			return;
-		}
-		String name = localPlayerName();
-		if (name == null)
+		String name = ChronicleEventCapture.playerName(client);
+		if (!cloudActive() || client.getGameState() != GameState.LOGGED_IN || name == null)
 		{
 			return;
 		}
@@ -601,7 +610,7 @@ public class ChroniclePlugin extends Plugin
 	private Map<String, Integer> journalAbsolutes(String rsn)
 	{
 		Map<String, Integer> out = new HashMap<>();
-		if (rsn == null || !localStore.isReadyFor(rsn))
+		if (!localStore.isReadyFor(rsn))
 		{
 			return out;
 		}
@@ -616,12 +625,23 @@ public class ChroniclePlugin extends Plugin
 		return out;
 	}
 
+	private boolean ready()
+	{
+		String rsn = localName;
+		return rsn != null && localStore.isReadyFor(rsn);
+	}
+
+	private void bankSitting()
+	{
+		localStore.setCharacter(localName, null, 0, clogCapture.snapshot(), null);
+		localStore.setTrackers(sessionView(), localName);
+	}
+
 	private void onLogout()
 	{
-		if (localName != null && localStore.isReadyFor(localName))
+		if (ready())
 		{
-			localStore.setCharacter(localName, null, 0, clogCapture.snapshot(), null);
-			localStore.setTrackers(sessionView(), localName);
+			bankSitting();
 			appendHistoryBaseline();
 			recordSessionLine();
 			Map<String, Integer> fresh = journalAbsolutes(localName);
@@ -654,14 +674,9 @@ public class ChroniclePlugin extends Plugin
 			null, this::refreshPanel);
 	}
 
-	Map<String, Integer> harvest()
-	{
-		return statStore.snapshotAll();
-	}
-
 	private Map<String, long[]> readSkills()
 	{
-		Map<String, long[]> out = new java.util.LinkedHashMap<>();
+		Map<String, long[]> out = new LinkedHashMap<>();
 		for (Skill s : Skill.values())
 		{
 			if (s != Skill.OVERALL)
@@ -710,14 +725,6 @@ public class ChroniclePlugin extends Plugin
 			: localStore.trackersSnapshot();
 	}
 
-	private static final String KEY_PLAYTIME = "gamePlaytime";
-	private static final String KEY_PLAYTIME_AT = "gamePlaytimeAt";
-
-	private volatile long playtimeMinutes;
-	private volatile long playtimeAt;
-	private boolean playtimeLogged;
-	private volatile long sessionStartMs;
-
 	long gamePlaytimeMinutes()
 	{
 		return carriedForward(playtimeMinutes, playtimeAt, System.currentTimeMillis(),
@@ -739,8 +746,7 @@ public class ChroniclePlugin extends Plugin
 
 	private void watchPlaytime()
 	{
-		long raw = client.getVarcIntValue(
-			net.runelite.api.gameval.VarClientID.ACCOUNT_SUMMARY_PLAYTIME);
+		long raw = client.getVarcIntValue(VarClientID.ACCOUNT_SUMMARY_PLAYTIME);
 		if (raw <= 0 || raw == playtimeMinutes)
 		{
 			return;
@@ -748,8 +754,7 @@ public class ChroniclePlugin extends Plugin
 		playtimeMinutes = raw;
 		playtimeAt = System.currentTimeMillis();
 		configManager.setRSProfileConfiguration(GROUP, KEY_PLAYTIME, String.valueOf(raw));
-		configManager.setRSProfileConfiguration(GROUP, KEY_PLAYTIME_AT,
-			String.valueOf(playtimeAt));
+		configManager.setRSProfileConfiguration(GROUP, KEY_PLAYTIME_AT, String.valueOf(playtimeAt));
 		if (!playtimeLogged)
 		{
 			playtimeLogged = true;
@@ -765,14 +770,9 @@ public class ChroniclePlugin extends Plugin
 
 	private long readLong(String key)
 	{
-		String was = configManager.getRSProfileConfiguration(GROUP, key);
-		if (was == null || was.isEmpty())
-		{
-			return 0;
-		}
 		try
 		{
-			return Long.parseLong(was);
+			return Long.parseLong(configManager.getRSProfileConfiguration(GROUP, key));
 		}
 		catch (NumberFormatException ignored)
 		{
@@ -797,8 +797,8 @@ public class ChroniclePlugin extends Plugin
 
 	List<SkillGain> sessionSkillXp()
 	{
-		chronicle.counters.ChronicleCounters c = counters;
-		return c == null ? java.util.Collections.emptyList() : c.sessionSkillXp();
+		ChronicleCounters c = counters;
+		return c == null ? Collections.emptyList() : c.sessionSkillXp();
 	}
 
 	List<LocalStore.SourceRow> dropSources()
@@ -831,11 +831,9 @@ public class ChroniclePlugin extends Plugin
 		return localStore.sourceItems(source);
 	}
 
-	void fetchSlayerJourney(
-		java.util.function.Consumer<LocalStore.SlayerJourney> onDone)
+	void fetchSlayerJourney(Consumer<LocalStore.SlayerJourney> onDone)
 	{
-		final String rsn = localName;
-		if (rsn == null || !localStore.isReadyFor(rsn))
+		if (!ready())
 		{
 			onDone.accept(null);
 			return;
@@ -845,12 +843,7 @@ public class ChroniclePlugin extends Plugin
 
 	LocalStore.SlayerJourney slayerJourney()
 	{
-		final String rsn = localName;
-		if (rsn == null || !localStore.isReadyFor(rsn))
-		{
-			return null;
-		}
-		return localStore.slayerJourney();
+		return ready() ? localStore.slayerJourney() : null;
 	}
 
 	List<JsonObject> feedNewest(int n)
@@ -882,7 +875,7 @@ public class ChroniclePlugin extends Plugin
 		return localStore.itemsBySource(from, to);
 	}
 
-	java.util.Set<String> unfiledSources(LocalDate from, LocalDate to)
+	Set<String> unfiledSources(LocalDate from, LocalDate to)
 	{
 		return localStore.unfiledSources(from, to);
 	}
@@ -945,8 +938,7 @@ public class ChroniclePlugin extends Plugin
 	private void reloadHistory(String rsn)
 	{
 		historyLog.compact(localDir(), rsn);
-		TreeMap<LocalDate, HistoryLog.Baseline> read =
-			historyLog.read(localDir(), rsn);
+		TreeMap<LocalDate, HistoryLog.Baseline> read = historyLog.read(localDir(), rsn);
 		if (rsn.equals(localName))
 		{
 			historyCache = read;
@@ -989,12 +981,12 @@ public class ChroniclePlugin extends Plugin
 		return localStore.combatLevel();
 	}
 
-	net.runelite.client.game.SkillIconManager skillIcons()
+	SkillIconManager skillIcons()
 	{
 		return skillIcons;
 	}
 
-	net.runelite.client.game.SpriteManager sprites()
+	SpriteManager sprites()
 	{
 		return sprites;
 	}
@@ -1027,8 +1019,7 @@ public class ChroniclePlugin extends Plugin
 		return Math.max(clogCapture.availableCount(), localStore.clogFraction()[1]);
 	}
 
-	List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task,
-		boolean includeOpen)
+	List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task, boolean includeOpen)
 	{
 		return localStore.onTaskLoot(fromMs, toMs, task, includeOpen);
 	}
@@ -1137,10 +1128,9 @@ public class ChroniclePlugin extends Plugin
 		return localStore.consumableValues();
 	}
 
-	void fetchGrinds(java.util.function.Consumer<List<GrindBook.GrindRow>> onDone)
+	void fetchGrinds(Consumer<List<GrindBook.GrindRow>> onDone)
 	{
-		final String rsn = localName;
-		if (rsn == null || !localStore.isReadyFor(rsn))
+		if (!ready())
 		{
 			onDone.accept(null);
 			return;
@@ -1150,12 +1140,11 @@ public class ChroniclePlugin extends Plugin
 		executor.submit(() -> onDone.accept(grindBook.grinds(clog, sources)));
 	}
 
-	Map<String, GrindBook.PetChase> petChases(java.util.Collection<String> pets)
+	Map<String, GrindBook.PetChase> petChases(Collection<String> pets)
 	{
-		final String rsn = localName;
-		if (rsn == null || !localStore.isReadyFor(rsn))
+		if (!ready())
 		{
-			return java.util.Collections.emptyMap();
+			return Collections.emptyMap();
 		}
 		return grindBook.petChases(localStore.clogSnapshot(), localStore.dropSources(),
 			localStore.trackersSnapshot(), localStore.skillSheet(),
@@ -1219,8 +1208,7 @@ public class ChroniclePlugin extends Plugin
 			return null;
 		}
 		long mins = sessionElapsedMinutes();
-		if (sessionStartMs <= 0 || client.getGameState() != GameState.LOGGED_IN
-			|| localName == null || !localStore.isReadyFor(localName))
+		if (sessionStartMs <= 0 || client.getGameState() != GameState.LOGGED_IN || !ready())
 		{
 			return null;
 		}
@@ -1263,12 +1251,12 @@ public class ChroniclePlugin extends Plugin
 		return out;
 	}
 
-	com.google.gson.Gson gson()
+	Gson gson()
 	{
 		return gson;
 	}
 
-	net.runelite.client.game.ItemManager items()
+	ItemManager items()
 	{
 		return localStore.items();
 	}
@@ -1280,7 +1268,7 @@ public class ChroniclePlugin extends Plugin
 
 	Map<String, Integer> sessionView()
 	{
-		Map<String, Integer> abs = harvest();
+		Map<String, Integer> abs = statStore.snapshotAll();
 		Map<String, Integer> out = new HashMap<>(abs.size());
 		for (Map.Entry<String, Integer> en : abs.entrySet())
 		{
@@ -1294,30 +1282,19 @@ public class ChroniclePlugin extends Plugin
 
 	private static File localDir()
 	{
-		return new File(net.runelite.client.RuneLite.RUNELITE_DIR, "chronicle");
-	}
-
-	private void gatherCharacter()
-	{
-		if (client.getGameState() != GameState.LOGGED_IN)
-		{
-			return;
-		}
-		String name = localPlayerName();
-		if (name == null)
-		{
-			return;
-		}
-		Player lp = client.getLocalPlayer();
-		localStore.setCharacter(name, harvestSkills(), lp != null ? lp.getCombatLevel() : 0,
-			clogCapture.snapshot(), achievementSync.snapshot());
-		localStore.setTrackers(sessionView(), name);
+		return new File(RuneLite.RUNELITE_DIR, "chronicle");
 	}
 
 	private void refreshLocal()
 	{
-		gatherCharacter();
-		if (localName != null && localStore.isReadyFor(localName))
+		String name = ChronicleEventCapture.playerName(client);
+		if (client.getGameState() == GameState.LOGGED_IN && name != null)
+		{
+			Player lp = client.getLocalPlayer();
+			localStore.setCharacter(name, harvestSkills(), lp.getCombatLevel(),
+				clogCapture.snapshot(), achievementSync.snapshot());
+		}
+		if (ready())
 		{
 			localStore.setTrackers(sessionView(), localName);
 			checkDependencies();
@@ -1325,11 +1302,10 @@ public class ChroniclePlugin extends Plugin
 			{
 				appendHistoryBaseline();
 			}
-		}
-		if (localName != null && localStore.isReadyFor(localName)
-			&& !"true".equals(configManager.getRSProfileConfiguration(GROUP, "lootTrackerImported")))
-		{
-			importLootTracker();
+			if (!"true".equals(configManager.getRSProfileConfiguration(GROUP, "lootTrackerImported")))
+			{
+				importLootTracker();
+			}
 		}
 		executor.submit(() -> localStore.flush(localDir()));
 	}
@@ -1372,23 +1348,8 @@ public class ChroniclePlugin extends Plugin
 
 	private static boolean wantedLootType(String key)
 	{
-		if (key == null)
-		{
-			return false;
-		}
-		for (LootRecordType t
-			: LootRecordType.values())
-		{
-			if (t == LootRecordType.PLAYER)
-			{
-				continue;
-			}
-			if (key.startsWith("drops_" + t.name() + "_"))
-			{
-				return true;
-			}
-		}
-		return false;
+		return key != null && Arrays.stream(LootRecordType.values())
+			.anyMatch(t -> t != LootRecordType.PLAYER && key.startsWith("drops_" + t.name() + "_"));
 	}
 
 	private List<RawSource> readLootTrackerArchive(String profileKey)
@@ -1397,25 +1358,15 @@ public class ChroniclePlugin extends Plugin
 		List<String> keys;
 		try
 		{
-			keys = configManager.getRSProfileConfigurationKeys(
-				"loottracker", profileKey, "drops_");
+			keys = configManager.getRSProfileConfigurationKeys("loottracker", profileKey, "drops_");
 		}
 		catch (RuntimeException e)
 		{
-			log.debug("loot tracker key scan failed", e);
 			return out;
 		}
-		if (keys == null)
+		for (String key : keys == null ? Collections.<String>emptyList() : keys)
 		{
-			return out;
-		}
-		for (String key : keys)
-		{
-			if (!wantedLootType(key))
-			{
-				continue;
-			}
-			String raw = configManager.getConfiguration("loottracker", profileKey, key);
+			String raw = wantedLootType(key) ? configManager.getConfiguration("loottracker", profileKey, key) : null;
 			if (raw == null || raw.isEmpty())
 			{
 				continue;
@@ -1423,11 +1374,6 @@ public class ChroniclePlugin extends Plugin
 			try
 			{
 				JsonObject o = gson.fromJson(raw, JsonObject.class);
-				if (o.has("type") && "PLAYER".equalsIgnoreCase(
-					String.valueOf(o.get("type").getAsString())))
-				{
-					continue;
-				}
 				String source = o.has("name") ? o.get("name").getAsString() : null;
 				if (source == null || source.isEmpty())
 				{
@@ -1439,16 +1385,15 @@ public class ChroniclePlugin extends Plugin
 					o.has("last") ? o.get("last").getAsLong() : 0);
 				if (o.has("drops") && o.get("drops").isJsonArray())
 				{
-					com.google.gson.JsonArray arr = o.getAsJsonArray("drops");
+					JsonArray arr = o.getAsJsonArray("drops");
 					for (int i = 0; i + 1 < arr.size(); i += 2)
 					{
 						long id = arr.get(i).getAsLong();
 						long qty = arr.get(i + 1).getAsLong();
-						if (id <= 0 || qty <= 0)
+						if (id > 0 && qty > 0)
 						{
-							continue;
+							src.items.add(new long[]{id, qty});
 						}
-						src.items.add(new long[]{id, qty});
 					}
 				}
 				out.add(src);
@@ -1473,8 +1418,7 @@ public class ChroniclePlugin extends Plugin
 			long events = 0;
 			for (RawSource src : parsed)
 			{
-				List<LocalStore.BagItem> items =
-					new ArrayList<>(src.items.size());
+				List<LocalStore.BagItem> items = new ArrayList<>(src.items.size());
 				for (long[] drop : src.items)
 				{
 					int canon = localStore.items().canonicalize((int) drop[0]);
@@ -1488,11 +1432,9 @@ public class ChroniclePlugin extends Plugin
 						name = "Item " + canon;
 					}
 					long each = localStore.items().getItemPrice(canon);
-					items.add(new LocalStore.BagItem(canon, name, drop[1],
-						Math.max(0, each) * drop[1]));
+					items.add(new LocalStore.BagItem(canon, name, drop[1], Math.max(0, each) * drop[1]));
 				}
-				seeds.add(new LocalStore.LootSeed(src.source, src.kills, src.firstMs,
-					src.lastMs, items));
+				seeds.add(new LocalStore.LootSeed(src.source, src.kills, src.firstMs, src.lastMs, items));
 				events += src.kills;
 			}
 			if (!seeds.isEmpty())
@@ -1511,8 +1453,6 @@ public class ChroniclePlugin extends Plugin
 		}
 	}
 
-	private long lastRollAttempt;
-
 	private void appendHistoryBaseline()
 	{
 		final String rsn = localName;
@@ -1527,13 +1467,6 @@ public class ChroniclePlugin extends Plugin
 		}
 		final Map<String, Long> counters = localStore.spineCounters();
 		final Map<String, Long> kcs = killCounts();
-		long sittingXp = 0;
-		for (SkillGain g : sessionSkillXp())
-		{
-			sittingXp += g.xp;
-		}
-		log.debug("day rolled over: sitting began {} min ago, {} skills / {} xp counted so far",
-			sessionElapsedMinutes(), sessionSkillXp().size(), sittingXp);
 		final HistoryLog.Adjust adj = localStore.takePendingAdjust();
 		executor.submit(() ->
 		{
@@ -1565,7 +1498,7 @@ public class ChroniclePlugin extends Plugin
 	void actionImport(File file)
 	{
 		final String rsn = localName;
-		if (rsn == null || !localStore.isReadyFor(rsn))
+		if (!ready())
 		{
 			chat("Chronicle: log in first. An import lands in the logged-in account's journal.");
 			return;
@@ -1579,8 +1512,7 @@ public class ChroniclePlugin extends Plugin
 			JsonObject in;
 			try
 			{
-				String txt = new String(java.nio.file.Files.readAllBytes(file.toPath()),
-					java.nio.charset.StandardCharsets.UTF_8);
+				String txt = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
 				JsonElement el = gson.fromJson(txt, JsonElement.class);
 				in = el != null && el.isJsonObject() ? el.getAsJsonObject() : null;
 			}
@@ -1611,21 +1543,13 @@ public class ChroniclePlugin extends Plugin
 		});
 	}
 
-	private final long[] lastRevision = new long[4];
-
-	private volatile Map<String, long[]> liveSkills =
-		java.util.Collections.emptyMap();
-
-	private volatile long skillRevision;
-
 	private void takeLiveSkills()
 	{
 		Map<String, long[]> out = readSkills();
 		Map<String, long[]> was = liveSkills;
 		long[] wasOverall = was.get("overall");
 		liveSkills = out;
-		if (wasOverall == null || wasOverall[1] != client.getOverallExperience()
-			|| was.size() != out.size())
+		if (wasOverall == null || wasOverall[1] != out.get("overall")[1] || was.size() != out.size())
 		{
 			skillRevision++;
 		}
@@ -1654,20 +1578,8 @@ public class ChroniclePlugin extends Plugin
 		});
 	}
 
-	private String localPlayerName()
-	{
-		Player lp = client.getLocalPlayer();
-		String name = lp != null ? lp.getName() : null;
-		return name == null || name.isEmpty() ? null : name;
-	}
-
 	private static String trimToNull(String s)
 	{
-		if (s == null)
-		{
-			return null;
-		}
-		s = s.trim();
-		return s.isEmpty() ? null : s;
+		return s == null || s.trim().isEmpty() ? null : s.trim();
 	}
 }

@@ -28,7 +28,6 @@ import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -67,7 +66,6 @@ import net.runelite.client.plugins.slayer.SlayerPluginService;
 import net.runelite.client.util.Text;
 import net.runelite.http.api.loottracker.LootRecordType;
 
-@Slf4j
 @Singleton
 public class ChronicleEventCapture
 {
