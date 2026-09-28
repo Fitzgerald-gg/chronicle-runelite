@@ -610,11 +610,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return kcByKind;
 		}
-		Map<String, Long> out = new LinkedHashMap<>();
-		for (Entry<String, Long> e : plugin.killCounts().entrySet())
-		{
-			out.merge(LocalStore.chatKind(e.getKey()), e.getValue(), Math::max);
-		}
+		Map<String, Long> out = new LinkedHashMap<>(chatKcByKind());
 		for (SourceRow r : sources())
 		{
 			out.merge(kindOf(r.name), (long) r.kc, Math::max);
@@ -2579,6 +2575,12 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
+	private void openSlayer(String lens)
+	{
+		slayerLens = lens;
+		applyTab(View.SLAYER);
+	}
+
 	private JPanel buildSlayer()
 	{
 		JPanel p = column();
@@ -2851,15 +2853,12 @@ class ChroniclePanel extends PluginPanel
 	private JPanel onTaskHead(long qty, long value, long[] tally)
 	{
 		JPanel head = tallyCard("On-task loot", "Items", fmt(qty), accent(), value);
-		if (tally != null && tally.length > 2)
-		{
-			head.add(row("Tasks", fmt(tally[2])));
-		}
-		if (tally != null && tally.length > 0 && tally[0] > 0)
+		head.add(row("Tasks", fmt(tally[2])));
+		if (tally[0] > 0)
 		{
 			head.add(row("Kills logged", fmt(tally[0])));
 		}
-		if (tally != null && tally.length > 1 && tally[1] > 0)
+		if (tally[1] > 0)
 		{
 			head.add(row("Superiors", fmt(tally[1])));
 		}
@@ -6944,13 +6943,19 @@ class ChroniclePanel extends PluginPanel
 
 	private String slayerTip()
 	{
-		long[] ms = windowMs();
-		long[] tally = plugin.onTaskTally(ms[0], ms[1], null, wholeRecord());
-		long paid = tallyOf(plugin.onTaskLoot(ms[0], ms[1], null, wholeRecord()))[1];
+		long[] tally = taskTally();
 		return tip("Slayer",
 			"Tasks tracked", fmt(tally[2]),
 			"Kills on task", fmt(tally[0]),
-			"On-task loot", gps(paid));
+			"On-task loot", gps(tally[3]));
+	}
+
+	private long[] taskTally()
+	{
+		long[] ms = windowMs();
+		long[] tally = Arrays.copyOf(plugin.onTaskTally(ms[0], ms[1], null, wholeRecord()), 4);
+		tally[3] = tallyOf(plugin.onTaskLoot(ms[0], ms[1], null, wholeRecord()))[1];
+		return tally;
 	}
 
 	private static Integer openingCombat(HistoryLog.Levels opened)
@@ -7459,11 +7464,7 @@ class ChroniclePanel extends PluginPanel
 		final String craft = prettify(low(sk.name()));
 		boolean slayer = Skill.SLAYER.equals(sk);
 		cell.setToolTipText(slayer ? slayerTip() : skillTip(craft));
-		link(cell, slayer ? () ->
-		{
-			slayerLens = "Tasks";
-			applyTab(View.SLAYER);
-		} : () -> openSkill(craft));
+		link(cell, slayer ? () -> openSlayer("Tasks") : () -> openSkill(craft));
 
 		JLabel icon = new JLabel();
 		BufferedImage img = skillIcon(sk);
@@ -8895,23 +8896,27 @@ class ChroniclePanel extends PluginPanel
 
 	static List<String> wrapClauses(String text, int room)
 	{
-		FontMetrics fm = rowMetrics();
+		return wrap(text, " · ", rowMetrics(), room);
+	}
+
+	private static List<String> wrap(String text, String sep, FontMetrics fm, int room)
+	{
 		List<String> out = new ArrayList<>();
 		String line = null;
-		for (String clause : text.split(" \u00b7 "))
+		for (String part : text.split(Pattern.quote(sep)))
 		{
-			String tried = line == null ? clause : line + " \u00b7 " + clause;
+			String tried = line == null ? part : line + sep + part;
 			if (line != null && fm.stringWidth(tried) > room)
 			{
 				out.add(line);
-				line = clause;
+				line = part;
 			}
 			else
 			{
 				line = tried;
 			}
 		}
-		if (line != null)
+		if (line != null && !line.isEmpty())
 		{
 			out.add(line);
 		}
@@ -9364,11 +9369,10 @@ class ChroniclePanel extends PluginPanel
 
 	private void recapSlayerAndClues(RecapPicture.Facts f)
 	{
-		long[] ms = windowMs();
-		long[] tally = plugin.onTaskTally(ms[0], ms[1], null, f.whole);
+		long[] tally = taskTally();
+		long paid = tally[3];
 		if (tally[2] > 0)
 		{
-			long paid = tallyOf(plugin.onTaskLoot(ms[0], ms[1], null, f.whole))[1];
 			f.slayer.add(new RecapPicture.Named("Tasks", fmt(tally[2]), null));
 			if (tally[1] > 0)
 			{
@@ -9809,16 +9813,10 @@ class ChroniclePanel extends PluginPanel
 			said.fixed(" · " + killed[1]);
 			plateRow(plate, "Killed most", said, () -> openSourceLoose(who));
 		}
-		long[] ms = windowMs();
-		long[] tally = plugin.onTaskTally(ms[0], ms[1], null, wholeRecord());
+		long[] tally = taskTally();
 		if (tally[2] > 0)
 		{
-			long paid = tallyOf(plugin.onTaskLoot(ms[0], ms[1], null, wholeRecord()))[1];
-			plateRow(plate, "Tasks", fmt(tally[2]) + tail(paid), () ->
-			{
-				slayerLens = "Tasks";
-				applyTab(View.SLAYER);
-			});
+			plateRow(plate, "Tasks", fmt(tally[2]) + tail(tally[3]), () -> openSlayer("Tasks"));
 		}
 
 		Map<String, long[]> lines = new LinkedHashMap<>();
@@ -10935,11 +10933,7 @@ class ChroniclePanel extends PluginPanel
 			String key = low(sk.name());
 			String name = prettify(key);
 			long[] cur = sheet.get(key);
-			Runnable to = sk == Skill.SLAYER ? () ->
-			{
-				slayerLens = "Tasks";
-				applyTab(View.SLAYER);
-			} : () -> openSkill(name);
+			Runnable to = sk == Skill.SLAYER ? () -> openSlayer("Tasks") : () -> openSkill(name);
 			goTo(go, ql, name, cur != null && cur[0] > 0 ? "level " + cur[0] : "", to, 2,
 				SKILL_ALIASES.getOrDefault(key, new String[0]));
 		}
@@ -10970,11 +10964,7 @@ class ChroniclePanel extends PluginPanel
 			rebuild();
 		}, 1, "summary");
 		goTo(go, ql, "All trackers", "", this::openAllTrackers, 1, "trackers", "counters");
-		goTo(go, ql, "Kill log", "", () ->
-		{
-			slayerLens = "Monsters";
-			applyTab(View.SLAYER);
-		}, 1, "killlog", "kill count", "kc");
+		goTo(go, ql, "Kill log", "", () -> openSlayer("Monsters"), 1, "killlog", "kill count", "kc");
 		goTo(go, ql, "Left behind", "", () ->
 		{
 			applyTab(View.DROPS);
@@ -11043,11 +11033,7 @@ class ChroniclePanel extends PluginPanel
 				continue;
 			}
 			long n = safeLong(e.getValue());
-			fights.add(new Hit(e.getKey(), fmt(n) + " kc", null, "In the Kill Log", () ->
-			{
-				slayerLens = "Monsters";
-				applyTab(View.SLAYER);
-			}, sc, n));
+			fights.add(new Hit(e.getKey(), fmt(n) + " kc", null, "In the Kill Log", () -> openSlayer("Monsters"), sc, n));
 		}
 		total += searchGroup(p, "Bosses and monsters", fights);
 
@@ -11636,30 +11622,9 @@ class ChroniclePanel extends PluginPanel
 		p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
 		p.setOpaque(false);
 		p.setAlignmentX(Component.LEFT_ALIGNMENT);
-		Font f = small();
-		FontMetrics fm = p.getFontMetrics(f);
-		List<String> lines = new ArrayList<>();
-		StringBuilder line = new StringBuilder();
-		for (String word : text.split(" "))
+		for (String l : wrap(text, " ", p.getFontMetrics(small()), NOTE_WIDTH))
 		{
-			String candidate = line.length() == 0 ? word : line + " " + word;
-			if (fm.stringWidth(candidate) > NOTE_WIDTH && line.length() > 0)
-			{
-				lines.add(line.toString());
-				line = new StringBuilder(word);
-			}
-			else
-			{
-				line = new StringBuilder(candidate);
-			}
-		}
-		if (line.length() > 0)
-		{
-			lines.add(line.toString());
-		}
-		for (String l : lines)
-		{
-			JLabel lab = styled(new JLabel(l), f, dim());
+			JLabel lab = styled(new JLabel(l), small(), dim());
 			lab.setAlignmentX(Component.LEFT_ALIGNMENT);
 			p.add(lab);
 		}
@@ -11709,8 +11674,7 @@ class ChroniclePanel extends PluginPanel
 
 	private static void spaced(JComponent p, Component c)
 	{
-		p.add(c);
-		p.add(vgap(6));
+		spaced(p, c, 6);
 	}
 
 	private static void spaced(JComponent p, Component c, int gap)
