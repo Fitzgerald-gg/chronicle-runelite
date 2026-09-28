@@ -9,6 +9,8 @@
 package chronicle.counters;
 
 import com.google.gson.JsonObject;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
@@ -59,8 +61,8 @@ public class MovementStatTracker implements StatTracker
 	{
 		String option = event.getMenuOption() == null ? "" : event.getMenuOption();
 		String target = event.getMenuTarget() == null ? "" : event.getMenuTarget();
-		String optLow = option.toLowerCase(java.util.Locale.ROOT);
-		String tgtLow = Text.removeTags(target).toLowerCase(java.util.Locale.ROOT);
+		String optLow = option.toLowerCase(Locale.ROOT);
+		String tgtLow = Text.removeTags(target).toLowerCase(Locale.ROOT);
 
 		if (optLow.equals("walk here"))
 		{
@@ -215,7 +217,7 @@ public class MovementStatTracker implements StatTracker
 		try
 		{
 			return itemManager.getItemComposition(itemManager.canonicalize(itemId))
-				.getName().toLowerCase(java.util.Locale.ROOT);
+				.getName().toLowerCase(Locale.ROOT);
 		}
 		catch (RuntimeException e)
 		{
@@ -230,21 +232,13 @@ public class MovementStatTracker implements StatTracker
 
 	private static boolean isTeleportJewellery(String tgtLow)
 	{
-		for (String j : JEWELLERY)
-		{
-			if (tgtLow.contains(j))
-			{
-				return true;
-			}
-		}
-		return false;
+		return Arrays.stream(JEWELLERY).anyMatch(tgtLow::contains);
 	}
 
 	private static boolean isWearHandling(String option)
 	{
-		return option.startsWith("wear") || option.startsWith("wield")
-			|| option.startsWith("remove") || option.startsWith("check")
-			|| option.startsWith("destroy") || isInventoryManagement(option);
+		return startsWithAny(option, "wear", "wield", "remove", "check", "destroy")
+			|| isInventoryManagement(option);
 	}
 
 	private static String methodOf(String optLow, String tgtLow)
@@ -274,16 +268,18 @@ public class MovementStatTracker implements StatTracker
 
 	private static boolean isInventoryManagement(String option)
 	{
-		return option.startsWith("withdraw") || option.startsWith("deposit")
-			|| option.startsWith("examine") || option.startsWith("drop")
-			|| option.startsWith("value") || option.startsWith("take")
-			|| option.startsWith("bank") || option.startsWith("sell")
-			|| option.startsWith("buy") || option.startsWith("use");
+		return startsWithAny(option, "withdraw", "deposit", "examine", "drop", "value", "take",
+			"bank", "sell", "buy", "use");
+	}
+
+	private static boolean startsWithAny(String s, String... prefixes)
+	{
+		return Arrays.stream(prefixes).anyMatch(s::startsWith);
 	}
 
 	private void armTeleport(String label, boolean fromNexus)
 	{
-		pendingLabel = label == null ? "" : label.toLowerCase(java.util.Locale.ROOT);
+		pendingLabel = label.toLowerCase(Locale.ROOT);
 		pendingFromNexus = fromNexus;
 		pendingTick = client.getTickCount();
 		pendingMethod = null;
@@ -302,14 +298,11 @@ public class MovementStatTracker implements StatTracker
 		}
 		String place = isHomeRow(row) ? "house" : row;
 		boolean placed = matchDestinationKey(place) != null;
-		if (fromChatMenu && rubbed)
+		if (fromChatMenu && rubbed && !placed)
 		{
 			rubTick = -1;
-			if (!placed)
-			{
-				clearPending();
-				return false;
-			}
+			clearPending();
+			return false;
 		}
 		if (!placed)
 		{
@@ -333,7 +326,7 @@ public class MovementStatTracker implements StatTracker
 
 	private String rowLabel(MenuOptionClicked event, String optLow, String tgtLow)
 	{
-		String row = menuRowText(event.getWidgetId(), event.getParam0()).toLowerCase(java.util.Locale.ROOT);
+		String row = menuRowText(event.getWidgetId(), event.getParam0()).toLowerCase(Locale.ROOT);
 		return (row + " " + optLow + " " + tgtLow).trim();
 	}
 
@@ -342,7 +335,7 @@ public class MovementStatTracker implements StatTracker
 	private String menuRowText(int componentId, int index)
 	{
 		String own = widgetChildText(componentId, index);
-		if (index < 0 || matchDestinationKey(own.toLowerCase(java.util.Locale.ROOT)) != null)
+		if (index < 0 || matchDestinationKey(own) != null)
 		{
 			return own;
 		}
@@ -350,7 +343,7 @@ public class MovementStatTracker implements StatTracker
 		for (int child = 0; child < MENU_CHILD_SCAN; child++)
 		{
 			String beside = rowOfList((group << 16) | child, index);
-			if (!beside.isEmpty() && matchDestinationKey(beside.toLowerCase(java.util.Locale.ROOT)) != null)
+			if (!beside.isEmpty() && matchDestinationKey(beside) != null)
 			{
 				return beside;
 			}
@@ -479,22 +472,9 @@ public class MovementStatTracker implements StatTracker
 	{
 		statStore.incrementStat("teleportsTotal");
 		String key = matchDestinationKey(pendingLabel);
-		String credited;
-		if (key != null)
+		if (key != null || pendingFromNexus)
 		{
-			credited = key;
-		}
-		else if (pendingFromNexus)
-		{
-			credited = "teleportsNexus";
-		}
-		else
-		{
-			credited = null;
-		}
-		if (credited != null)
-		{
-			statStore.incrementStat(credited);
+			statStore.incrementStat(key != null ? key : "teleportsNexus");
 		}
 		if (pendingMethod != null)
 		{
@@ -529,11 +509,8 @@ public class MovementStatTracker implements StatTracker
 
 	private boolean isRunStep(int step)
 	{
-		if (step >= RUN_STEP_TILES)
-		{
-			return true;
-		}
-		return client.getVarpValue(VarPlayerID.OPTION_RUN) == 1 && client.getEnergy() > 0;
+		return step >= RUN_STEP_TILES
+			|| (client.getVarpValue(VarPlayerID.OPTION_RUN) == 1 && client.getEnergy() > 0);
 	}
 
 	static String matchDestinationKey(String label)
@@ -542,7 +519,7 @@ public class MovementStatTracker implements StatTracker
 		{
 			return null;
 		}
-		String clean = label.toLowerCase(java.util.Locale.ROOT);
+		String clean = label.toLowerCase(Locale.ROOT);
 		for (Map.Entry<String, String> d : DESTINATIONS.entrySet())
 		{
 			if (clean.contains(d.getKey()))

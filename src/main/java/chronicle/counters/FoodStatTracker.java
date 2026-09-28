@@ -9,6 +9,7 @@
 package chronicle.counters;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -40,20 +41,25 @@ public class FoodStatTracker implements StatTracker
 {
 	private static final String[] SINGLE_HP_HEALS =
 		Tables.strings(Tables.load("counters_food.json").get("singleHpHeals"));
-
+	private static final Pattern DOSE_SUFFIX = Pattern.compile("^(.+?)\\s*\\((\\d)\\)$");
 	private static final int EAT_CONFIRM_TICKS = 3;
+	private static final int MAX_PENDING_EATS = 8;
+	private static final int DRINK_PAIR_TICKS = 2;
+	private static final int MAX_PENDING_DRINKS = 4;
 
 	private final StatStore store;
 	private final Client client;
 	private final ItemManager itemManager;
+	private final BiConsumer<String, Integer> consumableSink;
 
 	private String lastConsumed;
-
 	private int previousHitpoints = -1;
-
+	private Map<Integer, Integer> inventorySnapshot;
 	private final List<PendingEat> pendingEats = new ArrayList<>();
-
-	private static final int MAX_PENDING_EATS = 8;
+	private final List<DoseDrunk> pendingDoses = new ArrayList<>();
+	private final List<ParkedDrink> parkedDrinks = new ArrayList<>();
+	private final Map<String, Integer> itemDosePrices = new HashMap<>();
+	private final Map<String, Integer> dosePrices = new HashMap<>();
 
 	@AllArgsConstructor
 	private static final class PendingEat
@@ -61,8 +67,6 @@ public class FoodStatTracker implements StatTracker
 		private final int itemId;
 		private int ticksLeft;
 	}
-
-	private Map<Integer, Integer> inventorySnapshot;
 
 	@AllArgsConstructor
 	private static final class DoseDrunk
@@ -80,21 +84,6 @@ public class FoodStatTracker implements StatTracker
 		private final String potion;
 		private int ticksLeft;
 	}
-
-	private static final int DRINK_PAIR_TICKS = 2;
-
-	private static final int MAX_PENDING_DRINKS = 4;
-
-	private final List<DoseDrunk> pendingDoses = new ArrayList<>();
-
-	private final List<ParkedDrink> parkedDrinks = new ArrayList<>();
-
-	private static final Pattern DOSE_SUFFIX = Pattern.compile("^(.+?)\\s*\\((\\d)\\)$");
-
-	private final Map<String, Integer> itemDosePrices = new HashMap<>();
-	private final Map<String, Integer> dosePrices = new HashMap<>();
-
-	private final BiConsumer<String, Integer> consumableSink;
 
 	@Override
 	public void onMenuOptionClicked(MenuOptionClicked event)
@@ -117,7 +106,6 @@ public class FoodStatTracker implements StatTracker
 	public void onGameTick(GameTick event)
 	{
 		int hitpoints = client.getBoostedSkillLevel(Skill.HITPOINTS);
-
 		if (previousHitpoints != -1 && hitpoints == previousHitpoints + 1)
 		{
 			if (lastConsumed == null || !isSingleHpHeal(lastConsumed))
@@ -129,24 +117,9 @@ public class FoodStatTracker implements StatTracker
 				lastConsumed = null;
 			}
 		}
-
 		previousHitpoints = hitpoints;
-
-		for (Iterator<PendingEat> it = pendingEats.iterator(); it.hasNext(); )
-		{
-			if (--it.next().ticksLeft <= 0)
-			{
-				it.remove();
-			}
-		}
-
-		for (Iterator<DoseDrunk> it = pendingDoses.iterator(); it.hasNext(); )
-		{
-			if (--it.next().ticksLeft <= 0)
-			{
-				it.remove();
-			}
-		}
+		pendingEats.removeIf(p -> --p.ticksLeft <= 0);
+		pendingDoses.removeIf(d -> --d.ticksLeft <= 0);
 		for (Iterator<ParkedDrink> it = parkedDrinks.iterator(); it.hasNext(); )
 		{
 			ParkedDrink drink = it.next();
@@ -163,23 +136,18 @@ public class FoodStatTracker implements StatTracker
 	{
 		if (event.getGameState() != GameState.LOGGED_IN)
 		{
-			reset();
+			pendingEats.clear();
+			pendingDoses.clear();
+			parkedDrinks.clear();
+			inventorySnapshot = null;
+			lastConsumed = null;
+			previousHitpoints = -1;
 		}
 		if (event.getGameState() == GameState.LOGIN_SCREEN)
 		{
 			itemDosePrices.clear();
 			dosePrices.clear();
 		}
-	}
-
-	private void reset()
-	{
-		pendingEats.clear();
-		pendingDoses.clear();
-		parkedDrinks.clear();
-		inventorySnapshot = null;
-		lastConsumed = null;
-		previousHitpoints = -1;
 	}
 
 	@Override
@@ -190,52 +158,21 @@ public class FoodStatTracker implements StatTracker
 		{
 			return;
 		}
-
-		if (!pendingEats.isEmpty() && inventorySnapshot != null)
-		{
-			for (Map.Entry<Integer, Integer> before : inventorySnapshot.entrySet())
-			{
-				int consumed = before.getValue() - current.getOrDefault(before.getKey(), 0);
-				if (consumed <= 0)
-				{
-					continue;
-				}
-				if (consumed != 1 || take(pendingEats, p -> p.itemId == before.getKey()) == null)
-				{
-					continue;
-				}
-				store.incrementStat("foodEaten");
-				int price = (int) Math.min(itemManager.getItemPrice(itemManager.canonicalize(before.getKey())),
-					Integer.MAX_VALUE);
-				if (price > 0)
-				{
-					store.incrementStatBy("consumedValue", price);
-					store.incrementStatBy("foodConsumedValue", price);
-				}
-				String typed = perFoodKey(itemName(before.getKey()));
-				if (!typed.isEmpty())
-				{
-					store.incrementStat(typed);
-					if (price > 0 && consumableSink != null)
-					{
-						consumableSink.accept(typed, price);
-					}
-				}
-			}
-		}
-
 		if (inventorySnapshot != null)
 		{
-			for (Map.Entry<Integer, Integer> before : inventorySnapshot.entrySet())
+			StatTracker.rises(current, inventorySnapshot, (id, n) ->
 			{
-				if (before.getValue() - current.getOrDefault(before.getKey(), 0) != 1)
+				if (n == 1 && take(pendingEats, p -> p.itemId == id) != null)
 				{
-					continue;
+					eaten(id);
 				}
-				DoseDrunk dose = doseDrunk(before.getKey(), current);
+			});
+			StatTracker.rises(current, inventorySnapshot, (id, n) ->
+			{
+				DoseDrunk dose = n == 1 ? doseDrunk(id, current) : null;
 				if (dose == null)
 				{
-					continue;
+					return;
 				}
 				ParkedDrink drink = take(parkedDrinks, d -> namesAgree(d.potion, dose.base));
 				if (drink != null)
@@ -246,10 +183,29 @@ public class FoodStatTracker implements StatTracker
 				{
 					pendingDoses.add(dose);
 				}
+			});
+		}
+		inventorySnapshot = current;
+	}
+
+	private void eaten(int itemId)
+	{
+		store.incrementStat("foodEaten");
+		int price = StatTracker.worth(itemManager, itemManager.canonicalize(itemId), 1);
+		if (price > 0)
+		{
+			store.incrementStatBy("consumedValue", price);
+			store.incrementStatBy("foodConsumedValue", price);
+		}
+		String typed = perFoodKey(itemName(itemId));
+		if (!typed.isEmpty())
+		{
+			store.incrementStat(typed);
+			if (price > 0 && consumableSink != null)
+			{
+				consumableSink.accept(typed, price);
 			}
 		}
-
-		inventorySnapshot = current;
 	}
 
 	private DoseDrunk doseDrunk(int itemId, Map<Integer, Integer> current)
@@ -266,11 +222,7 @@ public class FoodStatTracker implements StatTracker
 		}
 		String base = m.group(1);
 		int doses = m.group(2).charAt(0) - '0';
-		if (doses < 1)
-		{
-			return null;
-		}
-		if (doses > 1 && !appeared(base + "(" + (doses - 1) + ")", current))
+		if (doses < 1 || (doses > 1 && !appeared(base + "(" + (doses - 1) + ")", current)))
 		{
 			return null;
 		}
@@ -293,18 +245,8 @@ public class FoodStatTracker implements StatTracker
 	private static boolean drinkable(ItemComposition definition)
 	{
 		String[] actions = definition.getInventoryActions();
-		if (actions == null)
-		{
-			return false;
-		}
-		for (String action : actions)
-		{
-			if (action != null && "drink".equalsIgnoreCase(action.trim()))
-			{
-				return true;
-			}
-		}
-		return false;
+		return actions != null
+			&& Arrays.stream(actions).anyMatch(a -> a != null && "drink".equalsIgnoreCase(a.trim()));
 	}
 
 	static boolean namesAgree(String potion, String base)
@@ -466,19 +408,17 @@ public class FoodStatTracker implements StatTracker
 		return consumableKey(baseFoodName(foodName), "Eaten");
 	}
 
+	static String perPotionKey(String potionName)
+	{
+		return consumableKey(potionName, "Doses");
+	}
+
 	private static String consumableKey(String name, String suffix)
 	{
 		StringBuilder key = new StringBuilder();
 		for (String word : words(name))
 		{
-			if (key.length() == 0)
-			{
-				key.append(word);
-			}
-			else
-			{
-				key.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
-			}
+			key.append(key.length() == 0 ? word : Character.toUpperCase(word.charAt(0)) + word.substring(1));
 		}
 		return key.length() == 0 ? "" : key.append(suffix).toString();
 	}
@@ -499,11 +439,11 @@ public class FoodStatTracker implements StatTracker
 
 	static String baseFoodName(String foodName)
 	{
-		String name = foodName.trim();
-		name = name.replaceFirst("^\\d+\\s*/\\s*\\d+\\s+", "");
-		name = name.replaceFirst("(?i)^half\\s+an?\\s+", "");
-		name = name.replaceFirst("(?i)^slice\\s+of\\s+", "");
-		name = name.replaceFirst("(?i)^part\\s+", "");
+		String name = foodName.trim()
+			.replaceFirst("^\\d+\\s*/\\s*\\d+\\s+", "")
+			.replaceFirst("(?i)^half\\s+an?\\s+", "")
+			.replaceFirst("(?i)^slice\\s+of\\s+", "")
+			.replaceFirst("(?i)^part\\s+", "");
 		return name.isEmpty() ? foodName.trim() : name;
 	}
 
@@ -514,18 +454,13 @@ public class FoodStatTracker implements StatTracker
 		{
 			return;
 		}
-
 		String message = event.getMessage();
-
 		if (message.contains("You drink"))
 		{
-			String drunk = consumableName(message);
-
-			if (drunk.equals("beer"))
+			if (consumableName(message).equals("beer"))
 			{
 				store.incrementStat("beersDrunk");
 			}
-
 			if (message.contains("You drink some of the") || message.contains("You drink some of your"))
 			{
 				store.incrementStat("potionDoses");
@@ -536,14 +471,12 @@ public class FoodStatTracker implements StatTracker
 					store.incrementStat(typed);
 				}
 				priceDrink(typed, potion);
-
 				if (message.contains("divine"))
 				{
 					store.incrementStatBy("divinePotionDamage", 10);
 				}
 			}
 		}
-
 		if (message.contains("You quickly smash the empty vial"))
 		{
 			store.incrementStat("vialsShattered");
@@ -553,46 +486,25 @@ public class FoodStatTracker implements StatTracker
 	private static boolean isSingleHpHeal(String menuTarget)
 	{
 		String cleaned = Text.removeTags(menuTarget);
-		for (String heal : SINGLE_HP_HEALS)
-		{
-			if (cleaned.contains(heal))
-			{
-				return true;
-			}
-		}
-		return false;
+		return Arrays.stream(SINGLE_HP_HEALS).anyMatch(cleaned::contains);
 	}
 
 	private static String consumableName(String message)
 	{
 		int from = message.indexOf("the ") + "the ".length();
-		int to = message.indexOf(".");
-		return message.substring(from, to).trim();
+		return message.substring(from, message.indexOf(".")).trim();
 	}
 
 	static String potionName(String message)
 	{
-		int from;
 		int the = message.indexOf(" of the ");
 		int your = message.indexOf(" of your ");
-		if (the >= 0)
-		{
-			from = the + " of the ".length();
-		}
-		else if (your >= 0)
-		{
-			from = your + " of your ".length();
-		}
-		else
+		int from = the >= 0 ? the + " of the ".length() : your >= 0 ? your + " of your ".length() : -1;
+		if (from < 0)
 		{
 			return "";
 		}
 		int to = message.indexOf('.', from);
 		return to > from ? message.substring(from, to).trim() : "";
-	}
-
-	static String perPotionKey(String potionName)
-	{
-		return consumableKey(potionName, "Doses");
 	}
 }

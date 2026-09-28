@@ -11,18 +11,12 @@ package chronicle.counters;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.inject.Inject;
 import javax.inject.Singleton;
 
 @Singleton
 public class StatStore
 {
 	private final Map<String, Integer> totals = new ConcurrentHashMap<>();
-
-	@Inject
-	public StatStore()
-	{
-	}
 
 	private volatile long revision;
 
@@ -66,15 +60,6 @@ public class StatStore
 
 	private static int saturatingSum(int current, int addend)
 	{
-		long sum = (long) current + addend;
-		if (sum > Integer.MAX_VALUE)
-		{
-			return Integer.MAX_VALUE;
-		}
-		if (sum < Integer.MIN_VALUE)
-		{
-			return Integer.MIN_VALUE;
-		}
-		return (int) sum;
+		return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, (long) current + addend));
 	}
 }

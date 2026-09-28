@@ -14,6 +14,8 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.events.AnimationChanged;
@@ -31,6 +33,7 @@ import net.runelite.client.game.ItemManager;
 
 @Slf4j
 @Singleton
+@RequiredArgsConstructor(access = AccessLevel.PACKAGE, onConstructor_ = @Inject)
 public class ChronicleCounters
 {
 	private final Client client;
@@ -45,16 +48,6 @@ public class ChronicleCounters
 	private volatile StatTracker[] trackers;
 
 	private volatile ExperienceStatTracker experience;
-
-	@Inject
-	ChronicleCounters(Client client, StatStore store, ItemManager itemManager,
-		SkillDeriver skillDeriver)
-	{
-		this.client = client;
-		this.store = store;
-		this.itemManager = itemManager;
-		this.skillDeriver = skillDeriver;
-	}
 
 	public void setConsumableSink(BiConsumer<String, Integer> sink)
 	{
