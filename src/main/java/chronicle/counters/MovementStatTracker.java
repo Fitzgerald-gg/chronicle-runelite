@@ -81,7 +81,7 @@ public class MovementStatTracker implements StatTracker
 
 		if (group == InterfaceID.TELENEXUS_TELEPORT)
 		{
-			armTeleport(nexusRowText(event.getParam0()), true);
+			armTeleport(rowOfList(InterfaceID.TelenexusTeleport.TEXT1, event.getParam0()), true);
 			return;
 		}
 
@@ -117,17 +117,8 @@ public class MovementStatTracker implements StatTracker
 			return;
 		}
 
-		if (optLow.equals("teleport to") || optLow.equals("teleport menu"))
-		{
-			return;
-		}
-
-		if (tgtLow.contains("teleport platform"))
-		{
-			return;
-		}
-
-		if (isInventoryManagement(optLow))
+		if (optLow.equals("teleport to") || optLow.equals("teleport menu")
+			|| tgtLow.contains("teleport platform") || isInventoryManagement(optLow))
 		{
 			return;
 		}
@@ -154,9 +145,11 @@ public class MovementStatTracker implements StatTracker
 			if (client.isInInstancedRegion())
 			{
 				clearPending();
-				return;
 			}
-			armTeleport("house", false);
+			else
+			{
+				armTeleport("house", false);
+			}
 			return;
 		}
 
@@ -243,27 +236,11 @@ public class MovementStatTracker implements StatTracker
 
 	private static String methodOf(String optLow, String tgtLow)
 	{
-		if (optLow.startsWith("break"))
-		{
-			return "teleportsViaTablet";
-		}
-		if (optLow.equals("cast") || optLow.startsWith("cast "))
-		{
-			return "teleportsViaSpell";
-		}
-		if (tgtLow.contains("scroll"))
-		{
-			return "teleportsViaScroll";
-		}
-		if (isTeleportCape(tgtLow) || optLow.contains("tele to poh"))
-		{
-			return "teleportsViaCape";
-		}
-		if (isTeleportJewellery(tgtLow))
-		{
-			return "teleportsViaJewellery";
-		}
-		return null;
+		return optLow.startsWith("break") ? "teleportsViaTablet"
+			: optLow.equals("cast") || optLow.startsWith("cast ") ? "teleportsViaSpell"
+			: tgtLow.contains("scroll") ? "teleportsViaScroll"
+			: isTeleportCape(tgtLow) || optLow.contains("tele to poh") ? "teleportsViaCape"
+			: isTeleportJewellery(tgtLow) ? "teleportsViaJewellery" : null;
 	}
 
 	private static boolean isInventoryManagement(String option)
@@ -354,17 +331,15 @@ public class MovementStatTracker implements StatTracker
 	private String rowOfList(int componentId, int index)
 	{
 		Widget w = client.getWidget(componentId);
-		if (w == null)
-		{
-			return "";
-		}
+		String kid = w == null ? null : kidText(w, index);
+		return kid == null ? "" : kid;
+	}
+
+	private static String kidText(Widget w, int index)
+	{
 		Widget[] kids = w.getChildren();
-		if (kids == null || index >= kids.length || kids[index] == null
-			|| kids[index].getText() == null)
-		{
-			return "";
-		}
-		return Text.removeTags(kids[index].getText()).trim();
+		return kids != null && index >= 0 && index < kids.length && kids[index] != null
+			&& kids[index].getText() != null ? Text.removeTags(kids[index].getText()).trim() : null;
 	}
 
 	private boolean awaitsAMenu()
@@ -395,18 +370,8 @@ public class MovementStatTracker implements StatTracker
 		{
 			return "";
 		}
-		Widget[] kids = w.getChildren();
-		if (kids != null && index >= 0 && index < kids.length
-			&& kids[index] != null && kids[index].getText() != null)
-		{
-			return Text.removeTags(kids[index].getText()).trim();
-		}
-		return w.getText() == null ? "" : Text.removeTags(w.getText()).trim();
-	}
-
-	private String nexusRowText(int index)
-	{
-		return index < 0 ? "" : rowOfList(InterfaceID.TelenexusTeleport.TEXT1, index);
+		String kid = kidText(w, index);
+		return kid != null ? kid : w.getText() == null ? "" : Text.removeTags(w.getText()).trim();
 	}
 
 	@Override
@@ -495,11 +460,7 @@ public class MovementStatTracker implements StatTracker
 	@Override
 	public void onAnimationChanged(AnimationChanged event)
 	{
-		if (event.getActor() != client.getLocalPlayer())
-		{
-			return;
-		}
-		if (event.getActor().getAnimation() == FAIRY_RING_ANIM)
+		if (event.getActor() == client.getLocalPlayer() && event.getActor().getAnimation() == FAIRY_RING_ANIM)
 		{
 			statStore.incrementStat("teleportsTotal");
 			statStore.incrementStat("teleportsFairyRing");
