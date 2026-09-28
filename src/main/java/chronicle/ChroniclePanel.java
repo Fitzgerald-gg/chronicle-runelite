@@ -784,9 +784,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		long got = counts.has(key + "_obtained")
 			? safeLong(counts.get(key + "_obtained")) : 0;
-		return tip(tab, new String[]{"Obtained", "Available", "Share"},
-			new String[]{fmt(got), fmt(total),
-				Math.round(got * 1000.0 / total) / 10.0 + "%"});
+		return tip(tab,
+			"Obtained", fmt(got),
+			"Available", fmt(total),
+			"Share", Math.round(got * 1000.0 / total) / 10.0 + "%");
 	}
 
 	private static Map<String, Long> pageCounts(JsonObject cl)
@@ -828,15 +829,13 @@ class ChroniclePanel extends PluginPanel
 		{
 			return null;
 		}
-		List<String> labels = new ArrayList<>();
-		List<String> figures = new ArrayList<>();
-		for (Entry<String, JsonElement> ln
-			: found.getAsJsonObject().entrySet())
+		List<String> lines = new ArrayList<>();
+		for (Entry<String, JsonElement> ln : found.getAsJsonObject().entrySet())
 		{
-			labels.add(ln.getKey());
-			figures.add(fmt(safeLong(ln.getValue())));
+			lines.add(ln.getKey());
+			lines.add(fmt(safeLong(ln.getValue())));
 		}
-		return tip(page, labels.toArray(new String[0]), figures.toArray(new String[0]));
+		return tip(page, lines);
 	}
 
 	private List<Entry<String, Long>> pageLines(String boss, String map)
@@ -1112,29 +1111,23 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 			figure = all;
-			String[] labels = new String[CLUE_TIERS.length + 1];
-			String[] figures = new String[CLUE_TIERS.length + 1];
-			labels[0] = "All";
-			figures[0] = fmt(all) + tail(allWorth);
+			List<String> lines = new ArrayList<>(Arrays.asList("All", fmt(all) + tail(allWorth)));
 			for (int i = 0; i < CLUE_TIERS.length; i++)
 			{
-				labels[i + 1] = CLUE_TIERS[i];
-				figures[i + 1] = each[i] == 0 ? "0"
-					: fmt(each[i]) + tail(worth[i]);
+				lines.add(CLUE_TIERS[i]);
+				lines.add(each[i] == 0 ? "0" : fmt(each[i]) + tail(worth[i]));
 			}
-			hover = tip("Clues", labels, figures);
+			hover = tip("Clues", lines);
 		}
 		else if ("Collections".equals(label))
 		{
 			figure = plugin.clogFinished();
 			int[] logStanding = clogStanding();
 			hover = tip("Collection log",
-				new String[]{"Obtained", "Available", "Share"},
-				new String[]{fmt(figure),
-					logStanding != null ? fmt(logStanding[1]) : "not yet",
-					logStanding != null
-						? Math.round(logStanding[0] * 1000.0 / logStanding[1]) / 10.0 + "%"
-						: "-"});
+				"Obtained", fmt(figure),
+				"Available", logStanding != null ? fmt(logStanding[1]) : "not yet",
+				"Share", logStanding != null
+					? Math.round(logStanding[0] * 1000.0 / logStanding[1]) / 10.0 + "%" : "-");
 		}
 		else if ("Quests".equals(label))
 		{
@@ -1155,22 +1148,24 @@ class ChroniclePanel extends PluginPanel
 			}
 			figure = done;
 			hover = tip("Quests",
-				new String[]{"Complete", "In progress", "Known"},
-				new String[]{fmt(done), fmt(started), fmt(q.size())});
+				"Complete", fmt(done),
+				"In progress", fmt(started),
+				"Known", fmt(q.size()));
 		}
 		else if ("Diaries".equals(label))
 		{
 			long[] d = diaryStanding();
 			figure = d[0];
 			hover = tip("Achievement diaries",
-				new String[]{"Tiers done", "Regions finished", "Regions"},
-				new String[]{d[0] + " / " + d[1], fmt(d[2]), fmt(d[3])});
+				"Tiers done", d[0] + " / " + d[1],
+				"Regions finished", fmt(d[2]),
+				"Regions", fmt(d[3]));
 		}
 		else
 		{
 			long named = namedLine(source, label);
 			figure = named > 0 ? named : bossKills(source);
-			hover = tip(label, new String[]{"Count"}, new String[]{fmt(figure)});
+			hover = tip(label, "Count", fmt(figure));
 		}
 		wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
 		cell.setToolTipText(hover);
@@ -1303,8 +1298,7 @@ class ChroniclePanel extends PluginPanel
 
 	private String bossTip(Boss b)
 	{
-		List<String> labels = new ArrayList<>();
-		List<String> figures = new ArrayList<>();
+		List<String> lines = new ArrayList<>();
 		String kind = kindOf(b.name);
 		SourceRow src = null;
 		List<SourceRow> paidOut = new ArrayList<>();
@@ -1328,58 +1322,57 @@ class ChroniclePanel extends PluginPanel
 		{
 			long inWin = bossKillsInWindow(b.name);
 			long[] paid = sourceInWindow(b.name);
-			labels.add(window().label);
-			figures.add((inWin < 0 ? "-" : count(inWin, "kill"))
+			lines.add(window().label);
+			lines.add((inWin < 0 ? "-" : count(inWin, "kill"))
 				+ tail(paid[1]));
 		}
 		long known = bossKills(b.name);
-		labels.add("Kills tracked");
-		figures.add(known > 0 ? fmt(known) : src != null ? fmt(src.loots) : "-");
+		lines.add("Kills tracked");
+		lines.add(known > 0 ? fmt(known) : src != null ? fmt(src.loots) : "-");
 		for (Entry<String, Long> pb : pageLines(b.name, "pb_lines"))
 		{
-			labels.add(pb.getKey());
-			figures.add(clock(pb.getValue()));
+			lines.add(pb.getKey());
+			lines.add(clock(pb.getValue()));
 		}
 		double[] timed = wholeRecord() && src != null ? new double[]{src.timed, src.timeSum}
 			: sourceTimesInWindow(b.name);
 		if (timed[0] > 0)
 		{
-			labels.add("Average kill");
-			figures.add(pb(timed[1] / timed[0]) + " · " + fmt((long) timed[0]) + " timed");
+			lines.add("Average kill");
+			lines.add(pb(timed[1] / timed[0]) + " · " + fmt((long) timed[0]) + " timed");
 		}
 		long here = minutesAt(b.name, wholeRecord() ? counters() : periodCounters());
 		if (here > 0 && minutesCoverPeriod())
 		{
-			labels.add("Time here");
-			figures.add(hoursMinutes(here));
+			lines.add("Time here");
+			lines.add(hoursMinutes(here));
 		}
 		for (Entry<String, Long> ln : logLines(b.name))
 		{
-			labels.add(ln.getKey());
-			figures.add(fmt(ln.getValue()));
+			lines.add(ln.getKey());
+			lines.add(fmt(ln.getValue()));
 		}
 		if (src != null)
 		{
-			labels.add("Drops");
-			figures.add(paidFigure(src));
+			lines.add("Drops");
+			lines.add(paidFigure(src));
 		}
 		for (SourceRow r : paidOut)
 		{
-			labels.add(beforeBracket(r.name));
-			figures.add(paidFigure(r));
+			lines.add(beforeBracket(r.name));
+			lines.add(paidFigure(r));
 		}
 		if (src == null && paidOut.isEmpty())
 		{
-			labels.add("Loot");
-			figures.add("none yet");
+			lines.add("Loot");
+			lines.add("none yet");
 		}
-		return tip(b.name, labels.toArray(new String[0]),
-			figures.toArray(new String[0]));
+		return tip(b.name, lines);
 	}
 
 	private String paidFigure(SourceRow r)
 	{
-		return fmt(tallyOf(plugin.sourceItems(r.name))[0]) + " \u00b7 " + gps(r.value);
+		return qtyGp(tallyOf(plugin.sourceItems(r.name))[0], r.value);
 	}
 
 	private String bossLootSource(Boss b)
@@ -1919,7 +1912,7 @@ class ChroniclePanel extends PluginPanel
 		long[] untaken = plugin.sessionUntakenTally();
 		if (untaken[0] > 0)
 		{
-			strip.add(row("Left behind", fmt(untaken[0]) + " · " + gps(untaken[1])));
+			strip.add(row("Left behind", qtyGp(untaken[0], untaken[1])));
 			mounted++;
 		}
 		mounted += addSittingFeats(strip);
@@ -2032,12 +2025,12 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (!slots.isEmpty())
 		{
-			strip.add(namedRow(slots.size() == 1 ? "Log slot" : "Log slots", slots, ACCENT_SESSION));
+			strip.add(namedRow(plural(slots.size(), "Log slot"), slots, ACCENT_SESSION));
 			mounted++;
 		}
 		if (!pets.isEmpty())
 		{
-			strip.add(namedRow(pets.size() == 1 ? "Pet" : "Pets", pets, ACCENT_SESSION));
+			strip.add(namedRow(plural(pets.size(), "Pet"), pets, ACCENT_SESSION));
 			mounted++;
 		}
 		return mounted;
@@ -2210,8 +2203,7 @@ class ChroniclePanel extends PluginPanel
 		final int cap = drillShown.getOrDefault(key, ROW_CAP);
 		for (String[] r : firstN(ranked, cap))
 		{
-			JPanel line = row(r[0], fmt(safeParse(r[1])) + " · "
-				+ gps(safeParse(r[2])));
+			JPanel line = row(r[0], qtyGp(safeParse(r[1]), safeParse(r[2])));
 			final String name = r[0];
 			link(line, () ->
 			{
@@ -2412,9 +2404,8 @@ class ChroniclePanel extends PluginPanel
 	{
 		for (Kind k : kindsOf(bag))
 		{
-			JPanel r = row(k.name, fmt(k.qty) + " \u00b7 " + gps(k.value), accent());
-			r.setToolTipText(fmt(k.distinct)
-				+ (k.distinct == 1 ? " distinct item" : " distinct items"));
+			JPanel r = row(k.name, qtyGp(k.qty, k.value), accent());
+			r.setToolTipText(count(k.distinct, "distinct item"));
 			link(r, () ->
 			{
 				lootKind = k.name;
@@ -2741,7 +2732,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			for (Kind k : kindsOf(bag))
 			{
-				page.add(row(k.name, fmt(k.qty) + " \u00b7 " + gps(k.value), accent()));
+				page.add(row(k.name, qtyGp(k.qty, k.value), accent()));
 			}
 			return page;
 		}
@@ -2764,7 +2755,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		for (Kind k : kindsOf(bag))
 		{
-			page.add(row(k.name, fmt(k.qty) + " \u00b7 " + gps(k.value), accent()));
+			page.add(row(k.name, qtyGp(k.qty, k.value), accent()));
 		}
 		return page;
 	}
@@ -2857,7 +2848,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel backToKinds(int held)
 	{
-		return backRow("< All kinds", fmt(held) + (held == 1 ? " item" : " items"), () ->
+		return backRow("< All kinds", count(held, "item"), () ->
 		{
 			lootKind = null;
 			rebuildInPlace();
@@ -3199,7 +3190,7 @@ class ChroniclePanel extends PluginPanel
 		p.add(group("Left where"));
 		for (UntakenRow r : sources)
 		{
-			JPanel row = row(r.name, "×" + fmt(r.qty) + " · " + gps(r.value), ACCENT_RED);
+			JPanel row = row(r.name, "×" + qtyGp(r.qty, r.value), ACCENT_RED);
 			link(row, () ->
 			{
 				leftBehindSource = r.name;
@@ -4246,7 +4237,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			if (u.qty > 0 && u.name.equalsIgnoreCase(name))
 			{
-				JPanel r = row("Left behind", fmt(u.qty) + " · " + gps(u.value)
+				JPanel r = row("Left behind", qtyGp(u.qty, u.value)
 					+ (u.kills > 0 ? " · " + count(u.kills, "kill") : ""));
 				r.setToolTipText("Open what was left on the floor");
 				link(r, () ->
@@ -4591,8 +4582,7 @@ class ChroniclePanel extends PluginPanel
 					Long when = landed.get(low(slot));
 					if (when != null)
 					{
-						r.setToolTipText(tip(slot, new String[]{"Landed"},
-							new String[]{dated(when)}));
+						r.setToolTipText(tip(slot, "Landed", dated(when)));
 					}
 					drill.add(r);
 					List<JPanel> d = detail.get(i);
@@ -4954,9 +4944,7 @@ class ChroniclePanel extends PluginPanel
 
 	private static String chaseTip(GrindBook.PetChase chase)
 	{
-		double pct = chase.percentileDry;
-		String share = pct < 1 ? "Under 1%" : pct > 99 ? "Over 99%" : Math.round(pct) + "%";
-		StringBuilder sb = new StringBuilder(share + " of players have " + chase.pet
+		StringBuilder sb = new StringBuilder(pct(chase.percentileDry, "Under ", "Over ") + " of players have " + chase.pet
 			+ " by this point. " + chaseSources(chase));
 		if (chase.activity != null && chase.sources.size() > 1)
 		{
@@ -5018,16 +5006,12 @@ class ChroniclePanel extends PluginPanel
 
 	private static String holdShare(GrindBook.PetChase chase)
 	{
-		double pct = chase.percentileDry;
-		if (pct < 1)
-		{
-			return "<1% have";
-		}
-		if (pct > 99)
-		{
-			return ">99% have";
-		}
-		return Math.round(pct) + "% have";
+		return pct(chase.percentileDry, "<", ">") + " have";
+	}
+
+	private static String pct(double p, String under, String over)
+	{
+		return p < 1 ? under + "1%" : p > 99 ? over + "99%" : Math.round(p) + "%";
 	}
 
 	private static boolean isSkill(String source)
@@ -5243,13 +5227,11 @@ class ChroniclePanel extends PluginPanel
 		{
 			String target = pace.targetLevel != null
 				? String.valueOf(pace.targetLevel) : "200m";
-			p.add(ghostRow(target + " in " + fmt(pace.daysOfPlay)
-				+ (pace.daysOfPlay == 1 ? " day of play" : " days of play"),
+			p.add(ghostRow(target + " in " + count(pace.daysOfPlay, "day") + " of play",
 				gp((long) pace.xpPerActiveDay) + "/day"));
 			if (pace.activeDays < 3)
 			{
-				p.add(ghostRow("measured over " + pace.activeDays
-					+ (pace.activeDays == 1 ? " day" : " days"), ""));
+				p.add(ghostRow("measured over " + count(pace.activeDays, "day"), ""));
 			}
 		}
 		else if (pace.dormant() && pace.lastActive != null)
@@ -6784,11 +6766,7 @@ class ChroniclePanel extends PluginPanel
 		SkillStand stand, HistoryLog.Levels opened, long[] played)
 	{
 		JPanel card = card(sessionPeriod() ? "This sitting" : "The period");
-		long xp = 0;
-		for (Entry<String, Long> g : gains)
-		{
-			xp += g.getValue();
-		}
+		long xp = xpOf(gains);
 		if ("PvM".equals(histFacet))
 		{
 			card.add(row("Monsters slain", "+" + fmt(summaryValue(progress, "kills"))));
@@ -6872,7 +6850,12 @@ class ChroniclePanel extends PluginPanel
 
 	private static String count(long n, String one)
 	{
-		return fmt(n) + " " + (n == 1 ? one : one + "s");
+		return fmt(n) + " " + plural(n, one);
+	}
+
+	private static String plural(long n, String one)
+	{
+		return n == 1 ? one : one + "s";
 	}
 
 	private static String hoursMinutes(long minutes)
@@ -6904,7 +6887,7 @@ class ChroniclePanel extends PluginPanel
 		JPanel combat = combatLevelTile(gain, opened);
 		JPanel total = totalLevelTile(stand, opened);
 		total.setToolTipText(periodTip != null ? tipLine(periodTip, "Opens the records")
-			: tip("Total level", new String[]{"Opens"}, new String[]{"the records"}));
+			: tip("Total level", "Opens", "the records"));
 		link(total, this::openRecords);
 		if (wholeRecord())
 		{
@@ -6929,7 +6912,7 @@ class ChroniclePanel extends PluginPanel
 		int cb = plugin.combatLevel();
 		Integer was = openingCombat(opened);
 		boolean climbed = !wholeRecord() && was != null && cb > was;
-		JLabel fig = new JLabel(cb > 0 ? (climbed ? fmt(was) + " to " + fmt(cb) : fmt(cb)) : "-",
+		JLabel fig = new JLabel(cb > 0 ? (climbed ? climb(was, cb) : fmt(cb)) : "-",
 			JLabel.RIGHT);
 		fig.setFont(small());
 		fig.setForeground(cb > 0 && (wholeRecord() || combatSkillsMoved(gain))
@@ -6938,13 +6921,10 @@ class ChroniclePanel extends PluginPanel
 		Map<String, Long> c = counters();
 		long[] ca = combatStanding();
 		cell.setToolTipText(tip("Combat",
-			new String[]{"Achievement points", "Tiers unlocked", "Damage dealt",
-				"Highest hit"},
-			new String[]{
-				ca[1] > 0 ? fmt(ca[0]) + " / " + fmt(ca[1]) : fmt(ca[0]),
-				fmt(ca[2]) + " / 6",
-				fmt(c.getOrDefault(StatKeys.DAMAGE_DEALT, 0L)),
-				fmt(c.getOrDefault(StatKeys.HIGHEST_HIT, 0L))}));
+			"Achievement points", ca[1] > 0 ? fmt(ca[0]) + " / " + fmt(ca[1]) : fmt(ca[0]),
+			"Tiers unlocked", fmt(ca[2]) + " / 6",
+			"Damage dealt", fmt(c.getOrDefault(StatKeys.DAMAGE_DEALT, 0L)),
+			"Highest hit", fmt(c.getOrDefault(StatKeys.HIGHEST_HIT, 0L))));
 		link(cell, () ->
 		{
 			sheetPage = "combat";
@@ -7057,24 +7037,22 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		named.sort(Entry.<String, Long>comparingByValue().reversed());
-		List<String> labels = new ArrayList<>();
-		List<String> figures = new ArrayList<>();
+		List<String> lines = new ArrayList<>();
 		for (String key : floors)
 		{
-			labels.add(StatRegistry.rowLabel(key));
-			figures.add(fmt(now.get(key)));
+			lines.add(StatRegistry.rowLabel(key));
+			lines.add(fmt(now.get(key)));
 		}
 		for (Entry<String, Long> e : named)
 		{
-			if (labels.size() >= 6)
+			if (lines.size() >= 12)
 			{
 				break;
 			}
-			labels.add(StatRegistry.rowLabel(e.getKey()));
-			figures.add(fmt(e.getValue()));
+			lines.add(StatRegistry.rowLabel(e.getKey()));
+			lines.add(fmt(e.getValue()));
 		}
-		return tip(craft, labels.toArray(new String[0]),
-			figures.toArray(new String[0]));
+		return tip(craft, lines);
 	}
 
 	private String slayerTip()
@@ -7082,8 +7060,10 @@ class ChroniclePanel extends PluginPanel
 		long[] ms = windowMs();
 		long[] tally = plugin.onTaskTally(ms[0], ms[1], null, wholeRecord());
 		long paid = tallyOf(plugin.onTaskLoot(ms[0], ms[1], null, wholeRecord()))[1];
-		return tip("Slayer", new String[]{"Tasks tracked", "Kills on task", "On-task loot"},
-			new String[]{fmt(tally[2]), fmt(tally[0]), gps(paid)});
+		return tip("Slayer",
+			"Tasks tracked", fmt(tally[2]),
+			"Kills on task", fmt(tally[0]),
+			"On-task loot", gps(paid));
 	}
 
 	private static Integer openingCombat(HistoryLog.Levels opened)
@@ -7291,13 +7271,13 @@ class ChroniclePanel extends PluginPanel
 				continue;
 			}
 			long n = Math.max(r.kc, r.loots);
-			JPanel line = row(tier, fmt(n) + " \u00b7 " + gps(r.value), accent());
+			JPanel line = row(tier, qtyGp(n, r.value), accent());
 			final String open = r.name;
 			link(line, () -> openSource(open));
 			line.setToolTipText(tip(tier + " clues",
-				new String[]{"Caskets", "Worth", "Each"},
-				new String[]{fmt(n), gps(r.value),
-					n > 0 ? gps(r.value / n) : "-"}));
+				"Caskets", fmt(n),
+				"Worth", gps(r.value),
+				"Each", n > 0 ? gps(r.value / n) : "-"));
 			p.add(line);
 		}
 	}
@@ -7435,29 +7415,23 @@ class ChroniclePanel extends PluginPanel
 
 	private static String taskTip(String title, JsonArray tasks)
 	{
-		final int CAP = 8;
-		StringBuilder sb = new StringBuilder("<html><body style='padding:2px'>");
-		sb.append("<div style='color:#8f8f8f'>").append(title).append("</div>");
-		for (int i = 0; i < tasks.size() && i < CAP; i++)
+		final int cap = 8;
+		StringBuilder sb = new StringBuilder(TIP_OPEN).append(dimLine(title));
+		for (int i = 0; i < tasks.size() && i < cap; i++)
 		{
 			JsonObject t = tasks.get(i).getAsJsonObject();
-			String task = t.get("task").getAsString();
-			sb.append("<div>").append(task.length() > 78 ? task.substring(0, 78) + "..." : task)
-				.append("</div>");
+			sb.append("<div>").append(clip(t.get("task").getAsString(), 78)).append("</div>");
 			String needs = t.has("requirements") ? t.get("requirements").getAsString() : "";
 			if (!needs.isEmpty())
 			{
-				sb.append("<div style='color:#8f8f8f'>&nbsp;&nbsp;")
-					.append(needs.length() > 70 ? needs.substring(0, 70) + "..." : needs)
-					.append("</div>");
+				sb.append(dimLine("&nbsp;&nbsp;" + clip(needs, 70)));
 			}
 		}
-		if (tasks.size() > CAP)
+		if (tasks.size() > cap)
 		{
-			sb.append("<div style='color:#8f8f8f'>and ").append(tasks.size() - CAP)
-				.append(" more</div>");
+			sb.append(dimLine("and " + (tasks.size() - cap) + " more"));
 		}
-		return sb.append("</body></html>").toString();
+		return sb.append(TIP_CLOSE).toString();
 	}
 
 	private void buildCombatAchievements(JPanel p)
@@ -7487,8 +7461,8 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, head);
 		if (unnamed > 0)
 		{
-			spaced(p, note("You have also done " + fmt(unnamed) + " combat achievement"
-				+ (unnamed == 1 ? "" : "s") + " added to the game since this copy of"
+			spaced(p, note("You have also done " + count(unnamed, "combat achievement")
+				+ " added to the game since this copy of"
 				+ " Chronicle was built. They are counted by the game, not named"
 				+ " here, until the plugin updates."), 4);
 		}
@@ -7523,7 +7497,7 @@ class ChroniclePanel extends PluginPanel
 			int n = e.getValue().size();
 			p.add(quietHead(e.getKey(), known
 				? fmt(got) + " / " + fmt(n)
-				: fmt(n) + (n == 1 ? " task" : " tasks"), foldKey));
+				: count(n, "task"), foldKey));
 			if (!open)
 			{
 				continue;
@@ -7535,10 +7509,9 @@ class ChroniclePanel extends PluginPanel
 					prettyTier(task.get("tier").getAsString()),
 					known ? (has ? ACCENT_SESSION : ACCENT_RED) : null, known);
 				line.setToolTipText(tip(task.get("name").getAsString(),
-					new String[]{"Tier", "Where", "Task"},
-					new String[]{task.get("tier").getAsString(),
-						caSource(task.get("monster").getAsString()),
-						task.get("task").getAsString()}));
+					"Tier", task.get("tier").getAsString(),
+					"Where", caSource(task.get("monster").getAsString()),
+					"Task", task.get("task").getAsString()));
 				p.add(line);
 			}
 			p.add(vgap(4));
@@ -7564,34 +7537,46 @@ class ChroniclePanel extends PluginPanel
 
 	private String periodTip(long[] played, List<Entry<String, Long>> gains)
 	{
-		long xp = 0;
-		for (Entry<String, Long> g : gains)
-		{
-			xp += g.getValue();
-		}
+		long xp = xpOf(gains);
 		return tip(sessionPeriod() ? "This sitting"
 			: wholeRecord() ? "Lifetime" : "The period",
-			new String[]{"Time played", "Sessions", "Experience"},
-			new String[]{hoursMinutes(played[0]), fmt(played[1]), "+" + gp(xp)});
+			"Time played", hoursMinutes(played[0]),
+			"Sessions", fmt(played[1]),
+			"Experience", "+" + gp(xp));
 	}
 
 	private static String tipLine(String card, String line)
 	{
-		return card.replace("</body>", "<div style='color:#8f8f8f'>" + line + "</div></body>");
+		return card.replace("</body>", dimLine(line) + "</body>");
 	}
 
-	private static String tip(String title, String[] labels, String[] figures)
+	private static String tip(String title, String... lines)
 	{
-		StringBuilder sb = new StringBuilder("<html><body style='padding:2px'>");
-		sb.append("<div style='color:#8f8f8f'>").append(title).append("</div>");
-		for (int i = 0; i < labels.length && i < figures.length; i++)
+		return tip(title, Arrays.asList(lines));
+	}
+
+	private static String tip(String title, List<String> lines)
+	{
+		StringBuilder sb = new StringBuilder(TIP_OPEN).append(dimLine(title));
+		for (int i = 0; i + 1 < lines.size(); i += 2)
 		{
-			String figure = figures[i].length() > 78 ? figures[i].substring(0, 78) + "..."
-				: figures[i];
-			sb.append("<div>").append(labels[i]).append(": <span style='color:#c8a25a'>")
-				.append(figure).append("</span></div>");
+			sb.append("<div>").append(lines.get(i)).append(": <span style='color:#c8a25a'>")
+				.append(clip(lines.get(i + 1), 78)).append("</span></div>");
 		}
-		return sb.append("</body></html>").toString();
+		return sb.append(TIP_CLOSE).toString();
+	}
+
+	private static final String TIP_OPEN = "<html><body style='padding:2px'>";
+	private static final String TIP_CLOSE = "</body></html>";
+
+	private static String dimLine(String s)
+	{
+		return "<div style='color:#8f8f8f'>" + s + "</div>";
+	}
+
+	private static String clip(String s, int most)
+	{
+		return s.length() > most ? s.substring(0, most) + "..." : s;
 	}
 
 	private JPanel totalLevelTile(SkillStand stand, HistoryLog.Levels opened)
@@ -7602,8 +7587,8 @@ class ChroniclePanel extends PluginPanel
 		String figure = fmt(stand.standing);
 		if (levels > 0)
 		{
-			figure = (stand.standing == shut.total
-				? fmt(opened.total) + " to " + figure : figure) + " · +" + fmt(levels);
+			figure = (stand.standing == shut.total ? climb(opened.total, stand.standing) : figure)
+				+ " · +" + fmt(levels);
 		}
 		JPanel cell = levelTile("Total level");
 		if (periodTip != null)
@@ -7647,7 +7632,7 @@ class ChroniclePanel extends PluginPanel
 		text.setBackground(DARKER);
 		boolean climbed = from != null && level > from && !wholeRecord();
 		JLabel lvl = styled(new JLabel(level <= 0 ? "-"
-			: climbed ? fmt(from) + " to " + fmt(level) : String.valueOf(level)), small(),
+			: climbed ? climb(from, level) : String.valueOf(level)), small(),
 			gained != null ? Color.WHITE : dim());
 		text.add(lvl);
 
@@ -9085,7 +9070,7 @@ class ChroniclePanel extends PluginPanel
 		long[] sat = daysPlayed().get(day);
 		if (sat != null && sat[1] > 0)
 		{
-			clauses.add(sat[1] + (sat[1] == 1 ? " sitting" : " sittings")
+			clauses.add(count(sat[1], "sitting")
 				+ (sat[0] > 0 ? " · " + hoursMinutes(sat[0]) : ""));
 		}
 		boolean crossed = crossedDays != null && crossedDays.contains(day);
@@ -9114,7 +9099,7 @@ class ChroniclePanel extends PluginPanel
 			? new long[]{sat[4], sat[5]} : dayTotals().get(ROLL_DAY.format(day));
 		if (loot != null && loot[0] > 0)
 		{
-			clauses.add(fmt(loot[0]) + (loot[0] == 1 ? " drop" : " drops")
+			clauses.add(count(loot[0], "drop")
 				+ tail(loot[1]));
 		}
 		return clauses.isEmpty() ? null : String.join(" · ", clauses);
@@ -9792,7 +9777,7 @@ class ChroniclePanel extends PluginPanel
 		else if (sittings > 0)
 		{
 			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(minutes),
-				fmt(sittings) + (sittings == 1 ? " sitting" : " sittings")));
+				count(sittings, "sitting")));
 		}
 		long[] xp = periodXp();
 		if (xp != null && xp[0] > 0)
@@ -9813,7 +9798,7 @@ class ChroniclePanel extends PluginPanel
 			else if (a != null && b > a)
 			{
 				f.tiles.add(new RecapPicture.Tile("Levels", "+" + fmt(b - a),
-					fmt(a) + " to " + fmt(b) + " total"));
+					climb(a, b) + " total"));
 			}
 		}
 		for (RecapPicture.Named n : f.loot)
@@ -9915,8 +9900,7 @@ class ChroniclePanel extends PluginPanel
 		int sittings = (int) sat[1];
 		if (sittings > 0)
 		{
-			plateRow(plate, "Played", hoursMinutes(minutes) + " · " + fmt(sittings)
-				+ (sittings == 1 ? " sitting" : " sittings"), () ->
+			plateRow(plate, "Played", hoursMinutes(minutes) + " · " + count(sittings, "sitting"), () ->
 			{
 				journalLens = "Sessions";
 				applyTab(View.JOURNAL);
@@ -9950,7 +9934,7 @@ class ChroniclePanel extends PluginPanel
 		long[] loot = periodLoot();
 		if (loot[0] > 0)
 		{
-			plateRow(plate, "Drops", fmt(loot[0]) + " · " + gps(loot[1]),
+			plateRow(plate, "Drops", qtyGp(loot[0], loot[1]),
 				() -> applyTab(View.DROPS));
 		}
 		String[] dearest = periodDearest();
@@ -9964,7 +9948,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (loot[2] > 0)
 		{
-			plateRow(plate, "Left behind", fmt(loot[2]) + " · " + gps(loot[3]), () ->
+			plateRow(plate, "Left behind", qtyGp(loot[2], loot[3]), () ->
 			{
 				dropsLeftBehind = true;
 				applyTab(View.DROPS);
@@ -10538,7 +10522,7 @@ class ChroniclePanel extends PluginPanel
 				float weight = 0.25f + 0.75f * Math.min(1f, (float) t[0] / most);
 				cell.setBackground(wash(accent(), weight));
 				n.setForeground(Color.WHITE);
-				cell.setToolTipText(hoursMinutes(t[0]) + " · " + t[1] + (t[1] == 1 ? " sitting" : " sittings"));
+				cell.setToolTipText(hoursMinutes(t[0]) + " · " + count(t[1], "sitting"));
 			}
 			else if (onSpine || (t != null && t[1] > 0))
 			{
@@ -10567,7 +10551,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		spaced(p, grid, 4);
 		p.add(ghostRow(written == 0 ? "nothing written this month"
-			: fmt(written) + (written == 1 ? " day written" : " days written")
+			: count(written, "day") + " written"
 			+ (monthMinutes > 0 ? " · " + hoursMinutes(monthMinutes) : ""), ""));
 		return p;
 	}
@@ -12154,6 +12138,26 @@ class ChroniclePanel extends PluginPanel
 	private static String named(String name, long qty)
 	{
 		return name + (qty > 1 ? " \u00d7" + fmt(qty) : "");
+	}
+
+	private static String climb(long from, long to)
+	{
+		return fmt(from) + " to " + fmt(to);
+	}
+
+	private static long xpOf(List<Entry<String, Long>> gains)
+	{
+		long xp = 0;
+		for (Entry<String, Long> g : gains)
+		{
+			xp += g.getValue();
+		}
+		return xp;
+	}
+
+	private static String qtyGp(long qty, long value)
+	{
+		return fmt(qty) + " · " + gps(value);
 	}
 
 	private static String tail(long v)
