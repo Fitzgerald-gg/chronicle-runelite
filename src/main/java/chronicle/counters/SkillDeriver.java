@@ -669,64 +669,29 @@ public class SkillDeriver
 	private static String itemToken(String skill, String itemName)
 	{
 		String low = itemName.trim().toLowerCase(Locale.ROOT);
-		if (low.isEmpty())
-		{
-			return "";
-		}
 		String n;
 		switch (skill)
 		{
 			case "WOODCUTTING":
-				if (!(low.endsWith(" logs") || low.equals("logs") || low.endsWith(" log")))
-				{
-					return "";
-				}
-				n = low.equals("logs") ? "" : low.replace(" logs", "").replace(" log", "").trim();
-				if (n.isEmpty())
-				{
-					n = "normal";
-				}
+				n = low.equals("logs") ? "normal"
+					: !(low.endsWith(" logs") || low.endsWith(" log")) ? null
+					: low.replace(" logs", "").replace(" log", "").trim();
+				n = "".equals(n) ? "normal" : n;
 				break;
 			case "FISHING":
-				if (low.startsWith("raw "))
-				{
-					n = low.substring(4).trim();
-				}
-				else if (FISH_NORAW.contains(low) || low.startsWith("leaping "))
-				{
-					n = low;
-				}
-				else
-				{
-					return "";
-				}
+				n = low.startsWith("raw ") ? low.substring(4).trim()
+					: FISH_NORAW.contains(low) || low.startsWith("leaping ") ? low : null;
 				break;
 			case "MINING":
-				if (low.startsWith("granite"))
-				{
-					n = "granite";
-				}
-				else if (low.startsWith("sandstone"))
-				{
-					n = "sandstone";
-				}
-				else if (low.startsWith("uncut "))
-				{
-					n = "gem rock";
-				}
-				else if (low.endsWith(" ore") || MINING_ROCKS.contains(low))
-				{
-					n = low;
-				}
-				else
-				{
-					return "";
-				}
+				n = low.startsWith("granite") ? "granite"
+					: low.startsWith("sandstone") ? "sandstone"
+					: low.startsWith("uncut ") ? "gem rock"
+					: low.endsWith(" ore") || MINING_ROCKS.contains(low) ? low : null;
 				break;
 			default:
 				n = low.startsWith("cooked ") ? low.substring(7).trim() : low;
 		}
-		return ITEM_ALIASES.getOrDefault(n, camel(n));
+		return low.isEmpty() || n == null ? "" : ITEM_ALIASES.getOrDefault(n, camel(n));
 	}
 
 	private static String fletchLogToken(String name)

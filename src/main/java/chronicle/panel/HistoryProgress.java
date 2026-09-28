@@ -27,6 +27,8 @@ import lombok.Getter;
 import lombok.Value;
 import lombok.experimental.Accessors;
 
+@Getter
+@Accessors(fluent = true)
 public final class HistoryProgress
 {
 	@Value
@@ -98,14 +100,8 @@ public final class HistoryProgress
 			"lootLeftKills", "resourcesGatheredValue", "resourcesDroppedValue", "itemsDroppedValue");
 	}
 
-	@Getter
-	@Accessors(fluent = true)
 	private final List<Row> summary;
-	@Getter
-	@Accessors(fluent = true)
 	private final List<Section> sections;
-	@Getter
-	@Accessors(fluent = true)
 	private final List<Group> groups;
 
 	private HistoryProgress(List<Row> summary, List<Section> sections)
@@ -117,14 +113,7 @@ public final class HistoryProgress
 
 	public Group group(String name)
 	{
-		for (Group g : groups)
-		{
-			if (g.name().equals(name))
-			{
-				return g;
-			}
-		}
-		return null;
+		return groups.stream().filter(g -> g.name().equals(name)).findFirst().orElse(null);
 	}
 
 	public static String groupOf(Section s)

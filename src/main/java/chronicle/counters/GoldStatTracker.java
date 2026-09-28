@@ -51,17 +51,11 @@ public class GoldStatTracker implements StatTracker
 	@Override
 	public void onGameTick(GameTick event)
 	{
-		if (coinsLastTick == IDLE)
-		{
-			return;
-		}
-
-		int coins = packCoins();
+		int coins = coinsLastTick == IDLE ? IDLE : packCoins();
 		if (coins == IDLE)
 		{
 			return;
 		}
-
 		int change = coins - coinsLastTick;
 		if (change < 0)
 		{
