@@ -87,6 +87,7 @@ import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Skill;
 import net.runelite.client.hiscore.HiscoreSkill;
 import net.runelite.client.ui.ColorScheme;
@@ -489,16 +490,11 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
+	@RequiredArgsConstructor
 	private static final class Boss
 	{
 		final String name;
 		final int sprite;
-
-		Boss(String name, int sprite)
-		{
-			this.name = name;
-			this.sprite = sprite;
-		}
 	}
 
 	private static List<Boss> bossRoster;
@@ -3066,19 +3062,9 @@ class ChroniclePanel extends PluginPanel
 		if (leftBehindSource != null)
 		{
 			List<BagItem> bag = plugin.untakenItemsOf(leftBehindSource);
-			long qty = 0;
-			long val = 0;
-			for (UntakenRow r : plugin.untakenSources())
-			{
-				if (r.name.equals(leftBehindSource))
-				{
-					qty = r.qty;
-					val = r.value;
-					break;
-				}
-			}
+			UntakenRow left = find(plugin.untakenSources(), u -> u.name, leftBehindSource, true);
 			spaced(p, tallyCard(leftBehindSource.toUpperCase(Locale.ROOT), "Left on the floor",
-				count(qty, "item"), ACCENT_RED, val));
+				count(left == null ? 0 : left.qty, "item"), ACCENT_RED, left == null ? 0 : left.value));
 			if (bag.isEmpty())
 			{
 				return noted(p, "The count above is older than the itemised record. "
@@ -3096,19 +3082,9 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		List<UntakenRow> sources = plugin.untakenSourcesOf(leftBehindItem);
-		long qty = 0;
-		long val = 0;
-		for (UntakenRow r : plugin.untakenItems())
-		{
-			if (r.name.equals(leftBehindItem))
-			{
-				qty = r.qty;
-				val = r.value;
-				break;
-			}
-		}
-		spaced(p, tallyCard(leftBehindItem.toUpperCase(Locale.ROOT), "Left behind", "×" + fmt(qty),
-			ACCENT_RED, val));
+		UntakenRow held = find(plugin.untakenItems(), u -> u.name, leftBehindItem, true);
+		spaced(p, tallyCard(leftBehindItem.toUpperCase(Locale.ROOT), "Left behind",
+			"×" + fmt(held == null ? 0 : held.qty), ACCENT_RED, held == null ? 0 : held.value));
 		if (sources.isEmpty())
 		{
 			return noted(p, "No source itemised for this yet.");
@@ -5673,22 +5649,13 @@ class ChroniclePanel extends PluginPanel
 	private boolean historyGathering;
 	private int historyEpoch;
 
+	@RequiredArgsConstructor
 	private static final class HistoryData
 	{
 		final TreeMap<LocalDate, Baseline> spine;
 		final List<JsonObject> feed;
 		final SlayerJourney journey;
 		final LocalDate day;
-
-		HistoryData(TreeMap<LocalDate, Baseline> spine,
-			List<JsonObject> feed, SlayerJourney journey,
-			LocalDate day)
-		{
-			this.spine = spine;
-			this.feed = feed;
-			this.journey = journey;
-			this.day = day;
-		}
 	}
 
 	private void gatherHistory()
@@ -6532,6 +6499,7 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
+	@RequiredArgsConstructor
 	private static final class SkillStand
 	{
 		final List<Skill> order;
@@ -6539,16 +6507,6 @@ class ChroniclePanel extends PluginPanel
 		final Map<Skill, Long> levels;
 		final long standing;
 		final HistoryLog.Levels closed;
-
-		SkillStand(List<Skill> order, List<String> keys,
-			Map<Skill, Long> levels, long standing, HistoryLog.Levels closed)
-		{
-			this.order = order;
-			this.keys = keys;
-			this.levels = levels;
-			this.standing = standing;
-			this.closed = closed;
-		}
 	}
 
 	private static Baseline baselineAt(Map<String, Long> xp)
@@ -7620,18 +7578,12 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
+	@RequiredArgsConstructor
 	private static final class Window
 	{
 		final LocalDate start;
 		final LocalDate end;
 		final String label;
-
-		Window(LocalDate start, LocalDate end, String label)
-		{
-			this.start = start;
-			this.end = end;
-			this.label = label;
-		}
 	}
 
 	private LocalStore.LootWindow lootWindow()
@@ -7697,19 +7649,12 @@ class ChroniclePanel extends PluginPanel
 		return new Window(start, end, label);
 	}
 
+	@RequiredArgsConstructor
 	private static final class Span
 	{
 		final Baseline opening;
 		final Baseline earliest;
 		final Baseline closing;
-
-		Span(Baseline opening, Baseline earliest,
-			Baseline closing)
-		{
-			this.opening = opening;
-			this.earliest = earliest;
-			this.closing = closing;
-		}
 	}
 
 	private Span span()
@@ -9232,20 +9177,29 @@ class ChroniclePanel extends PluginPanel
 
 	private void recapLoot(RecapPicture.Facts f)
 	{
+		if (!f.whole && !f.session)
+		{
+			long from = plugin.lootRollFrom();
+			if (from <= 0 || from > windowMs()[0])
+			{
+				f.lootNote = "Loot is not dated this far back, so this period's cannot be told from the rest.";
+				return;
+			}
+		}
+		long[] loot = periodLoot();
+		if (loot[0] > 0)
+		{
+			f.loot.add(new RecapPicture.Named("Drops", fmt(loot[0]), gps(loot[1])));
+		}
+		if (loot[2] > 0)
+		{
+			f.loot.add(new RecapPicture.Named("Left behind", fmt(loot[2]), gps(loot[3])));
+		}
 		if (f.whole)
 		{
-			long[] loot = periodLoot();
-			if (loot[0] > 0)
-			{
-				f.loot.add(new RecapPicture.Named("Drops", fmt(loot[0]), gps(loot[1])));
-			}
-			if (loot[2] > 0)
-			{
-				f.loot.add(new RecapPicture.Named("Left behind", fmt(loot[2]), gps(loot[3])));
-			}
 			List<SourceRow> rows = new ArrayList<>(sources());
 			rows.sort((a, b) -> Long.compare(b.value, a.value));
-			for (SourceRow r : rows.subList(0, Math.min(8, rows.size())))
+			for (SourceRow r : firstN(rows, 8))
 			{
 				if (r.value > 0)
 				{
@@ -9254,41 +9208,17 @@ class ChroniclePanel extends PluginPanel
 			}
 			List<BagItem> bag = new ArrayList<>(plugin.allLoot());
 			bag.sort((a, b) -> Long.compare(b.value, a.value));
-			for (BagItem b : bag.subList(0, Math.min(6, bag.size())))
+			for (BagItem b : firstN(bag, 6))
 			{
 				if (b.value > 0)
 				{
-					f.items.add(new RecapPicture.Named(b.name + " ×" + fmt(b.qty), null,
-						gps(b.value)));
+					f.items.add(new RecapPicture.Named(b.name + " ×" + fmt(b.qty), null, gps(b.value)));
 				}
 			}
 			return;
 		}
-		LocalStore.LootWindow win;
-		if (f.session)
-		{
-			win = plugin.sessionLootWindow();
-		}
-		else
-		{
-			long from = plugin.lootRollFrom();
-			if (from <= 0 || from > windowMs()[0])
-			{
-				f.lootNote = "Loot is not dated this far back, so this period's cannot be told from the rest.";
-				return;
-			}
-			Window w = window();
-			win = plugin.lootBetween(w.start, w.end);
-		}
-		if (win.loots > 0)
-		{
-			f.loot.add(new RecapPicture.Named("Drops", fmt(win.loots), gps(win.value)));
-		}
-		if (win.left > 0)
-		{
-			f.loot.add(new RecapPicture.Named("Left behind", fmt(win.left), gps(win.leftValue)));
-		}
-		for (String[] r : win.sources.subList(0, Math.min(8, win.sources.size())))
+		LocalStore.LootWindow win = lootWindow();
+		for (String[] r : firstN(win.sources, 8))
 		{
 			long v = safeParse(r[2]);
 			if (v > 0)
@@ -9296,13 +9226,12 @@ class ChroniclePanel extends PluginPanel
 				f.sources.add(new RecapPicture.Named(r[0], null, gps(v)));
 			}
 		}
-		for (String[] r : win.items.subList(0, Math.min(6, win.items.size())))
+		for (String[] r : firstN(win.items, 6))
 		{
 			long v = safeParse(r[2]);
 			if (v > 0)
 			{
-				f.items.add(new RecapPicture.Named(r[0] + " ×" + fmt(safeParse(r[1])), null,
-					gps(v)));
+				f.items.add(new RecapPicture.Named(r[0] + " ×" + fmt(safeParse(r[1])), null, gps(v)));
 			}
 		}
 		if (f.loot.isEmpty())
