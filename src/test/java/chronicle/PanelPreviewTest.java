@@ -1550,7 +1550,7 @@ public class PanelPreviewTest
 				Long v = history.lastEntry().getValue().skills.get(skill.toLowerCase(Locale.ROOT));
 				xp = v != null ? v : 0;
 			}
-			return PaceBook.forSkill(history, skill.toLowerCase(Locale.ROOT), xp);
+			return PaceBook.forSkill(history, skill.toLowerCase(Locale.ROOT), xp, java.time.LocalDate.now());
 		}
 
 		java.util.List<LocalStore.UntakenRow> taskMonsters = new ArrayList<>();

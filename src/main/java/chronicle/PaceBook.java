@@ -4,21 +4,17 @@
 package chronicle;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Experience;
 
-class PaceBook
+final class PaceBook
 {
 	private static final int MAX_LEVEL = 99;
 	private static final long MAX_XP = 200_000_000L;
-
 	private static final int MAX_ACTIVE_DAYS = 7;
 	private static final int RECENCY_DAYS = 30;
-
 	private static final int MIN_ACTIVE_DAYS = 2;
 
 	private PaceBook()
@@ -29,15 +25,10 @@ class PaceBook
 	static final class Pace
 	{
 		final double xpPerActiveDay;
-
 		final int activeDays;
-
 		final Integer targetLevel;
-
 		final long targetXp;
-
 		final long daysOfPlay;
-
 		final LocalDate lastActive;
 
 		boolean hasHorizon()
@@ -51,24 +42,16 @@ class PaceBook
 		}
 	}
 
-	static Pace forSkill(TreeMap<LocalDate, HistoryLog.Baseline> spine, String skill,
-		long currentXp)
-	{
-		return forSkill(spine, skill, currentXp, LocalDate.now());
-	}
-
-	static Pace forSkill(TreeMap<LocalDate, HistoryLog.Baseline> spine, String skill,
-		long currentXp, LocalDate asOf)
+	static Pace forSkill(TreeMap<LocalDate, HistoryLog.Baseline> spine, String skill, long currentXp, LocalDate asOf)
 	{
 		long xp = Math.max(0, currentXp);
 		long targetXp = nextMark(xp);
-		Integer targetLevel = targetXp > 0 && targetXp <= xpForLevel(MAX_LEVEL)
-			? levelAt(targetXp) : null;
+		Integer targetLevel = targetXp > 0 && targetXp <= xpForLevel(MAX_LEVEL) ? levelAt(targetXp) : null;
 		long remaining = targetXp > 0 ? targetXp - xp : 0;
 
-		List<Long> gains = new ArrayList<>();
+		long total = 0;
+		int activeDays = 0;
 		LocalDate lastActive = null;
-
 		if (spine != null && skill != null && asOf != null)
 		{
 			LocalDate cutoff = asOf.minusDays(RECENCY_DAYS);
@@ -83,39 +66,28 @@ class PaceBook
 					laterDate = null;
 					continue;
 				}
-				if (later != null)
+				if (later != null && later > value)
 				{
-					long gain = later - value;
-					if (gain > 0)
+					if (lastActive == null)
 					{
-						if (lastActive == null)
-						{
-							lastActive = laterDate;
-						}
-						if (gains.size() < MAX_ACTIVE_DAYS && !laterDate.isBefore(cutoff))
-						{
-							gains.add(gain);
-						}
+						lastActive = laterDate;
+					}
+					if (activeDays < MAX_ACTIVE_DAYS && !laterDate.isBefore(cutoff))
+					{
+						total += later - value;
+						activeDays++;
 					}
 				}
 				later = value;
 				laterDate = e.getKey();
-				if (lastActive != null
-					&& (gains.size() >= MAX_ACTIVE_DAYS || laterDate.isBefore(cutoff)))
+				if (lastActive != null && (activeDays >= MAX_ACTIVE_DAYS || laterDate.isBefore(cutoff)))
 				{
 					break;
 				}
 			}
 		}
 
-		long total = 0;
-		for (long g : gains)
-		{
-			total += g;
-		}
-		int activeDays = gains.size();
 		double pace = activeDays > 0 ? (double) total / activeDays : 0.0;
-
 		long daysOfPlay = activeDays < MIN_ACTIVE_DAYS || pace <= 0 || remaining <= 0
 			? 0 : (long) Math.ceil(remaining / pace);
 		return new Pace(pace, activeDays, targetLevel, targetXp, daysOfPlay, lastActive);

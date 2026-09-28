@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,54 +28,172 @@ class GrindBook
 {
 	private static final int MIN_DRY_RATE = 100;
 	private static final int MAX_ROWS = 20;
+	private static final long MAX_KC = 100_000_000L;
+	private static final int LEVEL_CAP = 99;
+	private static final long MIN_RATE = 2;
 
 	private final Gson gson;
 
 	private volatile Map<String, Map<String, Integer>> drops;
+	private volatile Map<String, SkillPet> skillPets;
 
-	private Map<String, Map<String, Integer>> book()
+	@RequiredArgsConstructor
+	public static final class GrindRow
 	{
-		Map<String, Map<String, Integer>> loaded = drops;
-		if (loaded != null)
+		public final String boss;
+		public final String item;
+		public final long kc;
+		public final long rate;
+		public final double percentileDry;
+	}
+
+	@RequiredArgsConstructor
+	static final class PetSource
+	{
+		final String boss;
+		final long kc;
+		final long rate;
+	}
+
+	@RequiredArgsConstructor
+	static final class PetChase
+	{
+		final String pet;
+		final long kc;
+		final double percentileDry;
+		final List<PetSource> sources;
+		final String activity;
+		final String unit;
+		final long level;
+
+		PetChase(String pet, long kc, double percentileDry, List<PetSource> sources)
 		{
-			return loaded;
+			this(pet, kc, percentileDry, sources, null, null, 0);
 		}
-		Map<String, Map<String, Integer>> out = new HashMap<>();
-		try (InputStream in = GrindBook.class.getResourceAsStream("/chronicle/osrs_clog_rates.json"))
+	}
+
+	@RequiredArgsConstructor
+	private static final class SkillSource
+	{
+		final String counter;
+		final String suffix;
+		final String notSuffix;
+		final List<String> minus;
+		final String name;
+		final long base;
+	}
+
+	@RequiredArgsConstructor
+	private static final class SkillKill
+	{
+		final String kc;
+		final List<String> orKc;
+		final String name;
+		final long base;
+		final boolean flat;
+	}
+
+	private static final class SkillPet
+	{
+		final String skill;
+		final String activity;
+		final String unit;
+		final boolean levelScaled;
+		final List<SkillSource> sources = new ArrayList<>();
+		final List<SkillKill> kills = new ArrayList<>();
+		final Set<String> named = new HashSet<>();
+		String diaryRegion;
+		String diaryTier;
+
+		SkillPet(JsonObject o)
 		{
-			if (in != null)
+			skill = str(o, "skill");
+			activity = str(o, "activity");
+			unit = str(o, "unit");
+			levelScaled = o.get("levelScaled").getAsBoolean();
+			for (JsonElement el : array(o, "sources"))
 			{
-				JsonObject root = gson.fromJson(
-					new InputStreamReader(in, StandardCharsets.UTF_8), JsonObject.class);
-				JsonObject bosses = root.has("drops") && root.get("drops").isJsonObject()
-					? root.getAsJsonObject("drops") : new JsonObject();
-				for (Map.Entry<String, JsonElement> b : bosses.entrySet())
+				JsonObject s = el.getAsJsonObject();
+				SkillSource source = new SkillSource(str(s, "counter"), str(s, "suffix"), str(s, "notSuffix"),
+					strings(s, "minus"), str(s, "name"), s.get("base").getAsLong());
+				sources.add(source);
+				if (source.counter != null)
 				{
-					if (!b.getValue().isJsonObject())
-					{
-						continue;
-					}
-					Map<String, Integer> items = new HashMap<>();
-					for (Map.Entry<String, JsonElement> it : b.getValue().getAsJsonObject().entrySet())
-					{
-						try
-						{
-							items.put(it.getKey(), it.getValue().getAsInt());
-						}
-						catch (RuntimeException ignored)
-						{
-						}
-					}
-					out.put(b.getKey(), items);
+					named.add(source.counter);
 				}
 			}
+			for (JsonElement el : array(o, "kills"))
+			{
+				JsonObject k = el.getAsJsonObject();
+				kills.add(new SkillKill(str(k, "kc"), strings(k, "orKc"), str(k, "name"),
+					k.get("base").getAsLong(), k.has("flat") && k.get("flat").getAsBoolean()));
+			}
+			JsonObject diary = obj(obj(o, "requires"), "diary");
+			if (diary != null)
+			{
+				diaryRegion = Objects.toString(str(diary, "region"), "");
+				diaryTier = str(diary, "tier");
+			}
+		}
+
+		boolean unlocked(JsonObject achievements)
+		{
+			if (diaryRegion == null)
+			{
+				return true;
+			}
+			JsonObject region = obj(obj(achievements, "diaries"), diaryRegion);
+			JsonElement done = region != null && diaryTier != null ? region.get(diaryTier) : null;
+			return done != null && done.isJsonPrimitive() && done.getAsBoolean();
+		}
+	}
+
+	private JsonObject resource(String name)
+	{
+		try (InputStream in = GrindBook.class.getResourceAsStream("/chronicle/" + name))
+		{
+			return gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), JsonObject.class);
 		}
 		catch (Exception e)
 		{
-			log.debug("rate book load failed", e);
+			log.debug("rate book {} unreadable", name, e);
+			return new JsonObject();
 		}
-		drops = out;
-		return out;
+	}
+
+	private Map<String, Map<String, Integer>> book()
+	{
+		if (drops == null)
+		{
+			Map<String, Map<String, Integer>> out = new HashMap<>();
+			JsonObject bosses = obj(resource("osrs_clog_rates.json"), "drops");
+			if (bosses != null)
+			{
+				for (Map.Entry<String, JsonElement> b : bosses.entrySet())
+				{
+					Map<String, Integer> items = new HashMap<>();
+					b.getValue().getAsJsonObject().entrySet().forEach(it -> items.put(it.getKey(), it.getValue().getAsInt()));
+					out.put(b.getKey(), items);
+				}
+			}
+			drops = out;
+		}
+		return drops;
+	}
+
+	private Map<String, SkillPet> skillBook()
+	{
+		if (skillPets == null)
+		{
+			Map<String, SkillPet> out = new HashMap<>();
+			JsonObject pets = obj(resource("osrs_skilling_pet_rates.json"), "pets");
+			if (pets != null)
+			{
+				pets.entrySet().forEach(e -> out.put(e.getKey().toLowerCase(Locale.ROOT), new SkillPet(e.getValue().getAsJsonObject())));
+			}
+			skillPets = out;
+		}
+		return skillPets;
 	}
 
 	private static String norm(String s)
@@ -90,24 +209,7 @@ class GrindBook
 		return sb.toString();
 	}
 
-	private static Set<String> pageFor(String key, Map<String, Set<String>> pageItems)
-	{
-		Set<String> page = pageItems.get(norm(key));
-		if (page != null)
-		{
-			return page;
-		}
-		int open = key.indexOf('(');
-		int close = key.lastIndexOf(')');
-		if (open >= 0 && close > open + 1)
-		{
-			return pageItems.get(norm(key.substring(open + 1, close)));
-		}
-		return null;
-	}
-
-	List<GrindRow> grinds(JsonObject clog,
-		List<LocalStore.SourceRow> dropSources)
+	List<GrindRow> grinds(JsonObject clog, List<LocalStore.SourceRow> dropSources)
 	{
 		Map<String, Map<String, Integer>> rates = book();
 		if (rates.isEmpty())
@@ -115,7 +217,7 @@ class GrindBook
 			return new ArrayList<>();
 		}
 		Map<String, Long> kcByNorm = killCounts(clog, dropSources);
-		Set<String> obtained = clogItems(clog);
+		Set<String> obtained = names(obj(clog, "clog_items"));
 		obtained.addAll(looted(dropSources));
 		Map<String, Set<String>> pageItems = new HashMap<>();
 		JsonObject byCat = obj(clog, "by_cat");
@@ -123,16 +225,10 @@ class GrindBook
 		{
 			for (Map.Entry<String, JsonElement> e : byCat.entrySet())
 			{
-				if (!e.getValue().isJsonObject())
+				if (e.getValue().isJsonObject())
 				{
-					continue;
+					pageItems.put(norm(e.getKey()), names(e.getValue().getAsJsonObject()));
 				}
-				Set<String> names = new HashSet<>();
-				for (Map.Entry<String, JsonElement> it : e.getValue().getAsJsonObject().entrySet())
-				{
-					names.add(it.getKey().toLowerCase(Locale.ROOT));
-				}
-				pageItems.put(norm(e.getKey()), names);
 			}
 		}
 
@@ -147,16 +243,14 @@ class GrindBook
 			Set<String> page = pageFor(boss.getKey(), pageItems);
 			for (Map.Entry<String, Integer> item : boss.getValue().entrySet())
 			{
-				int rate = item.getValue() != null ? item.getValue() : 0;
+				int rate = item.getValue();
 				String li = item.getKey().toLowerCase(Locale.ROOT);
-				boolean got = obtained.contains(li) || (page != null && page.contains(li));
-				if (got || rate < MIN_DRY_RATE)
+				if (rate < MIN_DRY_RATE || obtained.contains(li) || (page != null && page.contains(li)))
 				{
 					continue;
 				}
 				double pct = (1.0 - Math.pow(1.0 - 1.0 / rate, kc)) * 100.0;
-				out.add(new GrindRow(boss.getKey(), item.getKey(),
-					kc, rate, Math.round(pct * 10.0) / 10.0));
+				out.add(new GrindRow(boss.getKey(), item.getKey(), kc, rate, Math.round(pct * 10.0) / 10.0));
 			}
 		}
 		out.sort((a, b) ->
@@ -167,8 +261,19 @@ class GrindBook
 		return out.size() > MAX_ROWS ? new ArrayList<>(out.subList(0, MAX_ROWS)) : out;
 	}
 
-	private static Map<String, Long> killCounts(JsonObject clog,
-		List<LocalStore.SourceRow> dropSources)
+	private static Set<String> pageFor(String key, Map<String, Set<String>> pageItems)
+	{
+		Set<String> page = pageItems.get(norm(key));
+		int open = key.indexOf('(');
+		int close = key.lastIndexOf(')');
+		if (page == null && open >= 0 && close > open + 1)
+		{
+			return pageItems.get(norm(key.substring(open + 1, close)));
+		}
+		return page;
+	}
+
+	private static Map<String, Long> killCounts(JsonObject clog, List<LocalStore.SourceRow> dropSources)
 	{
 		Map<String, Long> kcByNorm = new HashMap<>();
 		JsonObject kcs = obj(clog, "kcs");
@@ -196,36 +301,6 @@ class GrindBook
 		return kcByNorm;
 	}
 
-	private static final long MAX_KC = 100_000_000L;
-
-	private static final int LEVEL_CAP = 99;
-	private static final long MIN_RATE = 2;
-
-	@RequiredArgsConstructor
-	static final class PetSource
-	{
-		final String boss;
-		final long kc;
-		final long rate;
-	}
-
-	@RequiredArgsConstructor
-	static final class PetChase
-	{
-		final String pet;
-		final long kc;
-		final double percentileDry;
-		final List<PetSource> sources;
-		final String activity;
-		final String unit;
-		final long level;
-
-		PetChase(String pet, long kc, double percentileDry, List<PetSource> sources)
-		{
-			this(pet, kc, percentileDry, sources, null, null, 0);
-		}
-	}
-
 	Map<String, PetChase> petChases(JsonObject clog, List<LocalStore.SourceRow> dropSources,
 		Map<String, Long> counters, Map<String, long[]> skills, JsonObject achievements,
 		Collection<String> pets)
@@ -242,8 +317,20 @@ class GrindBook
 			return out;
 		}
 		Map<String, Long> kcByNorm = killCounts(clog, dropSources);
-		Set<String> obtained = allObtained(clog);
+		Set<String> obtained = names(obj(clog, "clog_items"));
+		JsonObject byCat = obj(clog, "by_cat");
+		if (byCat != null)
+		{
+			for (Map.Entry<String, JsonElement> cat : byCat.entrySet())
+			{
+				if (cat.getValue().isJsonObject())
+				{
+					obtained.addAll(names(cat.getValue().getAsJsonObject()));
+				}
+			}
+		}
 		obtained.addAll(looted(dropSources));
+
 		Map<String, List<PetSource>> bySource = new HashMap<>();
 		for (Map.Entry<String, Map<String, Integer>> boss : rates.entrySet())
 		{
@@ -254,14 +341,11 @@ class GrindBook
 			}
 			for (Map.Entry<String, Integer> item : boss.getValue().entrySet())
 			{
-				long rate = item.getValue() != null ? item.getValue() : 0;
-				if (rate <= 0)
+				if (item.getValue() > 0)
 				{
-					continue;
+					bySource.computeIfAbsent(item.getKey().toLowerCase(Locale.ROOT), k -> new ArrayList<>())
+						.add(new PetSource(boss.getKey(), Math.min(kc, MAX_KC), item.getValue()));
 				}
-				bySource.computeIfAbsent(item.getKey().toLowerCase(Locale.ROOT),
-					k -> new ArrayList<>())
-					.add(new PetSource(boss.getKey(), Math.min(kc, MAX_KC), rate));
 			}
 		}
 		for (String pet : pets)
@@ -276,33 +360,26 @@ class GrindBook
 				continue;
 			}
 			SkillPet spec = skilling.get(key);
+			List<PetSource> src = bySource.get(key);
+			PetChase chase = null;
 			if (spec != null)
 			{
-				if (spec.requires != null && !spec.requires.met(achievements))
-				{
-					continue;
-				}
-				PetChase chase = skillingChase(pet, spec, counters, skills, kcByNorm);
-				if (chase != null)
-				{
-					out.put(key, chase);
-				}
-				continue;
+				chase = spec.unlocked(achievements) ? skillingChase(pet, spec, counters, skills, kcByNorm) : null;
 			}
-			List<PetSource> src = bySource.get(key);
-			if (src == null)
+			else if (src != null)
 			{
-				continue;
+				src.sort((a, b) -> Long.compare(b.kc, a.kc));
+				chase = chase(pet, src, null, null, 0);
 			}
-			List<PetSource> sorted = new ArrayList<>(src);
-			sorted.sort((a, b) -> Long.compare(b.kc, a.kc));
-			out.put(key, chase(pet, sorted, null, null, 0));
+			if (chase != null)
+			{
+				out.put(key, chase);
+			}
 		}
 		return out;
 	}
 
-	private static PetChase chase(String pet, List<PetSource> sources, String activity,
-		String unit, long level)
+	private static PetChase chase(String pet, List<PetSource> sources, String activity, String unit, long level)
 	{
 		double miss = 1.0;
 		long kc = 0;
@@ -313,267 +390,16 @@ class GrindBook
 		}
 		sources.sort((a, b) -> Long.compare(b.kc, a.kc));
 		double pct = Math.max(0.0, Math.min(100.0, (1.0 - miss) * 100.0));
-		return new PetChase(pet, kc, Math.round(pct * 10.0) / 10.0, sources, activity, unit,
-			level);
+		return new PetChase(pet, kc, Math.round(pct * 10.0) / 10.0, sources, activity, unit, level);
 	}
 
-	@RequiredArgsConstructor
-	private static final class SkillSource
-	{
-		final String counter;
-		final String suffix;
-		final String notSuffix;
-		final List<String> minus;
-		final String name;
-		final long base;
-	}
-
-	@RequiredArgsConstructor
-	private static final class SkillKill
-	{
-		final String kc;
-		final List<String> orKc;
-		final String name;
-		final long base;
-		final boolean flat;
-	}
-
-	@RequiredArgsConstructor
-	private static final class Requirement
-	{
-		final String diaryRegion;
-		final String diaryTier;
-		final String quest;
-		final String combatTier;
-
-		boolean met(JsonObject achievements)
-		{
-			if (achievements == null)
-			{
-				return false;
-			}
-			if (diaryRegion != null
-				&& !flag(obj(obj(achievements, "diaries"), diaryRegion), diaryTier))
-			{
-				return false;
-			}
-			if (quest != null
-				&& !"FINISHED".equals(text(obj(achievements, "quests"), quest)))
-			{
-				return false;
-			}
-			return combatTier == null
-				|| safeLong(field(obj(obj(achievements, "combat"), "tiers"), combatTier)) > 0;
-		}
-
-		private static JsonElement field(JsonObject o, String key)
-		{
-			return o != null && key != null && o.has(key) ? o.get(key) : null;
-		}
-
-		private static boolean flag(JsonObject o, String key)
-		{
-			JsonElement el = field(o, key);
-			try
-			{
-				return el != null && el.isJsonPrimitive() && el.getAsBoolean();
-			}
-			catch (RuntimeException ignored)
-			{
-				return false;
-			}
-		}
-
-		private static String text(JsonObject o, String key)
-		{
-			JsonElement el = field(o, key);
-			return el != null && el.isJsonPrimitive() ? el.getAsString() : null;
-		}
-	}
-
-	private static final class SkillPet
-	{
-		final String skill;
-		final String activity;
-		final String unit;
-		final boolean levelScaled;
-		final List<SkillSource> sources;
-		final List<SkillKill> kills;
-		final Requirement requires;
-		final Set<String> named;
-
-		SkillPet(String skill, String activity, String unit, boolean levelScaled,
-			List<SkillSource> sources, List<SkillKill> kills, Requirement requires)
-		{
-			this.skill = skill;
-			this.activity = activity;
-			this.unit = unit;
-			this.levelScaled = levelScaled;
-			this.sources = sources;
-			this.kills = kills;
-			this.requires = requires;
-			this.named = new HashSet<>();
-			for (SkillSource s : sources)
-			{
-				if (s.counter != null)
-				{
-					this.named.add(s.counter);
-				}
-			}
-		}
-	}
-
-	private volatile Map<String, SkillPet> skillPets;
-
-	private Map<String, SkillPet> skillBook()
-	{
-		Map<String, SkillPet> loaded = skillPets;
-		if (loaded != null)
-		{
-			return loaded;
-		}
-		Map<String, SkillPet> out = new HashMap<>();
-		try (InputStream in = GrindBook.class.getResourceAsStream(
-			"/chronicle/osrs_skilling_pet_rates.json"))
-		{
-			if (in != null)
-			{
-				JsonObject root = gson.fromJson(
-					new InputStreamReader(in, StandardCharsets.UTF_8), JsonObject.class);
-				JsonObject pets = obj(root, "pets");
-				if (pets != null)
-				{
-					for (Map.Entry<String, JsonElement> e : pets.entrySet())
-					{
-						if (!e.getValue().isJsonObject())
-						{
-							continue;
-						}
-						SkillPet pet = readSkillPet(e.getValue().getAsJsonObject());
-						if (pet != null)
-						{
-							out.put(e.getKey().toLowerCase(Locale.ROOT), pet);
-						}
-					}
-				}
-			}
-		}
-		catch (Exception e)
-		{
-			log.debug("skilling pet rate book load failed", e);
-		}
-		skillPets = out;
-		return out;
-	}
-
-	private static SkillPet readSkillPet(JsonObject o)
-	{
-		List<SkillSource> sources = new ArrayList<>();
-		if (o.has("sources") && o.get("sources").isJsonArray())
-		{
-			for (JsonElement el : o.getAsJsonArray("sources"))
-			{
-				if (!el.isJsonObject())
-				{
-					continue;
-				}
-				JsonObject s = el.getAsJsonObject();
-				long base = safeLong(s.get("base"));
-				if (base <= 0)
-				{
-					continue;
-				}
-				sources.add(new SkillSource(str(s, "counter"), str(s, "suffix"),
-					str(s, "notSuffix"), strings(s, "minus"), str(s, "name"), base));
-			}
-		}
-		List<SkillKill> kills = new ArrayList<>();
-		if (o.has("kills") && o.get("kills").isJsonArray())
-		{
-			for (JsonElement el : o.getAsJsonArray("kills"))
-			{
-				if (!el.isJsonObject())
-				{
-					continue;
-				}
-				JsonObject k = el.getAsJsonObject();
-				long base = safeLong(k.get("base"));
-				if (base <= 0 || str(k, "kc") == null)
-				{
-					continue;
-				}
-				kills.add(new SkillKill(str(k, "kc"), strings(k, "orKc"), str(k, "name"), base,
-					k.has("flat") && k.get("flat").getAsBoolean()));
-			}
-		}
-		if (sources.isEmpty() && kills.isEmpty())
-		{
-			return null;
-		}
-		return new SkillPet(str(o, "skill"), str(o, "activity"), str(o, "unit"),
-			o.has("levelScaled") && o.get("levelScaled").getAsBoolean(), sources, kills,
-			readRequirement(o));
-	}
-
-	private static Requirement readRequirement(JsonObject o)
-	{
-		JsonObject r = obj(o, "requires");
-		if (r == null)
-		{
-			return null;
-		}
-		JsonObject diary = obj(r, "diary");
-		JsonObject quest = obj(r, "quest");
-		JsonObject combat = obj(r, "combat");
-		String region = diary != null ? nz(str(diary, "region")) : null;
-		String tier = diary != null ? nz(str(diary, "tier")) : null;
-		String name = quest != null ? nz(str(quest, "name")) : null;
-		String caTier = combat != null ? nz(str(combat, "tier")) : null;
-		if (region == null && name == null && caTier == null)
-		{
-			return null;
-		}
-		return new Requirement(region, tier, name, caTier);
-	}
-
-	private static JsonObject obj(JsonObject o, String key)
-	{
-		return o != null && key != null && o.has(key) && o.get(key).isJsonObject()
-			? o.getAsJsonObject(key) : null;
-	}
-
-	private static String nz(String s)
-	{
-		return s != null ? s : "";
-	}
-
-	private static List<String> strings(JsonObject o, String key)
-	{
-		List<String> out = new ArrayList<>();
-		if (o.has(key) && o.get(key).isJsonArray())
-		{
-			for (JsonElement el : o.getAsJsonArray(key))
-			{
-				out.add(el.getAsString());
-			}
-		}
-		return out;
-	}
-
-	private static String str(JsonObject o, String field)
-	{
-		return o.has(field) && o.get(field).isJsonPrimitive()
-			? o.get(field).getAsString() : null;
-	}
-
-	private PetChase skillingChase(String pet, SkillPet spec, Map<String, Long> counters,
+	private static PetChase skillingChase(String pet, SkillPet spec, Map<String, Long> counters,
 		Map<String, long[]> skills, Map<String, Long> kcByNorm)
 	{
 		long level = 0;
 		if (spec.levelScaled)
 		{
-			long[] sheet = skills != null && spec.skill != null
-				? skills.get(spec.skill) : null;
+			long[] sheet = skills != null && spec.skill != null ? skills.get(spec.skill) : null;
 			level = sheet != null && sheet.length > 0 ? sheet[0] : 0;
 			if (level <= 0)
 			{
@@ -584,38 +410,26 @@ class GrindBook
 		List<PetSource> sources = new ArrayList<>();
 		for (SkillSource s : spec.sources)
 		{
-			source(sources, s.name, Math.min(count(s, spec, counters), MAX_KC),
-				spec.levelScaled ? s.base - 25L * level : s.base);
+			addSource(sources, s.name, count(s, spec, counters), spec.levelScaled ? s.base - 25L * level : s.base);
 		}
 		for (SkillKill k : spec.kills)
 		{
-			source(sources, k.name, Math.min(killCount(k, kcByNorm), MAX_KC),
-				spec.levelScaled && !k.flat ? k.base - 25L * level : k.base);
+			long n = kcByNorm.getOrDefault(norm(k.kc), 0L);
+			for (String alt : k.orKc)
+			{
+				n = Math.max(n, kcByNorm.getOrDefault(norm(alt), 0L));
+			}
+			addSource(sources, k.name, n, spec.levelScaled && !k.flat ? k.base - 25L * level : k.base);
 		}
 		return sources.isEmpty() ? null : chase(pet, sources, spec.activity, spec.unit, level);
 	}
 
-	private static void source(List<PetSource> out, String name, long n, long rate)
+	private static void addSource(List<PetSource> out, String name, long n, long rate)
 	{
 		if (n > 0 && rate >= MIN_RATE)
 		{
-			out.add(new PetSource(name, n, rate));
+			out.add(new PetSource(name, Math.min(n, MAX_KC), rate));
 		}
-	}
-
-	private static long killCount(SkillKill k, Map<String, Long> kcByNorm)
-	{
-		Long kc = kcByNorm.get(norm(k.kc));
-		long n = kc != null ? kc : 0;
-		for (String alt : k.orKc)
-		{
-			Long other = kcByNorm.get(norm(alt));
-			if (other != null)
-			{
-				n = Math.max(n, other);
-			}
-		}
-		return n;
 	}
 
 	private static long count(SkillSource s, SkillPet spec, Map<String, Long> counters)
@@ -630,19 +444,12 @@ class GrindBook
 			for (Map.Entry<String, Long> e : counters.entrySet())
 			{
 				String k = e.getKey();
-				if (!k.endsWith(s.suffix)
-					|| (s.notSuffix != null && k.endsWith(s.notSuffix))
-					|| spec.named.contains(k))
+				if (k.endsWith(s.suffix) && !(s.notSuffix != null && k.endsWith(s.notSuffix)) && !spec.named.contains(k))
 				{
-					continue;
+					n += Math.max(0L, e.getValue() != null ? e.getValue() : 0L);
 				}
-				n += Math.max(0L, e.getValue() != null ? e.getValue() : 0L);
 			}
 			return n;
-		}
-		if (s.counter == null)
-		{
-			return 0;
 		}
 		long n = counters.getOrDefault(s.counter, 0L);
 		for (String m : s.minus)
@@ -652,37 +459,12 @@ class GrindBook
 		return Math.max(0L, n);
 	}
 
-	private static Set<String> clogItems(JsonObject clog)
+	private static Set<String> names(JsonObject o)
 	{
 		Set<String> out = new HashSet<>();
-		JsonObject items = obj(clog, "clog_items");
-		if (items != null)
+		if (o != null)
 		{
-			for (Map.Entry<String, JsonElement> e : items.entrySet())
-			{
-				out.add(e.getKey().toLowerCase(Locale.ROOT));
-			}
-		}
-		return out;
-	}
-
-	private static Set<String> allObtained(JsonObject clog)
-	{
-		Set<String> out = clogItems(clog);
-		JsonObject byCat = obj(clog, "by_cat");
-		if (byCat != null)
-		{
-			for (Map.Entry<String, JsonElement> cat : byCat.entrySet())
-			{
-				if (!cat.getValue().isJsonObject())
-				{
-					continue;
-				}
-				for (Map.Entry<String, JsonElement> it : cat.getValue().getAsJsonObject().entrySet())
-				{
-					out.add(it.getKey().toLowerCase(Locale.ROOT));
-				}
-			}
+			o.keySet().forEach(k -> out.add(k.toLowerCase(Locale.ROOT)));
 		}
 		return out;
 	}
@@ -703,6 +485,28 @@ class GrindBook
 		return out;
 	}
 
+	private static JsonObject obj(JsonObject o, String key)
+	{
+		return o != null && o.has(key) && o.get(key).isJsonObject() ? o.getAsJsonObject(key) : null;
+	}
+
+	private static Iterable<JsonElement> array(JsonObject o, String key)
+	{
+		return o.has(key) ? o.getAsJsonArray(key) : new ArrayList<>();
+	}
+
+	private static String str(JsonObject o, String key)
+	{
+		return o.has(key) && o.get(key).isJsonPrimitive() ? o.get(key).getAsString() : null;
+	}
+
+	private static List<String> strings(JsonObject o, String key)
+	{
+		List<String> out = new ArrayList<>();
+		array(o, key).forEach(el -> out.add(el.getAsString()));
+		return out;
+	}
+
 	private static long safeLong(JsonElement e)
 	{
 		try
@@ -713,15 +517,5 @@ class GrindBook
 		{
 			return 0;
 		}
-	}
-
-	@RequiredArgsConstructor
-	public static final class GrindRow
-	{
-		public final String boss;
-		public final String item;
-		public final long kc;
-		public final long rate;
-		public final double percentileDry;
 	}
 }

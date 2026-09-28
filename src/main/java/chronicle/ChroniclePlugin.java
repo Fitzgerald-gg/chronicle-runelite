@@ -581,7 +581,7 @@ public class ChroniclePlugin extends Plugin
 
 		log.debug("pushing {} counters for {}", snapshot.size(), name);
 		api.pushStats(config.serverBaseUrl(), token, name, snapshot, cachedAccountType,
-			harvestSkills(), this::onPushResult);
+			harvestSkills(), this::refreshPanel);
 	}
 
 	private static String accountTypeTag(int varbit)
@@ -651,24 +651,7 @@ public class ChroniclePlugin extends Plugin
 			return;
 		}
 		api.pushStats(config.serverBaseUrl(), token, who, snapshot, type,
-			null, this::onPushResult);
-	}
-
-	private void onPushResult(ChronicleApiClient.PushResult result)
-	{
-		if (result.ok)
-		{
-			log.debug("push ok: {} accepted, {} changed", result.accepted, result.changed);
-		}
-		else if (result.code == 409)
-		{
-			log.debug("push 409: server ahead; journal stays authoritative");
-		}
-		else
-		{
-			log.debug("push failed code={} err={}", result.code, result.error);
-		}
-		refreshPanel();
+			null, this::refreshPanel);
 	}
 
 	Map<String, Integer> harvest()
@@ -1136,7 +1119,7 @@ public class ChroniclePlugin extends Plugin
 		catch (RuntimeException ignored)
 		{
 		}
-		return PaceBook.forSkill(spine, skill.toLowerCase(Locale.ROOT), xp);
+		return PaceBook.forSkill(spine, skill.toLowerCase(Locale.ROOT), xp, LocalDate.now());
 	}
 
 	List<LocalStore.UntakenRow> untakenSources()

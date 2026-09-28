@@ -27,128 +27,60 @@ final class SlayerTaskBook
 {
 	static final int UNKNOWN_ID = -1;
 
-	private static final String RESOURCE = "/chronicle/osrs_slayer_tasks.json";
+	private final Map<Integer, String> npcToTask = new HashMap<>();
+	private final Map<String, List<String>> variants = new HashMap<>();
 
-	private static volatile SlayerTaskBook instance;
-
-	private final Map<Integer, String> npcToTask;
-	private final Map<String, List<String>> variants;
-
-	private SlayerTaskBook(Map<Integer, String> npcToTask, Map<String, List<String>> variants)
+	private static final class Holder
 	{
-		this.npcToTask = npcToTask;
-		this.variants = variants;
+		static final SlayerTaskBook BOOK = new SlayerTaskBook();
 	}
 
 	static SlayerTaskBook get()
 	{
-		SlayerTaskBook loaded = instance;
-		if (loaded != null)
-		{
-			return loaded;
-		}
-		synchronized (SlayerTaskBook.class)
-		{
-			if (instance == null)
-			{
-				instance = load();
-			}
-			return instance;
-		}
+		return Holder.BOOK;
 	}
 
-	private static SlayerTaskBook load()
+	private SlayerTaskBook()
 	{
-		Map<Integer, String> ids = new HashMap<>();
-		Map<String, List<String>> names = new HashMap<>();
-		try (InputStream in = SlayerTaskBook.class.getResourceAsStream(RESOURCE))
+		try (InputStream in = SlayerTaskBook.class.getResourceAsStream("/chronicle/osrs_slayer_tasks.json"))
 		{
-			if (in != null)
+			JsonObject root = new JsonParser().parse(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
+			for (Map.Entry<String, JsonElement> e : root.getAsJsonObject("npc_to_task").entrySet())
 			{
-				JsonElement parsed = new JsonParser().parse(
-					new InputStreamReader(in, StandardCharsets.UTF_8));
-				JsonObject root = parsed != null && parsed.isJsonObject() ? parsed.getAsJsonObject() : null;
-				if (root != null && root.has("npc_to_task") && root.get("npc_to_task").isJsonObject())
-				{
-					for (Map.Entry<String, JsonElement> e : root.getAsJsonObject("npc_to_task").entrySet())
-					{
-						try
-						{
-							ids.put(Integer.parseInt(e.getKey().trim()), e.getValue().getAsString());
-						}
-						catch (RuntimeException ignored)
-						{
-						}
-					}
-				}
-				if (root != null && root.has("tasks") && root.get("tasks").isJsonObject())
-				{
-					for (Map.Entry<String, JsonElement> e : root.getAsJsonObject("tasks").entrySet())
-					{
-						List<String> vs = new ArrayList<>();
-						if (e.getValue().isJsonArray())
-						{
-							for (JsonElement v : e.getValue().getAsJsonArray())
-							{
-								try
-								{
-									String s = v.getAsString().toLowerCase(Locale.ROOT);
-									if (!s.isEmpty())
-									{
-										vs.add(s);
-									}
-								}
-								catch (RuntimeException ignored)
-								{
-								}
-							}
-						}
-						names.put(e.getKey().toLowerCase(Locale.ROOT), vs);
-					}
-				}
+				npcToTask.put(Integer.parseInt(e.getKey()), e.getValue().getAsString().toLowerCase(Locale.ROOT));
 			}
-			else
+			for (Map.Entry<String, JsonElement> e : root.getAsJsonObject("tasks").entrySet())
 			{
-				log.debug("reference table {} missing", RESOURCE);
+				List<String> vs = new ArrayList<>();
+				for (JsonElement v : e.getValue().getAsJsonArray())
+				{
+					vs.add(v.getAsString().toLowerCase(Locale.ROOT));
+				}
+				variants.put(e.getKey().toLowerCase(Locale.ROOT), vs);
 			}
 		}
 		catch (Exception e)
 		{
-			log.debug("reference table {} unreadable", RESOURCE, e);
+			log.debug("slayer task table unreadable", e);
 		}
-		return new SlayerTaskBook(ids, names);
 	}
 
 	static boolean onTask(String npcName, int npcId, String task)
-	{
-		return get().isOnTask(npcName, npcId, task);
-	}
-
-	boolean isOnTask(String npcName, int npcId, String task)
 	{
 		if (task == null || task.trim().isEmpty() || npcName == null || npcName.trim().isEmpty())
 		{
 			return false;
 		}
+		SlayerTaskBook book = get();
 		String taskKey = task.trim().toLowerCase(Locale.ROOT);
-		String mapped = npcToTask.get(npcId);
+		String mapped = book.npcToTask.get(npcId);
 		if (mapped != null)
 		{
-			return mapped.toLowerCase(Locale.ROOT).equals(taskKey);
+			return mapped.equals(taskKey);
 		}
 		String name = npcName.trim().toLowerCase(Locale.ROOT);
-		if (name.contains(root(taskKey)))
-		{
-			return true;
-		}
-		for (String v : variants.getOrDefault(taskKey, Collections.emptyList()))
-		{
-			if (name.contains(v))
-			{
-				return true;
-			}
-		}
-		return false;
+		return name.contains(root(taskKey))
+			|| book.variants.getOrDefault(taskKey, Collections.emptyList()).stream().anyMatch(name::contains);
 	}
 
 	static String root(String task)
