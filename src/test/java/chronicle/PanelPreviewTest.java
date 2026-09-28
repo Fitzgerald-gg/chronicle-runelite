@@ -1167,12 +1167,6 @@ public class PanelPreviewTest
 			return store != null ? store.lootRollFrom() : 0;
 		}
 
-		java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, boolean includeOpen)
-		{
-			return store != null ? store.onTaskLoot(fromMs, toMs, includeOpen)
-				: new java.util.ArrayList<>();
-		}
-
 		@Override
 		java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task,
 			boolean includeOpen)
@@ -1191,12 +1185,6 @@ public class PanelPreviewTest
 		java.util.List<String> taskNames()
 		{
 			return store != null ? store.taskNames() : new java.util.ArrayList<>();
-		}
-
-		long[] onTaskTally(long fromMs, long toMs, boolean includeOpen)
-		{
-			return store != null ? store.onTaskTally(fromMs, toMs, includeOpen)
-				: new long[]{0, 0, 0};
 		}
 
 		@Override
