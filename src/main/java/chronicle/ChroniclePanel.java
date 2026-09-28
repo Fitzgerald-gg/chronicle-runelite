@@ -294,14 +294,10 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	private static ImageIcon tabIcon(String name)
-	{
-		return new ImageIcon(ImageUtil.loadImageResource(ChroniclePanel.class, name));
-	}
-
 	private void addTab(String icon, String tooltip, Tab target)
 	{
-		MaterialTab mt = new MaterialTab(tabIcon(icon), tabGroup, new JPanel());
+		MaterialTab mt = new MaterialTab(new ImageIcon(ImageUtil.loadImageResource(ChroniclePanel.class, icon)),
+			tabGroup, new JPanel());
 		mt.setToolTipText(tooltip);
 		mt.setOnSelectEvent(() ->
 		{
@@ -670,8 +666,7 @@ class ChroniclePanel extends PluginPanel
 		if (sessionPeriod())
 		{
 			rollUsed = true;
-			Long rolled = rolledKills(name);
-			return rolled == null ? 0 : rolled;
+			return rolled(name);
 		}
 		Span s = span();
 		if (s == null)
@@ -696,6 +691,12 @@ class ChroniclePanel extends PluginPanel
 			return rolled;
 		}
 		return -1;
+	}
+
+	private long rolled(String name)
+	{
+		Long n = rolledKills(name);
+		return n == null ? 0 : n;
 	}
 
 	private Long rolledKills(String name)
@@ -1226,12 +1227,15 @@ class ChroniclePanel extends PluginPanel
 			if (had.isEmpty())
 			{
 				String unkept = notCounting(true);
-				return noted(p, unkept != null ? unkept : "Nothing on the boss sheet was killed inside "
-					+ periodInSentence() + ".");
+				return noted(p, unkept != null ? unkept : inside("Nothing on the boss sheet was killed"));
 			}
 			roster = had;
 		}
-		JPanel opening = bossSheet(roster);
+		JPanel grid = grid3();
+		for (Boss b : roster)
+		{
+			grid.add(bossCell(b));
+		}
 		LocalDate shortFrom = rollUsed ? rollShortOf() : null;
 		if (shortFrom != null)
 		{
@@ -1239,18 +1243,8 @@ class ChroniclePanel extends PluginPanel
 				+ "instead, which reaches back only to " + shortFrom.format(FULL_DAY)
 				+ " and sees a kill only where it dropped something."), 4);
 		}
-		spaced(p, opening);
+		spaced(p, grid);
 		return p;
-	}
-
-	private JPanel bossSheet(List<Boss> rows)
-	{
-		JPanel grid = grid3();
-		for (Boss b : rows)
-		{
-			grid.add(bossCell(b));
-		}
-		return grid;
 	}
 
 	private JPanel bossCell(Boss b)
@@ -2718,13 +2712,6 @@ class ChroniclePanel extends PluginPanel
 		return more;
 	}
 
-	private JPanel actionRow(String label, Runnable go)
-	{
-		JPanel r = row(label, "", accent(), true);
-		link(r, go);
-		return r;
-	}
-
 	private void more(JPanel p, int size, int cap, boolean inset, java.util.function.IntConsumer show)
 	{
 		if (size > cap)
@@ -3058,11 +3045,13 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		p.add(vgap(8));
-		p.add(actionRow("All kills of " + t.task, () ->
+		JPanel all = row("All kills of " + t.task, "", accent(), true);
+		link(all, () ->
 		{
 			detailTask = -1;
 			openSourceLoose(t.task);
-		}));
+		});
+		p.add(all);
 		return p;
 	}
 
@@ -5587,13 +5576,7 @@ class ChroniclePanel extends PluginPanel
 				{
 					return floor;
 				}
-				long sum = 0;
-				for (Entry<String, Long> e
-					: rowsBySection.getOrDefault(s, new ArrayList<>()))
-				{
-					sum += e.getValue();
-				}
-				return sum;
+				return sumOf(rowsBySection.getOrDefault(s, new ArrayList<>()));
 			}).reversed());
 			order.addAll(crafts);
 		}
@@ -5642,12 +5625,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			String floorKey = StatRegistry.suffixFloor(craft, verb);
 			long floorVal = floorKey != null ? counters.getOrDefault(floorKey, 0L) : 0L;
-			long sum = 0;
-			for (Entry<String, Long> e : byVerb.get(verb))
-			{
-				sum += e.getValue();
-			}
-			verbTotal.put(verb, Math.max(floorVal, sum));
+			verbTotal.put(verb, Math.max(floorVal, sumOf(byVerb.get(verb))));
 		}
 		verbs.sort(Comparator.comparingLong(
 			(String v) -> verbTotal.getOrDefault(v, 0L)).reversed());
@@ -5659,13 +5637,8 @@ class ChroniclePanel extends PluginPanel
 				fmt(verbTotal.getOrDefault(verb, 0L)), stateKey));
 			if (open)
 			{
-				long sum = 0;
-				for (Entry<String, Long> e : byVerb.get(verb))
-				{
-					p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
-					sum += e.getValue();
-				}
-				long verbGhost = verbTotal.get(verb) - sum;
+				statRows(p, byVerb.get(verb));
+				long verbGhost = verbTotal.get(verb) - sumOf(byVerb.get(verb));
 				if (verbGhost >= 1)
 				{
 					p.add(ghostRow("Other", fmt(verbGhost)));
@@ -5678,11 +5651,7 @@ class ChroniclePanel extends PluginPanel
 	private void addDestinationsFold(JPanel p, List<Entry<String, Long>> destRows)
 	{
 		destRows.sort(StatRegistry::compareRows);
-		long sum = 0;
-		for (Entry<String, Long> e : destRows)
-		{
-			sum += e.getValue();
-		}
+		long sum = sumOf(destRows);
 		String stateKey = "Ledger & Roads:Destinations";
 		boolean open = foldOpen(stateKey);
 		p.add(subHead("Destinations", fmt(sum), stateKey));
@@ -6652,7 +6621,7 @@ class ChroniclePanel extends PluginPanel
 		SkillStand stand, HistoryLog.Levels opened, long[] played)
 	{
 		JPanel card = card(sessionPeriod() ? "This sitting" : "The period");
-		long xp = xpOf(gains);
+		long xp = sumOf(gains);
 		if ("PvM".equals(histFacet))
 		{
 			card.add(row("Monsters slain", "+" + fmt(summaryValue(progress, "kills"))));
@@ -6861,15 +6830,13 @@ class ChroniclePanel extends PluginPanel
 			long all = 0;
 			for (String tier : CLUE_TIERS)
 			{
-				Long n = rolledKills("Clue Scroll (" + tier + ")");
-				all += n == null ? 0 : n;
+				all += rolled("Clue Scroll (" + tier + ")");
 			}
 			return all;
 		}
 		if (!source.isEmpty())
 		{
-			Long n = rolledKills(source);
-			long rolled = n == null ? 0 : n;
+			long rolled = rolled(source);
 			return rolled > 0 && namedLine(source, label) > 0 ? -1 : rolled;
 		}
 		return 0;
@@ -7392,7 +7359,7 @@ class ChroniclePanel extends PluginPanel
 
 	private String periodTip(long[] played, List<Entry<String, Long>> gains)
 	{
-		long xp = xpOf(gains);
+		long xp = sumOf(gains);
 		return tip(sessionPeriod() ? "This sitting"
 			: wholeRecord() ? "Lifetime" : "The period",
 			"Time played", hoursMinutes(played[0]),
@@ -9396,8 +9363,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			else if (!f.whole)
 			{
-				Long rolled = rolledKills(source);
-				n = rolled == null ? 0 : rolled;
+				n = rolled(source);
 				v = sourceInWindow(source)[1];
 			}
 			if (n > 0)
@@ -11902,14 +11868,14 @@ class ChroniclePanel extends PluginPanel
 		return fmt(from) + " to " + fmt(to);
 	}
 
-	private static long xpOf(List<Entry<String, Long>> gains)
+	private static long sumOf(List<Entry<String, Long>> rows)
 	{
-		long xp = 0;
-		for (Entry<String, Long> g : gains)
+		long sum = 0;
+		for (Entry<String, Long> e : rows)
 		{
-			xp += g.getValue();
+			sum += e.getValue();
 		}
-		return xp;
+		return sum;
 	}
 
 	private static String qtyGp(long qty, long value)
