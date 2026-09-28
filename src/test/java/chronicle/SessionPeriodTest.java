@@ -362,13 +362,12 @@ public class SessionPeriodTest
 		String src = new String(java.nio.file.Files.readAllBytes(
 			java.nio.file.Paths.get("src/main/java/chronicle/ChroniclePanel.java")),
 			java.nio.charset.StandardCharsets.UTF_8);
-		int at = src.indexOf("moreRow(every - slayerShown");
+		int at = src.indexOf("more(p, shown.size(), slayerShown");
 		assertTrue("the journey board no longer offers to show more", at > 0);
 		String around = src.substring(Math.max(0, at - 320), at);
 		assertTrue("the button is sized off j.tasks, which is the whole journey "
 			+ "however the period is set: " + around,
-			around.contains("shown.size() > slayerShown")
-				&& around.contains("every = shown.size()"));
+			around.contains("shown.size() > slayerShown"));
 		assertFalse("and the lifetime list is still what it reads",
 			around.contains("j.tasks.size() > slayerShown"));
 	}

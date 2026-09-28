@@ -1817,7 +1817,7 @@ class ChroniclePanel extends PluginPanel
 			name.setForeground(accent());
 		}
 		head.setToolTipText(tip);
-		link(head, () -> toggleFold(fold));
+		folds(head, fold);
 	}
 
 	private void addXpBySkill(JPanel strip)
@@ -2086,7 +2086,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			rows.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
 			String stateKey = "session:" + family;
-			boolean open = !foldOpen(stateKey);
+			boolean open = foldOpen(stateKey, true);
 			strip.add(quietHead(family, open ? "" : fmt(rows.size()), stateKey));
 			mounted++;
 			if (!open)
@@ -2112,9 +2112,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		String listKey = "session:row:" + key;
 		boolean open = foldOpen(listKey);
-		JPanel head = sessionRow(key, value);
-		link(head, () -> toggleFold(listKey));
-		strip.add(head);
+		strip.add(folds(sessionRow(key, value), listKey));
 		int mounted = 1;
 		if (!open)
 		{
@@ -2210,14 +2208,8 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, head);
 		final String key = dropsLeftBehind ? "win:left" : "win:source";
 		final int cap = drillShown.getOrDefault(key, ROW_CAP);
-		int mounted = 0;
-		for (String[] r : ranked)
+		for (String[] r : firstN(ranked, cap))
 		{
-			if (mounted++ >= cap)
-			{
-				p.add(expander(key, cap, ranked.size()));
-				break;
-			}
 			JPanel line = row(r[0], fmt(safeParse(r[1])) + " · "
 				+ gps(safeParse(r[2])));
 			final String name = r[0];
@@ -2234,6 +2226,7 @@ class ChroniclePanel extends PluginPanel
 			});
 			p.add(line);
 		}
+		drillMore(p, key, ranked.size(), cap);
 		return p;
 	}
 
@@ -2385,13 +2378,8 @@ class ChroniclePanel extends PluginPanel
 		lifeHead.add(worthRow(everyValue));
 		lifeHead.add(row("Sources", fmt(sources.size())));
 		spaced(p, lifeHead);
-		int shown = 0;
-		for (SourceRow r : sources)
+		for (SourceRow r : firstN(sources, dropsShown))
 		{
-			if (shown++ >= dropsShown)
-			{
-				break;
-			}
 			JPanel card = cardPlain();
 			card.add(row(r.name, gps(r.value), accent()));
 			boolean killed = isKillSource(r.name);
@@ -2404,15 +2392,7 @@ class ChroniclePanel extends PluginPanel
 			link(card, () -> openSource(r.name));
 			spaced(p, card, 4);
 		}
-		if (sources.size() > dropsShown)
-		{
-			final int every = sources.size();
-			p.add(moreRow(every - dropsShown, () ->
-			{
-				dropsShown = every;
-				rebuildInPlace();
-			}));
-		}
+		more(p, sources.size(), dropsShown, false, n -> dropsShown = n);
 		return p;
 	}
 
@@ -2499,8 +2479,9 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(copyHeader(lootKind, () -> copyPicture(
 			lootPicture(lootKind, kept, mine, false), true)));
-		addBagRows(p, kept, drillShown.getOrDefault(key + lootKind, ROW_CAP),
-			key + lootKind);
+		int cap = drillShown.getOrDefault(key + lootKind, ROW_CAP);
+		addBagRows(p, firstN(kept, cap));
+		drillMore(p, key + lootKind, kept.size(), cap);
 		return p;
 	}
 
@@ -2536,14 +2517,8 @@ class ChroniclePanel extends PluginPanel
 		List<UntakenRow> list = byItem ? items : rows;
 		String key = byItem ? "left:item" : "left:source";
 		final int cap = drillShown.getOrDefault(key, ROW_CAP);
-		int shown = 0;
-		for (UntakenRow r : list)
+		for (UntakenRow r : firstN(list, cap))
 		{
-			if (shown++ >= cap)
-			{
-				p.add(expander(key, cap, list.size()));
-				break;
-			}
 			JPanel card = cardPlain();
 			card.add(row(r.name, gps(r.value), ACCENT_RED));
 			card.add(row(byItem ? "\u00d7" + fmt(r.qty) : fmt(r.qty) + " left", r.qty > 0
@@ -2556,6 +2531,7 @@ class ChroniclePanel extends PluginPanel
 			});
 			spaced(p, card, 4);
 		}
+		drillMore(p, key, list.size(), cap);
 		return p;
 	}
 
@@ -2812,13 +2788,22 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	private JPanel expander(String key, int cap, int of)
+	private void more(JPanel p, int size, int cap, boolean inset, java.util.function.IntConsumer show)
 	{
-		return moreRow(of - cap, () ->
+		if (size > cap)
 		{
-			drillShown.put(key, of);
-			rebuildInPlace();
-		});
+			JPanel more = moreRow(size - cap, () ->
+			{
+				show.accept(size);
+				rebuildInPlace();
+			});
+			p.add(inset ? nested(more) : more);
+		}
+	}
+
+	private void drillMore(JPanel p, String key, int size, int cap)
+	{
+		more(p, size, cap, false, n -> drillShown.put(key, n));
 	}
 
 	private static final class Kind
@@ -2879,16 +2864,10 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 
-	private void addBagRows(JPanel p, List<BagItem> bag, int cap, String key)
+	private void addBagRows(JPanel p, List<BagItem> bag)
 	{
-		int mounted = 0;
 		for (BagItem b : bag)
 		{
-			if (mounted++ >= cap)
-			{
-				p.add(expander(key, cap, bag.size()));
-				break;
-			}
 			JPanel r = row(named(b.name, b.qty),
 				b.value > 0 ? gps(b.value) : "");
 			link(r, () -> openItem(b.name));
@@ -3014,10 +2993,7 @@ class ChroniclePanel extends PluginPanel
 			link(r, () -> openSourceLoose(mob));
 			card.add(r);
 		}
-		if (kcs.size() > cap)
-		{
-			card.add(expander("killlog", cap, kcs.size()));
-		}
+		drillMore(card, "killlog", kcs.size(), cap);
 		p.add(card);
 		return p;
 	}
@@ -3286,7 +3262,7 @@ class ChroniclePanel extends PluginPanel
 			head.add(row("Slayer xp (est.)", gp(j.totalXpEst)));
 		}
 		spaced(p, head);
-		for (int k = 0; k < shown.size() && k < slayerShown; k++)
+		for (int k = 0; k < Math.min(shown.size(), slayerShown); k++)
 		{
 			SlayerTask t = shown.get(k);
 			JPanel card = cardPlain();
@@ -3311,12 +3287,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (shown.size() > slayerShown)
 		{
-			final int every = shown.size();
-			p.add(moreRow(every - slayerShown, () ->
-			{
-				slayerShown = every;
-				rebuildInPlace();
-			}));
+			more(p, shown.size(), slayerShown, false, n -> slayerShown = n);
 			p.add(vgap(4));
 		}
 	}
@@ -4081,20 +4052,15 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(group("From"));
 		final int srcCap = Math.max(itemSourceCap, drillShown.getOrDefault("item:src:" + name, 0));
-		int mounted = 0;
-		for (Object[] s : srcs)
+		for (Object[] s : firstN(srcs, srcCap))
 		{
-			if (mounted++ >= srcCap)
-			{
-				p.add(expander("item:src:" + name, srcCap, srcs.size()));
-				break;
-			}
 			JPanel r = row((String) s[0], "×" + fmt((long) s[1])
 				+ tail((long) s[2]));
 			final String src = (String) s[0];
 			link(r, () -> openSource(src));
 			p.add(r);
 		}
+		drillMore(p, "item:src:" + name, srcs.size(), srcCap);
 		addOther(p, "×" + fmt(Math.max(0, other)) + tail(Math.max(0, otherValue)), other > 0 || otherValue > 0);
 		return p;
 	}
@@ -4159,17 +4125,11 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(group("By task"));
 		final int taskCap = Math.max(itemSourceCap, drillShown.getOrDefault("item:task:" + name, 0));
-		int mounted = 0;
-		for (Object[] t : split)
+		for (Object[] t : firstN(split, taskCap))
 		{
-			if (mounted++ >= taskCap)
-			{
-				p.add(expander("item:task:" + name, taskCap, split.size()));
-				break;
-			}
-			p.add(row("Task: " + t[0], "×" + fmt((long) t[1])
-				+ tail((long) t[2])));
+			p.add(row("Task: " + t[0], "×" + fmt((long) t[1]) + tail((long) t[2])));
 		}
+		drillMore(p, "item:task:" + name, split.size(), taskCap);
 		return p;
 	}
 
@@ -4228,7 +4188,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		final String key = "kcsrc:" + sr.name;
 		head.add(quietHead("What says so", "", key));
-		if (!openFolds.contains(key))
+		if (!foldOpen(key))
 		{
 			return;
 		}
@@ -4272,16 +4232,11 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(group("Killed on task"));
 		int cap = drillShown.getOrDefault("ontask:src:" + npc, ROW_CAP);
-		int mounted = 0;
-		for (LocalStore.Assignment a : was)
+		for (LocalStore.Assignment a : firstN(was, cap))
 		{
-			if (mounted++ >= cap)
-			{
-				p.add(expander("ontask:src:" + npc, cap, was.size()));
-				break;
-			}
 			p.add(row("Task: " + a.task, fmt(a.killsHere)));
 		}
+		drillMore(p, "ontask:src:" + npc, was.size(), cap);
 		p.add(vgap(6));
 	}
 
@@ -4487,12 +4442,12 @@ class ChroniclePanel extends PluginPanel
 			}
 			p.add(group("Loot"));
 			int cap = drillShown.getOrDefault(name, 25);
-			addBagRows(p, bag.subList(0, Math.min(cap, bag.size())), cap, name);
+			addBagRows(p, firstN(bag, cap));
 			if (bag.size() > cap)
 			{
 				p.add(vgap(3));
-				p.add(expander(name, cap, bag.size()));
 			}
+			drillMore(p, name, bag.size(), cap);
 			addOther(p, gps(Math.max(0, other)), unfiled);
 			return p;
 		}
@@ -4646,7 +4601,7 @@ class ChroniclePanel extends PluginPanel
 						continue;
 					}
 					String foldKey = "pets:" + page + ":" + low(slot);
-					link(r, () -> toggleFold(foldKey));
+					folds(r, foldKey);
 					if (foldOpen(foldKey))
 					{
 						for (JPanel line : d)
@@ -5315,6 +5270,17 @@ class ChroniclePanel extends PluginPanel
 		return openFolds.contains(key);
 	}
 
+	private boolean foldOpen(String key, boolean byDefault)
+	{
+		return openFolds.contains(key) != byDefault;
+	}
+
+	private JPanel folds(JPanel head, String key)
+	{
+		link(head, () -> toggleFold(key));
+		return head;
+	}
+
 	private void toggleFold(String key)
 	{
 		if (!openFolds.remove(key))
@@ -5845,8 +5811,7 @@ class ChroniclePanel extends PluginPanel
 		JPanel head = row(label, totalStr);
 		styled(part(head, BorderLayout.CENTER), small(), dim());
 		head.setBorder(pad(3, 10, 1, 2));
-		link(head, () -> toggleFold(stateKey));
-		return head;
+		return folds(head, stateKey);
 	}
 
 	private static String value(Entry<String, Long> e)
@@ -5967,7 +5932,7 @@ class ChroniclePanel extends PluginPanel
 				continue;
 			}
 			String stateKey = "history:shut:" + name;
-			boolean open = !foldOpen(stateKey);
+			boolean open = foldOpen(stateKey, true);
 			card.add(quietHead(name, fmt(lines), stateKey));
 			if (!open)
 			{
@@ -6005,9 +5970,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		String listKey = "history:list:" + r.key();
 		boolean open = foldOpen(listKey);
-		JPanel head = row(r.label(), "+" + figure(r));
-		link(head, () -> toggleFold(listKey));
-		card.add(head);
+		card.add(folds(row(r.label(), "+" + figure(r)), listKey));
 		if (open)
 		{
 			int cap = shownCap(listKey);
@@ -6056,24 +6019,12 @@ class ChroniclePanel extends PluginPanel
 
 	private int shownCap(String key)
 	{
-		Integer n = histListShown.get(key);
-		return n == null ? HIST_LIST_CAP : n;
+		return histListShown.getOrDefault(key, HIST_LIST_CAP);
 	}
 
 	private void addMore(JPanel card, String key, int size, int cap, boolean inset)
 	{
-		if (size <= cap)
-		{
-			return;
-		}
-		JPanel tail = ghostRow("Show " + fmt(size - cap) + " more", "");
-		JPanel more = inset ? nested(tail) : tail;
-		link(more, () ->
-		{
-			histListShown.put(key, size);
-			rebuildInPlace();
-		});
-		card.add(more);
+		more(card, size, cap, inset, n -> histListShown.put(key, n));
 	}
 
 	private static String countersSince(
@@ -6609,15 +6560,14 @@ class ChroniclePanel extends PluginPanel
 		Map<String, Long> worth, Map<String, Long> loose, boolean withIcons)
 	{
 		String stateKey = "history:kind:" + kind;
-		boolean open = !foldOpen(stateKey);
+		boolean open = foldOpen(stateKey, true);
 		p.add(quietHead(kind, open ? "" : fmt(rows.size()), stateKey));
 		if (!open)
 		{
 			p.add(vgap(4));
 			return;
 		}
-		Integer asked = histListShown.get(stateKey);
-		int cap = asked == null ? BAND_CAP : asked;
+		int cap = histListShown.getOrDefault(stateKey, BAND_CAP);
 		JPanel card = cardPlain();
 		for (Entry<String, Long> e : firstN(rows, cap))
 		{
@@ -7409,7 +7359,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		Collections.sort(names);
 		String foldKey = "quests:" + heading;
-		boolean open = openFolds.contains(foldKey) != openByDefault;
+		boolean open = foldOpen(foldKey, openByDefault);
 		p.add(quietHead(heading, fmt(names.size()), foldKey));
 		if (!open)
 		{
@@ -11082,14 +11032,8 @@ class ChroniclePanel extends PluginPanel
 		String key = "search:" + title;
 		int cap = drillShown.getOrDefault(key, SEARCH_CAP);
 		FontMetrics fm = rowMetrics();
-		for (int i = 0; i < hits.size(); i++)
+		for (Hit h : firstN(hits, cap))
 		{
-			if (i >= cap)
-			{
-				p.add(expander(key, cap, hits.size()));
-				break;
-			}
-			Hit h = hits.get(i);
 			int room = boardRowRoom() - ROW_GAP - (h.figure.isEmpty() ? 0 : fm.stringWidth(h.figure));
 			String shown = h.name;
 			for (int keep = shown.length() - 1; fm.stringWidth(shown) > room && keep >= NAME_FLOOR; keep--)
@@ -11114,6 +11058,7 @@ class ChroniclePanel extends PluginPanel
 			door(r, h.go);
 			p.add(r);
 		}
+		drillMore(p, key, hits.size(), cap);
 		return hits.size();
 	}
 
