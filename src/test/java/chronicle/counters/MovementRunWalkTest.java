@@ -22,15 +22,6 @@ import static chronicle.counters.CounterTestKeys.DISTANCE_RAN;
 import static chronicle.counters.CounterTestKeys.DISTANCE_WALKED;
 import static org.junit.Assert.assertEquals;
 
-/**
- * The run/walk split in MovementStatTracker. The step itself is the evidence: a player
- * covers two tiles in a tick only by running, so a two-tile step is a run whatever the
- * run toggle happens to read. One tile is ambiguous - a walk, the tail of a run path, or
- * running on an empty bar - and falls back on the toggle plus energy.
- *
- * <p>This replaces a read of the run orb's sprite, whose every failure mode booked a run
- * as a walk. The last test here holds that line: the tracker asks for no widget at all.
- */
 public class MovementRunWalkTest
 {
 	private StatStore store;
@@ -50,7 +41,6 @@ public class MovementRunWalkTest
 		tracker = new MovementStatTracker(store, client, items);
 	}
 
-	// the run toggle, and a bar with something in it
 	private void runToggle(boolean on)
 	{
 		Mockito.when(client.getVarpValue(VarPlayerID.OPTION_RUN)).thenReturn(on ? 1 : 0);
@@ -62,7 +52,6 @@ public class MovementRunWalkTest
 		Mockito.when(client.getEnergy()).thenReturn(hundredthsOfAPercent);
 	}
 
-	// stand the player on a tile and let the tick land
 	private void standAt(int x, int y)
 	{
 		Mockito.when(local.getWorldLocation()).thenReturn(new WorldPoint(x, y, 0));
@@ -82,8 +71,6 @@ public class MovementRunWalkTest
 	@Test
 	public void twoTilesInATickIsARunEvenWhenTheToggleReadsOff()
 	{
-		// the reported bug: the toggle (or, before this, the orb sprite) reads off, yet
-		// the player is plainly running. The step overrules it.
 		runToggle(false);
 		standAt(3200, 3200);
 		standAt(3202, 3200);
@@ -95,7 +82,6 @@ public class MovementRunWalkTest
 	@Test
 	public void twoTilesIsARunOnAnEmptyBarToo()
 	{
-		// nothing about a reading of the game's state gets to contradict two tiles
 		runToggle(false);
 		energy(0);
 		standAt(3200, 3200);
@@ -108,7 +94,6 @@ public class MovementRunWalkTest
 	@Test
 	public void oneTileWithRunOnIsARun()
 	{
-		// the last tile of a run path: the toggle is still on, so it books as run
 		runToggle(true);
 		standAt(3200, 3200);
 		standAt(3201, 3200);
@@ -122,7 +107,7 @@ public class MovementRunWalkTest
 	{
 		runToggle(false);
 		standAt(3200, 3200);
-		standAt(3201, 3201);   // a diagonal step is still one tile of Chebyshev
+		standAt(3201, 3201);
 
 		assertEquals(0, ran());
 		assertEquals(1, walked());
@@ -131,7 +116,6 @@ public class MovementRunWalkTest
 	@Test
 	public void oneTileWithRunOnButNoEnergyIsAWalk()
 	{
-		// run switched on with an empty bar still walks
 		runToggle(true);
 		energy(0);
 		standAt(3200, 3200);
@@ -144,7 +128,6 @@ public class MovementRunWalkTest
 	@Test
 	public void aRunPathBooksItsTailWithTheRestOfIt()
 	{
-		// three ticks of a five-tile run: 2, 2, then the odd tile out
 		runToggle(true);
 		standAt(3200, 3200);
 		standAt(3202, 3200);
@@ -158,7 +141,6 @@ public class MovementRunWalkTest
 	@Test
 	public void noWidgetIsEverConsulted()
 	{
-		// the orb read is gone: no lookup by composite id, none by parent and child
 		runToggle(true);
 		standAt(3200, 3200);
 		standAt(3202, 3200);

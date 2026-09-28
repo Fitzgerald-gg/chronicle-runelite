@@ -17,20 +17,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * What the combat achievement board costs to put on screen.
- *
- * <p>Six hundred and fifty five tasks drawn flat is four labels apiece and
- * twelve thousand pixels of scroll in a column two hundred and forty wide,
- * which is what made this board the slowest thing in the panel. Filed by tier
- * it was no better: one of the six tiers is a hundred and seventy three rows
- * and mounted every one of them the moment it was opened.
- *
- * <p>Filed by what they are fought against, no fold is large. These hold the
- * board to that, which a structural test cannot see: a board that quietly went
- * back to mounting every row would still draw correctly, just slowly, and
- * slowly is the defect.
- */
 public class CombatBoardFoldTest
 {
 	private static final String JOURNAL =
@@ -42,7 +28,6 @@ public class CombatBoardFoldTest
 	private static ChroniclePanel panel() throws Exception
 	{
 		File dir = new File(System.getProperty("java.io.tmpdir"), "chronicle-ca-fold");
-		//noinspection ResultOfMethodCallIgnored
 		dir.mkdirs();
 		try (FileWriter w = new FileWriter(new File(dir, "somebody.json")))
 		{
@@ -62,7 +47,6 @@ public class CombatBoardFoldTest
 		((java.util.Collection<String>) f.get(p)).add(key);
 	}
 
-	/** Every component the board mounts, and every word it says. */
 	private static List<Component> board(ChroniclePanel p) throws Exception
 	{
 		final List<Component> flat = new ArrayList<>();
@@ -109,11 +93,6 @@ public class CombatBoardFoldTest
 		return false;
 	}
 
-	/**
-	 * TRAP: a board that mounts every task and merely hides the closed ones is
-	 * indistinguishable by eye from one that does not mount them, and costs
-	 * exactly what the flat board cost. The fold has to skip the rows.
-	 */
 	@Test
 	public void aClosedBoardDoesNotMountTheTasksUnderIt() throws Exception
 	{
@@ -123,13 +102,10 @@ public class CombatBoardFoldTest
 			+ " the flat board it was meant to replace", flat.size() < 900);
 		assertTrue("a task under a closed fold was mounted anyway",
 			!says(flat, "Noxious Foe"));
-		// and it is the whole board, not a board that lost its sources
-		// the heads take quietHead's register, the same as every other fold
 		assertTrue("the sources themselves went missing", says(flat, "ABERRANT SPECTRE")
 			&& says(flat, "BARROWS"));
 	}
 
-	/** Opening one source costs that source, and only that source. */
 	@Test
 	public void openingOneSourceMountsOnlyThatSource() throws Exception
 	{
@@ -146,12 +122,6 @@ public class CombatBoardFoldTest
 			!says(open, "Barrows Novice"));
 	}
 
-	/**
-	 * No source is large enough to be a wall on its own, which is the property
-	 * that makes the filing worth having. Held on the table, not on the panel,
-	 * so a table update that piles two hundred tasks onto one boss says so here
-	 * rather than in somebody's client.
-	 */
 	@Test
 	public void noSingleSourceIsAWall() throws Exception
 	{
@@ -174,7 +144,6 @@ public class CombatBoardFoldTest
 			+ " that has collapsed", per.size() > 50);
 		assertTrue(worst + " alone holds " + per.get(worst) + " tasks, which is a wall"
 			+ " and not a fold", per.get(worst) <= 40);
-		// a source with no name at all would file every orphan into one heap
 		assertEquals("a task is filed under nothing", 0,
 			per.getOrDefault("", 0).intValue());
 	}

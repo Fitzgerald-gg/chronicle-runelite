@@ -11,16 +11,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * What the record can and cannot say about the slayer half of a ledger.
- *
- * <p>A task carries ONE items map and a separate monsters map, and nothing
- * inside it links a drop to the thing that dropped it. So an item's on-task
- * total is exact, a monster's on-task kill count is exact, and a monster's
- * on-task LOOT does not exist at all. The journal below is built to make that
- * impossible to forget: its "Blue dragons" task is the one from the owner's
- * own record, where 97 of the 145 kills are Vorkath.
- */
 public class OnTaskSliceTest
 {
 	private static final long LO = Long.MIN_VALUE / 2;
@@ -59,7 +49,6 @@ public class OnTaskSliceTest
 		store.load(dir, "slicer");
 	}
 
-	/** An item's on-task total is exact, and so is the list of items that have one. */
 	@Test
 	public void anItemsOnTaskTotalIsExact()
 	{
@@ -67,12 +56,10 @@ public class OnTaskSliceTest
 		assertEquals("three distinct items were paid by tasks", 3, items.size());
 		assertEquals(2000, items.get("Fire rune")[0]);
 		assertEquals(10000, items.get("Fire rune")[1]);
-		// the filter must not be offered on an item no task ever paid
 		assertFalse("Zulrah's scales never came off a task",
 			items.containsKey("Zulrah's scales"));
 	}
 
-	/** A monster's on-task kills are exact, including a superior. */
 	@Test
 	public void aMonstersOnTaskKillsAreExact()
 	{
@@ -84,7 +71,6 @@ public class OnTaskSliceTest
 			null, kills.get("Zulrah"));
 	}
 
-	/** An item splits by the TASK that paid it, dearest first. */
 	@Test
 	public void anItemSplitsByTask()
 	{
@@ -99,10 +85,6 @@ public class OnTaskSliceTest
 			store.onTaskItemByTask("Zulrah's scales", LO, HI).isEmpty());
 	}
 
-	/**
-	 * A monster's page gets its ASSIGNMENTS, newest first: its own kills, and
-	 * the task's worth, which is the task's and says so.
-	 */
 	@Test
 	public void aMonsterGetsItsAssignments()
 	{
@@ -116,11 +98,6 @@ public class OnTaskSliceTest
 			store.onTaskAssignments("Zulrah", LO, HI).isEmpty());
 	}
 
-	/**
-	 * THE TRAP. Vorkath sits inside a Blue dragons task. Its kills are its own
-	 * and exact; the 15.3M is the whole assignment's and belongs to no single
-	 * monster in it, which is why the row is labelled for the TASK.
-	 */
 	@Test
 	public void aTaskTakeBelongsToTheTaskAndNotToOneMonsterInIt()
 	{
@@ -137,7 +114,6 @@ public class OnTaskSliceTest
 		assertEquals(15335312, vork.get(0).value);
 	}
 
-	/** A window the tasks fall outside of leaves nothing to filter. */
 	@Test
 	public void aWindowWithNoTasksInItIsEmpty()
 	{
@@ -149,7 +125,6 @@ public class OnTaskSliceTest
 		assertTrue(store.onTaskItemByTask("Fire rune", from, to).isEmpty());
 	}
 
-	/** Nothing asked of a null name throws. */
 	@Test
 	public void nullsAnswerEmpty()
 	{
@@ -157,16 +132,6 @@ public class OnTaskSliceTest
 		assertTrue(store.onTaskAssignments(null, LO, HI).isEmpty());
 	}
 
-	/**
-	 * A price is seeded, never raised.
-	 *
-	 * <p>Both importers used to take the larger of two valuations of the same
-	 * drop. That is not recovering a number, it is ratcheting the record upward
-	 * on whichever day the import happened to run: one Mithril spear went from
-	 * 172 to 231 between one export and the next, and could only ever go up.
-	 * Quantity still floors, because a higher count is a drop this journal had
-	 * not seen.
-	 */
 	@Test
 	public void anImportFloorsQuantityAndLeavesPriceAlone() throws Exception
 	{

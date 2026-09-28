@@ -12,12 +12,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The tab icons are one set, drawn to one contract: 16 by 16, a single grey,
- * each pixel either lit or clear with no anti-aliasing, and between 84 and 124
- * pixels lit so none reads as a scratch or a blot beside the others. The
- * contract lived in a commit message; this is where it is kept now.
- */
 public class TabIconsTest
 {
 	private static final String[] TABS = {"tab_record", "tab_standing", "tab_loot", "tab_trackers"};

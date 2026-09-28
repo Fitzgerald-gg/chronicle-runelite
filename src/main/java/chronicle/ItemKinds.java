@@ -34,28 +34,10 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
-/**
- * What KIND of thing an item is: a rune, a herb, a seed, a bar.
- *
- * <p>The game does not say. An item has a name, an id and a price, and nothing
- * that groups "Fire rune" with "Blood rune" while keeping "Rune scimitar" out
- * of it. So the grouping is bundled, generated from the item list the cache
- * holds, as five other taxonomies here already are.
- *
- * <p>The rules are ORDERED and the first match wins, which is the whole trick:
- * "Rune arrow" is claimed by Ammunition before the rune rule can see it, and
- * "Rune essence" by Materials. A ledger of eight hundred names has a dozen of
- * these traps in it, and every one of them reads as a rune to anything simpler.
- *
- * <p>Names are matched case-insensitively against the item's DISPLAY name, not
- * its id: ids move between revisions and a noted item has its own, while the
- * name is what the reader typed and what the row shows.
- */
 final class ItemKinds
 {
 	private static final String RESOURCE = "/chronicle/osrs_item_kinds.json";
 
-	/** One rule: a kind, how to match, and what to match against. */
 	private static final class Rule
 	{
 		String kind;
@@ -67,29 +49,18 @@ final class ItemKinds
 
 	private static List<Rule> rules;
 	private static List<String> kinds;
-	// Answered once per name. A board of three hundred rows asks for each of
-	// them on every rebuild, and a miss is the common answer, so most names
-	// walk all 65 rules (18 of them regex) before coming back null.
 	private static final Map<String, String> answered = new LinkedHashMap<>();
 
 	private ItemKinds()
 	{
 	}
 
-	/** The kinds, in the order the strip should offer them. */
 	static synchronized List<String> kinds()
 	{
 		load();
 		return kinds;
 	}
 
-	/**
-	 * The kind an item belongs to, or null where none of them claims it.
-	 *
-	 * <p>Null is a real answer and the commonest one: most of what drops is a
-	 * unique, a cosmetic or a quest item, and filing those under a made-up kind
-	 * would be worse than leaving them where the reader can still search by name.
-	 */
 	static synchronized String kindOf(String itemName)
 	{
 		if (itemName == null)
@@ -138,7 +109,6 @@ final class ItemKinds
 		return hit;
 	}
 
-	/** The kind a typed query names, by prefix ("run" -> "Runes"), or null when none does. */
 	static synchronized String named(String query)
 	{
 		if (query == null || query.trim().isEmpty())
@@ -191,9 +161,8 @@ final class ItemKinds
 				}
 			}
 		}
-		catch (Exception ignored)   // noqa: a missing taxonomy costs the filter, not the panel
+		catch (Exception ignored)
 		{
-			// read stays as far as it got; every name then answers null
 		}
 		rules = read;
 		kinds = Collections.unmodifiableList(order);
@@ -232,7 +201,7 @@ final class ItemKinds
 			}
 			catch (PatternSyntaxException e)
 			{
-				return null;   // a rule that cannot compile never matches
+				return null;
 			}
 		}
 		return r;

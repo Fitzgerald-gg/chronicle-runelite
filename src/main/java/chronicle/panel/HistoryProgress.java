@@ -22,54 +22,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
-/**
- * A period's progress, shaped for the History tab: a fixed-order summary of
- * the headline figures, then every other counter filed into the families and
- * sections the Stats tab uses, each section carrying its own period total.
- *
- * <p>Input is the period's positive counter deltas, as {@code HistoryLog.gained}
- * returns them: the trackers, and beside them the spine-only totals the plugin
- * derives from the journal (loot events, loot left on the floor, kills, slayer
- * tasks, collection log slots). Nothing here reads the spine or the journal,
- * and nothing here is Swing.
- *
- * <p>"Drops taken" is the owner's "drops received minus drops left behind",
- * kept to one unit: the loot events (kills that dropped something) less the
- * kills that left at least one stack on the floor, which the plugin counts
- * beside the untaken ledger as lootLeftKills. "Left on the floor" counts items,
- * not kills (one event can leave several items on the ground, and one item can
- * be part of an event), so it is never what "Drops taken" subtracts; the same
- * mismatch is why "Loot kept" states the difference in gp instead, the value
- * received minus the value left on the floor.
- *
- * <p>Every label comes from {@link StatRegistry}, so a key reads the same here
- * as on the Stats tab. Sections mirror the Stats tab: a key's family and
- * section come from the registry, floors head their section instead of listing
- * as rows, typed rows reconcile to the floor with the remainder as a ghost
- * "Other", and a section's total is the larger of its floor and what its rows
- * and ghost add up to. A family's flat key that heads one of its own sections
- * (potionDoses is the Potions floor, foodEaten the Food floor) files there as
- * the floor, once, never as a row beside the fold. Skilling crafts rank by
- * total, the other families keep the registry's fixed order. Destinations
- * stand as a section of their own under Ledger &amp; Roads, and a family's
- * sectionless rows form a section named after the family, one whose rows mix
- * units and so carries no figure. Summary keys, hidden keys and peak keys
- * (whose delta means nothing) never file.
- *
- * <p>{@link #groups()} files the same rows and sections into the groups the
- * History tab draws: every summary key belongs to exactly one group and every
- * section to exactly one, "The rest" taking whatever the named groups do not
- * claim, so no counter the plugin tracks is out of reach.
- *
- * <p>Some summary figures may be read off the journal itself instead of the
- * spine (the slayer lines, and the feed's dated entries counted by type): the
- * caller hands them in as retroactive figures, and a key handed in replaces
- * the spine's delta for that line, or stands alone where the spine never
- * carried the key.
- */
 public final class HistoryProgress
 {
-	/** One figure: a summary line or a section row. */
 	public static final class Row
 	{
 		private final String key;
@@ -109,30 +63,22 @@ public final class HistoryProgress
 			return value;
 		}
 
-		/** Whether {@link #value()} renders as gp. */
 		public boolean gp()
 		{
 			return gp;
 		}
 
-		/** A second figure in gp beside the value ("3 · 1,250 gp"); 0 when there is none. */
 		public long gpNote()
 		{
 			return gpNote;
 		}
 
-		/**
-		 * The word after the note's figure, as the Stats tab words it: "gp" beside
-		 * a count ("3 · 1,250 gp"), "dropped" beside the gathered value
-		 * ("2.5M gp · 300k dropped"). Empty when there is no note.
-		 */
 		public String gpNoteWord()
 		{
 			return gpNoteWord;
 		}
 	}
 
-	/** One fold: a section's period total, its rows, and the unresolved remainder. */
 	public static final class Section
 	{
 		private final String name;
@@ -162,65 +108,42 @@ public final class HistoryProgress
 			return name;
 		}
 
-		/** The Stats family the section files under, one of {@link StatRegistry#FAMILIES}. */
 		public String family()
 		{
 			return family;
 		}
 
-		/** The larger of the floor's delta and the rows plus the ghost, as the Stats tab heads it. */
 		public long total()
 		{
 			return total;
 		}
 
-		/** Rows by delta descending. */
 		public List<Row> rows()
 		{
 			return rows;
 		}
 
-		/** What the floor holds beyond the typed rows; 0 when nothing is left over. */
 		public long ghost()
 		{
 			return ghost;
 		}
 
-		/** "Other", or "Other means" under Teleports, as the Stats tab names it. */
 		public String ghostLabel()
 		{
 			return ghostLabel;
 		}
 
-		/**
-		 * Whether the rows add up to one figure the head can carry: a floor heads
-		 * them, every row is gp, or the section counts one kind of action (a
-		 * craft, Food, Potions, Thralls, the roads). A family's flat list and
-		 * Odds &amp; ends mix units (meals, doses, hitpoints) and carry none.
-		 */
 		public boolean summed()
 		{
 			return summed;
 		}
 
-		/** Whether {@link #total()} renders as gp: every row is gp. */
 		public boolean gp()
 		{
 			return gp;
 		}
 	}
 
-	/**
-	 * One group of the History tab: the figures a reader files under one head,
-	 * and the sections that open under them.
-	 *
-	 * <p>The rows are the summary figures the group claims, in the group's own
-	 * order, with a family's sectionless rows (Combat's hits and misses,
-	 * Living's vials) run on after them rather than folded away behind a head
-	 * named after the family the group already names. The sections are the
-	 * registry's own, each still carrying its family so a fold keeps the key it
-	 * had.
-	 */
 	public static final class Group
 	{
 		private final String name;
@@ -234,39 +157,27 @@ public final class HistoryProgress
 			this.sections = Collections.unmodifiableList(sections);
 		}
 
-		/** The group's name, one of {@link HistoryProgress#GROUPS}. */
 		public String name()
 		{
 			return name;
 		}
 
-		/** The group's own figures, in the group's fixed order. */
 		public List<Row> rows()
 		{
 			return rows;
 		}
 
-		/** The folds under them, in the order {@link HistoryProgress#sections()} gives. */
 		public List<Section> sections()
 		{
 			return sections;
 		}
 	}
 
-	/**
-	 * The groups the History tab draws, in order. A group is drawn only when it
-	 * holds something, and every summary key and every section files under
-	 * exactly one of them, so nothing the plugin tracks is unreachable.
-	 */
 	public static final String[] GROUPS = {
 		"Experience", "Combat", "Loot", "Skilling", "Upkeep", "Travel", "Achievement",
 		"The rest"
 	};
 
-	// which group each summary key files under, and the order the group reads
-	// its rows in. Every key in SUMMARY_KEYS that summary() draws a row for is
-	// here exactly once, the derived rows (dropsTaken, lootKept) included;
-	// lootLeftValue and lootLeftKills are read into other rows and draw none.
 	private static final Map<String, List<String>> GROUP_ROWS = new LinkedHashMap<>();
 
 	static
@@ -278,26 +189,10 @@ public final class HistoryProgress
 		}
 	}
 
-	// the Ledger & Roads sections that are travel rather than ledger
 	private static final Set<String> TRAVEL_SECTIONS =
 		new HashSet<>(Arrays.asList("Teleports", "Destinations", "On foot"));
 
-	// the counter keys the summary consumes, in summary order. "Drops taken" is
-	// derived from dropsReceived and lootLeftKills, "Left on the floor" reads
-	// lootLeftCount and lootLeftValue together, "Loot kept" is derived from
-	// lootValue and lootLeftValue, the damage split rides under
-	// "Damage dealt", and resourcesDroppedValue is the note on the gathered
-	// row, so the list is the keys and not the rows. slayerKills never rides the
-	// spine: the History tab reads it off the slayer journey for the period and
-	// lays it over the deltas as a retroactive figure. Nor do the pets, quests,
-	// diaries, combat achievements and levels: the History tab counts them off
-	// the feed's dated entries for the period, the way it counts deaths and
-	// collection log slots over the spine's delta. Teleports are not here: the
-	// Teleports section carries the period's total with its "Other means", one
-	// place for one figure.
 	private static final Set<String> SUMMARY_KEYS = Tables.set(StatRegistry.TABLES, "historySummaryKeys");
-	// the plain summary lines between the derived loot rows and the gathered row,
-	// in the order they are drawn
 	private static final String[] SUMMARY_RUN = Tables.strings(StatRegistry.TABLES.get("summaryRun"));
 
 	private final List<Row> summary;
@@ -311,28 +206,21 @@ public final class HistoryProgress
 		this.groups = Collections.unmodifiableList(grouped(summary, sections));
 	}
 
-	/** The headline figures, in their fixed order; only those above zero. */
 	public List<Row> summary()
 	{
 		return summary;
 	}
 
-	/** Every other counter, filed by family then section; empty sections are absent. */
 	public List<Section> sections()
 	{
 		return sections;
 	}
 
-	/**
-	 * The same figures filed into the tab's groups, in {@link #GROUPS} order; a
-	 * group holding nothing is absent.
-	 */
 	public List<Group> groups()
 	{
 		return groups;
 	}
 
-	/** One group by name, or null when the period put nothing in it. */
 	public Group group(String name)
 	{
 		for (Group g : groups)
@@ -345,7 +233,6 @@ public final class HistoryProgress
 		return null;
 	}
 
-	/** Which group a section files under; the tab draws it there. */
 	public static String groupOf(Section s)
 	{
 		switch (s.family())
@@ -361,11 +248,6 @@ public final class HistoryProgress
 		}
 	}
 
-	// The summary rows and the sections, filed by group. A family's flat list
-	// (the section named after its own family) is run on as the group's rows
-	// rather than folded behind a head repeating the group's name; it holds no
-	// floor, so there is never a remainder to lose, and the guard keeps the
-	// fold if one ever appears.
 	private static List<Group> grouped(List<Row> summary, List<Section> sections)
 	{
 		Map<String, Row> byKey = new LinkedHashMap<>();
@@ -412,22 +294,6 @@ public final class HistoryProgress
 		return out;
 	}
 
-	/**
-	 * Shape a period, with summary figures read off the journal itself laid over
-	 * the spine's deltas, saying whether what was left on the floor is dated for
-	 * this period. It is not, on a record whose left-behind tally joined the spine
-	 * after the period began, and the two figures derived by subtracting it,
-	 * what was picked up and what was kept, would then claim the whole take:
-	 * the period received two hundred drops and left, so far as the record can
-	 * say, none. They are drawn only where the subtraction has a source.
-	 *
-	 * @param counters the period's positive counter deltas, spine extras included
-	 * @param gp whether a key's figure is gp; null reads the registry
-	 * @param retroactive summary keys with the figure the journal gives them for
-	 * the period (closed slayer segments, the feed's dated entries by type); a
-	 * key here replaces the spine's delta, a zero included, and a key the
-	 * summary does not read is ignored. Null for none.
-	 */
 	public static HistoryProgress of(Map<String, Long> counters, Predicate<String> gp,
 		Map<String, Long> retroactive, boolean leftDated)
 	{
@@ -460,10 +326,6 @@ public final class HistoryProgress
 	{
 		List<Row> out = new ArrayList<>();
 		add(out, c, gp, "dropsReceived");
-		// the kills whose loot was all picked up: received less the kills that
-		// left a stack, floored where more kills left something than the period
-		// counted, and drawn only where the period received something and the
-		// record can date what was left
 		long received = at(c, "dropsReceived");
 		if (received > 0 && leftDated)
 		{
@@ -490,9 +352,6 @@ public final class HistoryProgress
 		long gathered = at(c, "resourcesGatheredValue");
 		if (gathered > 0)
 		{
-			// what the gatherer dropped rides the gathered row as its margin, as
-			// on the Stats tab: subtract one from the other and a miner's career
-			// reads as zero
 			out.add(new Row("resourcesGatheredValue", StatRegistry.label("resourcesGatheredValue"),
 				gathered, gp.test("resourcesGatheredValue"), at(c, "resourcesDroppedValue"),
 				"dropped"));
@@ -501,7 +360,6 @@ public final class HistoryProgress
 		return out;
 	}
 
-	// one summary line, only when the period moved it
 	private static void add(List<Row> out, Map<String, Long> c, Predicate<String> gp, String key)
 	{
 		long v = at(c, key);
@@ -511,7 +369,6 @@ public final class HistoryProgress
 		}
 	}
 
-	// one section in the making: its rows, and its floor split by floor key
 	private static final class Bucket
 	{
 		final List<Map.Entry<String, Long>> rows = new ArrayList<>();
@@ -521,8 +378,6 @@ public final class HistoryProgress
 
 	private static List<Section> sections(Map<String, Long> c, Predicate<String> gp)
 	{
-		// family -> section -> bucket, in arrival order; the families and the
-		// fixed sections are re-ordered below
 		Map<String, Map<String, Bucket>> byFamily = new LinkedHashMap<>();
 		for (Map.Entry<String, Long> e : c.entrySet())
 		{
@@ -538,9 +393,6 @@ public final class HistoryProgress
 			boolean floor = StatRegistry.isFloor(key);
 			if (sec.isEmpty())
 			{
-				// a flat key that heads one of the family's own sections files
-				// there as the floor: potionDoses is Living's "Doses drunk" and
-				// the Potions floor, and one figure is shown once
 				String heads = StatRegistry.headOf(family, key);
 				if (heads != null)
 				{
@@ -581,8 +433,6 @@ public final class HistoryProgress
 		return out;
 	}
 
-	// Skilling ranks its crafts by weight (the floor when there is one, else the
-	// rows' sum); the other families keep the registry's order, strays last
 	private static List<String> sectionOrder(String family, Map<String, Bucket> secs)
 	{
 		List<String> order = new ArrayList<>();
@@ -646,19 +496,11 @@ public final class HistoryProgress
 		String ghostLabel = "Other";
 		if (sec.equals("Teleports") && floor - shown >= 1)
 		{
-			// means of travel aren't typed rows, but the floor still reconciles:
-			// unclassified journeys are "Other means", as on the Stats tab
 			ghost = floor - shown;
 			ghostLabel = "Other means";
 		}
-		// the head is never less than the rows under it: a named row outside the
-		// floor (herbiboars beside creatures trapped, failed pickpockets beside
-		// the successes) lifts it, as on the Stats tab
 		long total = Math.max(shown + ghost, floor);
 
-		// a section holding more than one verb names each row's verb: the Stats
-		// tab nests them by verb, and "Shark" cooked beside "Shark" burned is not
-		// a breakdown
 		boolean verbed = verbs.size() > 1;
 		List<Row> lines = new ArrayList<>(rows.size());
 		for (Map.Entry<String, Long> e : rows)
@@ -677,8 +519,6 @@ public final class HistoryProgress
 		}
 		if (lines.isEmpty() && floor > 0)
 		{
-			// a floor with no typed rows opens to its floors, one row each: bones
-			// buried and bones offered are separate verbs
 			List<Map.Entry<String, Long>> floors = new ArrayList<>(b.floors.entrySet());
 			floors.sort(StatRegistry::compareRows);
 			for (Map.Entry<String, Long> fe : floors)
@@ -692,9 +532,6 @@ public final class HistoryProgress
 		{
 			return null;
 		}
-		// the head carries a figure where the rows add up to one: a floor heads
-		// them, every row is gp, or the section counts one kind of action. A
-		// family's flat list and Odds & ends mix meals, doses and hitpoints.
 		boolean allGp = !lines.isEmpty();
 		for (Row r : lines)
 		{

@@ -20,18 +20,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The bundled achievement diary table, held against things outside itself.
- *
- * <p>RuneLite core ships these as compiled per-region classes, but
- * DiaryRequirement is package private, so reading them means reflecting into
- * another plugin's internals. Bundled instead, and checked the same way the
- * combat achievements are: a requirement shown wrong sends somebody to go and do
- * the wrong thing.
- */
 public class AchievementDiaryTest
 {
-	/** The twelve diaries the game has. Not read from the file it checks. */
 	private static final String[] REGIONS = {
 		"Ardougne", "Desert", "Falador", "Fremennik", "Kandarin", "Karamja",
 		"Kourend & Kebos", "Lumbridge & Draynor", "Morytania", "Varrock",
@@ -53,7 +43,6 @@ public class AchievementDiaryTest
 		}
 	}
 
-	/** TRAP: a region silently missing, which is what a page rename looks like. */
 	@Test
 	public void everyDiaryIsHere()
 	{
@@ -66,12 +55,6 @@ public class AchievementDiaryTest
 			REGIONS.length, d.size());
 	}
 
-	/**
-	 * TRAP: the one that actually bit. Scanning forward from a tier HEADING finds
-	 * whatever table comes first, and on Karamja that is the audio player, which
-	 * cost the region 39 of its 44 tasks with the file still looking healthy.
-	 * Ardougne was quietly ten short the same way. No tier is thin now.
-	 */
 	@Test
 	public void noTierIsSuspiciouslyThin()
 	{
@@ -93,12 +76,6 @@ public class AchievementDiaryTest
 		}
 	}
 
-	/**
-	 * TRAP: the panel paints in the RuneScape pixel font. A bullet, an en dash or
-	 * a curly quote paints .notdef, a hollow box, in the middle of a requirement.
-	 * The Fremennik Blast Furnace task really does carry bullets between its
-	 * dialogue options, and they are mapped to a character the font has.
-	 */
 	@Test
 	public void everyCharacterCanActuallyBePainted() throws Exception
 	{
@@ -129,17 +106,6 @@ public class AchievementDiaryTest
 		}
 	}
 
-	/**
-	 * TRAP: the wiki's own apparatus leaking into a task - its list numbering at
-	 * the front, or a footnote reference at the back that points at a note the row
-	 * did not bring with it.
-	 *
-	 * <p>Deliberately NOT a check that a task ends in punctuation. Two of the 492
-	 * genuinely do not, because the wiki wrote them that way: one Desert task and
-	 * one Wilderness task simply have no full stop. An assertion on the end of the
-	 * string would fail on both and teach whoever hit it to edit the data to suit
-	 * the test.
-	 */
 	@Test
 	public void aTaskIsAWholeInstructionAndCarriesNoListNumber()
 	{
@@ -158,9 +124,6 @@ public class AchievementDiaryTest
 						task.matches("^\\d+\\..*"));
 					assertTrue("too short to be an instruction: " + task,
 						task.length() > 8);
-					// NOT endsWith("...") : "Between a Rock..." is a real quest and
-					// three Desert tasks name it, so an ellipsis is not evidence of
-					// truncation here. A leaked footnote reference is.
 					assertFalse("a footnote reference outlived its footnote: " + task,
 						task.matches(".*\\[[a-z]{0,2}\\s?\\d*\\]$"));
 				}
@@ -168,7 +131,6 @@ public class AchievementDiaryTest
 		}
 	}
 
-	/** A requirement is always stated, even when the answer is that there is none. */
 	@Test
 	public void everyTaskSaysWhatItNeeds()
 	{
@@ -193,7 +155,6 @@ public class AchievementDiaryTest
 		assertTrue("'None' is a real answer and should appear", seen.contains("None"));
 	}
 
-	/** Known tasks, so a reshaped page cannot quietly hand back different text. */
 	@Test
 	public void theTasksSayWhatTheGameSaysTheySay()
 	{
@@ -206,14 +167,6 @@ public class AchievementDiaryTest
 			.startsWith("Have Wizard Cromperty teleport you to the Rune Essence mine."));
 	}
 
-	/**
-	 * TRAP: a wiki note welded to the word before it. The wiki puts "[sic]" and
-	 * the "[not boostable]" that says a level cannot be potioned into a &lt;sup&gt;,
-	 * and stripping tags without putting the markup's space back produced
-	 * "70 Defence[not boostable]", which a reader takes for a typo in the plugin
-	 * rather than for a note about the requirement. Cheap to reintroduce, since
-	 * the tag stripper deliberately joins everything else with no space.
-	 */
 	@Test
 	public void noNoteIsWeldedToTheWordBeforeIt()
 	{

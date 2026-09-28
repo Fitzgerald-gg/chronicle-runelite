@@ -30,8 +30,6 @@ public interface ChronicleConfig extends Config
 	)
 	String advancedSection = "advanced";
 
-	// no on/off item for the journal itself; the RuneLite plugin toggle is that switch.
-
 	@ConfigItem(
 		keyName = "cloudSync",
 		name = "Enable cloud sync",
@@ -102,10 +100,6 @@ public interface ChronicleConfig extends Config
 	{
 		return 5;
 	}
-
-	// RuneLite's config has no button type, so an action is a tick that runs and
-	// clears itself. These two used to be a "manage" link under the Journal,
-	// which put a settings screen inside a reading panel.
 
 	@ConfigItem(
 		keyName = "importJournal",

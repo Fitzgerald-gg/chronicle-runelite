@@ -32,10 +32,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/** Collection-log capture: the own-account guard, and the full-log transmit burst. */
 public class ClogCaptureTest
 {
-	// game script and varp ids, mirrored from ClogCapture.
 	private static final int COLLECTION_LOG_SETUP = 7797;
 	private static final int COLLECTION_DELAYED_TRANSMIT = 4100;
 	private static final int COLLECTION_INIT_SCRIPT = 2240;
@@ -69,16 +67,12 @@ public class ClogCaptureTest
 		itemNames.put(DRACONIC_VISAGE, "Draconic visage");
 		itemNames.put(VORKATHS_HEAD, "Vorkath's head");
 		itemNames.put(JAR_OF_DECAY, "Jar of decay");
-		// Four different items wearing one name, as My Notes carries twenty six
-		// Ancient pages. Different ids, identical names.
 		for (int i = 0; i < 4; i++)
 		{
 			itemNames.put(ANCIENT_PAGE + i, "Ancient page");
 		}
 		capture = new ClogCapture(client, im);
 	}
-
-	// ── fixture ────────────────────────────────────────────────────────────
 
 	private void adventureLogOpen(boolean open)
 	{
@@ -88,14 +82,12 @@ public class ClogCaptureTest
 
 	private static final int ANCIENT_PAGE = 11341;
 
-	/** A page that lists one name in several slots, some held and some not. */
 	private void stubMyNotesPage(int held)
 	{
 		Widget[] head = {textWidget("My Notes"), textWidget("Obtained: " + held + "/4")};
 		Widget[] kids = new Widget[4];
 		for (int i = 0; i < 4; i++)
 		{
-			// opacity 0 is held, 100 is faded
 			kids[i] = itemWidget(ANCIENT_PAGE + i, 1, i < held ? 0 : 100);
 		}
 		Widget header = Mockito.mock(Widget.class);
@@ -108,7 +100,6 @@ public class ClogCaptureTest
 			.thenReturn(items);
 	}
 
-	// the player's own open: the client fires SETUP at us.
 	private void logOpened()
 	{
 		capture.onScriptPostFired(new ScriptPostFired(COLLECTION_LOG_SETUP));
@@ -161,13 +152,8 @@ public class ClogCaptureTest
 		return w;
 	}
 
-	// A drawn Vorkath page: kc header with colour tags and a thousands separator,
-	// one plain obtained item, one obtained item the widget reports as quantity 0,
-	// one greyed.
 	private void stubVorkathPage()
 	{
-		// arrays built first; a mock created inside an unfinished
-		// when(...).thenReturn(...) corrupts Mockito's stubbing state.
 		Widget[] head = {
 			textWidget("Vorkath"),
 			textWidget("Obtained: 12/33"),
@@ -188,7 +174,6 @@ public class ClogCaptureTest
 			.thenReturn(items);
 	}
 
-	/** A page whose header lines are given verbatim, the way the game writes them. */
 	private void stubPage(String page, String... headerLines)
 	{
 		Widget[] head = new Widget[headerLines.length + 1];
@@ -245,10 +230,6 @@ public class ClogCaptureTest
 		Mockito.verify(client, Mockito.never()).runScript(COLLECTION_INIT_SCRIPT);
 	}
 
-	// ── own account only ───────────────────────────────────────────────────
-
-	// A log opened through a POH adventure log belongs to the house owner. The whole
-	// real sequence is fired here: open, transmit, page draw, flush.
 	@Test
 	public void adventureLogOpenYieldsNothingAnywhere()
 	{
@@ -268,8 +249,6 @@ public class ClogCaptureTest
 		verifyNoTransmitRequested();
 	}
 
-	// Control for the test above: same fixture with the varbit clear does get read,
-	// so the guard test can't pass on a fixture that captures nothing anyway.
 	@Test
 	public void ownPageDrawIsScraped()
 	{
@@ -280,21 +259,13 @@ public class ClogCaptureTest
 
 		Map<String, Integer> page = byCat().get("Vorkath");
 		assertEquals(Integer.valueOf(1), page.get("Draconic visage"));
-		// an obtained item whose widget reports no quantity still counts as one.
 		assertEquals(Integer.valueOf(1), page.get("Vorkath's head"));
-		// greyed means unobtained.
 		assertNull(page.get("Jar of decay"));
 		assertEquals(2, page.size());
-		// kc comes off the Killcount line rather than the Obtained line above it,
-		// with colour tags and the comma stripped.
 		assertEquals(Integer.valueOf(1234), kcs().get("Vorkath"));
 		assertTrue(capture.isDirty());
 	}
 
-	// ── the full-log transmit burst ────────────────────────────────────────
-
-	// Entries stream in over several ticks and each one pushes the flush deadline
-	// out, so a push taken mid-burst can't go out carrying a fragment of the log.
 	@Test
 	public void transmitBurstAccretesAndPublishesOnlyOnTheFlushTick()
 	{
@@ -310,12 +281,10 @@ public class ClogCaptureTest
 		tickTo(102);
 		transmit(VORKATHS_HEAD, 7);
 
-		// both held already, nothing publishable yet.
 		assertEquals(Integer.valueOf(1), clogItems().get("Draconic visage"));
 		assertEquals(Integer.valueOf(7), clogItems().get("Vorkath's head"));
 		assertFalse(capture.isDirty());
 
-		// the second entry moved the deadline out past the first one's 104.
 		tickTo(104);
 		assertFalse(capture.isDirty());
 
@@ -324,8 +293,6 @@ public class ClogCaptureTest
 		assertEquals(2, clogItems().size());
 	}
 
-	// The init script we run to reset the view re-fires SETUP; the re-entry guard
-	// keeps that from wiping the entries or asking for a second transmit.
 	@Test
 	public void ourOwnReTriggerDoesNotWipeTheCapture()
 	{
@@ -343,8 +310,6 @@ public class ClogCaptureTest
 			Mockito.anyInt(), Mockito.anyInt(), Mockito.any(), Mockito.any());
 	}
 
-	// A log that transmits nothing still has to release the guard on the fallback
-	// deadline, or nothing captures for the rest of the session.
 	@Test
 	public void emptyLogStillClearsTheRetrieveGuard()
 	{
@@ -356,14 +321,12 @@ public class ClogCaptureTest
 		assertFalse(capture.isDirty());
 		assertTrue(clogItems().isEmpty());
 
-		// a genuine second open still gets its Search op.
 		logOpened();
 		Mockito.verify(client, Mockito.times(2)).menuAction(
 			Mockito.anyInt(), Mockito.anyInt(), Mockito.any(MenuAction.class),
 			Mockito.anyInt(), Mockito.anyInt(), Mockito.any(), Mockito.any());
 	}
 
-	// the transmit args come straight from the game, so they can be short or missing.
 	@Test
 	public void malformedTransmitIsIgnored()
 	{
@@ -385,28 +348,15 @@ public class ClogCaptureTest
 		assertTrue(clogItems().isEmpty());
 	}
 
-	// ── snapshot shape ─────────────────────────────────────────────────────
-
-	// LocalStore.mergeClog floor-merges these keys by name and the panel reads them
-	// back, so a rename here drops the data silently.
 	@Test
 	public void snapshotCarriesTheServersMergeKeys()
 	{
-		// Every key here has to be merged on BOTH sides -- LocalStore.mergeClog and
-		// the server's _clog_merge -- or a page not opened this session loses what
-		// it last said. This test exists to make adding one here fail until it is.
 		Set<String> expected = new HashSet<>(Arrays.asList(
 			"by_cat", "kcs", "kc_lines", "pb_lines", "slayer_kcs", "cat_counts",
 			"clog_items", "finished", "available"));
 		assertEquals(expected, capture.snapshot().keySet());
 	}
 
-	// A PERSONAL BEST IS A TIME. The expression takes the last ": number" on the
-	// line, so "Personal Best: 3:46" hands back 46 under the label "Personal
-	// Best: 3", and the seconds of a best time were stored as the page's count:
-	// Tempoross read 46 where 455 were killed, Vorkath 19 where 156 were, the
-	// Gauntlet 55 where 31 were. Those were the three numbers that started all
-	// of this.
 	@Test
 	public void aPersonalBestIsNotAKillCount()
 	{
@@ -420,15 +370,12 @@ public class ClogCaptureTest
 		assertNull("a best time was read as a count", lines.get("Personal Best: 3"));
 		assertEquals(Integer.valueOf(455), lines.get("Tempoross kills"));
 		assertEquals(Integer.valueOf(1_048), lines.get("Reward permits claimed"));
-		// and the page's headline number is no longer the seconds of that time
 		assertEquals(Integer.valueOf(1_048), kcs().get("Tempoross"));
 	}
 
 	@Test
 	public void theLabelledKillLineIsWhatAPageCountsFor()
 	{
-		// kcs keeps whichever number came first, which on this page counts
-		// rewards. Reading it by its label is what tells 447 from 1,078.
 		JsonObject clog = new JsonObject();
 		JsonObject pages = new JsonObject();
 		JsonObject todt = new JsonObject();
@@ -445,7 +392,7 @@ public class ClogCaptureTest
 		clog.add("kc_lines", pages);
 		JsonObject kcs = new JsonObject();
 		kcs.addProperty("Wintertodt", 1078);
-		kcs.addProperty("The Gauntlet", 55);   // the old half-a-best-time reading
+		kcs.addProperty("The Gauntlet", 55);
 		clog.add("kcs", kcs);
 
 		Map<String, Long> counts = LocalStore.clogKillCounts(clog);
@@ -455,14 +402,6 @@ public class ClogCaptureTest
 		assertNull("gambles are not kills", counts.get("Barbarian Assault"));
 	}
 
-	// ── account boundary ───────────────────────────────────────────────────
-
-	// The login screen must NOT clear this. The plugin folds the capture into the
-	// journal from its own logout handler, and both are @Subscribe on
-	// GameStateChanged at the same priority: clearing here meant whichever the
-	// EventBus registered first decided whether a session's collection log
-	// survived, and a player who opened their log and logged out lost the lot --
-	// the Kill Log included, which is the one thing a new install is told to do.
 	@Test
 	public void theLoginScreenLeavesTheCaptureForThePluginToBank()
 	{
@@ -482,9 +421,6 @@ public class ClogCaptureTest
 		assertFalse(byCat().isEmpty());
 	}
 
-	// and the boundary itself, which the plugin now draws deliberately once it has
-	// taken what it needs: nothing captured for one player may still be sitting
-	// there to go out under the next one's name.
 	@Test
 	public void resetClearsEverything()
 	{
@@ -508,8 +444,6 @@ public class ClogCaptureTest
 		assertFalse(capture.isDirty());
 	}
 
-	// ── login-synced counts, no interface needed ───────────────────────────
-
 	@Test
 	public void loginVarpsFillTheAccountWideCounts()
 	{
@@ -527,8 +461,6 @@ public class ClogCaptureTest
 		assertTrue(capture.isDirty());
 	}
 
-	// The varps read 0 until the game syncs them, so a LOGGED_IN taken early has to
-	// leave the counts alone instead of recording an account that collected nothing.
 	@Test
 	public void loginBeforeTheVarpsSyncDoesNotZeroTheCounts()
 	{
@@ -548,12 +480,6 @@ public class ClogCaptureTest
 		assertFalse(capture.isDirty());
 	}
 
-	/**
-	 * TRAP: a page listing one name in many slots. My Notes is twenty six Ancient
-	 * pages: different items, one name. The scrape used to overwrite the name each
-	 * time it saw it, so the page recorded 1 however many were held and the board
-	 * could never read above "1/26".
-	 */
 	@Test
 	public void repeatedNamesOnAPageAreCountedNotOverwritten()
 	{
@@ -566,7 +492,6 @@ public class ClogCaptureTest
 			Integer.valueOf(3), byCat().get("My Notes").get("Ancient page"));
 	}
 
-	/** And reading the same page twice does not count it twice. */
 	@Test
 	public void readingAPageAgainReplacesRatherThanAddsToIt()
 	{
@@ -581,7 +506,6 @@ public class ClogCaptureTest
 			Integer.valueOf(3), byCat().get("My Notes").get("Ancient page"));
 	}
 
-	/** A faded slot is one the player does not have, and is not counted. */
 	@Test
 	public void fadedSlotsAreNotCounted()
 	{

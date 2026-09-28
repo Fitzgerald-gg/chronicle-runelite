@@ -9,7 +9,6 @@ import java.util.List;
 import javax.swing.SwingUtilities;
 import org.junit.Test;
 
-/** Not an assertion: a measurement, run with -Dchronicle.bench=1. */
 public class RebuildBenchTest
 {
 	@Test
@@ -95,9 +94,6 @@ public class RebuildBenchTest
 						}
 						Method rebuild = ChroniclePanel.class.getDeclaredMethod("rebuild");
 						rebuild.setAccessible(true);
-						// What the client does: build, lay out at the height the
-						// content actually wants, and paint it. Laying out at a
-						// fixed 800 and never painting measures the cheap half.
 						panel.setSize(242, 800);
 						long t0 = System.nanoTime();
 						rebuild.invoke(panel);

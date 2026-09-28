@@ -46,100 +46,43 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.game.ItemManager;
 
-/**
- * The on-disk journal: one {@code <slug>.json} per account under
- * {@code .runelite/chronicle/}, loaded at login and rewritten as you play. It is
- * the record the side panel reads, and it never leaves this computer.
- *
- * <p>Threading: {@link #record} and {@link #setCharacter} run on the client thread
- * ({@link #record} prices through {@link ItemManager}), and {@link #setCharacter} and
- * {@link #setTrackers} once more on the EDT, from the plugin's shutDown; {@link #load} and
- * {@link #flush} run on a background executor. The in-memory model is guarded by
- * {@link #lock}, and the file-writing methods hold it only long enough to
- * serialise a string, so the client thread never blocks on I/O.
- */
 @Singleton
 @Slf4j
 class LocalStore implements chronicle.counters.GatheredLedger
 {
 	static final int SCHEMA = 1;
-	/**
-	 * Which way of reckoning kill counts this build writes to the spine. Each
-	 * spine line says the version that wrote it, and on the first login under
-	 * a newer one the difference between the two, taken over the same journal,
-	 * is written beside the next line so the change never reads as kills.
-	 *
-	 * <p>Bump it whenever {@link #reconciledKills} or {@link #spineKills} would
-	 * give a different figure for the same journal, and keep the old version's
-	 * branch: the shift is worked out by running both. KillsVersionTest pins
-	 * what the current version gives, and fails on a change that did not bump.
-	 *
-	 * <p>0: the Plugin Hub's build to 7bd5812, the ledger raised to the page
-	 * counter as the floor, and the kills sum over the ledger's own figures.
-	 * 1: the page's labelled line and the ledger's own figure as the floor,
-	 * and the kills sum over the reconciled figure of each fight the ledger
-	 * has seen loot from, found by kind.
-	 */
 	static final int KILLS_VERSION = 1;
-	// runaway guard
 	private static final int FEED_CAP = 20000;
-	// peak counters: lifetime is max(base, session) rather than base + session.
 	static final Set<String> MAX_KEYS = new HashSet<>(
 		Arrays.asList("highestHit", "highestHitTaken"));
-	// Event types kept as dated feed lines. LOOT and LOOT_UNTAKEN are recorded too,
-	// into the drop and untaken ledgers; GROUP_STORAGE isn't kept at all.
 	private static final Set<String> FEED_TYPES = new HashSet<>(Arrays.asList(
 		"PET", "COLLECTION", "COMBAT_ACHIEVEMENT", "QUEST", "DIARY", "CLUE", "DEATH", "SLAYER",
 		"LEVEL",
-		"SESSION"));   // SESSION is recorded by the plugin itself, so it stays off the network
+		"SESSION"));
 
 	private final ItemManager itemManager;
 	private final Gson gson;
 
 	private final Object lock = new Object();
-	// What the counts moved since the spine's last line that was not play is laid
-	// by in the journal itself, under this key, for the next line. It has to
-	// live beside the counts it explains: a pile in memory was lost to a client
-	// closed between the journal's flush and the spine's next line, and the
-	// counts it explained then read as a day's kills.
 	static final String SPINE_ADJ = "spine_adj";
-	// The reckoning a version step laid by on SPINE_ADJ brings the spine to, so
-	// a login before that line is written does not lay the same step twice.
 	static final String SPINE_ADJ_KV = "spine_adj_kv";
-	// Set when a reading lays a correction by, so the next tick writes its line;
-	// not by one handed back after a failed write, which waits for the write
-	// interval rather than retrying every tick.
 	private volatile boolean freshAdjust;
-	private JsonObject root;          // the current account's model (guarded by lock)
-	private JsonObject trackersBase;  // lifetime counters frozen at load; +session = lifetime
-	private String currentRsn;        // whose model root holds
-	private File mountedDir;          // where the journal it came from lives
-	private volatile boolean ready;   // true once an account's file has been loaded
-	// Why the journal isn't reaching disk, or null. The panel shows it; a stalled
-	// journal still looks alive in memory otherwise.
+	private JsonObject root;
+	private JsonObject trackersBase;
+	private String currentRsn;
+	private File mountedDir;
+	private volatile boolean ready;
 	private volatile String journalWarning;
 
-	// Session tallies for the panel strip and recent-drop row. In memory only,
-	// cleared at the account boundary; guarded by lock.
 	private int sessionLoots;
 	private long sessionLootValue;
 	private int sessionUntaken;
 	private long sessionUntakenValue;
-	// the kills that left at least one stack on the floor, the capture's own count
 	private int sessionUntakenKills;
 	private final ArrayDeque<RecentDrop> recentDrops = new ArrayDeque<>();
-	// This sitting's take, in the same shape as one of the dated roll's days, so
-	// a board can read it through the same fold. The roll keeps ONE entry a day
-	// and a sitting is hours inside one of those, so it could never be asked what
-	// this sitting took; this is written beside it as the drops land. In memory
-	// only, and gone at the account boundary like the tallies above it.
 	private JsonObject sessionRoll = new JsonObject();
 
-	// runaway guard; every log, ore, fish and gem in the game is a few hundred ids,
-	// and the journal is rewritten whole on every flush.
 	private static final int GATHERED_CAP = 1024;
-	// Lock-free mirror of the record's "gathered_items", read on every drop click.
-	// The resolver writes it on the client thread while load() rebuilds it on the executor.
 	private final Set<Integer> gatheredItems =
 		ConcurrentHashMap.newKeySet();
 
@@ -151,7 +94,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		final String name;
 	}
 
-
 	@Inject
 	LocalStore(ItemManager itemManager, Gson gson)
 	{
@@ -159,12 +101,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		this.gson = gson;
 	}
 
-	// ------------------------------------------------------------------
-	// Session lifecycle
-	// ------------------------------------------------------------------
-
-	/** Mount this account's record, or start one. Runs on the executor; call once
-	 *  per login, before anything records. */
 	void load(File dir, String rsn)
 	{
 		freshAdjust = false;
@@ -182,29 +118,24 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					loaded = el.getAsJsonObject();
 				}
 			}
-			catch (Exception e)   // noqa: a torn file is set aside below
+			catch (Exception e)
 			{
 				log.warn("local record unreadable: {}", f, e);
 			}
 			if (loaded == null)
 			{
-				// The only copy of this account's history, and the next flush would write
-				// a blank skeleton over it. Keep the bytes under a dated sidecar.
 				setAside(f, "corrupt");
 			}
 		}
 		long fileSchema = loaded != null ? asLong(loaded.get("schema")) : 0;
 		if (fileSchema > SCHEMA)
 		{
-			// A newer schema would be stamped down by normalise() and rewritten. Mount nothing.
 			log.warn("journal {} is schema {}; this build reads {}",
 				f.getName(), fileSchema, SCHEMA);
 			journalWarning = "This journal was written by a newer version of Chronicle. "
 				+ "Update the plugin to open it. Nothing on disk has been changed.";
 			synchronized (lock)
 			{
-				// Empty rather than null: a model going null under the panel's reads throws
-				// on the EDT. No currentRsn, so flush() can't write it over the real record.
 				root = skeleton(rsn);
 				trackersBase = new JsonObject();
 				currentRsn = null;
@@ -221,24 +152,15 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		synchronized (lock)
 		{
 			root = loaded;
-			// The counter keys are folded before the base below is frozen: a key
-			// left in the base would be restated on the next session total.
 			int healed = repairTrackerKeys();
-			// Freeze the loaded lifetime counters; setTrackers() recomputes the live
-			// total as this base + the current session.
 			trackersBase = loaded.getAsJsonObject("trackers").deepCopy();
 			currentRsn = rsn;
-			// What an earlier build, or an import, could leave inconsistent: the same
-			// item twice in one source's bag, a feed line twice, by-item leavings that
-			// no longer sum to the pairs, off-task kills counted toward a slayer task.
 			healed += dedupeSourceBags() + dedupeFeed() + reconcileUntaken()
 				+ purgeOffTaskMonsters() + splitDays();
 			if (healed > 0)
 			{
 				log.debug("repaired {} journal entries on load", healed);
 			}
-			// Cleared first: the mirror must describe this account only, or the previous
-			// character's ore would credit this one's drops.
 			gatheredItems.clear();
 			for (JsonElement g : arr(loaded, "gathered_items"))
 			{
@@ -248,17 +170,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					gatheredItems.add((int) id);
 				}
 			}
-			// Before the store says it is ready: a logout in between would write
-			// a line under this build's reckoning with the step not yet laid by.
 			settleKillsVersion(dir, rsn);
 			ready = true;
 		}
-		// Whatever was wrong belongs to the last account. A disk still refusing
-		// writes re-states itself on the next flush.
 		journalWarning = null;
 	}
 
-	/** The account has logged out; a different one must not record onto its model. */
 	void endSession()
 	{
 		ready = false;
@@ -271,12 +188,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			sessionUntakenKills = 0;
 			sessionRoll = new JsonObject();
 			recentDrops.clear();
-			// Account-scoped. load() reads it back from the record.
 			gatheredItems.clear();
 		}
 	}
 
-	/** Lay a change that was not play by, for the next line of the spine. */
 	void addPendingAdjust(HistoryLog.Adjust adj)
 	{
 		if (adj == null || adj.isEmpty())
@@ -303,11 +218,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * A correction a spine line failed to carry, put back for the next line of
-	 * {@code rsn}'s spine: onto the journal it came from, or nowhere if another
-	 * is mounted now.
-	 */
 	void restorePendingAdjust(String rsn, HistoryLog.Adjust adj)
 	{
 		synchronized (lock)
@@ -322,7 +232,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** The change laid by, handed to the line about to be written, and cleared. */
 	HistoryLog.Adjust takePendingAdjust()
 	{
 		synchronized (lock)
@@ -347,7 +256,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** A correction a reading laid by since the last line was written. */
 	boolean hasFreshAdjust()
 	{
 		return freshAdjust;
@@ -358,16 +266,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return ready && rsn != null && rsn.equals(currentRsn);
 	}
 
-	// ------------------------------------------------------------------
-	// Ingest (client thread)
-	// ------------------------------------------------------------------
-
-	/**
-	 * Bumped on every call to record(), kept or not, and on every other write to
-	 * the model. The panel is rebuilt when the record
-	 * moves and left alone when it does not; this is how "moved" is known without
-	 * comparing two copies of the whole journal every tick.
-	 */
 	private volatile long revision;
 
 	long revision()
@@ -375,7 +273,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return revision;
 	}
 
-	/** Fold one captured event into the model. Runs on the client thread. */
 	void record(String type, JsonObject data, String rsn)
 	{
 		if (!isReadyFor(rsn) || type == null || data == null)
@@ -407,7 +304,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** One dated line onto the feed, newest last, the cap kept. */
 	private void appendFeed(String type, JsonObject data)
 	{
 		JsonObject entry = new JsonObject();
@@ -418,7 +314,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			JsonArray feed = root.getAsJsonArray("feed");
 			feed.add(entry);
-			// index 0 is the oldest; the feed is appended in order
 			while (feed.size() > FEED_CAP)
 			{
 				feed.remove(0);
@@ -462,8 +357,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 		}
 
-		// The standing PB when the game restated it, else this kill's own time when
-		// it was the record.
 		Double pbCand = null;
 		if (present(data, "personalBestTime"))
 		{
@@ -475,13 +368,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			pbCand = data.get("killTime").getAsDouble();
 		}
-		// This kill's own time, where the boss timer gave one. Kept as a count
-		// and a sum, on the source and on the dated roll, so an average over
-		// any period falls out without a row per kill.
 		Double killTime = present(data, "killTime")
 			&& data.get("killTime").getAsDouble() > 0 ? data.get("killTime").getAsDouble() : null;
-		// The game flagging THIS kill as the new best; a best merely restated
-		// on the first kill after install was set while nobody was watching.
 		boolean newRecord = present(data, "personalBest")
 			&& data.get("personalBest").getAsBoolean();
 
@@ -489,8 +377,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			slayerLoot(data, batchValue, source, priced);
 			JsonObject drops = root.getAsJsonObject("drops");
-			// Guarded field by field: an older journal's source entry (or a hand edit)
-			// can be missing counters, and an exception here is eaten by the event bus.
 			JsonObject src = drops.has(source) && drops.get(source).isJsonObject()
 				? drops.getAsJsonObject(source) : null;
 			if (src == null)
@@ -509,17 +395,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				bump(src, "timed", 1);
 				src.addProperty("timeSum", asDouble(src.get("timeSum")) + killTime);
 			}
-			// The chat box speaks BEFORE the drop lands. "Your Sarachnis kill count
-			// is: 52" anchors at 52, and the loot event for that very kill arrives
-			// after it, so counting it as an observation SINCE would read 53. The
-			// row carries the game's own number for the kill it came from: where
-			// that is the number the anchor was taken at, this is that same kill
-			// arriving late, and the baseline moves with it rather than the count.
-			// A slayer monster's row carries its task counter instead, which is a
-			// different quantity and will not match, so its kills still count.
 			absorbLaggingKill(source, kc);
-			// first_seen/last_seen run as min/max of every kill, epoch ms: an earlier
-			// date the Loot Tracker import set stands, a later one only ever extends.
 			long nowMs = System.currentTimeMillis();
 			long firstSeen = asLong(src.get("first_seen"));
 			if (firstSeen <= 0 || nowMs < firstSeen)
@@ -547,8 +423,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			if (pbCand != null && pbCand > 0 && (bestPb <= 0 || pbCand < bestPb))
 			{
 				src.addProperty("pb", pbCand);
-				// A record is a dated line of its own: the time it set and the
-				// one it beat.
 				if (newRecord)
 				{
 					JsonObject rec = new JsonObject();
@@ -583,20 +457,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	// ------------------------------------------------------------------
-	// The dated loot roll
-	//
-	// A loot event knows when it happened and the ledger above keeps only what
-	// it was, so until this roll existed the record could say a player had taken
-	// 64,274 drops worth 488M and nothing whatever about when. One entry a day
-	// carries the day's take and the day's floor, with a breakdown beside them,
-	// which is as fine as any window the panel offers. Per kill would be tens of
-	// thousands of rows a year for no extra precision.
-	//
-	// The breakdown is pruned past DETAIL_DAYS; the day's totals are kept for
-	// good, being a few dozen bytes apiece.
-	// ------------------------------------------------------------------
-
 	private static final int DETAIL_DAYS = 400;
 	private static final DateTimeFormatter DAY_KEY =
 		DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -613,7 +473,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return days.getAsJsonObject(today);
 	}
 
-	// the breakdown goes off days older than DETAIL_DAYS; their totals stay
 	private static void pruneDetail(JsonObject days)
 	{
 		String cut = LocalDate.now().minusDays(DETAIL_DAYS).format(DAY_KEY);
@@ -654,12 +513,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return o != null && o.has(key) && o.get(key).isJsonObject() ? o.getAsJsonObject(key) : new JsonObject();
 	}
 
-	// one kill's take, against today
 	private void rollTaken(String source, long value, JsonArray priced, Double killTime)
 	{
-		// Today and this sitting, the same figures into the same shape. Written
-		// here rather than derived later: a drop knows which sitting it landed in
-		// only while that sitting is running.
 		for (JsonObject into : new JsonObject[]{dayRoll(), sessionRoll})
 		{
 			bump(into, "loots", 1);
@@ -673,12 +528,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				bySource.addProperty("timeSum", asDouble(bySource.get("timeSum")) + killTime);
 			}
 			JsonObject items = sub(into, "items");
-			// Its items per source as well as in total, the day's as the
-			// sitting's, which is what lets a source's page answer for any
-			// period with what it paid it IN. The day's heap stays beside them:
-			// an older build reads only that.
 			JsonObject mine = sub(bySource, "items");
-			// how many of its drops the rows hold: one an older build adds is not
 			bump(bySource, "filed", 1);
 			for (JsonElement pe : priced)
 			{
@@ -696,7 +546,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	// one kill's floor, against today
 	private void rollLeft(long qty, long value, int kills, List<BagItem> perItem)
 	{
 		for (JsonObject into : new JsonObject[]{dayRoll(), sessionRoll})
@@ -714,8 +563,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** What the dated roll holds for a window; every figure zero and every list
-	 *  empty when the window holds nothing. */
 	static final class LootWindow
 	{
 		long loots;
@@ -726,7 +573,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		final List<String[]> items = new ArrayList<>();
 		final List<String[]> sources = new ArrayList<>();
 		final List<String[]> leftItems = new ArrayList<>();
-		// per source: {kills the timer timed, their seconds summed}
 		final Map<String, double[]> times = new LinkedHashMap<>();
 		private final Map<String, long[]> byItem = new LinkedHashMap<>();
 		private final Map<String, long[]> bySource = new LinkedHashMap<>();
@@ -754,8 +600,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** The first day the roll holds, as epoch ms, or 0 when it holds none. A
-	 *  window opening before this day has no dated account of its loot. */
 	long lootRollFrom()
 	{
 		synchronized (lock)
@@ -777,7 +621,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** The roll summed over [from, to], both days included. */
 	LootWindow lootBetween(LocalDate from, LocalDate to)
 	{
 		LootWindow w = new LootWindow();
@@ -803,7 +646,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return w.ranked();
 	}
 
-	/** Each day the roll holds, keyed yyyy-MM-dd: {loots, value, left, leftValue}. */
 	Map<String, long[]> dayTotals()
 	{
 		Map<String, long[]> out = new TreeMap<>();
@@ -823,11 +665,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * When one item landed, off the dated roll: {first day, last day, days it
-	 * landed, how many the days hold}, the days as millis at local midnight;
-	 * zeros where it never did.
-	 */
 	long[] itemDays(String name)
 	{
 		String first = null;
@@ -875,15 +712,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 	}
 
-	/**
-	 * What THIS sitting has taken and left, ranked, in the same shape the dated
-	 * roll answers a window with.
-	 *
-	 * <p>One entry folded through the same gather and rank the roll uses, so the
-	 * boards that read a window read a sitting without knowing the difference.
-	 * A sitting that has seen no drops answers with every figure zero and every
-	 * list empty, which is the true answer and not an absence of one.
-	 */
 	LootWindow sessionLootWindow()
 	{
 		LootWindow w = new LootWindow();
@@ -894,13 +722,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return w.ranked();
 	}
 
-	/**
-	 * Each source's own items over the days [from, to], or this sitting's when
-	 * {@code from} is null, ranked, under the source's own spelling: the game has
-	 * monsters whose names differ only by case, and the roll keeps them apart.
-	 * A drop that fell on a day the roll kept only as one heap has no row here:
-	 * what the roll holds for a source less its rows is what went unitemised.
-	 */
 	Map<String, List<BagItem>> itemsBySource(LocalDate from, LocalDate to)
 	{
 		Map<String, Map<String, long[]>> by = new LinkedHashMap<>();
@@ -933,8 +754,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					for (String id : its.keySet())
 					{
 						JsonObject e = obj(its, id);
-						// the name the day gives it, as the head reads it: an item
-						// renamed between two drops keeps one name in the day
 						String label = str(obj(obj(d, "items"), id), "n", str(e, "n", id));
 						long[] t = into.computeIfAbsent(label, k -> new long[2]);
 						t[0] += asLong(e.get("q"));
@@ -945,7 +764,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 						}
 						catch (NumberFormatException ignored)
 						{
-							// a name-keyed entry from an older shape
 						}
 					}
 				}
@@ -956,10 +774,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * The sources with a drop on a day in [from, to] that no row of theirs
-	 * holds, whatever it was worth: one the roll kept only in the day's heap.
-	 */
 	Set<String> unfiledSources(LocalDate from, LocalDate to)
 	{
 		Set<String> out = new HashSet<>();
@@ -985,8 +799,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/** The first day the roll still keeps by source, as epoch ms, or 0: older
-	 *  days keep only their totals once DETAIL_DAYS have passed. */
 	long lootDetailFrom()
 	{
 		synchronized (lock)
@@ -1004,17 +816,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * Files under its sources what a day's heap holds beyond their own rows,
-	 * where the record proves whose each item was: days written before the roll
-	 * kept items per source, and drops an older build adds to a day since. Only a
-	 * source with drops its rows do not hold (its loots past its filed count) can
-	 * be owed any. Where one source is owed, the rest is all its own; where several
-	 * are, an item worth something that only one of the day's sources has ever
-	 * dropped (by id or by name) is that one's. Written only where it all finds an
-	 * owed owner and every owed source then comes to exactly the value the roll
-	 * holds for it; any other day is left as it stands.
-	 */
 	private int splitDays()
 	{
 		int split = 0;
@@ -1025,7 +826,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			JsonObject srcs = obj(obj(all, day), "sources");
 			JsonObject heap = obj(obj(all, day), "items");
-			// the heap less every source's rows, and what each source is owed
 			Map<String, long[]> rest = new LinkedHashMap<>();
 			for (String id : heap.keySet())
 			{
@@ -1066,9 +866,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				String id = r.getKey();
 				String name = str(obj(heap, id), "n", "");
-				// Only an owed source has drops outside its rows, so one owed source
-				// owns all the rest. Among several, the bags say whose it is, and a
-				// worthless item is left: no total can catch a bag that misleads.
 				String owner = owed.size() == 1 ? owed.keySet().iterator().next() : null;
 				for (String source : owner != null ? new HashSet<String>() : srcs.keySet())
 				{
@@ -1077,7 +874,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					{
 						if (owner != null || r.getValue()[1] == 0)
 						{
-							continue days;   // two sources could have dropped it
+							continue days;
 						}
 						owner = source;
 					}
@@ -1122,7 +919,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return split;
 	}
 
-	// whether a source's lifetime bag holds an item of this name
 	private static boolean dropped(JsonObject bag, String name)
 	{
 		for (String key : bag.keySet())
@@ -1135,8 +931,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return false;
 	}
 
-	// fold one day's breakdown into the running tally. `named` reads the stored
-	// display name off the entry; a source is named by its own key.
 	private static void gather(JsonObject day, String key,
 		Map<String, long[]> into, boolean named)
 	{
@@ -1155,7 +949,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	// the timed kills a day's source entries hold, summed per source
 	private static void gatherTimes(JsonObject day, Map<String, double[]> into)
 	{
 		JsonObject o = obj(day, "sources");
@@ -1171,7 +964,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	// biggest by value first, as {name, qty, value}
 	private static void rank(Map<String, long[]> from, List<String[]> into)
 	{
 		List<Map.Entry<String, long[]>> rows =
@@ -1184,10 +976,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** Refresh the character sheet. Runs on the client thread, and once on the EDT
-	 *  from the plugin's shutDown, which banks the session on a settings toggle; the
-	 *  lock covers both. {@code collectionLog} is the capture's raw map, converted to
-	 *  a tree here. */
 	void setCharacter(String rsn, JsonObject skills, int combatLevel,
 		Map<String, Object> collectionLog, JsonObject achievements)
 	{
@@ -1206,15 +994,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				root.addProperty("combat_level", combatLevel);
 			}
-			// What the counts were before this reading, so what it moved that was
-			// not play can be laid by (noteArrival).
 			Counts before = collectionLog != null ? countsNow() : null;
 			if (collectionLog != null)
 			{
-				// Anchor from what has just been READ, not from the merged result:
-				// a page not opened this session keeps its old number through the
-				// merge, and re-anchoring on it would throw away the observations
-				// that number has been riding on.
 				Object read = collectionLog.get("slayer_kcs");
 				if (read instanceof Map)
 				{
@@ -1227,8 +1009,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 						}
 					}
 				}
-				// The session's capture is partial, covering only the pages browsed.
-				// Clog data only grows; union it into the stored log.
 				root.add("collection_log", mergeClog(sub(root, "collection_log"),
 					gson.toJsonTree(collectionLog).getAsJsonObject()));
 			}
@@ -1244,15 +1024,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** The counts as they stand, and what each fight's figure rests on. */
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	private static final class Counts
 	{
-		// the reconciled figures, by the reconciliation's own names
 		final Map<String, Long> kills;
-		// by kind: 1 a page counter, 2 something the game said; absent, the ledger alone
 		final Map<String, Integer> rank;
-		// the spine's kills sum, and the kinds it adds up
 		final long sum;
 		final Set<String> summed;
 	}
@@ -1267,15 +1043,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			Map<String, Long> anchored = anchoredKills();
 			Map<String, Long> kills = reconciledKills(cl, sources, chat, anchored);
 			Map<String, Integer> rank = new HashMap<>();
-			// The page's raw counter is a word, but not one about kills: Tempoross's
-			// held 46, the tail of a 3:46 best time, where the Kill Log says 455.
 			for (String name : obj(cl, "kcs").keySet())
 			{
 				rank.put(chatKind(name), 1);
 			}
-			// What the game said: the Kill Log, a page's labelled line (not a page
-			// merely opened, whose lines can be empty), a chat line and an anchor,
-			// the last two by the fight they name, not the words the chat box used.
 			Map<String, Long> said = killLogCounts(cl);
 			said.putAll(pageKillLines(cl));
 			Set<String> vocabulary = clogKillCounts(cl).keySet();
@@ -1296,23 +1067,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * What a reading just moved that was not play, laid by for the spine.
-	 *
-	 * <p>A fight's first word of a higher kind brings its whole past with it:
-	 * the Kill Log opened for the first time said Tempoross 455 where the page's
-	 * counter had 46, and the day it was read claimed 409 kills. So a count that
-	 * comes to rest on a better source than it had (the ledger, then a page
-	 * counter, then something the game said) moved by a correction, and so did
-	 * any count that falls. A fight already resting on a statement moves by
-	 * play, kills the ledger did not see (no drop, another device), and those
-	 * stay kills. {@code announced} is the kill a chat line announces with its
-	 * count: that one was played.
-	 *
-	 * <p>Fights are matched by kind: a first statement can re-file a fight under
-	 * the game's spelling ("Abyssal demons" for the ledger's "Abyssal demon"),
-	 * and a name looked up as it stood found nothing and laid nothing by.
-	 */
 	private void noteArrival(Counts before, long announced)
 	{
 		Counts after = countsNow();
@@ -1326,7 +1080,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			Long then = was.get(kind);
 			if (then == null)
 			{
-				continue;   // a fight new to the record measures from its first figure
+				continue;
 			}
 			long moved = e.getValue() - then;
 			boolean risen = after.rank.getOrDefault(kind, 0) > before.rank.getOrDefault(kind, 0);
@@ -1340,8 +1094,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				played += moved - notPlay;
 			}
 		}
-		// The sum's own step, less what of it was play: a fight that joined or
-		// left the sum, or changed its name in it, is in the step and in no row.
 		long sumShift = after.sum - before.sum - played;
 		if (sumShift != 0)
 		{
@@ -1350,11 +1102,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		addPendingAdjust(adj);
 	}
 
-	/**
-	 * Re-freeze the lifetime base at the current journal values. Called before the
-	 * session counter store is cleared (shutdown, or a cloudSync toggle), so the
-	 * fresh from-zero session can't take back what was already folded in.
-	 */
 	void rebase(String rsn)
 	{
 		if (!isReadyFor(rsn))
@@ -1371,12 +1118,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * Refresh the lifetime tracker counters from this session's live totals. Runs on
-	 * the client thread, and once on the EDT from the plugin's shutDown; the lock
-	 * covers both. {@code session} is the from-zero session snapshot; lifetime
-	 * is base + session (max for the peak counters), so repeat calls never double up.
-	 */
 	void setTrackers(Map<String, Integer> session, String rsn)
 	{
 		if (!isReadyFor(rsn) || session == null)
@@ -1396,15 +1137,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		revision++;
 	}
 
-	/**
-	 * Every counter's lifetime figure, from the frozen base and a session, worked
-	 * out without writing anything.
-	 *
-	 * <p>The same arithmetic setTrackers persists, lifted out so a reader can have
-	 * it at any moment. The panel used to read the PERSISTED copy, which only
-	 * moves when the journal is flushed, so a board showing what this account has
-	 * gathered sat still through an hour of gathering and then jumped on logout.
-	 */
 	Map<String, Long> lifetimeOf(Map<String, Integer> session)
 	{
 		Map<String, Long> out = new HashMap<>();
@@ -1432,11 +1164,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	// ------------------------------------------------------------------
-	// Persist (background executor)
-	// ------------------------------------------------------------------
-
-	/** Write the JSON record, or do nothing while no account is mounted. */
 	void flush(File dir)
 	{
 		String json;
@@ -1459,18 +1186,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			writeAtomic(jsonPath(dir, rsn), json);
 			journalWarning = null;
 		}
-		catch (Exception e)   // noqa: the model is intact in memory; the next tick retries
+		catch (Exception e)
 		{
-			// A full, read-only or locked directory drops every write while the panel,
-			// served from memory, goes on looking live. Say so where it is read.
 			log.warn("local flush failed", e);
 			journalWarning = "Could not write the journal to disk: check free space and "
 				+ "permissions on " + dir.getAbsolutePath() + ".";
 		}
 	}
 
-	/** A fresh record: the identity fields here, the containers from normalise(),
-	 *  which is the one place they are enumerated. */
 	private JsonObject skeleton(String rsn)
 	{
 		JsonObject o = new JsonObject();
@@ -1482,7 +1205,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return o;
 	}
 
-	/** An empty drop source, as all three merge paths start one. */
 	private static JsonObject newSource()
 	{
 		JsonObject src = new JsonObject();
@@ -1493,16 +1215,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return src;
 	}
 
-	/**
-	 * Make sure a loaded record has the containers created here, which are the ones
-	 * the character sheet, the drops table and the feed are written into.
-	 *
-	 * <p>NOT every container the ingest paths expect: the later stores (untaken and
-	 * its two indexes, the slayer spine, loot_days, consumable_values) create their
-	 * own on first write and are guarded at their own call sites. An ingest path
-	 * added on the strength of the old promise, reading straight through
-	 * getAsJsonObject the way recordLoot does, would find nothing there.
-	 */
 	private void normalise(JsonObject o, String rsn)
 	{
 		o.addProperty("schema", SCHEMA);
@@ -1534,22 +1246,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		root.addProperty("updated_at", nowSec());
 	}
 
-	// ------------------------------------------------------------------
-	// Panel-facing reads (copies only; safe to call from the EDT)
-	// ------------------------------------------------------------------
-
 	ItemManager items()
 	{
 		return itemManager;
 	}
 
-	/** Why the journal is not keeping the record, or null while it is. */
 	String journalWarning()
 	{
 		return journalWarning;
 	}
 
-	/** Lifetime counters as the journal knows them (base + this session). */
 	Map<String, Long> trackersSnapshot()
 	{
 		Map<String, Long> out = new HashMap<>();
@@ -1574,20 +1280,13 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		final int loots;
 		final long value;
 		final Double pb;
-		// epoch ms, 0 = unknown; comes in from the Loot Tracker import's per-source
-		// range and extends as play continues.
 		final long firstMs;
 		final long lastMs;
-		// lower-cased name of every item the bag holds a copy of. The dryness book
-		// reads it as obtained: a unique already looted is never a chase, whatever the
-		// stored log says.
 		final Set<String> looted;
-		// kills the boss timer gave a time for, and those times summed in seconds
 		final long timed;
 		final double timeSum;
 	}
 
-	/** Every drop source, unsorted (the panel ranks). */
 	List<SourceRow> dropSources()
 	{
 		List<SourceRow> out = new ArrayList<>();
@@ -1617,8 +1316,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	// The names in one source's bag, lower-cased, holding only entries with a copy
-	// in hand: a zero-quantity row is a name the bag once knew, not an item owned.
 	private static Set<String> lootedNames(JsonObject src)
 	{
 		Set<String> out = new HashSet<>();
@@ -1642,7 +1339,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out.isEmpty() ? Collections.emptySet() : out;
 	}
 
-	/** Newest feed entries, newest first (deep copies). */
 	List<JsonObject> feedNewest(int n)
 	{
 		List<JsonObject> out = new ArrayList<>();
@@ -1693,14 +1389,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		final long value;
 	}
 
-	/**
-	 * Canonicalise an item id, then name it and price the stack. Notes and placeholders
-	 * price as the real item. Client thread; the value is frozen into the record here
-	 * and never repriced.
-	 *
-	 * <p>An id the ItemManager cannot compose is named after its number instead of
-	 * throwing: one unknown id must not abort a caller's whole loop.
-	 */
 	BagItem price(int id, long qty)
 	{
 		int canon = itemManager.canonicalize(id);
@@ -1709,7 +1397,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			name = itemManager.getItemComposition(canon).getName();
 		}
-		catch (Exception e)   // noqa: unknown id, fall back to the raw number
+		catch (Exception e)
 		{
 			name = "Item " + id;
 		}
@@ -1717,17 +1405,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return new BagItem(canon, name, qty, each * qty);
 	}
 
-	/** How an item is filed in a source's bag: its id when one is known, else
-	 *  {@code n:} and the lowercased name. Both merge paths key the same way or the
-	 *  same item lands on two lines. */
 	private static String bagKey(int id, String name)
 	{
 		return id > 0 ? String.valueOf(id)
 			: "n:" + (name == null ? "" : name.toLowerCase(Locale.ROOT));
 	}
 
-	/** One source's whole record from the core Loot Tracker's local store, already
-	 *  canonicalised and priced by the caller (client thread). */
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class LootSeed
 	{
@@ -1738,13 +1421,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		final List<BagItem> items;
 	}
 
-	/**
-	 * Floor this account's drops with the core Loot Tracker's own lifetime record.
-	 * kc and loots take the tracker's event count as a lower bound (a higher
-	 * game-reported kc survives), item qty/value match by id then by name, source
-	 * value takes the priced sum, first_seen/last_seen extend as min/max. A re-run
-	 * can only raise floors it already set.
-	 */
 	void floorLootTracker(List<LootSeed> seeds, String rsn)
 	{
 		if (!isReadyFor(rsn) || seeds == null)
@@ -1803,7 +1479,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					}
 					if (hit == null)
 					{
-						// a name-keyed entry picks up its real id here
 						for (var e : items.entrySet())
 						{
 							if (e.getValue().isJsonObject())
@@ -1833,18 +1508,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 						hit.addProperty("value", 0);
 						items.add(bagKey(b.itemId, b.name), hit);
 					}
-					// A floor on a FACT is fine: the archive counts every drop this
-					// account ever took, so a higher quantity is one this journal
-					// had not seen. A floor on a PRICE is not the same thing at
-					// all. The seed is one day's price multiplied by a lifetime
-					// quantity, so taking the larger of two valuations is not
-					// recovering anything, it is ratcheting the record upward on
-					// whichever day the import happened to run. It moved a
-					// Mithril spear from 172 to 231 between one export and the
-					// next, and it can only ever go up.
-					//
-					// So quantity is floored, and a price is only ever SEEDED:
-					// written into a row that has none, never over one that has.
 					if (b.qty > (hit.has("qty") ? hit.get("qty").getAsLong() : 0))
 					{
 						hit.addProperty("qty", b.qty);
@@ -1854,9 +1517,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 						hit.addProperty("value", b.value);
 					}
 				}
-				// The header is the sum of the bag under it, not the seed's own
-				// subtotal. Those two had drifted apart on 16 of my sources by
-				// 813,301 gp, with Vorkath's header 493,431 above its own rows.
 				long bagged = 0;
 				for (var e : items.entrySet())
 				{
@@ -1870,14 +1530,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					src.addProperty("value", bagged);
 				}
 			}
-			// Hundreds of rows have just been seeded from the Loot Tracker. None of
-			// them is a kill that happened since an anchor was taken, so the
-			// baselines move with them rather than the counts.
 			rebaseAnchors();
 		}
 	}
 
-	/** One source's item bag, unsorted. */
 	List<BagItem> sourceItems(String source)
 	{
 		List<BagItem> out = new ArrayList<>();
@@ -1908,11 +1564,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/** Left-behind loot, priced at record like drops and aggregated per source
-	 *  ({@code untaken: {source: {qty, value, kills}}}). {@code kills} is the
-	 *  capture's count of the kills that left at least one of the event's stacks,
-	 *  the unit "Drops taken" subtracts in; an imported or older event carries none
-	 *  and reads as 0. */
 	private void recordUntaken(JsonObject data)
 	{
 		String source = str(data, "source", "Unknown");
@@ -1945,7 +1596,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			bump(src, "qty", qty);
 			bump(src, "value", value);
 			bump(src, "kills", kills);
-			// the same tally keyed by item name
 			JsonObject byItem = sub(root, "untaken_items");
 			for (BagItem b : perItem)
 			{
@@ -1954,8 +1604,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				bump(e, "value", b.value);
 			}
 			rollLeft(qty, value, kills, perItem);
-			// …and the pairing, so the lens drills from either end: which items a
-			// source left, and which sources left an item.
 			JsonObject bag = sub(sub(root, "untaken_pairs"), source);
 			for (BagItem b : perItem)
 			{
@@ -1971,8 +1619,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** A name/qty/value row: untaken sources, untaken items, task monsters. An
-	 *  untaken source also carries the kills that left its stacks; 0 elsewhere. */
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class UntakenRow
 	{
@@ -1987,7 +1633,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** Add the price of one consumption to a typed key's lifetime gp. Client thread. */
 	void addConsumableValue(String key, long gp, String rsn)
 	{
 		if (!isReadyFor(rsn) || key == null || key.isEmpty() || gp <= 0)
@@ -2004,9 +1649,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** Remember an item id this account gathered. Client thread, once per resolved
-	 *  gathering action; it lives in the record so an ore mined last week and binned
-	 *  today still reads as a resource dropped. */
 	@Override
 	public void noteGathered(int itemId)
 	{
@@ -2035,7 +1677,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return itemId > 0 && gatheredItems.contains(itemId);
 	}
 
-	/** The lifetime base (pre-session) for one counter, or 0 when unknown. */
 	long trackerBase(String key)
 	{
 		synchronized (lock)
@@ -2045,14 +1686,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	// ------------------------------------------------------------------
-	// The slayer journey (task-by-task, kept locally)
-	// ------------------------------------------------------------------
-
-	// runaway guard
 	private static final int SLAYER_TASK_CAP = 1000;
 
-	/** The slayer store, created on first use. Callers hold {@code lock}. */
 	private JsonObject slayerRoot()
 	{
 		JsonObject sl = sub(root, "slayer");
@@ -2063,16 +1698,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return sl;
 	}
 
-	/**
-	 * How long after a completion the finishing kill's loot may still land on it, in
-	 * seconds. RuneLite clears the live task on the completing tick, so that kill's
-	 * loot arrives after the segment has closed; the server attached it to the
-	 * completion within this window and the segmenter folded it into the task.
-	 */
 	static final long SLAYER_FINAL_KILL_GRACE = 30;
 
-	/** The newest task segment if it is open and names {@code task}, else null.
-	 *  Callers hold {@code lock}. */
 	private static JsonObject openSegment(JsonArray tasks, String task)
 	{
 		if (tasks.size() == 0)
@@ -2094,21 +1721,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			&& task.equalsIgnoreCase(seg.get("task").getAsString());
 	}
 
-	/** A numeric field, or null when absent. */
 	private static Long optLong(JsonObject o, String key)
 	{
 		return o.has(key) && o.get(key).isJsonPrimitive()
 			? Long.valueOf(asLong(o.get(key))) : null;
 	}
 
-	/**
-	 * The newest segment when this kill continues it: open, the same task, and the
-	 * live counter not having jumped back up. A strict upward jump in
-	 * {@code slayerTaskRemaining} between consecutive same-task kills is a fresh
-	 * assignment even when no completion line was seen (finished on another client,
-	 * both lines missed), so two back-to-back same-monster tasks split on the counter
-	 * alone instead of merging into one bloated row. Callers hold {@code lock}.
-	 */
 	private static JsonObject continuingSegment(JsonArray tasks, String task, Long rem)
 	{
 		JsonObject seg = openSegment(tasks, task);
@@ -2120,13 +1738,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return rem != null && lastRem != null && rem > lastRem ? null : seg;
 	}
 
-	/**
-	 * A segment closed by a completion within the finishing-kill grace that this kill
-	 * belongs to, else null. The finishing kill carries the task alone: its counter
-	 * went with the task, so a kill stamped by a live task ({@code live}) is the next
-	 * assignment unless its counter still continues the segment's. Callers hold
-	 * {@code lock}.
-	 */
 	private static JsonObject graceSegment(JsonArray tasks, String task, Long rem, boolean live)
 	{
 		long floor = nowSec() - SLAYER_FINAL_KILL_GRACE;
@@ -2151,15 +1762,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return null;
 	}
 
-	/**
-	 * A parked segment this kill resumes, moved to the end so it is the current one
-	 * again, else null. Switching to a different monster parks the task; returning to
-	 * it with a counter that continues downward ({@code rem <= min_rem}) is the same
-	 * assignment, so the two runs are one task rather than two rows. A higher counter
-	 * is a fresh assignment and supersedes the parked run. Only the newest segment of
-	 * the task is eligible, and only while no completion has closed it. Callers hold
-	 * {@code lock}.
-	 */
 	private static JsonObject resumeSegment(JsonArray tasks, String task, Long rem)
 	{
 		for (int i = tasks.size() - 1; i >= 0; i--)
@@ -2185,9 +1787,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return null;
 	}
 
-	/** One on-task kill: extend, fold, resume or open the task segment it belongs
-	 *  to. {@code data} is the loot event; a kill with no task stamp is not on task.
-	 *  Callers hold lock. */
 	private void slayerLoot(JsonObject data, long value, String monster, JsonArray items)
 	{
 		String task = str(data, "slayerTask", null);
@@ -2198,7 +1797,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		Long rem = optLong(data, "slayerTaskRemaining");
 		Long initialStamp = optLong(data, "slayerTaskInitial");
 		long initial = initialStamp == null ? 0 : initialStamp;
-		// stamped while the task was live, counter and all
 		boolean live = rem != null || initialStamp != null;
 		JsonObject sl = slayerRoot();
 		JsonArray tasks = sl.getAsJsonArray("tasks");
@@ -2220,9 +1818,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 		if (fold)
 		{
-			// The finishing kill, landing after its completion closed the segment: the
-			// game's count already stands as kills, so it fills a no-drop rather than
-			// adding a kill, and the completion instant stays the segment's date.
 			long total = asLong(seg.get("kills"));
 			long logged = loggedKills(seg) + 1;
 			seg.addProperty("logged", logged);
@@ -2232,9 +1827,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			seg.addProperty("kills", seg.get("kills").getAsLong() + 1);
 			seg.addProperty("ts", nowSec());
-			// RuneLite's initialAmount is restored from config and can be stale; the
-			// counter is self-proving (remaining is stamped post-decrement), so any
-			// reading R means the assignment was at least R + 1. The higher bound wins.
 			long assignment = Math.max(seg.get("assignment").getAsLong(), initial);
 			if (rem != null && rem + 1 > assignment)
 			{
@@ -2249,8 +1841,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 		}
 		seg.addProperty("value", seg.get("value").getAsLong() + value);
-		// What the task was made of: a "blue dragons" assignment takes brutals too,
-		// and its loot is a different question from the monster's lifetime bag.
 		if (monster != null && !monster.isEmpty())
 		{
 			bump(sub(seg, "monsters"), monster, 1);
@@ -2284,9 +1874,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return seg;
 	}
 
-	/** The kills the loot actually witnessed: kept apart from the game's own count
-	 *  once a completion has set that. A segment closed before the split kept only
-	 *  the total and its no-drops, which recover it. */
 	private static long loggedKills(JsonObject seg)
 	{
 		Long logged = optLong(seg, "logged");
@@ -2311,11 +1898,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * A task completion: close the open segment, opening one first if the whole task
-	 * went unwitnessed. The finished line's exact kill count trues up the loot spine;
-	 * kills the drops never saw surface as {@code noLootKills}.
-	 */
 	private void recordSlayerCompletion(JsonObject data)
 	{
 		String task = str(data, "task", null);
@@ -2336,9 +1918,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				seg = newSegment(tasks, task);
 			}
-			// The finished line's N is the game's own number: it becomes the task's
-			// kills and its size, and the kills the loot witnessed are kept apart as
-			// logged, so a surviving double-emit never shows more than N.
 			long logged = seg.get("kills").getAsLong();
 			seg.addProperty("logged", logged);
 			if (exact != null && exact > 0)
@@ -2350,38 +1929,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			seg.addProperty("open", false);
 			seg.addProperty("ts", nowSec());
 			long done = asLong(sl.get("completed"));
-			// the streak line's lifetime total wins when it's ahead
 			sl.addProperty("completed", streak != null && streak > done ? streak : done + 1);
 			touch();
 		}
 	}
 
-	/**
-	 * Every item the slayer journey logged inside a window, summed across tasks and
-	 * ranked by what it came to. A task carries the stamp of its own close, so this
-	 * is a filter over the journey rather than a delta: pass the whole of time to
-	 * get the lot.
-	 *
-	 * <p>On-task only by construction. The ledger's per-source totals cannot tell a
-	 * task kill from a stray one; the journey only ever holds the former.
-	 *
-	 * <p>A segment is one bucket carrying one stamp, and its contents can span
-	 * days, so a bounded window can only honestly claim the segments that CLOSED
-	 * inside it. An open one is stamped with its most recent kill and is dragged
-	 * whole into any window that catches a single kill of it, which put a task
-	 * handed out on Tuesday under a heading reading "This session". Unbounded, an
-	 * open task is simply part of the record and counts.
-	 */
 	List<BagItem> onTaskLoot(long fromMs, long toMs, boolean includeOpen)
 	{
 		return onTaskLoot(fromMs, toMs, null, includeOpen);
 	}
 
-	/**
-	 * Every item the whole ledger holds, summed across sources and ranked by
-	 * what it came to. One walk of `drops` under one lock, rather than the
-	 * source list plus a bag read per source.
-	 */
 	List<BagItem> allLoot()
 	{
 		Map<String, long[]> summed = new LinkedHashMap<>();
@@ -2429,18 +1986,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * Every task name the journey holds, newest first and without repeats, which
-	 * is the order a picker wants: what you fought lately, first.
-	 */
 	List<String> taskNames()
 	{
 		LinkedHashSet<String> names = new LinkedHashSet<>();
 		synchronized (lock)
 		{
 			JsonArray arr = taskArray();
-			// the journal keeps them oldest first; a picker wants the newest at
-			// the top, so this walks back
 			for (int i = arr.size() - 1; i >= 0; i--)
 			{
 				if (arr.get(i).isJsonObject())
@@ -2456,16 +2007,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return new ArrayList<>(names);
 	}
 
-	/**
-	 * One slayer assignment, as an NPC's page reads it.
-	 *
-	 * <p>The take is the TASK's, not this monster's: a task carries one items
-	 * map and a separate monsters map, and nothing inside it links a drop to
-	 * the thing that dropped it. On this account one "Blue dragons" assignment
-	 * holds 45 blue dragons, 3 babies and 97 Vorkath, so cutting its loot up by
-	 * monster would hand a reader Vorkath's drops under a blue dragon. The row
-	 * is labelled for the task for that reason.
-	 */
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class Assignment
 	{
@@ -2476,7 +2017,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		final long value;
 	}
 
-	/** Whether a task's stamp puts it inside the window. An unstamped task is in. */
 	private static boolean taskInside(JsonObject t, long fromMs, long toMs)
 	{
 		long ms = (long) (asDouble(t.get("ts")) * 1000);
@@ -2509,15 +2049,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return arr(sl, "tasks");
 	}
 
-	/**
-	 * Every item the tasks paid, inside the window: name to {qty, value}.
-	 *
-	 * <p>One pass over the journey, because the answer is asked of every row of
-	 * a board rather than once. It is also the only honest way to ask whether an
-	 * item HAS an on-task side at all: 287 of the 655 names on this account do,
-	 * and the other 368 must not be offered a filter that would show them
-	 * nothing.
-	 */
 	Map<String, long[]> onTaskItems(long fromMs, long toMs)
 	{
 		Map<String, long[]> out = new LinkedHashMap<>();
@@ -2541,11 +2072,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * Every monster the tasks were fought against, inside the window: name to
-	 * kills. Exact, unlike the loot: a task DOES say how many of each thing it
-	 * killed.
-	 */
 	Map<String, Long> onTaskKills(long fromMs, long toMs)
 	{
 		Map<String, Long> out = new LinkedHashMap<>();
@@ -2562,11 +2088,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * One item's on-task total split by the TASK that paid it, dearest first.
-	 * What the FROM list on an item's page becomes when the filter is on task:
-	 * the record can name the assignment exactly and the monster not at all.
-	 */
 	List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
 	{
 		Map<String, long[]> by = new LinkedHashMap<>();
@@ -2601,13 +2122,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * Every assignment that included one monster, newest first.
-	 *
-	 * <p>This is what an NPC's page can honestly show on task. The kills are
-	 * that monster's and exact; the worth is the whole assignment's, which is
-	 * why the row names the task rather than the monster.
-	 */
 	List<Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
 	{
 		List<Assignment> out = new ArrayList<>();
@@ -2643,12 +2157,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * The same, narrowed to one task by name.
-	 *
-	 * <p>By NAME rather than by segment: a reader asking what Nechryael have
-	 * paid means all eleven of them, not the one that closed on Tuesday.
-	 */
 	List<BagItem> onTaskLoot(long fromMs, long toMs, String onlyTask,
 		boolean includeOpen)
 	{
@@ -2678,13 +2186,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return bagRows(summed, ids, 0);
 	}
 
-	/**
-	 * The superior forms, which a task's monster roll names but never marks as
-	 * one. Bundled as chronicle/store_superiors.json, taken from the site's own
-	 * reference (reference/osrs_superiors.json, itself from the wiki) so the two
-	 * count the same thing. Matched without case: the journal has "Shadow Wyrm"
-	 * and "Malevolent Mage" as the game spelled them at the time.
-	 */
 	private static final Set<String> SUPERIORS = new HashSet<>();
 
 	static
@@ -2703,16 +2204,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * What the on-task loot was killed out of, inside the same window: the kills
-	 * that dropped something, how many of those were a superior, and how many
-	 * TASKS the loot came off. Kills that dropped nothing are counted separately
-	 * by the task and are not here, which is why this reads lower than a slayer
-	 * counter.
-	 *
-	 * <p>Narrowed by task name where one is given, so the figures belong to the
-	 * same bag the board is showing rather than to every task in the window.
-	 */
 	long[] onTaskTally(long fromMs, long toMs, boolean includeOpen)
 	{
 		return onTaskTally(fromMs, toMs, null, includeOpen);
@@ -2741,7 +2232,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return new long[]{kills, superiors, tasks};
 	}
 
-	/** The journey as the journal knows it, shaped for the panel (newest first). */
 	SlayerJourney slayerJourney()
 	{
 		synchronized (lock)
@@ -2774,8 +2264,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					asLong(seg.get("noLootKills")),
 					asLong(seg.get("ts")),
 					value,
-					// Only the newest segment can be in progress: an older one without a
-					// completion was parked or its completion was missed, and is done.
 					i == tasks.size() - 1 && isOpen(seg)));
 			}
 			return new SlayerJourney(
@@ -2786,7 +2274,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** Lifetime gp per consumable counter key, accumulated at each bite or dose. */
 	Map<String, Long> consumableValues()
 	{
 		Map<String, Long> out = new LinkedHashMap<>();
@@ -2800,7 +2287,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/** The per-item side of the uncollected ledger. */
 	List<UntakenRow> untakenItems()
 	{
 		return untakenRows("untaken_items", false);
@@ -2840,8 +2326,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** This session's kills that left at least one stack on the floor: what the
-	 *  Home strip takes off the loot events for "Drops taken". */
 	int sessionUntakenKills()
 	{
 		synchronized (lock)
@@ -2850,8 +2334,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** A COLLECTION event lights its slot at once: the item joins clog_items and
-	 *  the finished tally rises when it's new. The next full log open reconciles it. */
 	private void recordClogSlot(JsonObject data)
 	{
 		String name = str(data, "itemName", null);
@@ -2882,7 +2364,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** {finished, available} as the journal holds them; zero when unknown. */
 	int[] clogFraction()
 	{
 		synchronized (lock)
@@ -2896,17 +2377,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	{
 		JsonObject out = new JsonObject();
 		out.add("by_cat", nested(base, inc, "by_cat", false));
-		// Every counter a page carries, by the log's own name for it. Nested the
-		// way by_cat is -- page, then label -- and floor-merged the same way, so
-		// a page not opened this session keeps what it last said.
 		JsonObject kcLines = nested(base, inc, "kc_lines", false);
 		if (kcLines.size() > 0)
 		{
 			out.add("kc_lines", kcLines);
 		}
-		// Best times, merged the other way about. Every other figure here only
-		// grows, so they are floored; a personal best IMPROVES DOWNWARD, and
-		// flooring it would pin the worst time ever recorded and never let go.
 		JsonObject pbLines = nested(base, inc, "pb_lines", true);
 		if (pbLines.size() > 0)
 		{
@@ -2996,15 +2471,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return present(o, key) ? o.get(key).getAsString() : def;
 	}
 
-	/**
-	 * Merge another Chronicle journal into this account's record. Every store floors:
-	 * per-key max, earliest wins on first_seen, best wins on a personal best. An
-	 * import is the same account seen from somewhere else, so its history overlaps
-	 * this one and summing would double every shared kill; flooring makes a repeat
-	 * import a no-op. Runs off the client thread.
-	 *
-	 * @return a short summary of what came across.
-	 */
 	String importJournal(JsonObject in, String rsn)
 	{
 		if (!isReadyFor(rsn) || in == null)
@@ -3016,8 +2482,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		int counters = 0;
 		synchronized (lock)
 		{
-			// Lifetime counters: floor the frozen base AND the shown values, so the
-			// import survives the next session recompute.
 			if (in.has("trackers") && in.get("trackers").isJsonObject())
 			{
 				JsonObject tr = sub(root, "trackers");
@@ -3036,7 +2500,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					raise(tr, e.getKey(), v);
 				}
 			}
-			// Drop ledger: per source, then per item inside it.
 			if (in.has("drops") && in.get("drops").isJsonObject())
 			{
 				JsonObject drops = root.getAsJsonObject("drops");
@@ -3058,7 +2521,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					floorNumber(cur, inc, "loots");
 					floorNumber(cur, inc, "value");
 					floorNumber(cur, inc, "last_seen");
-					// first_seen only ever moves earlier
 					if (present(inc, "first_seen"))
 					{
 						long incFirst = asLong(inc.get("first_seen"));
@@ -3068,7 +2530,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 							cur.addProperty("first_seen", incFirst);
 						}
 					}
-					// a PB is the lowest time; the compare is flipped
 					if (present(inc, "pb"))
 					{
 						double incPb = inc.get("pb").getAsDouble();
@@ -3081,8 +2542,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					{
 						JsonObject bag = cur.has("items") && cur.get("items").isJsonObject()
 							? cur.getAsJsonObject("items") : new JsonObject();
-						// The bag is keyed by item id and an export may know only names, so
-						// match on name first; otherwise one herb ends up on two lines.
 						Map<String, String> byName = new HashMap<>();
 						for (var be : bag.entrySet())
 						{
@@ -3107,11 +2566,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 							String key = byName.get(incName.toLowerCase(Locale.ROOT));
 							if (key == null)
 							{
-								// No name match: file it under its id when the entry
-								// carried one, so the panel can draw the sprite, else keep
-								// the incoming map key, which on an id-keyed bag is the id;
-								// dedupeSourceBags below folds in the plain-name keys an
-								// older export left behind
 								key = incItem.has("id") && incItem.get("id").getAsInt() > 0
 									? bagKey(incItem.get("id").getAsInt(), incName)
 									: ie.getKey();
@@ -3132,12 +2586,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 						cur.add("items", bag);
 					}
 				}
-				// Another machine's ledger has just been merged in. Those rows are
-				// not kills that happened since an anchor was taken here, and the
-				// merge can only raise the counts, so the baselines move with them.
 				rebaseAnchors();
 			}
-			// the dated feed, deduplicated on feedKey
 			if (in.has("feed") && in.get("feed").isJsonArray())
 			{
 				JsonArray feed = root.getAsJsonArray("feed");
@@ -3158,7 +2608,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					feed.add(e.getAsJsonObject().deepCopy());
 					events++;
 				}
-				// an import interleaves, and the panel reads the feed in stored order
 				List<JsonObject> all = new ArrayList<>(feed.size());
 				for (JsonElement e : feed)
 				{
@@ -3169,13 +2618,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				}
 				setFeed(all, FEED_CAP);
 			}
-			// collection log: the same max-union used on capture
 			if (in.has("collection_log") && in.get("collection_log").isJsonObject())
 			{
 				root.add("collection_log", mergeClog(sub(root, "collection_log"), in.getAsJsonObject("collection_log")));
 			}
-			// The chat box's counts travel with it. This block names every key it
-			// carries, so one left out is dropped in silence.
 			if (in.has("chat_kcs") && in.get("chat_kcs").isJsonObject())
 			{
 				JsonObject mine = sub(root, "chat_kcs");
@@ -3184,8 +2630,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					raise(mine, e.getKey(), asLong(e.getValue()));
 				}
 			}
-			// The gathered ledger travels too, or ore mined on the other machine goes
-			// unrecognised here.
 			if (in.has("gathered_items") && in.get("gathered_items").isJsonArray())
 			{
 				JsonArray have = arr(root, "gathered_items");
@@ -3207,7 +2651,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					}
 					catch (RuntimeException ignored)
 					{
-						// not an item id
 					}
 				}
 				root.add("gathered_items", have);
@@ -3216,7 +2659,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				floorNestedStore(store, in);
 			}
-			// The left-behind pairing is two levels deep.
 			if (in.has("untaken_pairs") && in.get("untaken_pairs").isJsonObject())
 			{
 				JsonObject pairs = sub(root, "untaken_pairs");
@@ -3244,8 +2686,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					}
 				}
 			}
-			// The spine copies only into an empty one: two overlapping task lists
-			// can't be reconciled segment by segment.
 			if (in.has("slayer") && in.get("slayer").isJsonObject())
 			{
 				JsonObject incSl = in.getAsJsonObject("slayer");
@@ -3260,7 +2700,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 							tasks.add(t.getAsJsonObject().deepCopy());
 						}
 					}
-					// an imported spine is bounded like a grown one
 					while (tasks.size() > SLAYER_TASK_CAP)
 					{
 						tasks.remove(0);
@@ -3268,9 +2707,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				}
 				else if (incSl.has("tasks") && incSl.get("tasks").isJsonArray())
 				{
-					// A spine already stands: take only detail this one lacks (monsters,
-					// items). Matched on task and a nearby ts; the two sides round the
-					// instant differently, so equality would match nothing.
 					for (JsonElement t : incSl.getAsJsonArray("tasks"))
 					{
 						if (!t.isJsonObject())
@@ -3303,10 +2739,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			+ " journal entries · " + counters + " counters";
 	}
 
-	/** How far two records of the same task instant may drift and still be it. */
 	private static final long SEGMENT_MATCH_SECONDS = 60;
 
-	/** The local segment an incoming one describes, or null if none does. */
 	private static JsonObject nearestSegment(JsonArray tasks, JsonObject inc)
 	{
 		String task = inc.has("task") ? inc.get("task").getAsString() : null;
@@ -3338,7 +2772,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return best;
 	}
 
-	/** Floor one segment's {@code monsters} or {@code items} map into another's. */
 	private static void mergeSegmentDetail(JsonObject seg, JsonObject inc, String key)
 	{
 		if (!inc.has(key) || !inc.get(key).isJsonObject())
@@ -3352,11 +2785,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				JsonObject incRow = e.getValue().getAsJsonObject();
 				JsonObject curRow = sub(cur, e.getKey());
-				// Quantity floors; a price does not. Same argument as the Loot
-				// Tracker seed above: the larger of two valuations of the same
-				// drop is not a better number, it is whichever day the import
-				// ran. A price is seeded into a row that has none and left
-				// alone otherwise.
 				floorNumber(curRow, incRow, "qty");
 				if (asLong(curRow.get("value")) <= 0)
 				{
@@ -3374,11 +2802,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * Identity of a feed line: kind, the second it happened in, and subject. The exact
-	 * instant is too fine: a re-imported event can land a millisecond off. The second
-	 * on its own is too coarse, since a clue casket empties several slots inside it.
-	 */
 	private static String feedKey(JsonObject e)
 	{
 		long sec = asLong(e.get("ts")) / 1000L;
@@ -3386,7 +2809,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return kind + "|" + sec + "|" + feedSubject(e);
 	}
 
-	/** What a feed line is about: the thing it names, or failing that the payload. */
 	private static String feedSubject(JsonObject e)
 	{
 		if (!e.has("data") || !e.get("data").isJsonObject())
@@ -3394,8 +2816,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			return "";
 		}
 		JsonObject d = e.getAsJsonObject("data");
-		// Tried in order. questName/killerName/area are what the capture writes for
-		// QUEST, DEATH and DIARY; the last four turn up only in older journals.
 		for (String field : new String[]{"itemName", "petName", "questName",
 			"killerName", "area", "skill", "task", "monster",
 			"name", "quest", "diary", "achievement"})
@@ -3405,18 +2825,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				return d.get(field).getAsString().toLowerCase(Locale.ROOT);
 			}
 		}
-		// an imported line can carry only a marker; then the payload is the identity
 		JsonObject bare = d.deepCopy();
 		bare.remove("imported");
 		bare.remove("type");
 		return bare.toString();
 	}
 
-	/**
-	 * Collapse feed lines that describe the same moment; the fuller line survives.
-	 * Timestamps can differ by a millisecond across an import, so a record can hold
-	 * one log slot twice. Callers hold {@code lock}. Returns how many were absorbed.
-	 */
 	private int dedupeFeed()
 	{
 		JsonArray feed = arr(root, "feed");
@@ -3437,7 +2851,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				continue;
 			}
 			absorbed++;
-			// keep whichever says more; a named line beats a bare "imported" marker
 			if (payloadSize(o) > payloadSize(held))
 			{
 				best.put(key, o);
@@ -3467,7 +2880,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			? e.getAsJsonObject("data").size() : 0;
 	}
 
-	/** Raise {@code cur[key]} to {@code inc[key]} when the incoming one is higher. */
 	private static void floorNumber(JsonObject cur, JsonObject inc, String key)
 	{
 		if (present(inc, key))
@@ -3484,7 +2896,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** Floor a flat {name: {qty, value}} store, or a flat {key: number} one. */
 	private void floorNestedStore(String name, JsonObject in)
 	{
 		if (!in.has(name) || !in.get(name).isJsonObject())
@@ -3500,7 +2911,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				JsonObject curRow = sub(cur, e.getKey());
 				floorNumber(curRow, incRow, "qty");
 				floorNumber(curRow, incRow, "value");
-				floorNumber(curRow, incRow, "kills");   // the untaken store's third figure
+				floorNumber(curRow, incRow, "kills");
 			}
 			else
 			{
@@ -3509,7 +2920,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** Items one source was left holding, richest first. */
 	List<BagItem> untakenItemsOf(String source)
 	{
 		synchronized (lock)
@@ -3518,7 +2928,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** Sources that left a given item on the ground, most first. */
 	List<UntakenRow> untakenSourcesOf(String item)
 	{
 		List<UntakenRow> out = new ArrayList<>();
@@ -3542,7 +2951,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/** One task segment's own loot, richest first. */
 	List<BagItem> slayerTaskItems(int index)
 	{
 		return bagOf(obj(segmentAt(index), "items"));
@@ -3561,7 +2969,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/** What a task was actually made of: {monster: kills}, most killed first. */
 	List<UntakenRow> slayerTaskMonsters(int index)
 	{
 		List<UntakenRow> out = new ArrayList<>();
@@ -3577,8 +2984,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/** The task segment the panel's journey list calls {@code index}. The journey
-	 *  is served newest-first, the store keeps them oldest-first. */
 	private JsonObject segmentAt(int index)
 	{
 		synchronized (lock)
@@ -3590,8 +2995,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** Pets the journal has seen drop, newest first. Source and kc survive only on
-	 *  rows imported from an older record: a PET event carries the name alone. */
 	List<PetRow> pets()
 	{
 		List<PetRow> out = new ArrayList<>();
@@ -3635,17 +3038,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		final long ts;
 	}
 
-	/**
-	 * Rebuild the per-item untaken totals from the source-and-item pairs.
-	 *
-	 * <p>The same leavings are stored three ways: by source, by item, and by the pair.
-	 * The pairs carry the detail and the other two are sums of them, so anything that
-	 * edits one store without the others leaves the by-item view claiming more than the
-	 * by-source view of the same drops. This only runs when the pairs cover every source
-	 * the by-source store knows, which is what makes them safe to sum from; a journal
-	 * written before pairs existed is left alone. Callers hold {@code lock}. Returns how
-	 * many item rows it corrected.
-	 */
 	private int reconcileUntaken()
 	{
 		JsonObject pairs = obj(root, "untaken_pairs");
@@ -3703,25 +3095,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return corrected;
 	}
 
-	/**
-	 * Drop off-task monsters from slayer task segments. An earlier build stamped every
-	 * NPC kill made while a task was live as a task kill, so a Man or an impling killed
-	 * mid-task sits in the segment's {@code monsters} and inflates its {@code kills},
-	 * which is the count the page shows and the completion trues up against. Each
-	 * monster is put to the same on-task test capture now applies
-	 * ({@link SlayerTaskBook}); the segment stores names only, so it runs on the name
-	 * tier alone. Those that fail are removed and their counts taken off {@code kills}.
-	 * The segment's {@code items} and {@code value} are aggregated across its kills and
-	 * cannot be separated per monster, so they are left as they are. A segment whose
-	 * monsters all fail is kept with zero kills rather than deleted: it may be a
-	 * loot-less completion.
-	 *
-	 * <p>Only open segments are examined. A closed one was either imported from the
-	 * server, which filtered it with the id tier this name-only store cannot re-run
-	 * (Prifddinas guards on an Elves task are "Guard" here and would be thrown out),
-	 * or its count was already trued up by the completion line. Callers hold
-	 * {@code lock}. Returns how many segments changed.
-	 */
 	private int purgeOffTaskMonsters()
 	{
 		int changed = 0;
@@ -3764,13 +3137,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return changed;
 	}
 
-	/**
-	 * Collapse item entries that name the same thing within one source. The bag is
-	 * keyed by item id, a merged-in record may know only names, and an earlier build
-	 * filed those alongside the entry already there. The survivor takes the higher of
-	 * the two and keeps the id-bearing key. Callers hold {@code lock}. Returns how
-	 * many entries were absorbed.
-	 */
 	private int dedupeSourceBags()
 	{
 		JsonObject drops = obj(root, "drops");
@@ -3794,7 +3160,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					keep.put(name, ie.getKey());
 					continue;
 				}
-				// Prefer the numeric (id) key as the survivor.
 				String winner = held;
 				String loser = ie.getKey();
 				if (!isNumeric(held) && isNumeric(ie.getKey()))
@@ -3822,19 +3187,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return absorbed;
 	}
 
-	// the combat level an earlier build left inside a pickpocket key
 	private static final Pattern KEY_LEVEL =
 		Pattern.compile("\\(level[\\s-]*\\d*\\)?",
 			Pattern.CASE_INSENSITIVE);
 
-	/**
-	 * Fold the counter keys an earlier build minted wrong into the keys the mint
-	 * writes now, so the panel shows one row where it showed two: the plain tree
-	 * keyed as logsLogsChopped beside normalLogsChopped, a pickpocket target that
-	 * kept its combat level (guard(level21)Pickpockets), and a double-underscore
-	 * probe written as a counter. The sum survives, the old key goes, and a second
-	 * pass finds nothing. Callers hold {@code lock}. Returns how many keys went.
-	 */
 	private int repairTrackerKeys()
 	{
 		JsonObject tr = obj(root, "trackers");
@@ -3875,7 +3231,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return s != null && !s.isEmpty() && s.chars().allMatch(Character::isDigit);
 	}
 
-	/** Combat level as last gathered, or 0. */
 	int combatLevel()
 	{
 		synchronized (lock)
@@ -3884,7 +3239,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** The character sheet's skills: {skill: [level, xp]}, as last gathered. */
 	Map<String, long[]> skillSheet()
 	{
 		Map<String, long[]> out = new LinkedHashMap<>();
@@ -3905,15 +3259,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * The account's achievement state as last gathered: {@code quests} by name against
-	 * their state, {@code diaries} by region against each tier's completion, and
-	 * {@code combat} points plus per-tier status. Deep-copied for the panel.
-	 *
-	 * <p>Empty where the sheet has never been gathered, which is not the same as an
-	 * unmet requirement but is read as one: a chase printed off an unknown unlock is a
-	 * claim the journal cannot make.
-	 */
 	JsonObject achievements()
 	{
 		synchronized (lock)
@@ -3922,23 +3267,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * Journal-derived totals for the history spine, keyed as the History summary
-	 * reads them: dropsReceived (loot events across every source), lootValue (their
-	 * gp), lootLeftCount and lootLeftValue (items left on the floor and their gp,
-	 * from the untaken ledger, the same tally the Left behind lens shows),
-	 * lootLeftKills (the kills that left at least one stack, from the same ledger,
-	 * the figure "Drops taken" subtracts from dropsReceived in one unit), kills
-	 * (each fight's count as {@link #reconciledKills} gives it, which is the figure
-	 * the History tab's Kills list draws, summed over the sources the ledger has
-	 * actually seen loot from; a collection log page it never saw is not counted,
-	 * most of those being minigame rounds, which the list files elsewhere too),
-	 * slayerTasksCompleted,
-	 * clogSlotsObtained (the log's own obtained count when the journal holds one,
-	 * else the distinct names the stored pages list).
-	 * {@link #spineCounters} merges them into a copy of the trackers for each line;
-	 * nothing here reaches the trackers, so the Stats tab never sees them.
-	 */
 	Map<String, Long> spineExtras()
 	{
 		long loots = 0;
@@ -3949,14 +3277,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			loots += r.loots;
 			value += r.value;
 		}
-		// The reconciled FIGURE for each fight, over the ledger's own MEMBERSHIP.
-		//
-		// Two different questions, and the old fold answered both with sourceKills.
-		// Which fights count is the ledger's: a collection log page the ledger never
-		// saw loot from is mostly a minigame round, and the Kills list buckets those
-		// under Activities rather than showing them here. But what each one COUNTS
-		// is the reconciliation's, which applies the Kill Log, the chat line and the
-		// anchors over the page counters, and that is the figure the list draws.
 		JsonObject cl = clogSnapshot();
 		Map<String, Long> reconciled =
 			reconciledKills(cl, sources, chatKillCounts(), anchoredKills());
@@ -3984,11 +3304,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * The counters one history line carries: the trackers as they stand, with the
-	 * {@link #spineExtras spine extras} laid beside them. A fresh copy; the trackers
-	 * themselves are untouched.
-	 */
 	Map<String, Long> spineCounters()
 	{
 		Map<String, Long> out = trackersSnapshot();
@@ -3996,15 +3311,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * Every count of a fight the record holds, folded into one figure each.
-	 *
-	 * <p>Static and given everything it needs, so the preview harness reconciles
-	 * exactly the way the client does. It used to reconcile differently: the
-	 * stub built its map from the page counters and the ledger and never applied
-	 * the Kill Log at all, so a panel test could watch a page print the ledger's
-	 * number while the real client printed the game's.
-	 */
 	static Map<String, Long> reconciledKills(JsonObject clog,
 		List<SourceRow> sources, Map<String, Long> chat,
 		Map<String, Long> anchored)
@@ -4012,77 +3318,32 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return reconciledKills(clog, sources, chat, anchored, KILLS_VERSION);
 	}
 
-	/** The same, as the given {@link #KILLS_VERSION} reckoned it. */
 	static Map<String, Long> reconciledKills(JsonObject clog,
 		List<SourceRow> sources, Map<String, Long> chat,
 		Map<String, Long> anchored, int version)
 	{
 		Map<String, Long> out = clogKillCounts(clog);
-		// What the game itself says about the encounter: the Kill Log, and the
-		// chat line it prints on the kill. The Kill Log only moves when the
-		// player opens an interface, so a number resting on it alone is frozen
-		// between visits; the chat line arrives on every kill, with nothing
-		// opened and nothing fetched. Both are the game counting and both only
-		// count up, so between the two the larger is the later reading.
 		Map<String, Long> stated = killLogCounts(clog);
 		foldChatCounts(stated, chat, out.keySet());
-		// A statement always beats the page counter, which need not be counting
-		// kills at all: Wintertodt's page counts rewards claimed and says 1,078
-		// where 448 were killed, and the larger of those two is the lie.
 		placeByKind(out, stated, false);
 		if (version < 1)
 		{
-			// Version 0: the ledger, raised to the page counter, as the floor.
 			placeByKind(out, sourceKills(clog, sources), true);
 			placeByKind(out, anchored, false);
 			return out;
 		}
-		// The page's own LABELLED line is a statement too, and the step above just
-		// overwrote it. clogKillCounts lets that line replace the raw counter
-		// precisely because a named line is not a guess; handing the result to a
-		// Kill Log that has not been opened since would undo the correction and
-		// pull a page back down to a staler reading. Both only count up, so the
-		// later of the two is the larger.
 		placeByKind(out, pageKillLines(clog), true);
-		// The ledger is then a floor over that. A bare statement was true when
-		// somebody last opened an interface and knows nothing of what has
-		// happened since, so it may not pull down a count the ledger has
-		// actually watched: Abyssal demons read 1,798 from a stale Kill Log
-		// beside 2,346 seen.
-		//
-		// The LEDGER's own figure, not the one sourceKills raises to the page
-		// counter: the counters were step one and have already been weighed
-		// against the statements. Letting them back in here re-admits the reading
-		// those statements exist to overrule.
 		placeByKind(out, ledgerKills(clog, sources), true);
-		// And an anchored count is a statement carrying its own observations
-		// forward. It knows what has happened since, so it IS the count.
 		placeByKind(out, anchored, false);
 		return out;
 	}
 
-	/**
-	 * Kills per drop source, the figure the History tab's Kills list and its
-	 * summary line share: for each source the most any record has seen of it, its
-	 * kill-count line, the loot events it logged (an ordinary slayer monster has
-	 * no kill-count line, so only its loots grow) and the collection log's count
-	 * for the page of the same name. Keyed by the log's spelling where a source
-	 * matches a page ("Tormented Demons" for the ledger's "Tormented Demon"), else
-	 * the ledger's own; two sources that name one page fold into one entry, and a
-	 * source with nothing counted stays out. A page the ledger never saw loot from
-	 * is not here: {@code ChroniclePlugin.killCounts} lays those beside.
-	 */
 	static Map<String, Long> sourceKills(JsonObject clog,
 		List<SourceRow> sources)
 	{
 		return sourceKills(clog, sources, true);
 	}
 
-	/**
-	 * The spine's kills sum as the given version reckoned it: version 0 summed
-	 * the ledger's own figures, 1 the reconciled figure of each fight the
-	 * ledger has seen loot from.
-	 */
 	static long spineKills(JsonObject clog, List<SourceRow> sources,
 		Map<String, Long> reconciled, int version)
 	{
@@ -4102,16 +3363,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return kills;
 	}
 
-	/**
-	 * The reconciled entries the kills sum adds up: each fight the ledger has
-	 * seen loot from, found under the name the reconciliation filed it by, once.
-	 *
-	 * <p>Found by kind, not by name. The reconciliation keeps the first spelling
-	 * it meets, which is the Kill Log's or the page's ("Gargoyles", "The Mad
-	 * Angel") where the ledger says "Gargoyle" and "Mad Angel"; looking the
-	 * ledger's name up as it stands left 25 fights and 18,525 kills out of a
-	 * real record's sum, and a slayer task on any of them added nothing to it.
-	 */
 	static Set<String> spineKillKeys(JsonObject clog, List<SourceRow> sources,
 		Map<String, Long> reconciled)
 	{
@@ -4132,13 +3383,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * What moving from version {@code from} to this build's changes, fight by
-	 * fight and in the kills sum, worked out over the same journal: the whole
-	 * of the step the spine would otherwise read as a day's kills. A fight only
-	 * one version knows needs nothing; the spine measures it from its first
-	 * figure either way.
-	 */
 	HistoryLog.Adjust definitionShift(int from)
 	{
 		HistoryLog.Adjust adj = new HistoryLog.Adjust();
@@ -4168,23 +3412,16 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return adj;
 	}
 
-	/**
-	 * Lay the step from the reckoning the spine's newest line was written under
-	 * to this build's by, for the next line, so the change never reads as kills.
-	 * A line that does not say was written by the Plugin Hub's build to
-	 * 7bd5812, version 0: no other build wrote lines without saying.
-	 */
 	private void settleKillsVersion(File dir, String rsn)
 	{
 		Integer newest = HistoryLog.newestKv(gson, dir, rsn);
 		if (newest == null)
 		{
-			return;   // a first line has nothing before it to shift
+			return;
 		}
 		int from = newest;
 		synchronized (lock)
 		{
-			// A step already laid by and not yet written brought the spine that far.
 			if (root.has(SPINE_ADJ_KV) && root.has(SPINE_ADJ))
 			{
 				from = Math.max(from, (int) asLong(root.get(SPINE_ADJ_KV)));
@@ -4198,22 +3435,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				root.addProperty(SPINE_ADJ_KV, KILLS_VERSION);
 			}
-			// Laid at login, where the first write interval puts it on the spine;
-			// nothing for the tick path to hurry.
 			freshAdjust = false;
 		}
 	}
 
-
-	/**
-	 * What the ledger alone has watched of each source, under the log's spelling.
-	 *
-	 * <p>The same fold as {@link #sourceKills}, without raising a source to the
-	 * page's counter. {@link #reconciledKills} wants this one: it has already
-	 * weighed the counters against the game's own statements, and a floor that
-	 * carries the counter back in would re-admit exactly what those statements
-	 * were applied to overrule.
-	 */
 	static Map<String, Long> ledgerKills(JsonObject clog,
 		List<SourceRow> sources)
 	{
@@ -4239,15 +3464,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		for (SourceRow r : sources)
 		{
 			long kills = Math.max(r.kc, r.loots);
-			// TWO STATEMENTS AGREEING BEAT A TALLY OF ROWS. The ledger keeps both
-			// the count the game gave for a kill and the number of loot events it
-			// wrote down, and they can part: Zalcano holds 2,024 rows against
-			// 2,023 kills, because a drop imported from the old cloud journal
-			// carried no kill with it. Where the Kill Log independently says the
-			// same number the rows are the odd one out, and a row is not a kill.
-			// Where the two statements DIFFER, the ledger's is a partial count of
-			// some kind -- a task counter, not a lifetime -- and is no evidence
-			// against the rows at all, so nothing is clamped.
 			Long agreed = r.kc > 0 ? statedByKind.get(kindOf(r.name)) : null;
 			if (agreed != null && agreed.longValue() == r.kc && r.loots > r.kc)
 			{
@@ -4257,7 +3473,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			String known = byKind.get(kindOf(r.name));
 			if (known != null)
 			{
-				// The page's spelling either way: that is naming, not counting.
 				if (raiseToPage)
 				{
 					kills = Math.max(kills, paged.get(known));
@@ -4272,34 +3487,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	// ── anchored kill counts ───────────────────────────────────────────────
-
-	/** chat 3, Kill Log 2, page 1: which statement outranks which. */
 	private static int anchorRank(String src)
 	{
 		return "chat".equals(src) ? 3 : "log".equals(src) ? 2 : 1;
 	}
 
-	/**
-	 * A kill count the game stated, and what this journal had observed of that
-	 * same fight at the moment it was stated.
-	 *
-	 * <p>Both halves matter. The count alone is a snapshot: the Kill Log is read
-	 * by opening an interface, so a number resting on it is frozen until the
-	 * player goes and looks again, and Abyssal demons sat on 1,798 while the game
-	 * itself had reached 2,523. The observation alone is live but partial: the
-	 * ledger only ever saw the kills that dropped something, and only since
-	 * tracking began. Held together they are neither: the stated count carries
-	 * everything that happened before it, and the observations since carry
-	 * everything after, so the number moves on its own without ever re-counting a
-	 * kill the statement already counted.
-	 *
-	 * <p>Rank decides which statement stands. The chat box speaks on the kill
-	 * itself, the Kill Log when it is opened; a statement of equal or higher rank
-	 * REPLACES an older one outright, even when its number is lower, because this
-	 * is a dated reading superseding a dated reading rather than a guess at a
-	 * maximum. A lower rank never displaces a higher one.
-	 */
 	void anchorKill(String name, long stated, String src, String rsn)
 	{
 		if (name == null || name.isEmpty() || stated <= 0 || !isReadyFor(rsn))
@@ -4322,8 +3514,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				{
 					return;
 				}
-				// the same statement again, unchanged, must not re-baseline: the
-				// observations since it are what the number is riding on
 				if (anchorRank(src) == had && asLong(was.get("n")) == stated)
 				{
 					return;
@@ -4339,12 +3529,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * What the ledger has observed of a fight, under any spelling of its name.
-	 * The MAXIMUM of the matching sources and never their sum: the Kill Log says
-	 * "Abyssal demons" where the ledger says "Abyssal demon", and one kill must
-	 * not be billed twice for being written down twice.
-	 */
 	private long observedFor(String name)
 	{
 		String kind = kindOf(name);
@@ -4360,10 +3544,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return best;
 	}
 
-	/**
-	 * The kill an anchor was taken at, arriving afterwards as a drop. Re-takes
-	 * that anchor's baseline so the row is not read as a kill since.
-	 */
 	private void absorbLaggingKill(String source, Integer stated)
 	{
 		if (stated == null)
@@ -4385,7 +3565,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** Every anchored fight at its stated count plus what has been seen since. */
 	Map<String, Long> anchoredKills()
 	{
 		Map<String, Long> out = new LinkedHashMap<>();
@@ -4403,9 +3582,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				{
 					continue;
 				}
-				// Never negative. A journal restored from a backup, or carried to a
-				// machine that watched less of it, has fewer observations than the
-				// anchor was taken beside; that is not minus four kills.
 				long since = Math.max(0, observedFor(e.getKey()) - asLong(a.get("obs")));
 				out.put(e.getKey(), n + since);
 			}
@@ -4413,12 +3589,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * Re-take every anchor's observation baseline without touching what was
-	 * stated. For the moments the ledger's counts move without a kill happening:
-	 * the Loot Tracker import seeding hundreds of rows at once, and a journal
-	 * merged in from another machine. Left alone, those would read as kills.
-	 */
 	private void rebaseAnchors()
 	{
 		for (var e : obj(root, "kc_anchors").entrySet())
@@ -4430,30 +3600,18 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * A kill count the game announced in the chat box, under the name it used.
-	 * Stored raw: "subdued Wintertodt" is what was said, and mapping that onto a
-	 * source is the reader's job, so a mapping that turns out wrong can be fixed
-	 * later without the reading being lost.
-	 *
-	 * <p>Floor-merged like every other count. The game only ever counts up, and a
-	 * line from an older session must not pull a later one back.
-	 */
 	void noteKillCount(String subject, int tally, String rsn)
 	{
 		if (subject == null || subject.isEmpty() || tally <= 0 || !isReadyFor(rsn))
 		{
 			return;
 		}
-		// Held throughout, so no other reading lands between the two counts and
-		// has its correction laid by twice, once by each.
 		synchronized (lock)
 		{
 			if (root == null)
 			{
 				return;
 			}
-			// A repeat costs nothing: the recount below is the expensive part.
 			JsonObject known = obj(root, "chat_kcs");
 			if (known.has(subject) && asLong(known.get(subject)) >= tally)
 			{
@@ -4463,13 +3621,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			revision++;
 			sub(root, "chat_kcs").addProperty(subject, tally);
 			touch();
-			// and as an anchor, so the count keeps moving between announcements
 			anchorKill(subject, tally, "chat", rsn);
 			noteArrival(before, 1);
 		}
 	}
 
-	/** Every count the chat box has announced, by the name the game used. */
 	Map<String, Long> chatKillCounts()
 	{
 		synchronized (lock)
@@ -4478,13 +3634,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * The game's own Kill Log, by species: a per-encounter tally of lifetime
-	 * kills. This is what a kill count MEANS, and it is the only one of the three
-	 * sources that is always one: a collection log page's header counter can be
-	 * counting something else entirely (Wintertodt's counts rewards claimed), and
-	 * a loot tally counts rows rather than kills.
-	 */
 	static Map<String, Long> killLogCounts(JsonObject clog)
 	{
 		return positives(clog, "slayer_kcs");
@@ -4496,7 +3645,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		for (var e : obj(o, key).entrySet())
 		{
 			long v = asLong(e.getValue());
-			if (v > 0)   // a non-numeric entry is not a kill count
+			if (v > 0)
 			{
 				out.put(e.getKey(), v);
 			}
@@ -4504,20 +3653,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * The collection log's kill counts as the stored log lists them, by page name:
-	 * the positive numeric entries of its {@code kcs}, a non-numeric one being no
-	 * kill count. Empty with no log.
-	 */
 	static Map<String, Long> clogKillCounts(JsonObject clog)
 	{
 		Map<String, Long> out = positives(clog, "kcs");
-		// And where the page's own lines were captured, the LABELLED one wins. kcs
-		// holds whichever number came first on the page, which is not always the
-		// kills: Wintertodt's first line counts rewards claimed. Worse, a reading
-		// taken before those labels were captured could be half of a best time,
-		// and kcs is floor-merged, so the Gauntlet's 55 would outlive the 31 that
-		// corrects it. A named line is not a guess and replaces it outright.
 		if (clog != null && clog.has("kcs") && clog.get("kcs").isJsonObject())
 		{
 			out.putAll(pageKillLines(clog));
@@ -4525,11 +3663,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * Each page's own kill count, by the name the page gives it: the first line
-	 * whose label says kills or completions. A page carrying only rewards claimed
-	 * or a best time has none, which is the honest answer for it.
-	 */
 	static Map<String, Long> pageKillLines(JsonObject clog)
 	{
 		Map<String, Long> out = new LinkedHashMap<>();
@@ -4549,8 +3682,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				long v = asLong(ln.getValue());
 				if (v > 0)
 				{
-					// the first such line on the page: the Gauntlet's own count
-					// comes before the corrupted one, which is its own page
 					out.put(pg.getKey(), v);
 					break;
 				}
@@ -4559,24 +3690,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	/**
-	 * Fold the chat box's counts into a set of counts already keyed by source.
-	 *
-	 * <p>Folded into the game's OWN counts, not into everything known: the
-	 * collection log's page counter is not always counting kills, and taking the
-	 * larger of the two would keep the lie forever because the lie is the larger.
-	 * Wintertodt's page counts rewards claimed and says 1,078 where 448 were
-	 * killed. The Kill Log and this line are both the game counting the encounter,
-	 * so between those two the larger is simply the later reading.
-	 *
-	 * <p>The game names things its own way on these lines, so each reading is
-	 * tried against the names already in hand under three readings: as said, with
-	 * its leading word dropped ("subdued Wintertodt" is Wintertodt), and as a
-	 * chest ("Your Barrows chest count" is the Barrows Chests page). A reading
-	 * that matches nothing is still carried in under its own name rather than
-	 * dropped: a source can be announced in chat long before it has a log page or
-	 * a loot row, and a first kill should not have to wait for one.
-	 */
 	static void foldChatCounts(Map<String, Long> out,
 		Map<String, Long> chat, Set<String> vocabulary)
 	{
@@ -4589,9 +3702,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			byKind.putIfAbsent(chatKind(name), name);
 		}
-		// Names the game's own counts have not met yet still have to find their
-		// source, or a chat reading lands beside a page counter for the same thing
-		// instead of replacing it.
 		for (String name : vocabulary)
 		{
 			byKind.putIfAbsent(chatKind(name), name);
@@ -4616,22 +3726,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * Place stated counts onto names already in hand, one row per fight.
-	 *
-	 * <p>The Kill Log writes "Abyssal demons" where the ledger writes "Abyssal
-	 * demon", and putting them in side by side left the same monster listed
-	 * twice with two different numbers -- 32 such pairs on a real journal. Each
-	 * statement lands on the name already there.
-	 *
-	 * <p>{@code floor} is the difference between a statement that knows what has
-	 * happened since it and one that does not. An anchored count carries its own
-	 * observations forward, so it IS the count and replaces what is there. A bare
-	 * Kill Log reading is only what was true when somebody last opened that
-	 * interface: it may not pull a live count down, because the kills the ledger
-	 * has watched since are real. Abyssal demons read 1,798 from a stale log
-	 * beside 2,346 the ledger had actually seen.
-	 */
 	static void placeByKind(Map<String, Long> out,
 		Map<String, Long> stated, boolean floor)
 	{
@@ -4660,27 +3754,15 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/** kindOf, with a leading "the" dropped: the chat box says Gauntlet, the log says The Gauntlet. */
 	static String chatKind(String name)
 	{
 		String n = kindOf(name);
 		return n.startsWith("the ") ? n.substring(4) : n;
 	}
 
-	/**
-	 * Loose identity for a source: the collection log says "Tormented Demons"
-	 * where the ledger says "Tormented Demon", and they are one thing.
-	 */
 	static String kindOf(String name)
 	{
 		String n = name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
-		// "Jellies" is the Kill Log's name for the ledger's "Jelly", and
-		// stripping one s leaves "jellie", which meets nothing. It is the only
-		// name on my own record that the bare rule cannot bridge, out of 32
-		// that reach no ledger source at all.
-		//
-		// Only this one extra case. The obvious next rule, ves to f, turns "The
-		// Fight Caves" into "the fight caf", and nothing in the record needs it.
 		if (n.endsWith("ies"))
 		{
 			return n.substring(0, n.length() - 3) + "y";
@@ -4688,10 +3770,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return n.endsWith("s") ? n.substring(0, n.length() - 1) : n;
 	}
 
-	// Distinct item names the stored log calls obtained: clog_items plus every
-	// page's own capture (a page only lists what is lit). Zero with no log. The
-	// stand-in for a journal with no header count: the union lags the game's own
-	// figure while a page sits unvisited.
 	static int obtainedSlots(JsonObject cl)
 	{
 		Set<String> names = new HashSet<>();
@@ -4713,7 +3791,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return names.size();
 	}
 
-	/** The journal's stored collection log, deep-copied for the panel. */
 	JsonObject clogSnapshot()
 	{
 		synchronized (lock)
@@ -4722,15 +3799,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	/**
-	 * Carry an account's journal across an in-game rename: move {@code <oldslug>.json}
-	 * and {@code <oldslug>.history.jsonl} onto the new name's slugs. True when the
-	 * journal itself moved.
-	 *
-	 * <p>A file already under the new slug is set aside, not mounted: freed names get
-	 * taken, so it may be a stranger's record. Nothing is deleted. Journal and spine
-	 * move together.
-	 */
 	static boolean migrateJournalFiles(File dir, String oldName, String newName)
 	{
 		String oldSlug = slug(oldName);
@@ -4742,7 +3810,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		File journal = new File(dir, oldSlug + ".json");
 		if (!journal.isFile())
 		{
-			// nothing to carry; leave whatever is under the new name alone
 			return false;
 		}
 		File target = new File(dir, newSlug + ".json");
@@ -4765,8 +3832,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return true;
 	}
 
-	/** Move a file aside under a dated sidecar name, keeping every byte. False when
-	 *  it could not be moved. */
 	private static boolean setAside(File f, String tag)
 	{
 		File aside = new File(f.getParentFile(),
@@ -4777,7 +3842,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			log.warn("kept {} as {}", f.getName(), aside.getName());
 			return true;
 		}
-		catch (Exception e)   // noqa: best-effort; a false return tells the caller
+		catch (Exception e)
 		{
 			log.warn("could not set aside {}", f, e);
 			return false;
@@ -4786,20 +3851,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	static String slug(String rsn)
 	{
-		// ROOT: a Turkish JVM lowercases I to a dotless ı, which the strip then eats.
 		String s = rsn == null ? ""
 			: rsn.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-");
 		s = s.replaceAll("(^-+|-+$)", "");
 		return s.isEmpty() ? "profile" : s;
 	}
 
-	/**
-	 * What the journal HOLDS, counted. Every other board answers a question
-	 * about the account; this answers one about the record itself.
-	 *
-	 * <p>Raw counts only, and no dates and no name: the whole point is a page
-	 * somebody can hand over. One pass, one lock.
-	 */
 	Map<String, Long> journalFacts()
 	{
 		Map<String, Long> out = new LinkedHashMap<>();
@@ -4882,8 +3939,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		try (FileOutputStream out = new FileOutputStream(tmp))
 		{
 			out.write(content.getBytes(StandardCharsets.UTF_8));
-			// The move below is atomic over the file's name only; without forcing the
-			// bytes down first, a power cut leaves that name pointing at a torn record.
 			out.getFD().sync();
 		}
 		try
@@ -4897,8 +3952,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-
-	/** The slayer journey the journal computes for the panel, from its on-disk task array. */
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	public static final class SlayerJourney
 	{
@@ -4909,7 +3962,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		public final List<SlayerTask> tasks;
 	}
 
-	/** One task segment of the journey, newest first. */
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	public static final class SlayerTask
 	{
@@ -4917,7 +3969,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		public final long kills;
 		public final long assignment;
 		public final long noLootKills;
-		public final double ts;          // epoch seconds
+		public final double ts;
 		public final long totalValue;
 		public final boolean inProgress;
 	}

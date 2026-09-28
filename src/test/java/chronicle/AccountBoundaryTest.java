@@ -16,11 +16,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The store-level facts the account-identity guards rest on. A closed session leaves
- * its model mounted so the panel can still browse it, so {@link LocalStore#isReadyFor}
- * is the only thing that answers whether a model belongs to the account logged in now.
- */
 public class AccountBoundaryTest
 {
 	private LocalStore store;
@@ -47,7 +42,6 @@ public class AccountBoundaryTest
 		store.load(dir, "Alpha");
 		store.setTrackers(session("tilesWalked", 500), "Alpha");
 		store.endSession();
-		// the panel still browses the closed session, so the model stays readable
 		assertEquals(500L, (long) store.trackersSnapshot().get("tilesWalked"));
 		assertFalse(store.isReadyFor("Alpha"));
 		assertFalse(store.isReadyFor("Beta"));
@@ -59,29 +53,25 @@ public class AccountBoundaryTest
 		store.load(dir, "Alpha");
 		store.setTrackers(session("tilesWalked", 500), "Alpha");
 		store.endSession();
-		// Beta is logged in but its journal isn't mounted yet, so its writes must no-op.
 		store.setTrackers(session("tilesWalked", 7), "Beta");
 		store.record("PET", new com.google.gson.JsonObject(), "Beta");
 		assertEquals(500L, (long) store.trackersSnapshot().get("tilesWalked"));
 		store.load(dir, "Beta");
 		assertTrue(store.isReadyFor("Beta"));
 		assertFalse(store.isReadyFor("Alpha"));
-		// none of Alpha's 500 came across
 		assertTrue(store.trackersSnapshot().isEmpty());
 	}
 
 	@Test
 	public void reloadingALiveAccountWouldDoubleCountItsSession()
 	{
-		// The lifetime base is frozen from disk and the flushed file already holds the
-		// session so far, so a re-load counts that session twice.
 		store.load(dir, "Alpha");
 		store.setTrackers(session("tilesWalked", 500), "Alpha");
 		store.flush(dir);
 		assertEquals(500L, (long) store.trackersSnapshot().get("tilesWalked"));
 
-		store.load(dir, "Alpha");                          // what an unguarded world hop does
-		store.setTrackers(session("tilesWalked", 500), "Alpha");   // same session, still counting
+		store.load(dir, "Alpha");
+		store.setTrackers(session("tilesWalked", 500), "Alpha");
 		assertEquals(1000L, (long) store.trackersSnapshot().get("tilesWalked"));
 	}
 
@@ -92,7 +82,6 @@ public class AccountBoundaryTest
 		store.setTrackers(session("tilesWalked", 100), "Alpha");
 		store.setTrackers(session("tilesWalked", 250), "Alpha");
 		store.setTrackers(session("tilesWalked", 400), "Alpha");
-		// base(0) + the current session, so 400 rather than 100+250+400
 		assertEquals(400L, (long) store.trackersSnapshot().get("tilesWalked"));
 	}
 }

@@ -11,20 +11,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A record is not a tally, and a period of one is not a subtraction.
- *
- * <p>Highest hit is a high-water mark. Every other counter in the record grows
- * by addition, so a period's figure is its closing less its opening - and that
- * arithmetic is the one thing this kind must not have. A best of 68 at the
- * start of a week and 75 at the end printed "Highest hit 7", which nobody hit,
- * in a panel whose whole claim is that its numbers are true.
- *
- * <p>The store has always known: LocalStore.MAX_KEYS takes a max where a
- * lifetime would otherwise sum, and StatRegistry has carried the same two names
- * under a comment reading "a period delta of one means nothing". Nothing read
- * either of them on the way to the screen.
- */
 public class PeakCounterTest
 {
 	private static Map<String, Long> peaks(Map<String, Long> moved,
@@ -74,7 +60,6 @@ public class PeakCounterTest
 		return m;
 	}
 
-	/** TRAP: the difference of two records, printed as though somebody hit it. */
 	@Test
 	public void aRecordThatRoseIsReportedAsTheRecordAndNotTheDifference() throws Exception
 	{
@@ -86,12 +71,6 @@ public class PeakCounterTest
 			Long.valueOf(40_000), out.get("damageDealt"));
 	}
 
-	/**
-	 * TRAP: and where the record did NOT rise, the period's own best is simply
-	 * not in the record - the spine keeps the running maximum, not the hits
-	 * under it. A nought would say the reader hit nothing all week, and the
-	 * standing record would be somebody else's period.
-	 */
 	@Test
 	public void aRecordThatHeldIsNotAnswered() throws Exception
 	{
@@ -102,7 +81,6 @@ public class PeakCounterTest
 		assertTrue("and it took the ordinary counters with it", out.containsKey("deaths"));
 	}
 
-	/** Both high-water keys, so neither is fixed alone. */
 	@Test
 	public void bothRecordsAreHeldToTheSameRule() throws Exception
 	{
@@ -113,14 +91,6 @@ public class PeakCounterTest
 		assertEquals(Long.valueOf(43), out.get("highestHitTaken"));
 	}
 
-	/**
-	 * TRAP: the three tests above call the rule directly, so they prove it works
-	 * and not that anything uses it. Deleting the call site leaves every one of
-	 * them green while the panel goes back to printing a difference - which is
-	 * exactly the state the code was found in, since StatRegistry.peakKeys() and
-	 * LocalStore.MAX_KEYS both existed and only a test that compared the two
-	 * lists to each other ever read them.
-	 */
 	@Test
 	public void theRuleIsOnThePathEveryBoardTakes() throws Exception
 	{

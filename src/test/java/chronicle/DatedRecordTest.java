@@ -18,14 +18,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A personal best kept as a dated record with what it beat, and every timed
- * kill kept as a count and a sum so an average falls out over any period.
- *
- * <p>Only a best the game flags on the kill is a record set while the journal
- * watched: an old best restated on the first kill after install was set while
- * nobody was, and is not dated to today.
- */
 public class DatedRecordTest
 {
 	@Rule
@@ -82,7 +74,6 @@ public class DatedRecordTest
 		kill(80, 72.0, false);
 		assertEquals(72.0, source().pb, 0.001);
 		assertTrue("an old best was dated to today", records().isEmpty());
-		// and a lower best restated later, unflagged, fell while nobody watched
 		kill(75, 70.0, false);
 		assertEquals(70.0, source().pb, 0.001);
 		assertTrue("a best set unwatched was dated to today", records().isEmpty());
@@ -100,7 +91,6 @@ public class DatedRecordTest
 		assertEquals(70.0, d.get("time").getAsDouble(), 0.001);
 		assertEquals(72.0, d.get("was").getAsDouble(), 0.001);
 		assertEquals(70.0, source().pb, 0.001);
-		// a slower kill afterwards is not a record
 		kill(75, 70.0, false);
 		assertEquals(1, records().size());
 	}
@@ -119,12 +109,11 @@ public class DatedRecordTest
 		kill(60, null, false);
 		kill(80, null, false);
 		kill(100, null, false);
-		kill(0, null, false);   // the timer said nothing for this one
+		kill(0, null, false);
 		LocalStore.SourceRow v = source();
 		assertEquals(3, v.timed);
 		assertEquals(240.0, v.timeSum, 0.001);
 		assertEquals(4, v.loots);
-		// and the dated roll carries the same pair for today
 		java.time.LocalDate today = java.time.LocalDate.now();
 		LocalStore.LootWindow w = store.lootBetween(today, today);
 		double[] t = w.times.get("Vorkath");

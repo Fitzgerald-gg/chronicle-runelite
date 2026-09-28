@@ -11,10 +11,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The pace divisor is days the skill gained xp; idle days in between stay out of it.
- * Horizon rules and the xp curve are here too.
- */
 public class PaceBookTest
 {
 	private static final String SKILL = "fletching";
@@ -32,7 +28,6 @@ public class PaceBookTest
 		spine.put(date, b);
 	}
 
-	// a baseline holding other skills but no key for SKILL, like an imported one
 	private static void putBlind(TreeMap<LocalDate, HistoryLog.Baseline> spine, LocalDate date)
 	{
 		HistoryLog.Baseline b = new HistoryLog.Baseline();
@@ -40,7 +35,6 @@ public class PaceBookTest
 		spine.put(date, b);
 	}
 
-	// flat baselines for the `days` days before `until`
 	private static void idle(TreeMap<LocalDate, HistoryLog.Baseline> spine, LocalDate until,
 		int days, long xp)
 	{
@@ -59,11 +53,9 @@ public class PaceBookTest
 
 		PaceBook.Pace p = PaceBook.forSkill(spine, SKILL, 600_000L, TODAY);
 
-		// dividing by the 301 calendar days would say 332 xp a day
 		assertEquals(1, p.activeDays);
 		assertEquals(100_000.0, p.xpPerActiveDay, 0.001);
 		assertEquals(TODAY, p.lastActive);
-		// one active day gives a pace but no horizon
 		assertFalse(p.hasHorizon());
 		assertEquals(0, p.daysOfPlay);
 		assertTrue(p.dormant());
@@ -74,12 +66,11 @@ public class PaceBookTest
 	{
 		TreeMap<LocalDate, HistoryLog.Baseline> spine = spine();
 		idle(spine, TODAY.minusDays(1), 301, 500_000L);
-		put(spine, TODAY.minusDays(1), 600_000L);   // +100,000
-		put(spine, TODAY, 650_000L);                // +50,000
+		put(spine, TODAY.minusDays(1), 600_000L);
+		put(spine, TODAY, 650_000L);
 
 		PaceBook.Pace p = PaceBook.forSkill(spine, SKILL, 650_000L, TODAY);
 
-		// by calendar days: 150,000 over 302, or 497 a day
 		assertEquals(2, p.activeDays);
 		assertEquals(75_000.0, p.xpPerActiveDay, 0.001);
 		assertEquals(TODAY, p.lastActive);
@@ -91,8 +82,8 @@ public class PaceBookTest
 	{
 		TreeMap<LocalDate, HistoryLog.Baseline> spine = spine();
 		put(spine, TODAY.minusDays(3), 99_000L);
-		put(spine, TODAY.minusDays(1), 99_500L);    // +500
-		put(spine, TODAY, 100_000L);                // +500
+		put(spine, TODAY.minusDays(1), 99_500L);
+		put(spine, TODAY, 100_000L);
 
 		PaceBook.Pace p = PaceBook.forSkill(spine, SKILL, 100_000L, TODAY);
 
@@ -100,7 +91,6 @@ public class PaceBookTest
 		assertEquals(500.0, p.xpPerActiveDay, 0.001);
 		assertEquals(Integer.valueOf(50), p.targetLevel);
 		assertEquals(101_333L, p.targetXp);
-		// 1,333 at 500 a day rounds up
 		assertEquals(3, p.daysOfPlay);
 		assertTrue(p.hasHorizon());
 		assertFalse(p.dormant());
@@ -111,13 +101,12 @@ public class PaceBookTest
 	{
 		TreeMap<LocalDate, HistoryLog.Baseline> spine = spine();
 		put(spine, TODAY.minusDays(21), 99_000L);
-		put(spine, TODAY.minusDays(20), 99_500L);   // +500, three weeks back
-		put(spine, TODAY, 100_000L);                // +500, today
+		put(spine, TODAY.minusDays(20), 99_500L);
+		put(spine, TODAY, 100_000L);
 
 		PaceBook.Pace p = PaceBook.forSkill(spine, SKILL, 100_000L, TODAY);
 
 		assertEquals(2, p.activeDays);
-		// two active days spread over three weeks
 		assertTrue(p.hasHorizon());
 	}
 
@@ -127,7 +116,7 @@ public class PaceBookTest
 		TreeMap<LocalDate, HistoryLog.Baseline> spine = spine();
 		LocalDate moved = TODAY.minusDays(60);
 		put(spine, moved.minusDays(1), 500_000L);
-		put(spine, moved, 900_000L);                // a big day, two months ago
+		put(spine, moved, 900_000L);
 		idle(spine, TODAY, 59, 900_000L);
 		put(spine, TODAY, 900_000L);
 
@@ -137,7 +126,6 @@ public class PaceBookTest
 		assertEquals(0.0, p.xpPerActiveDay, 0.001);
 		assertFalse(p.hasHorizon());
 		assertTrue(p.dormant());
-		// lastActive looks past the 30-day window
 		assertEquals(moved, p.lastActive);
 	}
 
@@ -172,8 +160,6 @@ public class PaceBookTest
 		TreeMap<LocalDate, HistoryLog.Baseline> spine = spine();
 		long xp = 0;
 		put(spine, TODAY.minusDays(11), xp);
-		// four slow days, then seven at ten times the rate. only the newest
-		// seven feed the pace
 		for (int i = 10; i >= 7; i--)
 		{
 			xp += 1_000;
@@ -201,7 +187,6 @@ public class PaceBookTest
 
 		PaceBook.Pace p = PaceBook.forSkill(spine, SKILL, 5_000_000L, TODAY);
 
-		// reading the blind baseline as 0 would post a five-million-xp day
 		assertEquals(0, p.activeDays);
 		assertNull(p.lastActive);
 		assertFalse(p.hasHorizon());
@@ -224,7 +209,6 @@ public class PaceBookTest
 		assertNull(done.targetLevel);
 		assertEquals(0L, done.targetXp);
 		assertFalse(done.hasHorizon());
-		// nothing left to chase is not dormancy
 		assertFalse(done.dormant());
 	}
 

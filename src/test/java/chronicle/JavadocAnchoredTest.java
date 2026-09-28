@@ -14,19 +14,6 @@ import java.util.stream.Stream;
 import org.junit.Test;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A doc block describes the thing under it.
- *
- * <p>Two doc blocks stacked mean the first one describes the second, which is
- * not a thing, and the method it was written for is now some distance below
- * with somebody else's explanation over it. It happens whenever a helper is
- * added just above an existing method rather than just below it, which is the
- * natural place to put one, and it is invisible: both blocks read perfectly
- * well and neither is attached to what it talks about.
- *
- * <p>Four of these had accumulated. Two were written while fixing the other
- * two, in the same sitting, by exactly that mechanism.
- */
 public class JavadocAnchoredTest
 {
 	private static List<Path> sources() throws IOException

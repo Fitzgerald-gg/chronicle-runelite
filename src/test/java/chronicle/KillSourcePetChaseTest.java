@@ -15,13 +15,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-/**
- * Dryness for the pets whose attempts were already counted for them, by a collection
- * log page or by the drop ledger, in the unit the roll is asked in: a search of the
- * Rewards Guardian, a master casket opened, a high gamble, a crate, a loot sack, a
- * kill. None of these is a skilling counter and none is priced off a level; they are
- * read exactly as Hespori always was.
- */
 public class KillSourcePetChaseTest
 {
 	private static final List<String> PETS = Arrays.asList(
@@ -35,7 +28,6 @@ public class KillSourcePetChaseTest
 	private final List<LocalStore.SourceRow> ledger = new ArrayList<>();
 	private final JsonObject achievements = new JsonObject();
 
-	// a collection log page and its count
 	private void kc(String page, long n)
 	{
 		JsonObject kcs = clog.has("kcs") ? clog.getAsJsonObject("kcs") : new JsonObject();
@@ -43,13 +35,11 @@ public class KillSourcePetChaseTest
 		clog.add("kcs", kcs);
 	}
 
-	// a drop ledger source and its count
 	private void ledger(String source, int n)
 	{
 		ledger.add(new LocalStore.SourceRow(source, n, n, 0L, null, 0L, 0L, java.util.Collections.emptySet(), 0, 0));
 	}
 
-	// a diary tier the character sheet says is done, spelled as AchievementSync spells it
 	private void diary(String region, String tier, boolean done)
 	{
 		JsonObject diaries = achievements.has("diaries")
@@ -68,9 +58,6 @@ public class KillSourcePetChaseTest
 		return out.get(pet.toLowerCase(java.util.Locale.ROOT));
 	}
 
-	// 1/4,000 a search. The roll is on searching the Rewards Guardian, never on the
-	// game that paid for it, so the count the journal keeps for the minigame is the
-	// denominator and nothing else is added to it.
 	@Test
 	public void theProtectorIsReadOffTheRiftSearches()
 	{
@@ -78,34 +65,25 @@ public class KillSourcePetChaseTest
 		ledger("Guardians of the Rift", 4_955);
 		GrindBook.PetChase c = chase("Abyssal protector");
 		assertEquals(72.9, c.percentileDry, 0.05);
-		// one record kept two ways, so the fuller of the two stands for it
 		assertEquals(5_218, c.kc);
 		assertEquals(1, c.sources.size());
 		assertEquals(4_000, c.sources.get(0).rate);
 		assertEquals("Guardians of the Rift", c.activity);
 		assertEquals("searches", c.unit);
-		// nothing here was read off a level, so the page has no caveat to print
 		assertEquals(0, c.level);
 	}
 
-	// A chompy is rolled twice, on the kill and on the pluck, each at 1/500. Only the
-	// kill is counted, and the rate is not quietly halved to cover the pluck: that
-	// would overstate every bird left where it fell.
 	@Test
 	public void theChompyIsPricedOnTheKillItCountsNotThePluckItCannot()
 	{
-		// the chase only exists past the elite diary; PetUnlockGateTest holds that
 		diary("western", "elite", true);
 		ledger("Chompy bird", 295);
 		GrindBook.PetChase c = chase("Chompy chick");
 		assertEquals(44.6, c.percentileDry, 0.05);
 		assertEquals(295, c.kc);
 		assertEquals(500, c.sources.get(0).rate);
-		// a doubled roll would have printed 69.3, and deliberately does not
 	}
 
-	// Master caskets alone. The other trail tiers are counted by the same ledger under
-	// names one character apart and roll nothing for this pet.
 	@Test
 	public void onlyMasterCasketsRollTheBloodhound()
 	{
@@ -121,8 +99,6 @@ public class KillSourcePetChaseTest
 		assertEquals("caskets", c.unit);
 	}
 
-	// Low and medium gambles cannot give the queen, so only the high gamble count is
-	// a denominator here.
 	@Test
 	public void onlyTheHighGambleRollsTheQueen()
 	{
@@ -134,9 +110,6 @@ public class KillSourcePetChaseTest
 		assertEquals(1_000, c.sources.get(0).rate);
 	}
 
-	// The log page counts Spoils of War opened and the ledger counts the same crates
-	// under its own spelling. They are one record: the fuller stands for it, and the
-	// two are never added.
 	@Test
 	public void theCreatorTakesTheFullerOfTwoSpellingsNotTheirSum()
 	{
@@ -152,8 +125,6 @@ public class KillSourcePetChaseTest
 		assertEquals(1, both.sources.size());
 	}
 
-	// Expert and master sacks roll; basic and adept carry no Quetzin line at all, and
-	// the guild's own rumour count mixes all four tiers, so it is not the denominator.
 	@Test
 	public void quetzinCountsExpertAndMasterSacksAndNotTheGuildCount()
 	{
@@ -169,8 +140,6 @@ public class KillSourcePetChaseTest
 		assertEquals("Expert sacks", c.sources.get(0).boss);
 	}
 
-	// The ordinary kill is 1/2,500. A contract kill is 1/100 and nothing tells the two
-	// apart, so every kill is priced at the ordinary rate rather than guessed at.
 	@Test
 	public void yamiIsPricedAtTheOrdinaryKill()
 	{
@@ -181,7 +150,6 @@ public class KillSourcePetChaseTest
 		assertEquals(1_204, c.kc);
 	}
 
-	// The log capitalises the gryphon and the ledger does not. One source either way.
 	@Test
 	public void theGryphonIsOneSourceHoweverItIsSpelled()
 	{
@@ -193,8 +161,6 @@ public class KillSourcePetChaseTest
 		assertEquals(3_000, c.sources.get(0).rate);
 	}
 
-	// The log is only as fresh as the last time it was opened; the ledger keeps
-	// counting. The fuller record wins, and they are not added.
 	@Test
 	public void beefAndAggyReadTheFullerRecordNotTheStalerPage()
 	{
@@ -211,9 +177,6 @@ public class KillSourcePetChaseTest
 		assertEquals(6.0, aggy.percentileDry, 0.05);
 	}
 
-	// 1/8,000 a search of the reward pool, never a subdue. A subdue pays permits by
-	// the points scored and each permit buys one search, so subdues count fewer
-	// attempts than were made and would print the chase less dry than it is.
 	@Test
 	public void tinyTemporIsReadOffTheRewardPoolAndNotTheSubdue()
 	{
@@ -227,11 +190,8 @@ public class KillSourcePetChaseTest
 		assertEquals("Tempoross", c.activity);
 		assertEquals("searches", c.unit);
 		assertEquals(1.4, c.percentileDry, 0.05);
-		// the subdue count would have printed 0.6, and deliberately does not
 	}
 
-	// The casket is one of the things a pool search hands over, and its own table
-	// carries no pet. Counting caskets would count a share of those searches twice.
 	@Test
 	public void theTemporossCasketIsNotASecondRollUnit()
 	{
@@ -242,8 +202,6 @@ public class KillSourcePetChaseTest
 		assertEquals(1, c.sources.size());
 	}
 
-	// And with no pool searches recorded there is no chase at all: the subdue count
-	// on its own is not a denominator this pet can be priced from.
 	@Test
 	public void aTemporossSubdueCountAloneBuysNoChase()
 	{
@@ -251,9 +209,6 @@ public class KillSourcePetChaseTest
 		assertNull(chase("Tiny tempor"));
 	}
 
-	// Three pets have a rate the wiki prints and no counter that can ask for it in the
-	// unit the roll is made in. A row for them would be a guess, so they get none, and
-	// the boss pets around them are untouched by any of this.
 	@Test
 	public void thePetsNoCounterCanAskForGetNoRow()
 	{

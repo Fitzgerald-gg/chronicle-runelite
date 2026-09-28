@@ -20,11 +20,6 @@ import org.mockito.Mockito;
 
 import static org.junit.Assert.assertEquals;
 
-/**
- * A journal written by the build that stamped every mid-task kill as a task kill
- * carries off-task monsters in its slayer segments. Loading it drops them and takes
- * their counts off the segment's kills; a clean segment is left exactly as it was.
- */
 public class SlayerSegmentHealTest
 {
 	private LocalStore store;
@@ -69,7 +64,6 @@ public class SlayerSegmentHealTest
 		assertEquals(1, mons.size());
 		assertEquals(1, count(mons, "Nechryael"));
 		assertEquals(-1, count(mons, "Man"));
-		// the aggregated bag and value cannot be split per monster, so they stand
 		assertEquals(900, t.totalValue);
 		assertEquals(4, store.slayerTaskItems(0).get(0).qty);
 	}
@@ -92,9 +86,6 @@ public class SlayerSegmentHealTest
 	@Test
 	public void aClosedSegmentIsNotReVerifiedByNameAlone() throws Exception
 	{
-		// Imported from the server, which passed these guards on their Prifddinas ids.
-		// The journal keeps no ids, so re-running the name tier here would wrongly
-		// throw the whole task out.
 		write("{\"schema\":1,\"rsn\":\"Tester\",\"slayer\":{\"tasks\":["
 			+ "{\"task\":\"Elves\",\"kills\":128,\"assignment\":128,\"value\":5,\"open\":false,"
 			+ "\"monsters\":{\"Guard\":128}}]}}");

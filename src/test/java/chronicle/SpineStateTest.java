@@ -27,16 +27,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The state a spine stands at on a date, and the levels it draws. A line that
- * carries an overall its skills add up to is a complete snapshot: a skill it
- * does not list was at zero that day, so it replaces the standing skills
- * wholly. Any other line says only what it lists and merges over what stands.
- * Counters and kill counts are cumulative and always merge. A state resting on
- * a complete snapshot draws level 1 for a skill the record never carried, since
- * a complete line lists every skill that had any xp at all, so the total counts
- * every skill in the game.
- */
 public class SpineStateTest
 {
 	private static final String RSN = "Tester";
@@ -51,8 +41,6 @@ public class SpineStateTest
 		dir = Files.createTempDirectory("chronicle-spine-state").toFile();
 	}
 
-	// The spine as the client reads it, so each line's completeness is derived
-	// where the line is parsed rather than set by hand.
 	private TreeMap<LocalDate, HistoryLog.Baseline> spine(String... lines) throws Exception
 	{
 		File f = new File(dir, LocalStore.slug(RSN) + HistoryLog.SPINE_SUFFIX);
@@ -87,9 +75,7 @@ public class SpineStateTest
 			"{\"date\":\"2022-01-02\",\"skills\":{\"attack\":500}}",
 			"{\"date\":\"2022-01-03\",\"skills\":{\"attack\":500,\"hitpoints\":1151,\"overall\":9999}}");
 		assertTrue(s.get(on("2022-01-01")).complete);
-		// no overall at all: it says only what it lists
 		assertFalse(s.get(on("2022-01-02")).complete);
-		// an overall its parts do not add up to: the same
 		assertFalse(s.get(on("2022-01-03")).complete);
 	}
 
@@ -101,8 +87,6 @@ public class SpineStateTest
 			"{\"date\":\"2022-01-01\",\"skills\":{\"hitpoints\":1151,\"overall\":1151}}");
 		HistoryLog.Baseline state = HistoryLog.stateAt(s, on("2022-01-01"));
 		assertEquals(1151L, xp(state, "hitpoints"));
-		// the complete line accounts for every xp the account had, so the two
-		// skills it leaves out stood at zero
 		assertEquals(0L, xp(state, "attack"));
 		assertEquals(0L, xp(state, "mining"));
 		assertTrue(state.complete);
@@ -116,7 +100,6 @@ public class SpineStateTest
 			"{\"date\":\"2023-11-30\",\"skills\":{\"attack\":900}}");
 		HistoryLog.Baseline state = HistoryLog.stateAt(s, on("2023-11-30"));
 		assertEquals(900L, xp(state, "attack"));
-		// the line says nothing about mining, so mining stands where it was
 		assertEquals(700L, xp(state, "mining"));
 	}
 
@@ -149,7 +132,6 @@ public class SpineStateTest
 			"{\"date\":\"2026-01-02\",\"skills\":{\"attack\":900,\"overall\":900},"
 				+ "\"counters\":{},\"kcs\":{}}");
 		HistoryLog.Baseline state = HistoryLog.stateAt(s, on("2026-01-02"));
-		// cumulative: a complete skills line says nothing about either of them
 		assertEquals(40L, (long) state.counters.get("tilesWalked"));
 		assertEquals(100L, (long) state.kcs.get("Zulrah"));
 	}
@@ -166,7 +148,6 @@ public class SpineStateTest
 		HistoryLog.Baseline earliest = HistoryLog.earliest(s, on("2022-12-31"));
 		Map<String, Long> gained = HistoryLog.gained(opening.skills, earliest.skills,
 			closing.skills, opening.complete);
-		// attack was at zero on the opening snapshot, so the year gained all of it
 		assertEquals(1_000_000L, (long) gained.get("attack"));
 		assertEquals(1_250_000L - 1151L, (long) gained.get("hitpoints"));
 	}
@@ -182,8 +163,6 @@ public class SpineStateTest
 		HistoryLog.Baseline earliest = HistoryLog.earliest(s, on("2022-12-31"));
 		Map<String, Long> gained = HistoryLog.gained(opening.skills, earliest.skills,
 			closing.skills, opening.complete);
-		// the opening says nothing about attack, so its earliest recorded value
-		// stands in and the year shows no gain it cannot vouch for
 		assertNull(gained.get("attack"));
 	}
 
@@ -198,8 +177,6 @@ public class SpineStateTest
 		HistoryLog.Levels levels = HistoryLog.levels(HistoryLog.stateAt(s, on("2022-12-31")), THREE);
 		assertEquals(73, (int) levels.of.get("attack"));
 		assertEquals(75, (int) levels.of.get("hitpoints"));
-		// no line ever carried sailing, and a complete line accounts for every
-		// xp there was, so it stood at zero, which is level 1
 		assertEquals(1, (int) levels.of.get("sailing"));
 		assertEquals(73 + 75 + 1, levels.total);
 		assertEquals(3, levels.drawn);
@@ -239,8 +216,6 @@ public class SpineStateTest
 		}
 		log.compact(dir, RSN);
 		List<String> lines = Files.readAllLines(f.toPath(), StandardCharsets.UTF_8);
-		// every date still there, in the calendar's order, each line's own text
-		// untouched
 		assertEquals(Arrays.asList(b, c, a), lines);
 	}
 

@@ -27,14 +27,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 
-/**
- * Group storage: a three-event state machine on the client thread, with no test.
- *
- * <p>Open arms it, the FIRST sync of the temp container is the baseline, later
- * syncs are the running state, and close diffs the two into one event. The
- * product that consumes it is the GIM bot's shared-storage ledger, so a break
- * here is silent until somebody asks the bot what the group has.
- */
 public class GroupStorageTest
 {
 	private ChronicleEventCapture capture;
@@ -68,10 +60,8 @@ public class GroupStorageTest
 		capture.onWidgetClosed(e);
 	}
 
-	/** One server sync of the shared-storage temp container. */
 	private void sync(int... idsAndQtys)
 	{
-		// Item is final, so these are the real thing rather than mocks.
 		Item[] items = new Item[idsAndQtys.length / 2];
 		for (int i = 0; i < items.length; i++)
 		{
@@ -95,8 +85,8 @@ public class GroupStorageTest
 	public void aDepositAndAWithdrawalTravelInOneEvent()
 	{
 		open();
-		sync(995, 1000, 314, 50);        // the opening sync: coins and feathers
-		sync(995, 1500, 314, 20);        // deposited 500 coins, took 30 feathers
+		sync(995, 1000, 314, 50);
+		sync(995, 1500, 314, 20);
 		close();
 
 		JsonObject d = recorded();
@@ -110,7 +100,6 @@ public class GroupStorageTest
 		assertEquals(30, wd.get("quantity").getAsInt());
 	}
 
-	/** Opened, looked at, closed: nothing moved, so nothing is recorded. */
 	@Test
 	public void lookingIsNotAnEvent()
 	{
@@ -122,7 +111,6 @@ public class GroupStorageTest
 			Mockito.eq("GROUP_STORAGE"), Mockito.any(JsonObject.class), Mockito.anyString());
 	}
 
-	/** The container never synced, so nothing was ever observed to diff. */
 	@Test
 	public void aStorageThatNeverSyncedRecordsNothing()
 	{
@@ -132,7 +120,6 @@ public class GroupStorageTest
 			Mockito.eq("GROUP_STORAGE"), Mockito.any(JsonObject.class), Mockito.anyString());
 	}
 
-	/** A sync arriving while the interface is shut belongs to something else. */
 	@Test
 	public void syncsOutsideTheInterfaceAreIgnored()
 	{

@@ -26,11 +26,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The Recap: the period as one plate under Record, every row a figure and
- * a door to the board it was read off. Composed, not described: there is no
- * sentence on it, so there is nothing to sound like anyone.
- */
 public class RecapTest
 {
 	@BeforeClass
@@ -118,17 +113,12 @@ public class RecapTest
 		assertTrue(drops, drops.startsWith(String.format(java.util.Locale.UK, "%,d", loots) + " · "));
 		assertNotNull("no Killed most row", beside(plate, "Killed most"));
 		assertNotNull("no Pet row", beside(plate, "Pet"));
-		// every row is a door
 		List<String> said = new ArrayList<>();
 		collect(plate, said);
 		for (JPanel r : rows)
 		{
 			assertEquals(left(r), Cursor.HAND_CURSOR, r.getCursor().getType());
 		}
-		// The plate, whole and exact. A shape test passed on any sentence that
-		// happened to start with a digit; this is the only assertion that can
-		// actually catch prose arriving on the plate. The two shortened names are
-		// the rows that are wider than the plate: whole, they squeezed the label.
 		List<String> pairs = new ArrayList<>();
 		for (JPanel r : rows)
 		{
@@ -147,11 +137,6 @@ public class RecapTest
 			"Death | 1"), pairs);
 	}
 
-	/**
-	 * A row's label stays whole and the name beside it gives way. Nineteen
-	 * combat achievements with a long task read "Comb..." on the plate: the
-	 * one word saying what the figure was is the one that went.
-	 */
 	@Test
 	public void aLongNameGivesWayAndTheLabelStaysWhole() throws Exception
 	{
@@ -194,19 +179,13 @@ public class RecapTest
 		assertEquals("JOURNAL", String.valueOf(field(hold[0], "view")));
 	}
 
-	/**
-	 * Over a window, killed-most is the Kills board's own arithmetic: a species
-	 * the opening line does not carry keeps its earliest recorded base, so the
-	 * kills after that base count. Subtracting a missing opening read them as
-	 * none and handed the row to whoever the opening happened to name.
-	 */
 	@Test
 	public void killedMostOverAWindowKeepsTheEarliestBase() throws Exception
 	{
 		LocalDate cursor = LocalDate.of(2026, 6, 15);
 		PanelPreviewTest.StubPlugin stub = new PanelPreviewTest.StubPlugin(null);
 		HistoryLog.Baseline open = kcLine(900L, null);
-		HistoryLog.Baseline mid = kcLine(950L, 100L);     // Vorkath first recorded here
+		HistoryLog.Baseline mid = kcLine(950L, 100L);
 		HistoryLog.Baseline close = kcLine(1_000L, 400L);
 		stub.history.put(cursor.withDayOfMonth(5), open);
 		stub.history.put(cursor.withDayOfMonth(9), mid);
@@ -234,7 +213,6 @@ public class RecapTest
 				throw new RuntimeException(e);
 			}
 		});
-		// 300 Vorkath since its base of 100, against 100 Nechryael
 		assertEquals("Vorkath · 300", beside(plate[0], "Killed most"));
 	}
 

@@ -15,14 +15,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The sitting, as a period the whole panel can be read through.
- *
- * <p>Every other period is a date range, measured as the distance between two
- * of the history spine's closed baselines. The sitting has no closing baseline,
- * because it has not closed, and it needs none: the counters ARE the session,
- * exactly, with nothing subtracted from anything.
- */
 public class SessionPeriodTest
 {
 	private static ChroniclePanel panel;
@@ -92,11 +84,6 @@ public class SessionPeriodTest
 		assertEquals("This session", label());
 	}
 
-	/**
-	 * The figures come straight off the session counters, so they are exact and
-	 * need no baseline. A spine-derived period returns null when it has fewer
-	 * than two baselines to measure between; this one never can.
-	 */
 	@Test
 	public void itsFiguresAreTheSessionItselfNotADifferenceOfBaselines() throws Exception
 	{
@@ -115,7 +102,6 @@ public class SessionPeriodTest
 		}
 	}
 
-	/** A counter at zero this sitting is absent, not a row reading nought. */
 	@Test
 	public void aCounterUntouchedThisSittingIsNotCarried() throws Exception
 	{
@@ -126,7 +112,6 @@ public class SessionPeriodTest
 		}
 	}
 
-	/** And it is not the whole record, however short the sitting has been. */
 	@Test
 	public void itIsNotMistakenForLifetime() throws Exception
 	{
@@ -136,10 +121,6 @@ public class SessionPeriodTest
 		assertFalse((Boolean) whole.invoke(panel));
 	}
 
-	/**
-	 * No arrows. There is one sitting and it is this one; stepping the cursor off
-	 * it would name another day and go on calling it "This session".
-	 */
 	@Test
 	public void thereIsNoSteppingToAPreviousSitting() throws Exception
 	{
@@ -185,18 +166,6 @@ public class SessionPeriodTest
 		}
 	}
 
-	/**
-	 * TRAP: a level gained EARLIER TODAY, in a sitting that has since ended.
-	 *
-	 * <p>The spine is written once a day, so the nearest line before a sitting
-	 * that began this evening is the eve of today. Measured from that, everything
-	 * done this morning falls inside the sitting: Hunter reads "91 to 92" and the
-	 * total level reads "+1" under a heading saying "This session", for something
-	 * that happened hours ago in a different sitting.
-	 *
-	 * <p>Where the sitting began is derivable exactly and needs no baseline: the
-	 * experience each skill has now, less what THIS sitting earned.
-	 */
 	@Test
 	public void theSittingOpensWhereTheSittingBeganNotWhereTheDayDid() throws Exception
 	{
@@ -204,12 +173,9 @@ public class SessionPeriodTest
 			.getDeclaredMethod("baselineAt", Map.class);
 		m.setAccessible(true);
 
-		// 6,517,253 is exactly level 92; 5,902,831 is 91
 		Map<String, Long> now = new java.util.HashMap<>();
 		now.put("hunter", 6_600_000L);
 
-		// nothing gained this sitting: the sitting opened where it stands, so
-		// there is no range to draw and no level to claim
 		Object openedQuiet = m.invoke(null, new java.util.HashMap<>(now));
 		java.lang.reflect.Method levels = HistoryLog.class.getDeclaredMethod(
 			"levels", Class.forName("chronicle.HistoryLog$Baseline"), List.class);
@@ -222,7 +188,6 @@ public class SessionPeriodTest
 		assertEquals("a skill untouched this sitting opened where it stands",
 			Integer.valueOf(92), quietLevels.get("hunter"));
 
-		// and with 300k earned this sitting, it opened at 91 and really did climb
 		Map<String, Long> openXp = new java.util.HashMap<>();
 		openXp.put("hunter", 6_600_000L - 300_000L);
 		Object climbed = levels.invoke(null, m.invoke(null, openXp),
@@ -233,12 +198,6 @@ public class SessionPeriodTest
 			Integer.valueOf(91), climbedLevels.get("hunter"));
 	}
 
-	/**
-	 * A baseline built this way has to be complete, or the total tile stops
-	 * naming an opening: it refuses to pair two ends that disagree about how many
-	 * skills were drawn, and an incomplete baseline reads an absent skill as
-	 * undrawn rather than as level one.
-	 */
 	@Test
 	public void theDerivedOpeningCountsAsACompleteSnapshot() throws Exception
 	{
@@ -252,11 +211,6 @@ public class SessionPeriodTest
 			complete.getBoolean(at));
 	}
 
-	/**
-	 * Virtual levels are a statement about where an account STANDS, so they
-	 * belong to the whole record. A period reports what moved, and a level past
-	 * 99 cannot move.
-	 */
 	@Test
 	public void virtualLevelsAreForTheWholeRecordOnly() throws Exception
 	{
@@ -270,7 +224,6 @@ public class SessionPeriodTest
 			+ " about that period", around.contains("wholeRecord()"));
 	}
 
-	/** Pretend the client started {@code agoMs} ago. */
 	private static void began(long agoMs) throws Exception
 	{
 		Field pf = ChroniclePanel.class.getDeclaredField("plugin");
@@ -295,15 +248,6 @@ public class SessionPeriodTest
 		return (Boolean) m.invoke(panel, ts);
 	}
 
-	/**
-	 * TRAP: the one that made every dated board wrong under this period.
-	 *
-	 * <p>Every other period is a run of whole days, so the code that turns one
-	 * into a pair of timestamps rounded to midnight, which loses nothing. The
-	 * sitting is hours inside a day, and rounded the same way it swallows
-	 * everything since midnight: a level earned at breakfast was reported under
-	 * "This session" at teatime, which is what was seen in the client.
-	 */
 	@Test
 	public void theSittingBeginsWhenTheClientDidAndNotAtMidnight() throws Exception
 	{
@@ -311,10 +255,6 @@ public class SessionPeriodTest
 		began(90 * 60_000L);
 		long[] ms = windowMs();
 		long now = System.currentTimeMillis();
-		// Not "after midnight": a suite run at half past midnight has a sitting
-		// that honestly began yesterday evening. The rounding this guards
-		// against would put the start on a day boundary, and a start ninety
-		// minutes ago is on one only by coincidence.
 		assertTrue("the sitting did not begin when the client did",
 			Math.abs(ms[0] - (now - 90 * 60_000L)) < 5_000L);
 		long dayStart = java.time.Instant.ofEpochMilli(ms[0])
@@ -325,7 +265,6 @@ public class SessionPeriodTest
 		assertTrue("the sitting runs past now", ms[1] >= now - 5_000L);
 	}
 
-	/** The same bound, applied to the stamps every dated board files a line by. */
 	@Test
 	public void aLineFromEarlierTodayIsNotThisSitting() throws Exception
 	{
@@ -338,12 +277,6 @@ public class SessionPeriodTest
 			inside(now - 10 * 60_000L));
 	}
 
-	/**
-	 * TRAP: an undated line, which the journal wrote before it carried stamps.
-	 * Any period measured in days admits it and files it a little loosely. A
-	 * sitting cannot: a line that cannot say when it happened is not evidence
-	 * that it happened in the last hour.
-	 */
 	@Test
 	public void anUndatedLineIsNotClaimedByTheSitting() throws Exception
 	{
@@ -370,7 +303,6 @@ public class SessionPeriodTest
 		}
 	}
 
-	/** Every word one skill's drill says. */
 	private static java.util.List<String> drill(String craft) throws Exception
 	{
 		final java.util.List<String> said = new java.util.ArrayList<>();
@@ -391,16 +323,6 @@ public class SessionPeriodTest
 		return said;
 	}
 
-	/**
-	 * TRAP: the skill drill had BOTH of the flaws the sheet grid above it was
-	 * fixed for, and neither was visible from the grid.
-	 *
-	 * <p>It read its standing off the spine, which is written once a day, so it
-	 * stood still through an hour of training. And it measured its gain between
-	 * two of the spine's lines, which under the sitting are both today's, so it
-	 * reported the whole day. The fixture's sitting holds four skills' gains and
-	 * Runecraft is the largest of them.
-	 */
 	@Test
 	public void theSkillDrillMeasuresTheSittingAndNotTheDay() throws Exception
 	{
@@ -413,15 +335,6 @@ public class SessionPeriodTest
 			+ " earned in Runecraft: " + said, "+400k", said.get(at + 1));
 	}
 
-	/**
-	 * The drill's other half, and the one the grid above it was fixed for first:
-	 * where the skill STANDS is what the client says now, not what the spine's
-	 * newest line said whenever it was last written.
-	 *
-	 * <p>Held on a skill the sitting has moved, so the two answers differ: the
-	 * spine's copy of Runecraft is the fixture's journal, and the live sheet is
-	 * the client's, four hundred thousand ahead of it.
-	 */
 	@Test
 	public void theDrillStandsWhereTheClientSaysAndNotWhereTheSpineDoes() throws Exception
 	{
@@ -443,13 +356,6 @@ public class SessionPeriodTest
 			gp.invoke(null, live[1]), said.get(at + 1));
 	}
 
-	/**
-	 * TRAP: the cards above the button are the WINDOW's tasks, and the button
-	 * counted the whole journey. A sitting holding two tasks offered to show
-	 * three hundred and ten more, and clicking it mounted a lifetime of cards
-	 * under a heading reading "This session". True at every narrowed period, not
-	 * only this one.
-	 */
 	@Test
 	public void theMoreButtonCountsTheWindowsTasksAndNotTheJourneys() throws Exception
 	{
@@ -467,16 +373,6 @@ public class SessionPeriodTest
 			around.contains("j.tasks.size() > slayerShown"));
 	}
 
-	/**
-	 * The sitting ranks its own take, and that is the whole point of it.
-	 *
-	 * <p>The dated roll keeps ONE entry a day, by design: it is what lets a year
-	 * of drops be summed without holding a year of drops. So it could never be
-	 * asked what a sitting took, and this board used to say so out loud. The
-	 * sitting now keeps its OWN entry in the roll's shape, written as the drops
-	 * land, and every board that reads a window reads it without knowing which
-	 * of the two it got.
-	 */
 	@Test
 	public void theLootBoardRanksTheSittingsOwnTake() throws Exception
 	{
@@ -493,11 +389,6 @@ public class SessionPeriodTest
 			+ " not read from: " + all, all.contains("dated loot roll begins"));
 	}
 
-	/**
-	 * TRAP: the entry read must be the SITTING's and not the day's. The stub
-	 * answers those two with different figures on purpose, so a board that
-	 * quietly went back to lootBetween draws the day here and looks fine.
-	 */
 	@Test
 	public void andItIsTheSittingsEntryAndNotTheDays() throws Exception
 	{
@@ -510,12 +401,6 @@ public class SessionPeriodTest
 			+ "is reading the other's entry: " + sitting, sitting.equals(day));
 	}
 
-	/**
-	 * The counted-things bands take BOTH halves off the sitting's own entry. The
-	 * count used to be a delta between two of the spine's lines, and the spine is
-	 * written once a day, so under a sitting both ends were today's; the gp
-	 * beside it came off the dated roll, which is the day for the same reason.
-	 */
 	@Test
 	public void theCountedThingsBandCountsTheSitting() throws Exception
 	{
@@ -533,8 +418,6 @@ public class SessionPeriodTest
 				m.setAccessible(true);
 				javax.swing.JPanel into = new javax.swing.JPanel();
 				into.setLayout(new javax.swing.BoxLayout(into, javax.swing.BoxLayout.Y_AXIS));
-				// a spine delta that is NOT the sitting: a band reading this
-				// instead of the sitting's entry shows Vorkath and no demons
 				java.util.Map<String, Long> spine = new java.util.HashMap<>();
 				spine.put("vorkath", 40L);
 				m.invoke(panel, into, spine, spine, spine, false,
@@ -574,11 +457,6 @@ public class SessionPeriodTest
 		return said;
 	}
 
-	/**
-	 * The strip says "This session" because there it opens its own line. Inside a
-	 * sentence it is a phrase like any other, and a capital in the middle of one
-	 * reads as a typo in the plugin.
-	 */
 	@Test
 	public void theSittingIsNamedInLowerCaseInsideASentence() throws Exception
 	{
@@ -588,18 +466,10 @@ public class SessionPeriodTest
 		m.setAccessible(true);
 		assertEquals("a capital lands in the middle of every sentence naming it",
 			"this session", m.invoke(panel));
-		// and the periods whose names ARE proper nouns keep theirs
 		period("Lifetime");
 		assertEquals("Lifetime", m.invoke(panel));
 	}
 
-	/**
-	 * The item page reads the period, the way the source page does: its head off
-	 * the sitting's own entry, and the sources beneath off what each of them
-	 * dropped of it in the sitting, not every source that has ever dropped it.
-	 * What the heap holds beyond the sources' own rows is Other, so the list
-	 * still comes to the head.
-	 */
 	@Test
 	public void theItemPageReadsThePeriod() throws Exception
 	{

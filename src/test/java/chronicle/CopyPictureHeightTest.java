@@ -10,15 +10,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A copied picture holds the top of the list, and says so when it cannot hold
- * all of it.
- *
- * <p>A column of rows given less room than it asks for does not lose the rows
- * off the bottom: the layout squeezes, and the squeeze lands on the FIRST
- * rows, which come out at no height at all. A reader handed that picture sees
- * a list that starts in the middle of their loot with nothing to say it did.
- */
 public class CopyPictureHeightTest
 {
 	private static JPanel rows(int n)
@@ -47,7 +38,6 @@ public class CopyPictureHeightTest
 		return hold[0];
 	}
 
-	/** Whether anything at all was drawn on this scanline. */
 	private static boolean inked(BufferedImage img, int y)
 	{
 		for (int x = 0; x < img.getWidth(); x++)
@@ -60,10 +50,6 @@ public class CopyPictureHeightTest
 		return false;
 	}
 
-	/**
-	 * Six hundred rows at twenty pixels is twelve thousand, which is taller than
-	 * any window and exactly what the tall copy is for.
-	 */
 	@Test
 	public void aTallPictureIsAsTallAsItsList() throws Exception
 	{
@@ -73,7 +59,6 @@ public class CopyPictureHeightTest
 			img.getHeight() >= 600 * 20);
 	}
 
-	/** The first row is the first row, not the hundred and fifth. */
 	@Test
 	public void theTopOfTheListIsDrawn() throws Exception
 	{
@@ -86,14 +71,10 @@ public class CopyPictureHeightTest
 		assertTrue("the first row of the list was drawn at no height at all", any);
 	}
 
-	/**
-	 * Past the ceiling the picture is cropped, not squeezed, and its last line
-	 * says how much did not fit.
-	 */
 	@Test
 	public void aPictureTooTallSaysSo() throws Exception
 	{
-		BufferedImage img = tall(1200);   // 24,000px against a 20,000 ceiling
+		BufferedImage img = tall(1200);
 		assertEquals(20000, img.getHeight());
 		boolean top = false;
 		for (int y = 0; y < 20 && !top; y++)

@@ -31,11 +31,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * NPC loot comes only from the game's loot script. The client-side despawn sweep
- * (RuneLite's NpcLootReceived) is not subscribed to at all, and one ServerNpcLoot
- * produces exactly one LOOT row, on the tick it arrives, marked as the server's.
- */
 public class ServerLootOnlyTest
 {
 	private static final String SWEEP_EVENT = "net.runelite.client.events.NpcLootReceived";
@@ -90,12 +85,11 @@ public class ServerLootOnlyTest
 		Mockito.when(comp.getName()).thenReturn("Dust devil");
 		Mockito.when(comp.getId()).thenReturn(DUST_DEVIL);
 		List<ItemStack> items = new ArrayList<>();
-		items.add(new ItemStack(526, 1));      // bones
-		items.add(new ItemStack(1618, 1));     // uncut diamond
+		items.add(new ItemStack(526, 1));
+		items.add(new ItemStack(1618, 1));
 
 		capture.onServerNpcLoot(new ServerNpcLoot(comp, items));
 
-		// emitted straight away, before any GameTick
 		ArgumentCaptor<JsonObject> row = ArgumentCaptor.forClass(JsonObject.class);
 		Mockito.verify(store, Mockito.times(1)).record(
 			Mockito.eq("LOOT"), row.capture(), Mockito.eq("Tester"));
@@ -107,7 +101,6 @@ public class ServerLootOnlyTest
 		assertEquals(2, data.getAsJsonArray("items").size());
 		assertEquals(526, data.getAsJsonArray("items").get(0).getAsJsonObject().get("id").getAsInt());
 
-		// later ticks add nothing: there is no held copy waiting to be flushed
 		for (int t = 101; t <= 105; t++)
 		{
 			Mockito.when(client.getTickCount()).thenReturn(t);

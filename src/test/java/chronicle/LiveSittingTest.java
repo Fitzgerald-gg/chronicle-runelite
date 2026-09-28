@@ -17,14 +17,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The journal shows the sitting the reader is in.
- *
- * <p>Everything else already reached it as it happened: a level, a pet, a log
- * slot, a drop. A SITTING did not. It is written as one dated line when it
- * closes, so the journal listed every sitting its owner had ever had except the
- * one they were in the middle of - the one they could watch going by.
- */
 public class LiveSittingTest
 {
 	private static List<String> journal(JsonObject sitting) throws Exception
@@ -102,7 +94,6 @@ public class LiveSittingTest
 			+ said.subList(0, Math.min(12, said.size())), has(said, "1h 37m"));
 	}
 
-	/** And it reads as the line it will become, not as something else. */
 	@Test
 	public void itReadsAsAnOrdinarySessionLine() throws Exception
 	{
@@ -111,7 +102,6 @@ public class LiveSittingTest
 		assertTrue("it should carry what the sitting has taken", has(said, "41 drops"));
 	}
 
-	/** With no sitting there is nothing extra, and the journal is as it was. */
 	@Test
 	public void withNoSittingTheJournalIsUnchanged() throws Exception
 	{

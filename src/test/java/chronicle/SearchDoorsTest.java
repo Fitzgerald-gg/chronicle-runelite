@@ -29,15 +29,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Search, as one thing: the list is the resolver.
- *
- * <p>Enter opens the first row on screen, and nothing else. A second resolver
- * behind the key, with an order of its own, sent Enter somewhere the reader
- * could not see. A source named exactly stands before the items named after
- * it, a journal hit opens on its day, a miss names the nearest thing, and the
- * period strip says a search reads the whole record.
- */
 public class SearchDoorsTest
 {
 	private PanelPreviewTest.StubPlugin stub;
@@ -98,7 +89,6 @@ public class SearchDoorsTest
 		return f.get(panel);
 	}
 
-	/** The first row drawn with a hand on it, which is where Enter lands. */
 	private static JPanel firstDoor(Component c)
 	{
 		List<Component> flat = new ArrayList<>();
@@ -169,9 +159,7 @@ public class SearchDoorsTest
 	public void anExactlyNamedSourceStandsBeforeTheItemsNamedAfterIt() throws Exception
 	{
 		assertEquals("Zulrah", left(firstDoor(search("zulrah"))));
-		// and the singular of a plural name counts as exact
 		assertEquals("Zulrah", left(firstDoor(search("zulrahs"))));
-		// but a query the source does not match exactly ranks the items first
 		assertTrue(left(firstDoor(search("zulrah's"))).startsWith("Zulrah's scales"));
 	}
 
@@ -248,11 +236,6 @@ public class SearchDoorsTest
 		assertNull(field("histFrom"));
 	}
 
-	/**
-	 * A collection log hit opens the log on the page it names. It used to name
-	 * the page and then open the sheet, and opening the sheet puts its page back
-	 * to none: every log hit landed on the top of the skills.
-	 */
 	@Test
 	public void aLogHitOpensTheLogOnItsPage() throws Exception
 	{
@@ -275,11 +258,6 @@ public class SearchDoorsTest
 		assertEquals("The Fight Caves", field("clogPageSel"));
 	}
 
-	/**
-	 * Achievement and diary rows are doors like the rest. They listened for a
-	 * click and never registered with Enter, so a search that found only them
-	 * said "enter opens the first row" over a key that did nothing.
-	 */
 	@Test
 	public void enterOpensAnAchievementOrADiaryHit() throws Exception
 	{
@@ -310,7 +288,6 @@ public class SearchDoorsTest
 		return false;
 	}
 
-	/** The rows' names under one group's heading, up to the next heading. */
 	private static List<String> group(Component board, String title)
 	{
 		List<Component> flat = new ArrayList<>();
@@ -336,7 +313,6 @@ public class SearchDoorsTest
 		return out;
 	}
 
-	/** A skill answers to its own name, ahead of anything named after it. */
 	@Test
 	public void aSkillAnswersItsName() throws Exception
 	{
@@ -345,11 +321,6 @@ public class SearchDoorsTest
 		assertEquals("Hunter", field("detailSkill"));
 	}
 
-	/**
-	 * The fight named exactly comes first, whatever the bigger ones named like
-	 * it paid: "kraken" drew Vampyre kraken and Armoured kraken, and never
-	 * Kraken, and Enter opened the vampyre.
-	 */
 	@Test
 	public void theFightNamedExactlyComesFirst() throws Exception
 	{
@@ -359,7 +330,6 @@ public class SearchDoorsTest
 		assertEquals("Kraken", left(firstDoor(search("kraken"))));
 	}
 
-	/** A boss the loot keeps under another name is still found by its own. */
 	@Test
 	public void aBossIsFoundByItsOwnName() throws Exception
 	{
@@ -367,10 +337,6 @@ public class SearchDoorsTest
 		assertTrue(fights.toString(), fights.contains("Grotesque Guardians"));
 	}
 
-	/**
-	 * The whole journal, not its newest five hundred lines: an account with an
-	 * imported past found its first pets drop out of search after a few weeks.
-	 */
 	@Test
 	public void theWholeJournalIsSearched() throws Exception
 	{
@@ -399,7 +365,6 @@ public class SearchDoorsTest
 			journal.stream().anyMatch(l -> l.contains("Phoenix")));
 	}
 
-	/** A group longer than its first rows says how many more it holds, and opens them. */
 	@Test
 	public void aLongGroupSaysHowManyMore() throws Exception
 	{
@@ -424,7 +389,6 @@ public class SearchDoorsTest
 		}
 	}
 
-	/** The rows under one group's heading, as panels, to press. */
 	private static List<JPanel> groupRows(Component board, String title)
 	{
 		List<Component> flat = new ArrayList<>();
@@ -460,18 +424,13 @@ public class SearchDoorsTest
 		return tasks;
 	}
 
-	/**
-	 * The slayer tasks are there without the Slayer board having been opened,
-	 * and a task given more than once opens its newest assignment, as its hover
-	 * says: it opened the oldest, a finished task from May, not the one in hand.
-	 */
 	@Test
 	public void aTaskIsFoundUnvisitedAndOpensItsNewest() throws Exception
 	{
 		stub.journey = new LocalStore.SlayerJourney(2, 286, 0L, 0L, nechryaelTwice());
 		SwingUtilities.invokeAndWait(() -> panel = new ChroniclePanel(stub));
 		search("nechryael");
-		SwingUtilities.invokeAndWait(() -> { });   // the journey read lands
+		SwingUtilities.invokeAndWait(() -> { });
 		List<JPanel> tasks = groupRows(search("nechryael"), "Slayer tasks");
 		assertEquals(1, tasks.size());
 		assertEquals("Nechryael", left(tasks.get(0)));
@@ -479,7 +438,6 @@ public class SearchDoorsTest
 		assertEquals(0, field("detailTask"));
 	}
 
-	/** The initials players type for a fight find it. */
 	@Test
 	public void initialsFindAFight()
 	{
@@ -489,14 +447,9 @@ public class SearchDoorsTest
 		assertEquals(2, ChroniclePanel.matchScore("cg", "The Corrupted Gauntlet"));
 		assertEquals(2, ChroniclePanel.matchScore("gg", "Grotesque Guardians"));
 		assertEquals(-1, ChroniclePanel.matchScore("gg", "Zulrah"));
-		// and apostrophes alone ask for nothing
 		assertEquals(-1, ChroniclePanel.matchScore("''", "Zulrah"));
 	}
 
-	/**
-	 * Go to keeps its close answers only: "king" found inside Cooking took Enter
-	 * from the King Black Dragon, which it names outright.
-	 */
 	@Test
 	public void aNameInsideASkillDoesNotTakeEnter() throws Exception
 	{
@@ -505,7 +458,6 @@ public class SearchDoorsTest
 		assertEquals("King Black Dragon", left(firstDoor(board)));
 	}
 
-	/** Another name for a page answers only as typed whole: "logs" is the item kind. */
 	@Test
 	public void aPagesNicknameIsNotPluralised() throws Exception
 	{
@@ -513,7 +465,6 @@ public class SearchDoorsTest
 		assertTrue(group(search("clog"), "Go to").contains("Collection log"));
 	}
 
-	/** A boss is listed once, not again under the reward it pays out through. */
 	@Test
 	public void aBossIsListedOnceNotAgainUnderItsReward() throws Exception
 	{
@@ -524,7 +475,6 @@ public class SearchDoorsTest
 		assertFalse(fights.toString(), fights.contains("Reward pool (Tempoross)"));
 	}
 
-	/** Copies of one name on a page are held one by one, as the Log tab lights them. */
 	@Test
 	public void aPageOfOneNameCountsItsCopies() throws Exception
 	{
@@ -537,7 +487,6 @@ public class SearchDoorsTest
 		assertEquals("1 / 26", beside(search("my notes"), "My Notes"));
 	}
 
-	/** A diary task's first sentence does not end at an abbreviation. */
 	@Test
 	public void aDiaryTaskIsNotCutAtAnAbbreviation()
 	{
@@ -550,7 +499,6 @@ public class SearchDoorsTest
 		assertEquals("Mine some iron.", ChroniclePanel.firstSentence("Mine some iron. Then smelt it."));
 	}
 
-	/** A long hover wraps in a column instead of running off the screen. */
 	@Test
 	public void aLongHoverWraps()
 	{
@@ -562,7 +510,6 @@ public class SearchDoorsTest
 		assertTrue(got, got.contains("65 Runecraft &amp; completion"));
 	}
 
-	/** The journal forgives an apostrophe, as every other group does. */
 	@Test
 	public void theJournalForgivesAnApostrophe() throws Exception
 	{
@@ -581,7 +528,6 @@ public class SearchDoorsTest
 		}
 	}
 
-	/** A journal hit opens its day with every kind of line, whatever lens was left on. */
 	@Test
 	public void aJournalHitOpensOnEveryLens() throws Exception
 	{
@@ -604,20 +550,13 @@ public class SearchDoorsTest
 		assertEquals("All", lens.get(panel));
 	}
 
-	/** A slip on any name search answers to is caught, not only on loot. */
 	@Test
 	public void aSlipOnABossNeverLootedIsCaught() throws Exception
 	{
 		assertEquals("Grotesque Guardians", beside(search("grotesqe guardians"), "Did you mean"));
-		// the sheet's own bosses, where the log keeps no page of that name
 		assertEquals("Dagannoth Supreme", beside(search("dagannoth supreem"), "Did you mean"));
 	}
 
-	/**
-	 * A hit older than the Journal's newest four thousand lines still opens on
-	 * a day that shows it: search reads the whole journal, and the board read
-	 * only those, so such a hit opened on "Nothing in" its own day.
-	 */
 	@Test
 	public void anOldHitOpensOnADayThatShowsIt() throws Exception
 	{

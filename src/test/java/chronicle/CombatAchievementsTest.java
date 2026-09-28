@@ -19,18 +19,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The bundled combat achievement table, held against things outside itself.
- *
- * <p>A generated OSRS table is wrong data a reader BELIEVES, and this one is the
- * worst kind to get wrong: a dryness rate slightly off is a curiosity, but a
- * requirement shown wrong sends a player to go and do the wrong thing. So every
- * trap found while building it is asserted here, and the counts are checked
- * against the wiki's own totals table rather than against the file itself.
- */
 public class CombatAchievementsTest
 {
-	/** The bundled table, for every test that reads it. */
 	static JsonObject table()
 	{
 		try (InputStreamReader r = new InputStreamReader(
@@ -55,11 +45,6 @@ public class CombatAchievementsTest
 		return table().getAsJsonObject("_meta");
 	}
 
-	/**
-	 * TRAP: a tier page that fails to render, or a template change, drops tasks
-	 * silently and the file still looks healthy. The wiki states its own per-tier
-	 * counts in a table the generator does not read, so they are an outside check.
-	 */
 	@Test
 	public void everyTierHoldsTheNumberOfTasksTheWikiCounts()
 	{
@@ -78,7 +63,6 @@ public class CombatAchievementsTest
 		assertEquals("total", totals.get("tasks").getAsInt(), tasks().size());
 	}
 
-	/** And the points those tasks are worth add up to what the wiki says they do. */
 	@Test
 	public void theTiersAddUpToTheGamesPointTotal()
 	{
@@ -91,15 +75,6 @@ public class CombatAchievementsTest
 		assertEquals(meta().getAsJsonObject("totals").get("points").getAsLong(), sum);
 	}
 
-	/**
-	 * The denominator on the head card, when the journal has never watched a
-	 * combat achievement land.
-	 *
-	 * <p>The game states its own total on every completion and that total moves
-	 * with each release, so it wins where it has spoken. Where it has not, the
-	 * table is the fallback: the code once read `if (possible == 0) { possible
-	 * = 0; }`, so a new account showed a bare number of points over nothing.
-	 */
 	@Test
 	public void withNoWitnessedCompletionTheTableSuppliesTheTotal() throws Exception
 	{
@@ -110,7 +85,6 @@ public class CombatAchievementsTest
 		assertEquals("a journal that has seen nothing reads the table",
 			table, standing(stub)[1]);
 
-		// and the game's own figure wins the moment it has spoken
 		JsonObject data = new JsonObject();
 		data.addProperty("totalPossiblePoints", 2624);
 		JsonObject seen = new JsonObject();
@@ -120,7 +94,6 @@ public class CombatAchievementsTest
 		assertEquals(2624, standing(stub)[1]);
 	}
 
-	/** points, points there are, tiers, seen: what the head card is built from. */
 	private static long[] standing(PanelPreviewTest.StubPlugin stub) throws Exception
 	{
 		System.setProperty("java.awt.headless", "true");
@@ -131,13 +104,6 @@ public class CombatAchievementsTest
 		return (long[]) m.invoke(hold[0]);
 	}
 
-	/**
-	 * TRAP: the panel paints in the RuneScape pixel font, which has no glyph for
-	 * an en dash, a right single quote, or any of the arrows and bullets. A
-	 * character it cannot draw paints .notdef, a hollow box, in the middle of a
-	 * requirement. Every task name and description is checked against the font
-	 * itself rather than against a list of characters someone remembered.
-	 */
 	@Test
 	public void everyCharacterCanActuallyBePainted() throws Exception
 	{
@@ -159,11 +125,6 @@ public class CombatAchievementsTest
 		}
 	}
 
-	/**
-	 * TRAP: the wiki's task id is what makes a rename survivable. Two tasks
-	 * sharing one, or a table keyed by name instead, and a renamed task either
-	 * vanishes or overwrites another.
-	 */
 	@Test
 	public void everyTaskIsKeyedByTheGamesOwnId()
 	{
@@ -180,12 +141,6 @@ public class CombatAchievementsTest
 		}
 	}
 
-	/**
-	 * TRAP: the monster column is NOT the boss roster, and a surface that keys on
-	 * the roster silently drops a third of the tasks. CA names slayer monsters
-	 * (Aberrant Spectre, Bloodveld), raid encounters (Crystalline Hunllef, Fortis
-	 * Colosseum) and quest bosses (Galvek) that the hiscores have no node for.
-	 */
 	@Test
 	public void theMonsterColumnIsWiderThanTheBossRoster()
 	{
@@ -216,11 +171,6 @@ public class CombatAchievementsTest
 		}
 	}
 
-	/**
-	 * TRAP: punctuation in a task's own name. "Defence? What Defence?" is a real
-	 * task, and a name carrying question marks, apostrophes or brackets is exactly
-	 * what a careless parse or a careless search will mangle.
-	 */
 	@Test
 	public void namesKeepTheirOwnPunctuation()
 	{
@@ -232,7 +182,6 @@ public class CombatAchievementsTest
 			insanity.get("task").getAsString());
 	}
 
-	/** A task the player can read start to finish, not a truncated fragment. */
 	@Test
 	public void aRequirementIsAWholeSentence()
 	{

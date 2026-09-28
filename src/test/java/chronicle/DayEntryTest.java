@@ -21,11 +21,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Under each day's heading in the Journal, the day's own line: sittings and
- * minutes, xp and where most of it went, drops and their gp. Figures only,
- * each clause present only where the record has one.
- */
 public class DayEntryTest
 {
 	@BeforeClass
@@ -74,9 +69,9 @@ public class DayEntryTest
 		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
 		s.feed.add(session(day, 21, 70));
 		s.feed.add(session(day, 14, 100));
-		s.feed.add(session(day.minusDays(1), 20, 45));   // the day before: no xp, no loot
+		s.feed.add(session(day.minusDays(1), 20, 45));
 		s.history.put(day.minusDays(1), line(1_000_000L, 500_000L));
-		s.history.put(day, line(1_251_000L, 520_000L));   // +251k hunter, +20k fishing
+		s.history.put(day, line(1_251_000L, 520_000L));
 		s.dayTotals.put(DateTimeFormatter.ofPattern("yyyy-MM-dd").format(day), new long[]{98, 1_100_000L, 0, 0});
 		final ChroniclePanel[] hold = new ChroniclePanel[1];
 		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(s));
@@ -98,7 +93,6 @@ public class DayEntryTest
 		String heading = DateTimeFormatter.ofPattern("d MMM", Locale.UK).format(day).toUpperCase(Locale.ROOT);
 		int at = said.indexOf(heading);
 		assertTrue(said.toString(), at >= 0);
-		// wrapped at its clauses where the column is too narrow for it
 		List<String> lines = ChroniclePanel.wrapClauses(
 			"2 sittings · 2h 50m · +271k xp, most in Hunter · 98 drops · 1.1M gp",
 			ChroniclePanel.boardRowRoom());
@@ -109,11 +103,6 @@ public class DayEntryTest
 		assertEquals("1 sitting · 45m", said.get(b + 1));
 	}
 
-	/**
-	 * A week away and the next line carries the whole gap. Attributing that to
-	 * the first day back is a figure nobody earned in a day, so the day says
-	 * what it can and leaves the xp out.
-	 */
 	@Test
 	public void theFirstDayBackDoesNotClaimTheGap() throws Exception
 	{
@@ -121,7 +110,7 @@ public class DayEntryTest
 		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
 		s.feed.add(session(back, 20, 60));
 		s.history.put(back.minusDays(8), line(1_000_000L, 500_000L));
-		s.history.put(back, line(3_000_000L, 500_000L));   // two million over eight days
+		s.history.put(back, line(3_000_000L, 500_000L));
 		final ChroniclePanel[] hold = new ChroniclePanel[1];
 		SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(s));
 		PanelPreviewTest.regatherHistory(hold[0]);
@@ -146,7 +135,6 @@ public class DayEntryTest
 		assertEquals("1 sitting · 1h 0m", said.get(at + 1));
 	}
 
-	/** A sitting that says what it took, closing at {@code closed}. */
 	private static JsonObject sitting(java.time.LocalDateTime closed, long minutes, long xp,
 		long drops, long dropsGp, String skill)
 	{
@@ -165,13 +153,6 @@ public class DayEntryTest
 		return e;
 	}
 
-	/**
-	 * TRAP: a sitting across midnight. Two and a half hours from half nine
-	 * closed at two past twelve: the next day's line counted its time and the
-	 * day before kept its xp, so neither line added up to the rows under it. A
-	 * sitting belongs to the day it began, its row, its time, its xp and its
-	 * drops together.
-	 */
 	@Test
 	public void aSittingAcrossMidnightBelongsToTheDayItBegan() throws Exception
 	{
@@ -205,7 +186,6 @@ public class DayEntryTest
 		String beganLine = String.join(" · ", said.subList(b + 1, said.size()));
 		assertTrue(said.toString(), beganLine.startsWith("1 sitting · 2h 32m · +354k xp, most in Hunter"
 			+ " · 129 drops · 554k gp"));
-		// the row itself under the day it began, not under the day it closed
 		assertTrue(said.toString(), said.subList(b, said.size()).contains("Session · 2h 32m"));
 		assertFalse(said.toString(), said.subList(a, b).contains("Session · 2h 32m"));
 		List<String> next = ChroniclePanel.wrapClauses(
@@ -236,11 +216,6 @@ public class DayEntryTest
 		return said;
 	}
 
-	/**
-	 * A day no sitting crossed into or out of reads the spine and the roll, as
-	 * History and Records do: a sitting the client closed without writing is
-	 * in those and in no sitting.
-	 */
 	@Test
 	public void anOrdinaryDayReadsTheSpineNotTheWrittenSittings() throws Exception
 	{
@@ -248,7 +223,7 @@ public class DayEntryTest
 		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
 		s.feed.add(sitting(day.atTime(15, 0), 60, 10_000, 2, 1_000, "hunter"));
 		s.history.put(day.minusDays(1), line(1_000_000L, 500_000L));
-		s.history.put(day, line(1_090_000L, 500_000L));   // +90k: a sitting went unwritten
+		s.history.put(day, line(1_090_000L, 500_000L));
 		s.dayTotals.put(DateTimeFormatter.ofPattern("yyyy-MM-dd").format(day), new long[]{9, 40_000L, 0, 0});
 		List<String> said = journal(s);
 		String heading = DateTimeFormatter.ofPattern("d MMM", Locale.UK).format(day).toUpperCase(Locale.ROOT);
@@ -259,11 +234,6 @@ public class DayEntryTest
 		assertTrue(entry, entry.contains("9 drops · 40k gp"));
 	}
 
-	/**
-	 * A sitting in which nothing gained xp still says where the day's went: it
-	 * wrote no skills because none moved. Read as silent, it sent "most in"
-	 * back to the spine's midnight day, which named the evening before's skill.
-	 */
 	@Test
 	public void aSittingWithNoXpStillLetsTheDayNameItsSkill() throws Exception
 	{
@@ -273,7 +243,6 @@ public class DayEntryTest
 		idle.getAsJsonObject("data").remove("skills");
 		s.feed.add(idle);
 		s.feed.add(sitting(day.plusDays(1).atTime(0, 30), 120, 300_000, 0, 0, "hunter"));
-		// the spine's own midnight day went to fishing
 		s.history.put(day, line(1_000_000L, 500_000L));
 		s.history.put(day.plusDays(1), line(1_050_000L, 900_000L));
 		List<String> said = journal(s);
@@ -284,10 +253,6 @@ public class DayEntryTest
 		assertTrue(entry, entry.contains("most in Hunter"));
 	}
 
-	/**
-	 * A long day wraps rather than running off the column. As one label it cut
-	 * at "most i..." and the drops were never on screen.
-	 */
 	@Test
 	public void aLongDayWrapsAtItsClauses() throws Exception
 	{
@@ -303,7 +268,6 @@ public class DayEntryTest
 			assertTrue("a wrapped line still runs off: " + l, fm.stringWidth(l) <= room);
 		}
 		assertEquals("a clause was lost or split", day, String.join(" · ", lines));
-		// and a short one stays one line
 		assertEquals(java.util.Collections.singletonList("1 sitting · 45m"),
 			ChroniclePanel.wrapClauses("1 sitting · 45m", room));
 	}

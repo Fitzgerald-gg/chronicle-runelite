@@ -8,10 +8,6 @@
  */
 package chronicle.counters;
 
-/**
- * The journal key names the counter tests expect, for the keys main code writes as
- * literals rather than through {@link StatKeys}.
- */
 public final class CounterTestKeys
 {
 	private CounterTestKeys()

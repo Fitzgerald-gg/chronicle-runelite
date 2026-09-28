@@ -12,12 +12,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * One hover rule for the whole sheet: the period first, then the lifetime.
- *
- * <p>Skill hovers answered for the period; a boss hover answered for the
- * lifetime with no word saying so, under a cell printing the window's kills.
- */
 public class BossHoverPeriodTest
 {
 	@BeforeClass
@@ -38,7 +32,6 @@ public class BossHoverPeriodTest
 		});
 	}
 
-	/** The card, and the window's own label after it. */
 	private static String[] tip(String granularity) throws Exception
 	{
 		return tip(granularity, PanelPreviewTest.fixtureStub());
@@ -87,11 +80,6 @@ public class BossHoverPeriodTest
 		assertTrue("the lifetime comes before the period: " + tip, period < lifetime);
 	}
 
-	/**
-	 * No time on the whole record's card, as on the page it opens: the
-	 * minutes began the day the tracker did, and beside a career's kills they
-	 * read as a career's time.
-	 */
 	@Test
 	public void theWholeRecordsCardSaysNoTime() throws Exception
 	{

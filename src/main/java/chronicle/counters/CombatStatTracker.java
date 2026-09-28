@@ -26,16 +26,9 @@ import net.runelite.api.events.StatChanged;
 import static chronicle.counters.StatKeys.HIGHEST_HIT;
 import static chronicle.counters.StatKeys.DAMAGE_DEALT;
 
-/**
- * Lifetime combat counters: damage dealt and taken, biggest hits, blocks, misses, deaths.
- * Damage comes off the hitsplat stream; deaths off the chat death notice.
- */
 @RequiredArgsConstructor
 public class CombatStatTracker implements StatTracker
 {
-	// Every hitsplat that is damage, plain and max, in all five colours; poison and
-	// venom carry their own types and are tallied separately. A max hit wears a
-	// hitsplat of its own, so anything matching only DAMAGE_ME misses it.
 	private static final Set<Integer> DAMAGE_SPLATS = Set.of(
 		HitsplatID.DAMAGE_ME, HitsplatID.DAMAGE_ME_CYAN, HitsplatID.DAMAGE_ME_ORANGE,
 		HitsplatID.DAMAGE_ME_YELLOW, HitsplatID.DAMAGE_ME_WHITE,
@@ -45,8 +38,6 @@ public class CombatStatTracker implements StatTracker
 	private final StatStore store;
 	private final Client client;
 
-	// Special attack energy last tick (0-1000). A drop means a spec was used; regen and
-	// death charge only ever raise it. -1 = unprimed.
 	private int prevSpecEnergy = -1;
 
 	@Override
@@ -65,7 +56,7 @@ public class CombatStatTracker implements StatTracker
 	{
 		if (e.getGameState() == GameState.LOGGED_IN || e.getGameState() == GameState.LOGIN_SCREEN)
 		{
-			prevSpecEnergy = -1;   // re-prime across logins/hops
+			prevSpecEnergy = -1;
 		}
 	}
 
@@ -75,7 +66,6 @@ public class CombatStatTracker implements StatTracker
 		final Hitsplat splat = event.getHitsplat();
 		final int type = splat.getHitsplatType();
 		final int amount = splat.getAmount();
-		// splat on us is damage received, on anything else it's damage we dealt
 		final boolean landedOnSelf = isLocalPlayer(event.getActor());
 
 		if (landedOnSelf)
@@ -84,9 +74,6 @@ public class CombatStatTracker implements StatTracker
 		}
 		else if (DAMAGE_SPLATS.contains(type))
 		{
-			// Every damage splat, plain and max. The switch below matches DAMAGE_ME
-			// alone, so a max hit used to reach none of this: not the peak, not the
-			// total, not the style it was dealt with.
 			recordDamageDealt(event.getActor(), amount);
 		}
 
@@ -100,7 +87,6 @@ public class CombatStatTracker implements StatTracker
 				break;
 
 			case HitsplatID.BLOCK_ME:
-				// a block on us is one we blocked, a block on the target is one we missed
 				store.incrementStat(landedOnSelf ? "hitsBlocked" : "hitsMissed");
 				break;
 
@@ -109,8 +95,6 @@ public class CombatStatTracker implements StatTracker
 		}
 	}
 
-	// damageTaken stays DAMAGE_ME-only so its running total still lines up with history.
-	// The hit-taken record and the poison/venom bleed are tallied here instead.
 	private void recordDamageToSelf(int type, int amount)
 	{
 		if (type == HitsplatID.POISON)
@@ -130,7 +114,6 @@ public class CombatStatTracker implements StatTracker
 	@Override
 	public void onChatMessage(ChatMessage event)
 	{
-		// the death notice only ever arrives on these three channels
 		if (!StatTracker.gameChat(event))
 		{
 			return;
@@ -142,8 +125,6 @@ public class CombatStatTracker implements StatTracker
 		}
 	}
 
-	// Style behind the current damage. Combat XP lands on the same tick as the hit, give or
-	// take one, so the freshest attack/strength/ranged/magic drop names the style.
 	private String lastStyleKey;
 	private int lastStyleTick = -1;
 
@@ -171,27 +152,13 @@ public class CombatStatTracker implements StatTracker
 		}
 	}
 
-	/**
-	 * Everything a hit we dealt contributes to: the total, the style it was dealt
-	 * with, and the peak.
-	 *
-	 * <p>Reached by every damage splat, max included. That makes the running
-	 * totals step up from the day it shipped, because every max hit before it was
-	 * dropped on the floor: the figures are right from here and short by all of
-	 * those behind. damageTaken is left on the plain splat, where the comment
-	 * beside it explains its own reason.
-	 */
 	private void recordDamageDealt(Actor target, int amount)
 	{
 		store.incrementStatBy(DAMAGE_DEALT, amount);
-		// only attribute when the style's XP drop is within 2 ticks. better to undercount
-		// the per-style breakdown (the first hit of a session) than to guess at it
 		if (lastStyleKey != null && client.getTickCount() - lastStyleTick <= 2)
 		{
 			store.incrementStatBy(lastStyleKey, amount);
 		}
-		// combat level 0 skips raid puzzle props. Het's Seal in ToA credits
-		// multi-thousand hitsplats and they are not hits.
 		if (amount > store.getStat(HIGHEST_HIT) && target != null
 			&& target.getCombatLevel() > 0)
 		{

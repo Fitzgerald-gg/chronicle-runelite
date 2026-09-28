@@ -25,52 +25,31 @@ import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.game.ItemManager;
 
-/**
- * Turns a raw action tuple
- * {@code SKILL|xpDelta|objId|itemId|qty|targetName|consumedId|consumedQty} into typed
- * counters, off the bundled tables {@code osrs_skill_xp.json},
- * {@code osrs_skill_item_rules.json} and {@code osrs_object_species.json}.
- * Item names come from {@link ItemManager}; untradeables resolve too.
- * A tuple it can't type still counts the generic floor for its skill.
- */
 @Slf4j
 @Singleton
 public class SkillDeriver
 {
-	// the fixed lookup tables below; the file carries its own notes on the rows
 	private static final JsonObject TABLES = Tables.load("counters_skill_tables.json");
 	private static final Map<String, String> SMITH_ORE_ALIAS = Tables.map(TABLES, "smithOreAlias");
 	private static final Set<String> SMITH_METALS = Tables.set(TABLES, "smithMetals");
 	private static final Set<String> MINING_ROCKS = Tables.set(TABLES, "miningRocks");
-	// the catches the game hands over with no "Raw " in front of the name
 	private static final Set<String> FISH_NORAW = Tables.set(TABLES, "fishNoRaw");
 	private static final Map<String, String> ITEM_ALIASES = Tables.map(TABLES, "itemAliases");
 	private static final Set<String> PRODUCTION = Tables.set(TABLES, "production");
-	// gathering: generic floor key + typed family suffix
 	private static final Map<String, String> GATHERING_FLOOR = Tables.map(TABLES, "gatheringFloor");
 	private static final Map<String, String> GATHERING_SUFFIX = Tables.map(TABLES, "gatheringSuffix");
-	// gp is only counted where the world hands over new material. cooking,
-	// runecraft, smithing and herblore transform something already valued.
 	private static final Set<String> VALUED_GATHERING = Tables.set(TABLES, "valuedGathering");
-	// net-trap species by exact catch xp (merged multi-trap deltas match ×n)
 	private static final Map<String, String> NET_TRAP = Tables.map(TABLES, "netTrap");
-	// six nets is the most a hunter can lay at once
 	private static final int NET_TRAP_MAX = 6;
 	private static final Map<String, String> ENSOULED_REANIM_XP = Tables.map(TABLES, "reanimXp");
 	private static final Map<String, String> PRAYER_BASE_XP = Tables.map(TABLES, "prayerBaseXp");
 	private static final Map<String, String> HUNTER_ITEM_SPECIES = Tables.map(TABLES, "hunterItemSpecies");
 	private static final Map<String, String> BUTTERFLY_TARGETS = Tables.map(TABLES, "butterflyTargets");
-	// What an altar eats to make a rune, by name so a reskinned id still lands.
-	// Guardian essence is deliberately absent: it is the only essence the
-	// Guardians of the Rift altars take, and those altars roll no pet, so
-	// leaving it out keeps the minigame out of the count entirely.
 	private static final Set<String> ALTAR_ESSENCE = Tables.set(TABLES, "altarEssence");
 
 	private final ItemManager itemManager;
 	private final StatStore statStore;
 
-	// wired after construction, once a journal is mounted for the account, so
-	// volatile for the client thread. null until then, and in tests.
 	private volatile GatheredLedger gatheredLedger;
 
 	private Map<String, Map<String, String>> xpTable;
@@ -99,7 +78,6 @@ public class SkillDeriver
 		this.gatheredLedger = ledger;
 	}
 
-	// derive a tuple and fold the counters into the stat store
 	void apply(String tuple)
 	{
 		try
@@ -125,17 +103,9 @@ public class SkillDeriver
 	private static final Pattern FAILED_PICKPOCKET =
 		Pattern.compile("You fail to pick (?:the )?([\\w'. -]+?)'s pocket.*");
 
-	// "You accidentally burn the shark." The food is whatever follows the verb,
-	// so a cake or a slice of meat types itself without a list. Only "the" is
-	// confirmed verbatim; the other articles are tolerated, not relied on. The
-	// karambwanji line runs on ("You accidentally burn the karambwanji to
-	// ashes."), and the ashes are no part of the food.
 	private static final Pattern BURNED = Pattern.compile(
 		"You accidentally burn (?:the |some |a |an )?([\\w' -]+?)(?: to ashes)?[.!]?\\s*$");
 
-	// "Guard  (level-21)": the menu target carries the combat level, which is no
-	// part of who was robbed. Both bracket spellings go, along with any level text
-	// the tag strip left loose at the end of the name.
 	private static final Pattern NPC_LEVEL = Pattern.compile(
 		"\\s*\\(?\\s*level[\\s-]*\\d*\\s*\\)?\\s*$", Pattern.CASE_INSENSITIVE);
 
@@ -144,38 +114,21 @@ public class SkillDeriver
 		return NPC_LEVEL.matcher(target).replaceFirst("").trim();
 	}
 
-	// "You plant 3 potato seeds in the allotment." The crop is whatever sits
-	// in front of the seed noun, and the count in the line is the seeds one
-	// planting takes, not a number of plantings. A line naming no seed (the
-	// quest lines that also start "You plant ") matches nothing and leaves the
-	// aggregate to carry it alone.
 	private static final Pattern PLANTED = Pattern.compile(
 		"You plant (?:\\d+ )?(?:a |an |the |some )?([\\w'-]+(?: [\\w'-]+)*?) "
 			+ "(?:seed|seeds|spore|spores|sapling|saplings|seedling|seedlings)\\b");
 
-	// "You resurrect a lesser ghostly thrall." The tier and the kind name the
-	// typed key; a line that names neither still counts the floor.
 	private static final Pattern THRALL_RAISED = Pattern.compile(
 		"You resurrect (?:a |an |the |your )?((?:lesser|superior|greater) "
 			+ "(?:ghostly|skeletal|zombified))", Pattern.CASE_INSENSITIVE);
 
-	// "The tanner tans your cowhide." for one, "The tanner tans 27 cowhides for
-	// you." for a batch. The count is read off the line, and the plural comes
-	// off the hide so both forms land on the same key.
 	private static final Pattern HIDES_TANNED = Pattern.compile(
 		"The tanner tans (your|\\d+) ([\\w' -]+?)(?: for you)?\\.");
 
-	// "You put the grimy guam leaf herb into your herb sack." The grimy prefix and
-	// the trailing "herb" are both optional, since neither is confirmed verbatim;
-	// the sack only takes grimy herbs, so the key names the herb bare.
 	private static final Pattern HERB_SACKED = Pattern.compile(
 		"You put the (?:grimy )?([\\w' -]+?)(?: herb)? into your herb sack",
 		Pattern.CASE_INSENSITIVE);
 
-	// the lines that count what no xp drop can: see chatLine and the branches below.
-	// objectTarget is the game object the player last clicked, tags stripped,
-	// for the one line that reads the same at two trees: a bucket fills with sap
-	// at an evergreen as it does at a bloodwood tree, and only the second counts.
 	void applyChat(String msg, String objectTarget)
 	{
 		if (msg == null || msg.isEmpty())
@@ -192,7 +145,6 @@ public class SkillDeriver
 			Matcher burned = BURNED.matcher(msg);
 			if (burned.find())
 			{
-				// the same aliasing the cooked rows get, so shrimp burn as shrimp cook
 				String food = stripCamel(burned.group(1).toLowerCase(Locale.ROOT),
 					new String[0], "");
 				if (!food.isEmpty())
@@ -211,7 +163,6 @@ public class SkillDeriver
 				String crop = camel(planted.group(1));
 				if (!crop.isEmpty())
 				{
-					// one to a patch, whatever the yield it later gives up
 					statStore.incrementStat(crop + "Planted");
 				}
 			}
@@ -239,9 +190,6 @@ public class SkillDeriver
 		}
 	}
 
-	// The lines that count a whole action on their own: nothing else the client
-	// sees marks a herb sacked, a hide tanned, a thrall raised or a pool
-	// harpooned. Returns true when the line was one of them.
 	private boolean chatLine(String msg, String objectTarget)
 	{
 		if (msg.contains("into your herb sack"))
@@ -313,9 +261,6 @@ public class SkillDeriver
 			}
 			return true;
 		}
-		// "You put the Guam leaf into the vial of water." The step pays no xp, so
-		// the mint table's own row for this key never fires; the herb is left
-		// untyped because the line's naming of it is unconfirmed.
 		if (msg.contains("You put the") && msg.contains("vial"))
 		{
 			statStore.incrementStat("unfinishedPotionsMade");
@@ -342,26 +287,21 @@ public class SkillDeriver
 		}
 		String target = parts.length >= 6 ? parts[5] : "";
 		String consumedId = parts.length >= 7 ? parts[6] : "";
-		// how much of it left the pack. A tuple from before this field carried a
-		// count reads as the single item its consumedId used to mean.
 		int consumedQty = 1;
 		if (parts.length >= 8 && !parts[7].isEmpty())
 		{
 			consumedQty = Math.max(1, intOr(parts[7], 1));
 		}
 
-		// XP-windfall consumables (lamps/tomes): reward xp with no action behind it.
 		if (consumedId.equals("2528") || consumedId.equals("13148") || consumedId.equals("34057"))
 		{
 			return null;
 		}
-		// The (Corrupted) Gauntlet's internal economy.
 		if (gauntletId(itemId) || gauntletId(consumedId) || "35969".equals(objId))
 		{
 			return null;
 		}
 
-		// COOKING wine fermentation: one drop, n wines.
 		if (skill.equals("COOKING") && (consumedId.equals("1995") || consumedId.equals("1935")
 			|| consumedId.equals("1937") || (consumedId.isEmpty() && itemId.isEmpty())))
 		{
@@ -378,7 +318,6 @@ public class SkillDeriver
 			return smithing(name(itemId), qty);
 		}
 
-		// herbiboar: the target name when we get one, else the xp band on a bare drop.
 		if (skill.equals("HUNTER"))
 		{
 			String tl = target.toLowerCase(Locale.ROOT);
@@ -390,7 +329,7 @@ public class SkillDeriver
 				|| itemId.equals("21555") || itemId.equals("21562") || itemId.equals("21566")
 				|| (tl.isEmpty() && itemId.isEmpty())))
 			{
-				return null;   // trail steps of an already-counted harvest
+				return null;
 			}
 			if (tl.isEmpty())
 			{
@@ -425,7 +364,7 @@ public class SkillDeriver
 			boolean rune = low.endsWith(" rune") || low.endsWith(" runes");
 			if (!rune && !itemId.isEmpty())
 			{
-				return null;   // tiaras, veneration and rewards make no runes
+				return null;
 			}
 			List<Map.Entry<String, Integer>> out = typed("runesCrafted", qty,
 				rune ? stripCamel(low, new String[]{" runes", " rune"}, "") : "", "Runecrafted");
@@ -487,7 +426,6 @@ public class SkillDeriver
 			return out;
 		}
 
-		// GATHERING: generic floor + typed identity (gainedItem > object > xp).
 		String floor = GATHERING_FLOOR.get(skill);
 		if (floor == null)
 		{
@@ -516,15 +454,11 @@ public class SkillDeriver
 		List<Map.Entry<String, Integer>> out = typed(floor, n, token, GATHERING_SUFFIX.get(skill));
 		if (gained > 0 && VALUED_GATHERING.contains(skill))
 		{
-			// priced at the gather and banked as a running total. pricing the
-			// typed counters at read time would re-value old work at today's market.
 			int gp = valueOf(gained, n);
 			if (gp > 0)
 			{
 				out.add(entry("resourcesGatheredValue", gp));
 			}
-			// only token-resolved gathers reach here: the ledger stays bounded to
-			// logs, ores, fish and gems.
 			GatheredLedger ledger = gatheredLedger;
 			if (ledger != null)
 			{
@@ -534,7 +468,6 @@ public class SkillDeriver
 		return out;
 	}
 
-	// canonical form of an item id, or 0 when the tuple field isn't one
 	private int canonical(String itemId)
 	{
 		try
@@ -548,7 +481,6 @@ public class SkillDeriver
 		}
 	}
 
-	// live GE worth of qty of a canonical id; 0 for anything unpriced
 	private int valueOf(int canonicalId, int qty)
 	{
 		long each;
@@ -562,21 +494,12 @@ public class SkillDeriver
 		}
 		if (each <= 0)
 		{
-			return 0;   // untradeables and unpriced ids add nothing
+			return 0;
 		}
-		// clamp the multiply so a big harvest can't overflow int on the way to
-		// StatStore, which saturates the running total.
 		long value = each * Math.max(1, qty);
 		return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
 	}
 
-	// ── skill branches ─────────────────────────────────────────────────
-
-	// Essence spent at an altar, counted beside the runes it made. The runes are
-	// the wrong unit for how often the altar was asked for something: from level
-	// 33 upwards one essence returns several of the same rune, so runesCrafted
-	// runs several times ahead of the crafts behind it. Rune and pure essence
-	// share the counter because nothing downstream tells them apart either.
 	private void essenceSpent(List<Map.Entry<String, Integer>> out, String consumedId,
 		int consumedQty)
 	{
@@ -644,7 +567,6 @@ public class SkillDeriver
 			}
 			if (skill.equals("HUNTER"))
 			{
-				// birdhouse dismantle, gated before the chompy branch
 				String bh = ladder("HUNTER_BIRDHOUSES", xpStr);
 				if (!bh.isEmpty() && (name.equals("Clockwork")
 					|| name.startsWith("Bird nest") || name.equals("Feather")))
@@ -735,11 +657,11 @@ public class SkillDeriver
 			{
 				return pairs("headsReanimated", 1, tok + "HeadsReanimated", 1);
 			}
-			return null;   // passive lattice or unknown, nothing to count
+			return null;
 		}
 		if (low.endsWith(" rune") || low.endsWith(" runes") || low.equals("bird's egg"))
 		{
-			return null;   // the cast tracker owns the totals
+			return null;
 		}
 		if (low.startsWith("ensouled ") && low.endsWith(" head"))
 		{
@@ -782,7 +704,6 @@ public class SkillDeriver
 		return null;
 	}
 
-	// {verbCode, n}: 1=ground, 2=spell ×n, 3=altar, 0=unknown
 	private static int[] prayerVerb(int xp, String baseXp)
 	{
 		if (baseXp == null || xp <= 0)
@@ -823,7 +744,6 @@ public class SkillDeriver
 			{
 				return pairs("pyramidPlunderUrns", 1);
 			}
-			// no target came through: classify the stall by the stolen item
 			if (!itemId.isEmpty())
 			{
 				String nm = name(itemId).toLowerCase(Locale.ROOT);
@@ -864,32 +784,25 @@ public class SkillDeriver
 		return typed("pickPockets", 1, camel(npcName(low)), "Pickpockets");
 	}
 
-	// Sailing pays out for half a dozen activities and several of them share xp
-	// numbers. The item decides; the xp is only read when nothing changed hands.
 	private List<Map.Entry<String, Integer>> sailing(String xpStr, String itemId,
 		String consumedId)
 	{
 		String gained = name(itemId).toLowerCase(Locale.ROOT);
-		// one hook roll, one salvage.
 		if (gained.endsWith(" salvage"))
 		{
 			return typed("salvagePulled", 1, stripCamel(gained, new String[]{" salvage"}, ""),
 				"SalvagePulled");
 		}
-		// sorting hands back loot, so the salvage that LEFT the pack names the row
 		String used = name(consumedId).toLowerCase(Locale.ROOT);
 		if (used.endsWith(" salvage"))
 		{
 			return typed("salvageSorted", 1, stripCamel(used, new String[]{" salvage"}, ""),
 				"SalvageSorted");
 		}
-		// courier and bounty tasks each pay out one bag, so the bag is the receipt
 		if (gained.contains("port coin bag") || gained.contains("port reward bag"))
 		{
 			return pairs("portTasksCompleted", 1);
 		}
-		// trials pay a flat lump and hand over nothing. the other lump payers
-		// (port tasks, lost crates, lost caskets) all hand over an item.
 		if (itemId.isEmpty() && consumedId.isEmpty())
 		{
 			String key = ladder("SAILING", xpStr);
@@ -920,8 +833,6 @@ public class SkillDeriver
 		return null;
 	}
 
-	// ── tokens + tables ────────────────────────────────────────────────
-
 	private String itemToken(String skill, String itemName)
 	{
 		String low = itemName.trim().toLowerCase(Locale.ROOT);
@@ -951,7 +862,6 @@ public class SkillDeriver
 				}
 				else if (FISH_NORAW.contains(low) || low.startsWith("leaping "))
 				{
-					// barbarian fishing lands the fish already leaping, never raw
 					n = low;
 				}
 				else
@@ -981,7 +891,7 @@ public class SkillDeriver
 					return "";
 				}
 				break;
-			default:   // COOKING
+			default:
 				n = low.startsWith("cooked ") ? low.substring(7).trim() : low;
 		}
 		String alias = ITEM_ALIASES.get(n);
@@ -1000,7 +910,7 @@ public class SkillDeriver
 			}
 			if (first.equals("crossbow") || low.contains("crossbow"))
 			{
-				return "";   // crossbows are typed by the item rules instead
+				return "";
 			}
 			return camel(first);
 		}
@@ -1163,7 +1073,6 @@ public class SkillDeriver
 		return new java.util.AbstractMap.SimpleEntry<>(k, v);
 	}
 
-	// the floor row, and beside it the typed row when there is a token to type it by
 	private static List<Map.Entry<String, Integer>> typed(String floor, int n, String tok,
 		String suffix)
 	{
@@ -1187,8 +1096,6 @@ public class SkillDeriver
 		}
 	}
 
-	// ── bundled table loading (lazy, once) ─────────────────────────────
-
 	private synchronized Map<String, Map<String, String>> xpTable()
 	{
 		if (xpTable == null)
@@ -1209,7 +1116,6 @@ public class SkillDeriver
 					{
 						ladder.put(e.getKey(), e.getValue().getAsString());
 					}
-					// {"members":[...]} rows are ambiguous xp values, skipped
 				}
 				xpTable.put(skill.getKey(), ladder);
 			}
@@ -1264,7 +1170,7 @@ public class SkillDeriver
 								}
 								catch (RuntimeException e)
 								{
-									r.match = "";   // bad pattern, rule never matches
+									r.match = "";
 								}
 							}
 						}

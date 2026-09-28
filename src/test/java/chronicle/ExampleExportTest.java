@@ -38,29 +38,8 @@ import net.runelite.client.game.ItemManager;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-/**
- * Renders the panel to data, for the web demo at fitzgerald.gg/example.
- *
- * <p>The web page is not a second implementation of the panel. It cannot be:
- * two implementations of five thousand lines drift apart within a week, and the
- * whole worth of the demo is that it shows what the plugin actually does. So the
- * real panel is built here against a real journal, its own Swing tree is walked
- * into JSON, and the page draws that. Every rule the panel follows -- which rows
- * a period holds, what a band is called, what a line wears -- stays in one place,
- * in Java, where the plugin keeps it.
- *
- * <p>The crawl finds its own way around. From a starting state it clicks every
- * component that has a mouse listener, notes the state that click lands in, and
- * carries on from there until it runs out of new states or out of budget. What
- * comes out is a state graph: every screen the panel can show and every click
- * that moves between them.
- *
- * <p>Runs only when asked: {@code -Dchronicle.exportExample=<dir>}, with the
- * journal to read named by {@code -Dchronicle.exampleJournal=<dir>}.
- */
 public class ExampleExportTest
 {
-	/** How many states the crawl will draw before it stops. */
 	private static final int STATE_BUDGET =
 		Integer.getInteger("chronicle.exampleStates", 400);
 
@@ -68,9 +47,6 @@ public class ExampleExportTest
 	public static void headless() throws Exception
 	{
 		System.setProperty("java.awt.headless", "true");
-		// The client dresses Swing before it builds anything. Without that, a
-		// component that never sets its own colour keeps the metal default, and
-		// the export would carry a sheet of Swing grey the real panel never shows.
 		try
 		{
 			javax.swing.UIManager.setLookAndFeel(
@@ -85,20 +61,6 @@ public class ExampleExportTest
 		}
 	}
 
-	/**
-	 * Every field a click can change, because a state is identified by their
-	 * values and restored by writing them back. A field left out is a board the
-	 * crawl can never reach; a field that no longer exists is a null in every
-	 * hash, which is harmless but a lie.
-	 *
-	 * <p>`tab` is the one that matters most: the sub-tab strip is drawn from it,
-	 * so without it every recorded screen carries whatever tab the panel was last
-	 * left on and shows the wrong pills over the right board.
-	 *
-	 * <p>`detailStack` is deliberately absent. It is a final ArrayDeque, which
-	 * snapshot would alias rather than copy and restore could not write back; the
-	 * crawl walks forward, and the way back is derived from where it is.
-	 */
 	private static final String[] STATE_FIELDS = {
 		"tab", "subByTab", "view",
 		"histFacet", "histGranularity", "histCursor", "histFrom", "histTo",
@@ -111,21 +73,6 @@ public class ExampleExportTest
 		"dropsShown", "slayerShown",
 	};
 
-	/**
-	 * Everything else the panel declares, and why the crawl does not carry it.
-	 *
-	 * <p>This list exists so the one above cannot quietly go stale again. Three
-	 * of the boards the panel grew were unreachable for exactly that reason:
-	 * dropsByKind, lootKind and lootTask were never listed, so restore() put the
-	 * panel back on the source list every time and no state the crawl produced
-	 * could ever be a kind board. Four defects lived on screens the recording
-	 * had no way to reach.
-	 *
-	 * <p>A field belongs here for one of three reasons and the reason is written
-	 * down: it is DERIVED and restoring it would pin a stale answer; it is
-	 * PLUMBING that has nothing to do with where the reader is; or it is a value
-	 * no click can change, which would be a constant in every snapshot.
-	 */
 	private static final Map<String, String> NOT_STATE = notState();
 
 	private static Map<String, String> notState()
@@ -156,11 +103,6 @@ public class ExampleExportTest
 		return m;
 	}
 
-	/**
-	 * Every field the panel declares is either carried by the crawl or written
-	 * down as deliberately not carried. A new one is a failing test until
-	 * somebody decides which it is.
-	 */
 	@Test
 	public void everyPanelFieldIsClassified()
 	{
@@ -187,7 +129,6 @@ public class ExampleExportTest
 			java.util.Collections.emptyList(), unclassified);
 	}
 
-	/** And nothing is claimed in both lists, or claimed and then deleted. */
 	@Test
 	public void theTwoListsAgreeWithTheClass()
 	{
@@ -250,10 +191,6 @@ public class ExampleExportTest
 			+ crawl.iconCount + " icons");
 	}
 
-	// ------------------------------------------------------------------
-	// the crawl
-	// ------------------------------------------------------------------
-
 	private final class Crawl
 	{
 		private final ChroniclePanel panel;
@@ -303,11 +240,6 @@ public class ExampleExportTest
 			}
 		}
 
-		/**
-		 * The periods live behind a popup menu, which a headless run cannot open.
-		 * Each is set by hand instead and named, so the page can offer the same
-		 * list the plugin does.
-		 */
 		private void seedPeriods() throws Exception
 		{
 			Map<String, Object> home = snapshot();
@@ -332,23 +264,15 @@ public class ExampleExportTest
 			restore(home);
 		}
 
-		// Where Enter lands from a search: the tab each group of hits belongs to.
 		private void seedViews() throws Exception
 		{
 			Map<String, Object> home = snapshot();
 			Class<?> viewType = Class.forName("chronicle.ChroniclePanel$View");
-			// Open each board the way the panel opens it, not by writing `view`.
-			// A board now lives under a tab and a sub-tab, and the strip above the
-			// scroll is drawn from those: setting the view alone recorded every
-			// screen wearing whichever tab the panel was last left on, so the
-			// Kills board came out under Record's own pills.
 			Method applyTab = ChroniclePanel.class.getDeclaredMethod("applyTab", viewType);
 			applyTab.setAccessible(true);
 			for (Object v : viewType.getEnumConstants())
 			{
 				restore(home);
-				// on the EDT: applyCommon clears the search box, and
-				// IconTextField.setText asserts it is on the event thread
 				final Object target = v;
 				edt(() -> applyTab.invoke(panel, target));
 				String key = stateKey();
@@ -362,13 +286,6 @@ public class ExampleExportTest
 			restore(home);
 		}
 
-		/**
-		 * Stand on a tab and one of its sub-tabs, the way clicking its pill does.
-		 *
-		 * <p>A board is chosen by the pair, not by the `view` field: PvM's Combat
-		 * and Record's Ledger are the same builder reading different families,
-		 * and writing `view` alone leaves whichever tab the panel was last on.
-		 */
 		@SuppressWarnings({"unchecked", "rawtypes"})
 		private void openSub(String tabName, String subName) throws Exception
 		{
@@ -384,24 +301,12 @@ public class ExampleExportTest
 			edt(() -> apply.invoke(panel, target));
 		}
 
-		/** The newest assignment the fixture journal holds, or null for none. */
 		private String firstTaskName()
 		{
 			java.util.List<String> names = plugin.taskNames();
 			return names.isEmpty() ? null : names.get(0);
 		}
 
-		/**
-		 * Every board, reached the way the panel reaches it.
-		 *
-		 * <p>The crawl is a breadth-first walk of clicks, and the panel now has
-		 * more clicks than the budget: eight hundred and twenty six drills and a
-		 * seventy one cell sheet come first, and the Ledger's own families, the
-		 * Activities board and a task's page never come up at all. Seeding them
-		 * by hand is not a shortcut past the crawl -- the screens are still drawn
-		 * by the panel and still recorded whole -- it is the difference between
-		 * coverage that is decided and coverage that is hoped for.
-		 */
 		private void seedBoards() throws Exception
 		{
 			Map<String, Object> home = snapshot();
@@ -409,10 +314,6 @@ public class ExampleExportTest
 			Method applyTab = ChroniclePanel.class.getDeclaredMethod("applyTab", viewType);
 			applyTab.setAccessible(true);
 
-			// Every sub-tab of every tab, opened the way its own pill opens it.
-			// The crawl does reach most of them, but it reaches them in whatever
-			// order the budget allows and PvM's fourth board never came up at
-			// all; seeding the grid makes the coverage a decision.
 			for (String[] pair : new String[][]{
 				{"RECORD", "Now"}, {"RECORD", "Journal"}, {"RECORD", "Ledger"}, {"RECORD", "Recap"},
 				{"PVM", "Kills"}, {"PVM", "Loot"}, {"PVM", "Slayer"}, {"PVM", "Combat"},
@@ -423,13 +324,6 @@ public class ExampleExportTest
 				remember();
 			}
 
-			// each family the Ledger board offers, and one section of each
-			// opened: the ghost heads, the verb drills and the nested
-			// destinations only exist inside a fold, and a fold needs a click the
-			// crawl's budget never reaches. Combat is not among them -- it is a
-			// family of the same table, but it hangs under PvM's own sub-tab and
-			// was seeded above, where setting `statsFamily` under Record would
-			// have recorded a screen the panel cannot actually be left on.
 			String[][] families = {
 				{"Ledger & Roads", "Teleports"}, {"Living", "Food"}
 			};
@@ -451,7 +345,6 @@ public class ExampleExportTest
 					remember();
 				}
 			}
-			// both readings of the Skilling tab
 			for (String facet : new String[]{"Skills", "Activities"})
 			{
 				restore(home);
@@ -460,7 +353,6 @@ public class ExampleExportTest
 				field("histFacet").set(panel, facet);
 				remember();
 			}
-			// the slayer lenses, and the loot board's two
 			for (String lens : new String[]{"Tasks", "Monsters", "Drops"})
 			{
 				restore(home);
@@ -477,10 +369,6 @@ public class ExampleExportTest
 				field("dropsLeftBehind").set(panel, left);
 				remember();
 			}
-			// The loot board read by KIND, both readings of it, and one kind
-			// opened out of each. The crawl reaches the pills because they are
-			// on the board, but the screens BEHIND them need a click it never
-			// gets to: it spends its budget on eight hundred item drills first.
 			for (boolean onTask : new boolean[]{false, true})
 			{
 				for (String kind : new String[]{null, "Runes", "Everything else"})
@@ -494,8 +382,6 @@ public class ExampleExportTest
 					remember();
 				}
 			}
-			// The on-task board narrowed to one assignment, which is the other
-			// half of the task picker.
 			String task = firstTaskName();
 			if (task != null)
 			{
@@ -506,9 +392,6 @@ public class ExampleExportTest
 				field("lootTask").set(panel, task);
 				remember();
 			}
-			// What says so: the fold under a kill count, which holds every
-			// statement the record has about one fight. Opened on a source that
-			// has more than one of them.
 			for (String src : new String[]{"Dust devil", "Vorkath"})
 			{
 				restore(home);
@@ -519,8 +402,6 @@ public class ExampleExportTest
 				field("detailSource").set(panel, src);
 				remember();
 			}
-			// An item read on task, which replaces its source list with the
-			// tasks that paid it.
 			for (String item : new String[]{"Fire rune", "Coins"})
 			{
 				restore(home);
@@ -528,15 +409,11 @@ public class ExampleExportTest
 				field("onTaskOnly").set(panel, true);
 				remember();
 			}
-			// The counts-of-the-record page. Typed, never clicked, so the crawl
-			// has no path to it at all.
 			restore(home);
 			field("showInfo").set(panel, true);
 			remember();
 			restore(home);
-			// a task's own page, and the trackers page a search lands on
 			restore(home);
-			// a task row sets the field straight from its click handler
 			field("detailTask").set(panel, 0);
 			remember();
 
@@ -546,7 +423,6 @@ public class ExampleExportTest
 			edt(() -> openAll.invoke(panel));
 			remember();
 
-			// one skill drilled from the grid
 			restore(home);
 			Method openSkill = ChroniclePanel.class.getDeclaredMethod("openSkill", String.class);
 			openSkill.setAccessible(true);
@@ -556,12 +432,6 @@ public class ExampleExportTest
 			restore(home);
 		}
 
-		/**
-		 * Every source and every item the search can name, at the screen its own
-		 * click opens. The panel's own methods are called for it, so the state is
-		 * the one a reader really lands on rather than a guess at which fields it
-		 * sets.
-		 */
 		private void seedDrills() throws Exception
 		{
 			Map<String, Object> home = snapshot();
@@ -575,8 +445,6 @@ public class ExampleExportTest
 			for (LocalStore.SourceRow r : plugin.dropSources())
 			{
 				restore(home);
-				// the client asserts its own text field is touched on the event
-				// thread, and openSource clears the search box
 				edt(() -> openSource.invoke(panel, r.name));
 				sources.put(r.name, remember());
 				for (LocalStore.BagItem b : plugin.sourceItems(r.name))
@@ -596,17 +464,6 @@ public class ExampleExportTest
 			restore(home);
 		}
 
-		/**
-		 * What the search searches.
-		 *
-		 * <p>The panel's search is a pure function of what was typed over five
-		 * lists: the counters, the drop ledger's items and its sources, the
-		 * collection log's slots and the journal's lines. None of those depend on
-		 * the query, so all five are handed to the page whole and it runs the same
-		 * function over them. The probes underneath are the proof: the real search
-		 * is run here for a battery of queries and its answers shipped, so the
-		 * page's own answers can be held against them.
-		 */
 		private void gatherCorpus() throws Exception
 		{
 			List<Object> trackers = new ArrayList<>();
@@ -621,9 +478,6 @@ public class ExampleExportTest
 			}
 			corpus.put("trackers", trackers);
 
-			// the ledger's items folded by name, with the sources they came from
-			// in the order the ledger lists them, which is the order the search
-			// prints them in
 			Map<String, long[]> agg = new LinkedHashMap<>();
 			Map<String, List<String>> from = new LinkedHashMap<>();
 			List<Object> sources = new ArrayList<>();
@@ -647,8 +501,6 @@ public class ExampleExportTest
 			}
 			corpus.put("items", items);
 			corpus.put("sources", sources);
-			// Enter's own rule walks the bag rows flat and keeps the dearest single
-			// row, not the folded total, so the page needs them in that order too
 			List<Object> rows = new ArrayList<>();
 			for (LocalStore.SourceRow src : plugin.dropSources())
 			{
@@ -659,8 +511,6 @@ public class ExampleExportTest
 			}
 			corpus.put("rows", rows);
 
-			// the log's slots in the order the search walks them, each at the first
-			// page that carries it, with whether that page counts it held
 			Method obtained = ChroniclePanel.class.getDeclaredMethod("obtained",
 				com.google.gson.JsonObject.class);
 			Method slotHeld = ChroniclePanel.class.getDeclaredMethod("slotHeld", String.class,
@@ -710,9 +560,6 @@ public class ExampleExportTest
 			}
 			corpus.put("feed", feed);
 
-			// Which KINDS the tasks actually paid. Search offers a kind two
-			// ways, the whole ledger and the slayer half, and the second row
-			// must not be offered where the tasks paid none of that kind.
 			java.util.Set<String> taskKinds = new java.util.LinkedHashSet<>();
 			for (LocalStore.BagItem b : plugin.onTaskLoot(
 				Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, null, true))
@@ -725,12 +572,6 @@ public class ExampleExportTest
 			probeSearch();
 		}
 
-		/**
-		 * The real search, run here, so the page's own answers can be held against
-		 * it. The queries are drawn from the corpus itself, a few from each list
-		 * plus the awkward ones: a query that matches nothing, one that matches
-		 * everywhere, single letters, and the empty string.
-		 */
 		private void probeSearch() throws Exception
 		{
 			Method buildSearch = ChroniclePanel.class.getDeclaredMethod("buildSearch",
@@ -757,9 +598,6 @@ public class ExampleExportTest
 			Map<String, Object> home = snapshot();
 			for (String raw : queries)
 			{
-				// the field's text is trimmed before the panel ever sees it, so a
-				// probe that hands over the untrimmed string is asking a question
-				// the plugin is never asked
 				String q = raw.trim();
 				restore(home);
 				final JPanel[] drawn = new JPanel[1];
@@ -784,13 +622,6 @@ public class ExampleExportTest
 			probes.putAll(out);
 		}
 
-		/**
-		 * Where Enter really lands for a query. The handler has a ladder of its
-		 * own -- an exact source name, then an exact item, then the dearest item
-		 * whose name contains it, then the first source that does, then the tab
-		 * the first group of hits belongs to -- so rather than describe it, the
-		 * real field is filled in and the real listener fired.
-		 */
 		private String pressEnter(String q, Map<String, Object> home) throws Exception
 		{
 			restore(home);
@@ -818,7 +649,6 @@ public class ExampleExportTest
 			return landed;
 		}
 
-		// the state the panel is in now, queued to be drawn if it is new
 		private String remember() throws Exception
 		{
 			String key = stateKey();
@@ -830,11 +660,6 @@ public class ExampleExportTest
 			return key;
 		}
 
-		/**
-		 * One state: the panel drawn, and where each of its clicks leads. The
-		 * click is tried on a fresh restore of this state so one does not carry
-		 * into the next.
-		 */
 		private Map<String, Object> draw(String key) throws Exception
 		{
 			JPanel body = build();
@@ -853,12 +678,12 @@ public class ExampleExportTest
 				}
 				if (!click(target))
 				{
-					continue;   // a popup or a dialog: no state to land in
+					continue;
 				}
 				String landed = stateKey();
 				if (landed.equals(key))
 				{
-					continue;   // a click that changes nothing is not a link
+					continue;
 				}
 				edges.put(join(path), landed);
 				if (!snapshots.containsKey(landed))
@@ -875,8 +700,6 @@ public class ExampleExportTest
 			return state;
 		}
 
-		// the whole panel as the client mounts it: the tab strip, the search
-		// line and the body under them
 		private JPanel build() throws Exception
 		{
 			final JPanel[] made = new JPanel[1];
@@ -890,19 +713,10 @@ public class ExampleExportTest
 			return made[0];
 		}
 
-		/**
-		 * One component as the page will draw it: what lays it out, what colour it
-		 * is, what it says and what it wears. Anything with a mouse listener is
-		 * noted as a link and its path recorded for the click pass.
-		 */
 		private Map<String, Object> node(Component c, List<Integer> path, List<int[]> clicks)
 			throws Exception
 		{
 			Map<String, Object> n = new LinkedHashMap<>();
-			// A scroll pane is the client's furniture, not the panel's: the page
-			// scrolls the way a page does. Walk straight through to what it holds
-			// and leave its viewport, its two bars and their four arrow buttons
-			// out of the drawing.
 			if (c instanceof javax.swing.JScrollPane)
 			{
 				javax.swing.JScrollPane pane = (javax.swing.JScrollPane) c;
@@ -910,18 +724,6 @@ public class ExampleExportTest
 				Component view = port == null ? null : port.getView();
 				if (view != null)
 				{
-					// Walk down by the indices the pane really uses, not by
-					// assuming the viewport is its first child. It is not: the
-					// scroll bars come first under the client's own look and
-					// feel, so a hard-coded 0,0 pointed the click pass at a
-					// scroll bar and every row inside the scroll pane lost its
-					// link. The tabs kept theirs only because they hang outside
-					// the pane.
-					// No step is taken for the pane: the view stands in its place
-					// in the tree, so it must stand in its place in the path too.
-					// Charging the path for the viewport and the view while the
-					// tree collapsed all three into one is what left every row
-					// inside the pane pointing at nothing.
 					return node(view, path, clicks);
 				}
 			}
@@ -942,9 +744,6 @@ public class ExampleExportTest
 				{
 					n.put("mid", true);
 				}
-				// what the client's own font needed for this line. The page draws
-				// in a different face, so this is how it knows whether its own is
-				// close enough to fit where the panel fits.
 				java.awt.Dimension want = l.getPreferredSize();
 				if (want != null && want.width > 0)
 				{
@@ -964,7 +763,6 @@ public class ExampleExportTest
 					n.put("p", new int[]{in.top, in.right, in.bottom, in.left});
 				}
 			}
-			// the one live control on the page: a real input goes here
 			if (c instanceof javax.swing.text.JTextComponent)
 			{
 				n.put("field", true);
@@ -989,13 +787,6 @@ public class ExampleExportTest
 					n.put("h", pref.height);
 				}
 				List<Object> kids = new ArrayList<>();
-				// Count the children that are DRAWN, not the ones the container
-				// holds. A hidden child is left out of the tree, so from the next
-				// sibling on, Swing's index and the page's index part company --
-				// and a click path written in Swing's numbers then points at the
-				// wrong row, or at nothing. Everything inside the scroll pane lost
-				// its link this way while the tabs, which have no hidden sibling,
-				// kept theirs.
 				int shown = 0;
 				for (int i = 0; i < box.getComponentCount(); i++)
 				{
@@ -1018,7 +809,6 @@ public class ExampleExportTest
 			}
 			else if (!n.containsKey("t") && !n.containsKey("ic"))
 			{
-				// a spacer: all it carries is its height
 				java.awt.Dimension pref = c.getPreferredSize();
 				n.put("gap", pref == null ? 0 : pref.height);
 			}
@@ -1043,8 +833,6 @@ public class ExampleExportTest
 			}
 			return hash;
 		}
-
-		// ----- state -----
 
 		private String stateKey() throws Exception
 		{
@@ -1112,20 +900,6 @@ public class ExampleExportTest
 		}
 	}
 
-	/**
-	 * Every distinct piece of drawing, once.
-	 *
-	 * <p>A thousand states of one panel are mostly the same panel: the tab strip,
-	 * the search line and the period row are identical in all of them, and whole
-	 * boards repeat between neighbouring states. Each node is filed by what it
-	 * holds, children included, so an identical subtree anywhere is the same
-	 * entry. What a state keeps is the number of its root.
-	 *
-	 * <p>Where a shared piece is clickable, where the click goes is still the
-	 * state's own business: two states can share a board and send the same row to
-	 * different places, because the destination lives in the state's edge map and
-	 * not in the drawing.
-	 */
 	private static final class Pool
 	{
 		final List<Object> nodes = new ArrayList<>();
@@ -1156,10 +930,6 @@ public class ExampleExportTest
 			return at;
 		}
 	}
-
-	// ------------------------------------------------------------------
-	// plumbing
-	// ------------------------------------------------------------------
 
 	private static Field field(String name)
 	{
@@ -1228,11 +998,6 @@ public class ExampleExportTest
 		return f.isBold() ? "b" : "n";
 	}
 
-	/**
-	 * Follow a path of DRAWN children, in the same numbering the tree is written
-	 * in: hidden children are not counted, and a scroll pane is not a step,
-	 * because the tree puts what it holds in its place.
-	 */
 	private static Component at(Component root, int[] path)
 	{
 		Component c = unwrap(root);
@@ -1267,7 +1032,6 @@ public class ExampleExportTest
 		return c;
 	}
 
-	// what a scroll pane is really showing
 	private static Component unwrap(Component c)
 	{
 		while (c instanceof javax.swing.JScrollPane)
@@ -1297,12 +1061,6 @@ public class ExampleExportTest
 		return b.toString();
 	}
 
-	/**
-	 * Press a component the way a reader would. False where the press opens
-	 * something a headless run has no screen for, a popup menu or a dialog: those
-	 * are controls rather than links, and the states behind them are seeded by
-	 * hand instead.
-	 */
 	private static boolean click(Component c) throws Exception
 	{
 		final boolean[] ok = {true};
@@ -1325,7 +1083,6 @@ public class ExampleExportTest
 		return ok[0];
 	}
 
-	// the panel's own thousands grouping, which the item lines carry
 	private static String fmtNum(long n)
 	{
 		return String.format(java.util.Locale.UK, "%,d", n);
@@ -1389,15 +1146,6 @@ public class ExampleExportTest
 		Thread.sleep(5000);
 	}
 
-	/**
-	 * A sitting for the This Session tab, which an export otherwise has none of:
-	 * nobody is playing.
-	 *
-	 * <p>Nothing is invented for it. The daily spine holds the whole of the
-	 * counters at the close of every day, so the difference between its last two
-	 * lines is exactly one day's play, which is the same shape a sitting has and
-	 * every figure in it is one the record really holds.
-	 */
 	private static void giveItASitting(PanelPreviewTest.StubPlugin stub)
 	{
 		if (stub.history == null || stub.history.size() < 2)
@@ -1421,12 +1169,6 @@ public class ExampleExportTest
 		stub.sessionLootValue = worth == null ? 0 : worth;
 	}
 
-	/**
-	 * The real game's own icons, drawn out of the cache ahead of this run and
-	 * waiting in a folder. The preview harness draws grey boxes, which is fine
-	 * for a shot that only has to prove a row exists; a page people will look at
-	 * needs the item.
-	 */
 	private static void dressWithRealIcons(PanelPreviewTest.StubPlugin stub) throws Exception
 	{
 		String dir = System.getProperty("chronicle.exampleIcons");
@@ -1471,7 +1213,6 @@ public class ExampleExportTest
 					return null;
 				}
 			}));
-		// the price list, so a bag row that kept only a name still finds its item
 		List<net.runelite.http.api.item.ItemPrice> prices = new ArrayList<>();
 		String map = System.getProperty("chronicle.exampleItemNames");
 		if (map != null && new File(map).exists())
@@ -1504,13 +1245,6 @@ public class ExampleExportTest
 			});
 		stub.itemManager = im;
 
-		// The game's sprites, which the boss sheet wears. Two spellings, because
-		// two dumps produced them: a whole-index dump names every frame
-		// (`sprite-<id>-<frame>.png`) and sits in its own folder, while the older
-		// hand-picked few sit beside the item art under frame-less names. A
-		// sprite that answers neither leaves its label bare, and a bare label is
-		// recorded as a spacer -- which is how seventy one boss cells once came
-		// out of a recording wearing nothing at all.
 		String spriteDir = System.getProperty("chronicle.exampleSprites");
 		File sprites = spriteDir == null ? null : new File(spriteDir);
 		net.runelite.client.game.SpriteManager sm =
@@ -1535,7 +1269,6 @@ public class ExampleExportTest
 			org.mockito.Mockito.any(java.util.function.Consumer.class));
 		stub.spriteManager = sm;
 
-		// the skill icons ship with the client itself, so they need no cache
 		net.runelite.client.game.SkillIconManager skills =
 			org.mockito.Mockito.mock(net.runelite.client.game.SkillIconManager.class);
 		org.mockito.Mockito.when(skills.getSkillImage(org.mockito.Mockito.any(),

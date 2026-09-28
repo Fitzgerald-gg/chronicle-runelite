@@ -12,9 +12,6 @@ import lombok.RequiredArgsConstructor;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuOptionClicked;
 
-/**
- * Pet-petting, counted off the "Pet" menu click and settled a tick later.
- */
 @RequiredArgsConstructor
 public class NPCStatTracker implements StatTracker
 {
@@ -35,7 +32,6 @@ public class NPCStatTracker implements StatTracker
 	@Override
 	public void onGameTick(GameTick event)
 	{
-		// the pet animation runs over two ticks, so bank on the even one or a held click credits twice
 		if (pendingPet && evenTick)
 		{
 			statStore.incrementStat("animalsPetted");

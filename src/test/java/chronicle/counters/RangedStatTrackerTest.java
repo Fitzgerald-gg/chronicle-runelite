@@ -23,14 +23,8 @@ import org.mockito.Mockito;
 import static chronicle.counters.CounterTestKeys.AMMO_CONSUMED;
 import static org.junit.Assert.assertEquals;
 
-/**
- * Nothing in the client says a shot was fired. RangedStatTracker infers it from a
- * shrinking worn-ammo slot, judged at the tick boundary: minus whatever turned up in
- * the pack, and refused if the drop is bigger than MAX_PER_TICK.
- */
 public class RangedStatTrackerTest
 {
-	// EquipmentInventorySlot.AMMO
 	private static final int AMMO_SLOT = 13;
 
 	private static final int ARROW_ID = 892;
@@ -54,7 +48,6 @@ public class RangedStatTrackerTest
 		tracker = new RangedStatTracker(store, client);
 	}
 
-	// set the quiver and fire the equipment change; a negative id empties the slot
 	private void quiver(int id, int qty)
 	{
 		Mockito.when(equipment.getItem(AMMO_SLOT)).thenReturn(id < 0 ? null : new Item(id, qty));
@@ -84,8 +77,6 @@ public class RangedStatTrackerTest
 		return store.getStat(AMMO_CONSUMED);
 	}
 
-	// shrinkage
-
 	@Test
 	public void aShotIsBookedOnlyOnceTheTickIsComplete()
 	{
@@ -93,7 +84,6 @@ public class RangedStatTrackerTest
 		tick();
 
 		quiver(ARROW_ID, 99);
-		// the pack isn't read until the tick closes
 		assertEquals(0, consumed());
 
 		tick();
@@ -106,19 +96,15 @@ public class RangedStatTrackerTest
 		quiver(ARROW_ID, 100);
 		tick();
 
-		// fast weapons shrink the slot more than once before the tick closes
 		quiver(ARROW_ID, 99);
 		quiver(ARROW_ID, 98);
 		quiver(ARROW_ID, 97);
 		tick();
 		assertEquals(3, consumed());
 
-		// pendingConsume was cleared; a quiet tick books nothing
 		tick();
 		assertEquals(3, consumed());
 	}
-
-	// unequips and pickups
 
 	@Test
 	public void ammoThatLandedInThePackTheSameTickWasNotSpent()
@@ -126,13 +112,11 @@ public class RangedStatTrackerTest
 		quiver(ARROW_ID, 100);
 		tick();
 
-		// unequip: slot -28, pack +28
 		packHolds(ARROW_ID, 28);
 		quiver(ARROW_ID, 72);
 		tick();
 		assertEquals(0, consumed());
 
-		// an arrow picked back up looks the same to the tracker
 		packHolds(ARROW_ID, 48);
 		quiver(ARROW_ID, 71);
 		tick();
@@ -145,7 +129,6 @@ public class RangedStatTrackerTest
 		quiver(ARROW_ID, 100);
 		tick();
 
-		// 29 left the quiver, 28 turned up in the pack; the odd one is a shot
 		packHolds(ARROW_ID, 28);
 		quiver(ARROW_ID, 71);
 		tick();
@@ -163,14 +146,10 @@ public class RangedStatTrackerTest
 		tick();
 		assertEquals(0, consumed());
 
-		// packAmmoAtTickStart rebaselines every tick, so the 28 now lying in the pack
-		// offset nothing
 		quiver(ARROW_ID, 71);
 		tick();
 		assertEquals(1, consumed());
 	}
-
-	// the per-tick ceiling
 
 	@Test
 	public void theCeilingAdmitsAFullTicksWorthOfFiring()
@@ -178,7 +157,6 @@ public class RangedStatTrackerTest
 		quiver(ARROW_ID, 1000);
 		tick();
 
-		// 20 is MAX_PER_TICK, the largest drop still booked as firing
 		quiver(ARROW_ID, 980);
 		tick();
 		assertEquals(20, consumed());
@@ -190,7 +168,6 @@ public class RangedStatTrackerTest
 		quiver(ARROW_ID, 1000);
 		tick();
 
-		// 21, one past the ceiling
 		quiver(ARROW_ID, 979);
 		tick();
 		assertEquals(0, consumed());
@@ -210,24 +187,18 @@ public class RangedStatTrackerTest
 		tick();
 		assertEquals(0, consumed());
 
-		// a refusal still clears pendingConsume; held over, the 500 would ride
-		// along with the next real shot
 		tick();
 		quiver(ARROW_ID, 499);
 		tick();
 		assertEquals(1, consumed());
 	}
 
-	// changes that aren't shrinkage
-
-	// quantities stay under the ceiling; it's the id check that stops the count here
 	@Test
 	public void emptyingTheQuiverIsNotAVolley()
 	{
 		quiver(ARROW_ID, 15);
 		tick();
 
-		// the slot empties and the id goes to -1: no same-id shrink to read
 		quiver(-1, 0);
 		tick();
 		assertEquals(0, consumed());
@@ -239,12 +210,10 @@ public class RangedStatTrackerTest
 		quiver(ARROW_ID, 20);
 		tick();
 
-		// a different id is a swap, however much smaller the new stack
 		quiver(BOLT_ID, 5);
 		tick();
 		assertEquals(0, consumed());
 
-		// the swap leaves a usable baseline behind
 		quiver(BOLT_ID, 4);
 		tick();
 		assertEquals(1, consumed());
@@ -261,8 +230,6 @@ public class RangedStatTrackerTest
 		assertEquals(0, consumed());
 	}
 
-	// logging out
-
 	@Test
 	public void leavingTheWorldForgetsTheQuiverEntirely()
 	{
@@ -274,14 +241,12 @@ public class RangedStatTrackerTest
 
 			quiver(ARROW_ID, 100);
 			tick();
-			quiver(ARROW_ID, 99);      // a shot that hasn't been settled yet
+			quiver(ARROW_ID, 99);
 
 			gameState(away);
 			tick();
 			assertEquals(away.name(), 0, consumed());
 
-			// the next account to log in must not get the gap between the two
-			// quivers booked to it
 			quiver(ARROW_ID, 40);
 			tick();
 			assertEquals(away.name(), 0, consumed());
@@ -295,13 +260,10 @@ public class RangedStatTrackerTest
 		tick();
 		quiver(ARROW_ID, 99);
 
-		// LOGGED_IN arrives repeatedly during a session and must not reset anything
 		gameState(GameState.LOGGED_IN);
 		tick();
 		assertEquals(1, consumed());
 	}
-
-	// container filter
 
 	@Test
 	public void containersOtherThanTheEquipmentAreIgnored()
@@ -309,8 +271,6 @@ public class RangedStatTrackerTest
 		quiver(ARROW_ID, 100);
 		tick();
 
-		// a bank or trade window holding the same ammo at slot 13; read as the
-		// quiver it would book five shots and leave a false baseline
 		ItemContainer other = Mockito.mock(ItemContainer.class);
 		Mockito.when(other.getItem(AMMO_SLOT)).thenReturn(new Item(ARROW_ID, 95));
 		tracker.onItemContainerChanged(
@@ -318,7 +278,6 @@ public class RangedStatTrackerTest
 		tick();
 		assertEquals(0, consumed());
 
-		// the quiver's own baseline is untouched
 		quiver(ARROW_ID, 99);
 		tick();
 		assertEquals(1, consumed());

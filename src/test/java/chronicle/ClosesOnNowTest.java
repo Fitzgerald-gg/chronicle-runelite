@@ -13,15 +13,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-/**
- * A period that reaches today closes on now, not on the last snapshot.
- *
- * <p>The history spine is written once a day. Everything measured against its
- * newest line therefore stopped at whenever it was last written, which for a
- * period ending today is some hours ago - so a board saying what this week had
- * done was missing everything since midnight and caught up overnight. The same
- * flaw appeared three times over: the skills, the kill counts and every counter.
- */
 public class ClosesOnNowTest
 {
 	private static ChroniclePanel panel;
@@ -73,7 +64,6 @@ public class ClosesOnNowTest
 		return m;
 	}
 
-	/** Today's figures reach a period that includes today. */
 	@Test
 	public void aPeriodEndingTodayTakesTheLiveFigure() throws Exception
 	{
@@ -83,11 +73,6 @@ public class ClosesOnNowTest
 			Long.valueOf(1040L), got.get("logsChopped"));
 	}
 
-	/**
-	 * Merged upward, never downward. These figures only grow, so the larger is
-	 * the later; a live reading that is somehow behind is a reading to ignore
-	 * rather than a reason to lose what the record already holds.
-	 */
 	@Test
 	public void aLiveFigureBehindTheSnapshotIsIgnored() throws Exception
 	{
@@ -96,7 +81,6 @@ public class ClosesOnNowTest
 		assertEquals(Long.valueOf(1000L), got.get("logsChopped"));
 	}
 
-	/** And a key only the spine knows keeps what the spine holds. */
 	@Test
 	public void aKeyTheLiveSideNeverHeardOfIsKept() throws Exception
 	{
@@ -106,11 +90,6 @@ public class ClosesOnNowTest
 		assertEquals(Long.valueOf(5L), got.get("logsChopped"));
 	}
 
-	/**
-	 * TRAP: a period that ENDED. September's figures are September's, and
-	 * pouring today's totals into them would report this month's woodcutting as
-	 * last month's.
-	 */
 	@Test
 	public void aPeriodThatEndedIsLeftAlone() throws Exception
 	{
@@ -132,7 +111,6 @@ public class ClosesOnNowTest
 		}
 	}
 
-	/** Nothing to merge is nothing to do. */
 	@Test
 	public void noLiveReadingLeavesTheSnapshotExactlyAsItWas() throws Exception
 	{

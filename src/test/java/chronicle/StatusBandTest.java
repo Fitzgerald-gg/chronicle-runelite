@@ -18,17 +18,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Silence when nothing is wrong, and a band that fixes itself when it can.
- *
- * <p>The chrome used to carry a green pip reading "logging" on every board,
- * always. It carried no information - the plugin is always logging while the
- * panel is open - and its only content was the absence of gold or red, which
- * an absent row expresses better. So there is no row while nothing is wrong,
- * and when something is, the row IS the colour: a tinted band with the words
- * on it, amber for a plugin we capture through being off, red for the journal
- * not saving. The amber one is pressed to put right; the red one cannot be.
- */
 public class StatusBandTest
 {
 	private static PanelPreviewTest.StubPlugin stub;
@@ -86,7 +75,6 @@ public class StatusBandTest
 		});
 	}
 
-	/** TRAP: the state the panel is in almost all of the time. Nothing is drawn. */
 	@Test
 	public void nothingWrongMeansNoRowAtAll() throws Exception
 	{
@@ -116,7 +104,6 @@ public class StatusBandTest
 			b.getToolTipText());
 	}
 
-	/** The click does the thing, and the band comes down on the same rebuild. */
 	@Test
 	public void pressingTheAmberBandTurnsThePluginOn() throws Exception
 	{
@@ -134,8 +121,6 @@ public class StatusBandTest
 			}
 		});
 		assertEquals("the press did not ask the plugin to be switched on", 1, stub.fixesAsked);
-		// the stub clears the warning the way the real check does; the rebuild the
-		// press queued is on the EDT behind us
 		SwingUtilities.invokeAndWait(() ->
 		{
 		});
@@ -146,16 +131,12 @@ public class StatusBandTest
 			band().isVisible());
 	}
 
-	/**
-	 * Red cannot be fixed from a side panel - a full disk is not emptied by a
-	 * click - so it offers no press, and it is the more serious colour.
-	 */
 	@Test
 	public void notSavingIsRedAndOffersNoPress() throws Exception
 	{
 		build();
 		stub.journalWarning = "Could not write the journal to disk.";
-		stub.captureWarning = "Slayer off";   // and the worse one wins
+		stub.captureWarning = "Slayer off";
 		rebuild();
 		JPanel b = band();
 		assertTrue(b.isVisible());
@@ -176,7 +157,6 @@ public class StatusBandTest
 		assertEquals("a press on the red band tried to switch a plugin on", 0, stub.fixesAsked);
 	}
 
-	/** The wash is the ground with the colour laid thinly over it, not the colour. */
 	@Test
 	public void theTintIsAWashAndNotTheFullColour() throws Exception
 	{

@@ -21,11 +21,6 @@ import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The Slayer tab's journey block has to follow the journal while the client is
- * still running. Finish a task and "Tasks done" moves without a restart; leave
- * the journal alone and the block settles instead of rebuilding forever.
- */
 public class SlayerJourneyRefreshTest
 {
 	@Test
@@ -40,7 +35,6 @@ public class SlayerJourneyRefreshTest
 		assertEquals("90", valueAfter(panel, "Tasks done"));
 		assertEquals("12,345", valueAfter(panel, "Kills on task"));
 
-		// One more task finishes while the panel is still up.
 		stub.journey = journeyOf(91, 12_600,
 			task("Abyssal demons", 255), task("Nechryael", 167), task("Gargoyles", 143));
 		rebuild(panel);
@@ -65,19 +59,12 @@ public class SlayerJourneyRefreshTest
 		pump(8);
 		int settled = stub.fetches;
 
-		// Nothing has moved in the journal, and nothing should move on screen.
 		pump(8);
 		assertEquals("the journey read is rebuilding the tab in a loop",
 			settled, stub.fetches);
-		// The journey lands and the tab repaints once to show it. A couple of
-		// reads is that settling; a climbing tally is the loop.
 		assertTrue("the journey read never settled, it took " + settled + " reads",
 			settled <= 3);
 	}
-
-	// ------------------------------------------------------------------
-	// Fixtures
-	// ------------------------------------------------------------------
 
 	private static LocalStore.SlayerJourney journeyOf(int completed, long kills,
 		LocalStore.SlayerTask... tasks)
@@ -87,7 +74,6 @@ public class SlayerJourneyRefreshTest
 		return new LocalStore.SlayerJourney(completed, kills, 5_000_000L, 0, list);
 	}
 
-	// ts 0 keeps the dateline off the card, which keeps the label list short
 	private static LocalStore.SlayerTask task(String name, long kills)
 	{
 		return new LocalStore.SlayerTask(name, kills, 0, 0, 0, 1_000L, false);
@@ -100,7 +86,6 @@ public class SlayerJourneyRefreshTest
 		return s;
 	}
 
-	/** {@link PanelPreviewTest.StubPlugin} with a tally of the journey reads. */
 	private static final class CountingStub extends PanelPreviewTest.StubPlugin
 	{
 		int fetches;
@@ -119,7 +104,6 @@ public class SlayerJourneyRefreshTest
 		}
 	}
 
-	// same throwaway icon PanelPreviewTest draws, since headless has no sprites
 	private ItemManager mockItems()
 	{
 		ClientThread ct = Mockito.mock(ClientThread.class);
@@ -136,10 +120,6 @@ public class SlayerJourneyRefreshTest
 			});
 		return im;
 	}
-
-	// ------------------------------------------------------------------
-	// Driving the panel
-	// ------------------------------------------------------------------
 
 	private ChroniclePanel mountSlayerPanel(CountingStub stub) throws Exception
 	{
@@ -164,8 +144,6 @@ public class SlayerJourneyRefreshTest
 		});
 	}
 
-	// The panel answers a journey read on an invokeLater, and that callback can
-	// post a rebuild of its own, which is why one turn of the queue is not enough.
 	private static void pump(int turns) throws Exception
 	{
 		for (int i = 0; i < turns; i++)
@@ -176,12 +154,6 @@ public class SlayerJourneyRefreshTest
 		}
 	}
 
-	// ------------------------------------------------------------------
-	// Reading what is on screen
-	// ------------------------------------------------------------------
-
-	// The row builder adds the caption first and its figure second, so the text
-	// straight after a caption is the figure the panel is showing for it.
 	private static String valueAfter(ChroniclePanel panel, String caption)
 	{
 		List<String> texts = labels(panel);
@@ -216,10 +188,6 @@ public class SlayerJourneyRefreshTest
 			}
 		}
 	}
-
-	// ------------------------------------------------------------------
-	// Reflection, borrowed from PanelPreviewTest
-	// ------------------------------------------------------------------
 
 	@SuppressWarnings({"unchecked", "rawtypes"})
 	private static void setEnum(ChroniclePanel panel, String field, String enumClass,

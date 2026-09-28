@@ -33,42 +33,20 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.Text;
 
-/**
- * Collection-log capture.
- *
- * <p>Opening the log from code counts as automation; this only ever reacts to the
- * player's own open. The completion fraction and the per-tab counts come from
- * login-synced varps and need no interface at all. On a real open we fire the log's
- * own "Search" op, which makes the game server transmit every entry: one open, the
- * whole log. Page-header scrapes on top of that pick up kill counts.
- *
- * <p>Every collection-log path checks the POH adventure-log varbit first: own account
- * only. The slayer kill log carries no such check because it has no shared view. It
- * opens from the Slayer rewards interface and shows nobody else's kills.
- */
 @Singleton
 @Slf4j
 public class ClogCapture
 {
-	// Account-wide unique clog slots, synced on login without opening anything.
 	private static final int VARP_CLOG_OBTAINED = 2943;
 	private static final int VARP_CLOG_TOTAL = 2944;
-	// Per-tab obtained/total, also login-synced varps.
 	private static final String[] CAT_NAMES = {"bosses", "raids", "clues", "minigames", "other"};
 	private static final int[][] VARP_CAT = {
 		{4613, 4614}, {4615, 4616}, {4617, 4618}, {4619, 4620}, {4621, 4622},
 	};
-	// The kill/completion count in a "<label>: 1,234" header line.
 	private static final Pattern COUNT_LINE = Pattern.compile(":\\s*([\\d,]+)\\s*$");
-	// "Personal Best: 3:46", "Personal Best Corrupted: 13:11", and the hour shape
-	// a long raid reaches. Tried BEFORE the count, because a count expression
-	// reading the last ": number" on one of these lines comes back with the
-	// seconds and calls them kills.
 	private static final Pattern TIME_LINE = Pattern.compile(
 		"^(?<label>.+?):\\s*(?<h>\\d+:)?(?<m>\\d{1,3}):(?<s>\\d{2})(?:\\.\\d+)?\\s*$");
 
-	// The player's own open fires SETUP; we answer with the "Search" op and each
-	// obtained item comes back as a TRANSMIT pre-fire carrying its id + quantity.
 	private static final int COLLECTION_LOG_SETUP = 7797;
 	private static final int COLLECTION_DELAYED_TRANSMIT = 4100;
 	private static final int COLLECTION_INIT_SCRIPT = 2240;
@@ -76,29 +54,15 @@ public class ClogCapture
 	private final Client client;
 	private final ItemManager itemManager;
 
-	// byCat: page -> {item name: quantity}. kcs: page -> the first counted
-	// line on its header, which is not always a kill count: Wintertodt's
-	// counts rewards claimed, 1,078 where 447 were killed.
 	private final Map<String, Map<String, Integer>> byCat = new HashMap<>();
 	private final Map<String, Integer> kcs = new HashMap<>();
-	// page -> {label: count}, every counter the page carries under the name the
-	// log gives it. A number without its label cannot be told apart from a kill
-	// count, and several of these are not one.
 	private final Map<String, Map<String, Integer>> kcLines = new HashMap<>();
-	// page -> label -> seconds. A best time, which is a time and not a count.
 	private final Map<String, Map<String, Integer>> pbLines = new HashMap<>();
-	// Species -> lifetime kills. The kill log is one scrollable list; one open
-	// yields every monster.
 	private final Map<String, Integer> slayerKcs = new HashMap<>();
-	// The panel reads these on the EDT (clogFinished/clogAvailable) while the client
-	// thread writes them, so they carry the barrier. `dirty` below does not need one:
-	// it is written and read on the client thread alone.
 	private volatile int finished;
 	private volatile int available;
 	private boolean dirty;
 
-	// The completion fraction: free on every login, no interface needed. Moves
-	// the record only when the figures did.
 	private void readCompletion()
 	{
 		int obtained = client.getVarpValue(VARP_CLOG_OBTAINED);
@@ -112,7 +76,6 @@ public class ClogCapture
 		}
 	}
 
-	// Enabled mid-session: no LOGGED_IN transition is coming. Read the varps now.
 	void primeFromVarps()
 	{
 		readCompletion();
@@ -133,8 +96,6 @@ public class ClogCapture
 		return available;
 	}
 
-	// Bumped alongside dirty, so the panel can tell the log moved without being
-	// told what moved. dirty is consumed by the push; this is not.
 	private volatile long revision;
 
 	long revision()
@@ -142,19 +103,11 @@ public class ClogCapture
 		return revision;
 	}
 
-	// Ticks since the kill log opened; -1 = idle. Row widgets can be built a tick
-	// or two after WidgetLoaded, so the scrape retries briefly once it's open.
 	private int killLogTicks = -1;
 
-	// Per-tab obtained/total, keyed "<tab>_obtained"/"<tab>_total".
 	private final Map<String, Integer> catCounts = new HashMap<>();
-	// Every obtained item from a full-log transmit: item name -> quantity.
 	private final Map<String, Integer> clogItems = new HashMap<>();
-	// The init script we run to reset the view re-fires SETUP; this ignores our own
-	// re-trigger until the transmit burst settles.
 	private boolean clogRetrieving;
-	// Tick to flush on, a short buffer after the last transmit item (large logs
-	// stream over a few ticks); -1 = idle.
 	private int clogFlushTick = -1;
 
 	@Inject
@@ -179,18 +132,10 @@ public class ClogCapture
 		}
 		else if (state == GameState.LOGIN_SCREEN)
 		{
-			// NOT reset here. The plugin folds this capture into the journal on its
-			// own logout handler, and both of us are @Subscribe on GameStateChanged
-			// at the same priority: whichever the EventBus happened to register
-			// first decided whether a session's log survived. It calls reset() once
-			// it has taken what it needs, so the order is stated rather than lucky.
 			dropSceneState();
 		}
 		else if (state == GameState.HOPPING)
 		{
-			// Same account on the other side, so the accreted model and the dirty flag
-			// survive. Scene state doesn't: drop the kill-log retry, and close out a
-			// live transmit before the hop strands it on a deadline.
 			killLogTicks = -1;
 			if (clogFlushTick > 0)
 			{
@@ -209,9 +154,6 @@ public class ClogCapture
 		}
 		if (e.getScriptId() == COLLECTION_LOG_SETUP)
 		{
-			// The player opened their log. An adventure-log view is someone else's log:
-			// bail, and bin anything half-captured. Then don't recurse on the reset
-			// script we run below.
 			if (client.getVarbitValue(VarbitID.COLLECTION_POH_HOST_BOOK_OPEN) == 1)
 			{
 				clogItems.clear();
@@ -223,13 +165,9 @@ public class ClogCapture
 			}
 			clogRetrieving = true;
 			clogItems.clear();
-			// The log's own "Search" op makes the game server transmit every entry;
-			// the init script then resets the view and closes the search behind us.
 			client.menuAction(-1, InterfaceID.Collection.SEARCH_TOGGLE, MenuAction.CC_OP,
 				1, -1, "Search", null);
 			client.runScript(COLLECTION_INIT_SCRIPT);
-			// Fallback deadline so the guard always clears, even for an empty log that
-			// never fires a transmit. Each captured item pushes this out by 3.
 			clogFlushTick = client.getTickCount() + 5;
 		}
 	}
@@ -258,7 +196,6 @@ public class ClogCapture
 			if (name != null)
 			{
 				clogItems.put(name, Math.max(1, quantity));
-				// Flush a few ticks after the last item (big logs stream over ticks).
 				clogFlushTick = client.getTickCount() + 3;
 			}
 		}
@@ -273,14 +210,13 @@ public class ClogCapture
 	{
 		if (e.getGroupId() == InterfaceID.KILL_LOG)
 		{
-			killLogTicks = 0;   // arm the retry; the scrape runs on the next ticks
+			killLogTicks = 0;
 		}
 	}
 
 	@Subscribe
 	public void onGameTick(GameTick t)
 	{
-		// No new item for a few ticks means the transmit is done.
 		if (clogFlushTick > 0 && client.getTickCount() >= clogFlushTick)
 		{
 			settleTransmit();
@@ -294,7 +230,7 @@ public class ClogCapture
 		scrapeSlayerLog();
 		if (slayerKcs.size() > before || killLogTicks >= 5)
 		{
-			killLogTicks = -1;   // captured, or gave up after ~5 ticks
+			killLogTicks = -1;
 		}
 		else
 		{
@@ -302,8 +238,6 @@ public class ClogCapture
 		}
 	}
 
-	// End a transmit: the guard reopens for the next log open and whatever arrived
-	// becomes publishable. Reached by the quiet-tick deadline or by a world hop.
 	private void settleTransmit()
 	{
 		clogFlushTick = -1;
@@ -315,7 +249,6 @@ public class ClogCapture
 		}
 	}
 
-	// The kill log is two parallel columns of children: names, and their kill counts.
 	private void scrapeSlayerLog()
 	{
 		try
@@ -341,7 +274,7 @@ public class ClogCapture
 				String digits = kcText.replaceAll("[^0-9]", "");
 				if (digits.isEmpty())
 				{
-					continue;   // "Lots!" (>65,535), or a header row
+					continue;
 				}
 				try
 				{
@@ -350,7 +283,6 @@ public class ClogCapture
 				}
 				catch (NumberFormatException ignored)
 				{
-					// skip a malformed row
 				}
 			}
 			if (captured > 0)
@@ -366,7 +298,6 @@ public class ClogCapture
 		}
 	}
 
-	// Rows can be dynamic, loader, or static children; try each.
 	private static Widget[] childrenOf(Widget w)
 	{
 		if (w == null)
@@ -405,19 +336,11 @@ public class ClogCapture
 			{
 				return;
 			}
-			String page = text(head[0]);   // the page title, e.g. "Vorkath"
+			String page = text(head[0]);
 			if (page == null || page.isEmpty())
 			{
 				return;
 			}
-			// EVERY header line "<label>: N" that isn't "Obtained", under the name
-			// the log gives it. Keeping only the first number and throwing the
-			// label away is what let a counter be read as a kill count when it
-			// was counting something else: Wintertodt's line counts rewards
-			// claimed, so it said 1,078 where 447 were killed, and the Gauntlet
-			// page carries two completion counts of which only one was ever kept.
-			// `kcs` still holds that first number, since the stored log and the
-			// site both still read it.
 			Map<String, Integer> lines = new LinkedHashMap<>();
 			Map<String, Integer> times = new LinkedHashMap<>();
 			Integer first = null;
@@ -428,7 +351,6 @@ public class ClogCapture
 				{
 					continue;
 				}
-				// a time first, or its seconds are read as a count
 				Matcher t = TIME_LINE.matcher(line);
 				if (t.matches())
 				{
@@ -457,15 +379,11 @@ public class ClogCapture
 				try
 				{
 					int n = Integer.parseInt(m.group(1).replace(",", ""));
-					// the match starts at the colon, so what precedes it is the
-					// label exactly as the page wrote it
 					String label = line.substring(0, m.start()).trim();
 					if (label.isEmpty())
 					{
 						continue;
 					}
-					// Backstop for a time TIME_LINE did not recognise: a label ending
-					// in a digit is the tell that ": number" cut a clock in half.
 					if (Character.isDigit(label.charAt(label.length() - 1)))
 					{
 						continue;
@@ -478,7 +396,6 @@ public class ClogCapture
 				}
 				catch (NumberFormatException ignored)
 				{
-					// keep scanning
 				}
 			}
 			if (first != null)
@@ -493,16 +410,10 @@ public class ClogCapture
 			{
 				pbLines.put(page, times);
 			}
-			// opacity 0 = obtained, anything greyed isn't.
-			// An empty entry still means something: the page was read and nothing
-			// on it is held, which is not the same as never having read it.
 			Map<String, Integer> pageItems = byCat.computeIfAbsent(page, k -> new HashMap<>());
 			Widget[] kids = items.getDynamicChildren();
 			if (kids != null)
 			{
-				// A scrape reads the WHOLE page, so it replaces what a previous one
-				// left rather than adding to it. Without this, summing below would
-				// count a page twice the second time it was opened.
 				pageItems.clear();
 				for (Widget it : kids)
 				{
@@ -513,14 +424,6 @@ public class ClogCapture
 					String name = itemName(it.getItemId());
 					if (name != null)
 					{
-						// SUMMED, not overwritten. A page can list the same name in
-						// several slots, and those slots are different items wearing
-						// one name: My Notes is twenty six Ancient pages. Overwriting
-						// collapsed all of them onto the last one's quantity, so the
-						// page could never read above 1 of 26 however many were held.
-						// Every slot here is one the player HAS, since the unobtained
-						// ones are faded and skipped above, so the sum of a repeated
-						// name is the number of them held.
 						pageItems.merge(name, Math.max(1, it.getItemQuantity()),
 							Integer::sum);
 					}
@@ -535,7 +438,6 @@ public class ClogCapture
 		}
 	}
 
-	// Reads the five per-tab varps; true if any of them moved.
 	private boolean readCategoryCounts()
 	{
 		boolean changed = false;
@@ -544,7 +446,7 @@ public class ClogCapture
 			int tot = client.getVarpValue(VARP_CAT[i][1]);
 			if (tot <= 0)
 			{
-				continue;   // not synced yet; keep whatever we already had
+				continue;
 			}
 			int obt = client.getVarpValue(VARP_CAT[i][0]);
 			String ok = CAT_NAMES[i] + "_obtained", tk = CAT_NAMES[i] + "_total";
@@ -571,7 +473,6 @@ public class ClogCapture
 		}
 	}
 
-	/** Widget text with colour tags stripped, or null. */
 	private static String text(Widget w)
 	{
 		if (w == null)
@@ -581,8 +482,6 @@ public class ClogCapture
 		String t = w.getText();
 		return t == null ? null : Text.removeTags(t).trim();
 	}
-
-	// ── read by the journal and the clog push ──────────────────────────────
 
 	boolean isDirty()
 	{
@@ -594,7 +493,6 @@ public class ClogCapture
 		dirty = false;
 	}
 
-	/** What cannot outlive a scene, without touching what was captured. */
 	private void dropSceneState()
 	{
 		killLogTicks = -1;
@@ -617,7 +515,6 @@ public class ClogCapture
 		dirty = false;
 	}
 
-	/** JSON-ready clog state; the journal floor-merges it into what it already holds. */
 	Map<String, Object> snapshot()
 	{
 		Map<String, Object> out = new HashMap<>();
@@ -627,7 +524,6 @@ public class ClogCapture
 		out.put("pb_lines", pbLines);
 		out.put("slayer_kcs", slayerKcs);
 		out.put("cat_counts", catCounts);
-		// empty until the player opens their log once this session.
 		out.put("clog_items", clogItems);
 		out.put("finished", finished);
 		out.put("available", available);

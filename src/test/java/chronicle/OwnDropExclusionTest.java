@@ -36,11 +36,6 @@ import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * An item the player drops within a few ticks of a kill spawns self-owned, exactly
- * like the kill's loot. A "Drop" click just before the spawn marks it as the
- * player's own, so leaving it there is not a LOOT_UNTAKEN row against the monster.
- */
 public class OwnDropExclusionTest
 {
 	private static final int SPIKE = 30_000;
@@ -129,7 +124,6 @@ public class OwnDropExclusionTest
 		return it;
 	}
 
-	// the item reaches its own despawn tick on the ground, and the next tick flushes.
 	private void leave(TileItem... items)
 	{
 		tick(DESPAWN);
@@ -234,10 +228,6 @@ public class OwnDropExclusionTest
 		assertTrue(((List<?>) get("recentDrops")).isEmpty());
 	}
 
-	// The live order. The item spawns while the tick's packets are read, our own
-	// GameTick runs before LootManager's (the event bus orders equal-priority
-	// subscribers by class name), and only then does LootManager post the kill,
-	// on the same tick count. The spawn has to survive that first kill-less tick.
 	@Test
 	public void theKillIsPostedAfterTheSpawnAndOurOwnGameTick()
 	{
@@ -264,8 +254,6 @@ public class OwnDropExclusionTest
 		assertEquals(BEAR, rows.get(0).get("source").getAsString());
 	}
 
-	// Only "Drop" puts an item on the ground. Any other option on the same item
-	// (here Destroy) explains nothing, so the kill's spawn stays untaken loot.
 	@Test
 	public void onlyADropClickExplainsASpawn()
 	{
@@ -321,7 +309,6 @@ public class OwnDropExclusionTest
 	@Test
 	public void aDropWhileRunningLandsWhereTheClickWasMade()
 	{
-		// clicked at 3200,3200; by the time the spawn is read the player is a tile on
 		Mockito.when(me.getWorldLocation()).thenReturn(new WorldPoint(3200, 3200, 0));
 		kill(100, BEAR);
 		drop(100, SPIKE);

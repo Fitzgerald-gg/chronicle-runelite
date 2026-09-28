@@ -16,15 +16,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The per-task combat achievement bits, and the arithmetic that reads them.
- *
- * <p>The game states points and which tiers are unlocked, and nothing about WHICH
- * tasks are done, so the journal could only ever name the ones it happened to
- * watch land. CA_TASK_COMPLETED_0 to _20 carry all of them: task id N is bit N%32
- * of word N/32. Getting that arithmetic wrong does not throw; it silently ticks
- * the wrong achievements.
- */
 public class CombatTaskBitsTest
 {
 	private static int[] words() throws Exception
@@ -39,24 +30,15 @@ public class CombatTaskBitsTest
 		return CombatAchievementsTest.tasks();
 	}
 
-	/**
-	 * TRAP: the varps are NOT contiguous. They run 3116 upward, then jump to 4496,
-	 * 4721 and 5673 as tasks were added over the years. A loop over base + i reads
-	 * varps belonging to something else entirely, and every bit it finds there is
-	 * a combat achievement ticked at random.
-	 */
 	@Test
 	public void theVarpsAreNamedBecauseTheyAreNotSequential() throws Exception
 	{
 		int[] w = words();
-		// The run really is a run, for exactly thirteen words...
 		for (int i = 1; i <= 12; i++)
 		{
 			assertEquals("the contiguous head is shorter than the comment says",
 				w[i - 1] + 1, w[i]);
 		}
-		// ...and then it stops, which is the whole point. A loop over a base would
-		// walk off the end here into varps belonging to something else.
 		assertNotEquals("if these ever become contiguous the comment is stale, not"
 			+ " the code", w[12] + 1, w[13]);
 		int breaks = 0;
@@ -71,7 +53,6 @@ public class CombatTaskBitsTest
 			+ " their number changes", 7, breaks);
 	}
 
-	/** Every task the table knows has a bit to live in. */
 	@Test
 	public void theBitsReachEveryTaskInTheTable() throws Exception
 	{
@@ -86,7 +67,6 @@ public class CombatTaskBitsTest
 		assertTrue("the words do not even cover the task count", slots >= tasks().size());
 	}
 
-	/** And the list is the whole run, with nothing skipped in the middle. */
 	@Test
 	public void everyWordIsListedOnce() throws Exception
 	{
@@ -100,11 +80,6 @@ public class CombatTaskBitsTest
 		}
 	}
 
-	/**
-	 * A client with nothing set. snapshot() walks the quest list before it reaches
-	 * the bits, and Quest.getState reads the script's return off the int stack, so
-	 * the stack has to exist: 1 is "not started" for every quest.
-	 */
 	private static Client blankClient()
 	{
 		Client client = Mockito.mock(Client.class);
@@ -112,19 +87,11 @@ public class CombatTaskBitsTest
 		return client;
 	}
 
-	/**
-	 * The writer end to end, against a client whose varps are set the way the game
-	 * would set them. This is the test that bites: the loop can read the right
-	 * varps and still file every bit under the wrong id.
-	 */
 	@Test
 	public void theWriterTurnsBitsIntoTheIdsTheTableUses() throws Exception
 	{
 		Client client = blankClient();
 		int[] w = words();
-		// Task 0 is bit 0 of the first word; task 33 is bit 1 of the second; task
-		// 445 is bit 29 of the fourteenth. Three words apart so a reversed or
-		// off-by-one mapping cannot land on all three by luck.
 		Mockito.when(client.getVarpValue(w[0])).thenReturn(1);
 		Mockito.when(client.getVarpValue(w[1])).thenReturn(1 << 1);
 		Mockito.when(client.getVarpValue(w[13])).thenReturn(1 << 29);
@@ -138,13 +105,6 @@ public class CombatTaskBitsTest
 			new HashSet<>(Arrays.asList(0, 33, 445)), ids);
 	}
 
-	/**
-	 * TRAP: a mask read the wrong way round. Testing for == 0 instead of != 0 is
-	 * a one-character slip that still produces a plausible-looking array of ids,
-	 * and on a fresh account it produces all 672 of them: a player who has done
-	 * nothing reads as a player who has done everything. The empty client is the
-	 * case that makes it obvious.
-	 */
 	@Test
 	public void anEmptyWordContributesNothing() throws Exception
 	{
@@ -156,10 +116,6 @@ public class CombatTaskBitsTest
 				.getAsJsonObject("combat").getAsJsonArray("tasksDone").size());
 	}
 
-	/**
-	 * And a full word writes all 32, including bit 31. Read into a signed int that
-	 * bit is the sign bit, so a loop guarding on bits &gt; 0 silently drops it.
-	 */
 	@Test
 	public void theTopBitOfAWordIsNotLostToTheSign() throws Exception
 	{

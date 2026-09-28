@@ -17,11 +17,6 @@ import org.junit.Test;
 import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 
-/**
- * The kill count the game announces on the kill itself. It is the only reading
- * that is both the game's own count and arrives without the player opening
- * anything, which is what the plugin is supposed to be: invisible after setup.
- */
 public class ChatKillCountTest
 {
 	private ChronicleEventCapture capture;
@@ -50,11 +45,6 @@ public class ChatKillCountTest
 	@Test
 	public void theCountIsBankedWithoutAnyLootEvent()
 	{
-		// Wintertodt's reward is a crate, not an NPC drop, so no loot event ever
-		// follows. The count used to be parsed into an in-memory map read only
-		// when stamping a drop, and was therefore discarded on every single kill,
-		// which is why Wintertodt sat on a Kill Log reading of 447 that only moved
-		// when the player opened an interface.
 		said("Your subdued Wintertodt count is: 448.");
 		Mockito.verify(store).noteKillCount("subdued Wintertodt", 448, "Tester");
 	}
@@ -77,10 +67,6 @@ public class ChatKillCountTest
 	@Test
 	public void aLapAndAHarvestAreNotKills()
 	{
-		// The expression admits these because they annotate a loot event the same
-		// way, but an agility lap is not a kill and their sources are followed by
-		// the loot ledger already. Banking them would put a course in the kill
-		// counts.
 		said("Your Ape Atoll Agility lap count is: 1337.");
 		said("Your Herbiboar harvest count is: 1169.");
 		Mockito.verify(store, Mockito.never())
@@ -96,13 +82,9 @@ public class ChatKillCountTest
 			.noteKillCount(Mockito.anyString(), Mockito.anyInt(), Mockito.anyString());
 	}
 
-	// ── the reading side ───────────────────────────────────────────────────
-
 	@Test
 	public void theChatCountOvertakesAFrozenKillLog()
 	{
-		// The Kill Log said 447 when the player last opened it. One kill later the
-		// game itself has said 448, and that is the answer.
 		Map<String, Long> out = new LinkedHashMap<>();
 		out.put("Wintertodt", 447L);
 		Map<String, Long> chat = new LinkedHashMap<>();
@@ -131,9 +113,9 @@ public class ChatKillCountTest
 		out.put("Barrows Chests", 500L);
 		out.put("Tempoross", 455L);
 		Map<String, Long> chat = new LinkedHashMap<>();
-		chat.put("Gauntlet", 32L);          // the log says "The Gauntlet"
-		chat.put("Barrows", 512L);          // the log says "Barrows Chests"
-		chat.put("Tempoross", 456L);        // said the same way
+		chat.put("Gauntlet", 32L);
+		chat.put("Barrows", 512L);
+		chat.put("Tempoross", 456L);
 		LocalStore.foldChatCounts(out, chat, java.util.Collections.emptySet());
 		assertEquals(Long.valueOf(32), out.get("The Gauntlet"));
 		assertEquals(Long.valueOf(512), out.get("Barrows Chests"));
@@ -144,9 +126,6 @@ public class ChatKillCountTest
 	@Test
 	public void aSourceNothingElseKnowsYetIsStillCarriedIn()
 	{
-		// A first kill is announced in chat before there is a log page or a loot
-		// row to hang it on. Waiting for one would mean a fresh install shows
-		// nothing until it opens an interface, which is the whole complaint.
 		Map<String, Long> out = new LinkedHashMap<>();
 		Map<String, Long> chat = new LinkedHashMap<>();
 		chat.put("Amoxliatl", 1L);

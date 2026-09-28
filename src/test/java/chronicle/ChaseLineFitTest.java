@@ -19,21 +19,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The pets page prints a chase in one line: where the kills went, and the share of
- * players holding the pet by that point. The row is narrow and Swing clips the end
- * of a label, so the line is fitted before it is mounted. What is tested here is
- * the bargain that fitting strikes: the names give up letters, the figures give up
- * nothing, and that whatever comes back really does measure inside the row.
- */
 public class ChaseLineFitTest
 {
 	@Before
 	public void laf() throws Exception
 	{
 		System.setProperty("java.awt.headless", "true");
-		// the client's own look and feel: its scrollbar is what the row's width is
-		// reckoned against
 		javax.swing.SwingUtilities.invokeAndWait(() ->
 		{
 			try
@@ -48,8 +39,6 @@ public class ChaseLineFitTest
 		});
 	}
 
-	// Whatever mark the panel actually cuts with, so this test guards that and not
-	// a copy of it.
 	private static String ellipsis() throws Exception
 	{
 		java.lang.reflect.Field f = ChroniclePanel.class.getDeclaredField("ELLIPSIS");
@@ -78,7 +67,6 @@ public class ChaseLineFitTest
 			activity, unit, 99);
 	}
 
-	// The share the row draws on the right, exactly as the panel words it.
 	private static String share(GrindBook.PetChase chase) throws Exception
 	{
 		java.lang.reflect.Method m =
@@ -87,7 +75,6 @@ public class ChaseLineFitTest
 		return (String) m.invoke(null, chase);
 	}
 
-	// The whole sentence the row hands its hover, exactly as the panel words it.
 	private static String tip(GrindBook.PetChase chase) throws Exception
 	{
 		java.lang.reflect.Method m =
@@ -96,7 +83,6 @@ public class ChaseLineFitTest
 		return (String) m.invoke(null, chase);
 	}
 
-	// A skilling chase, built with the sources the fitted line gave up naming.
 	private static GrindBook.PetChase spread(double pct, String activity, String unit,
 		Object... nameKc)
 	{
@@ -110,7 +96,6 @@ public class ChaseLineFitTest
 		return new GrindBook.PetChase("A pet", total, pct, src, activity, unit, 0);
 	}
 
-	// The one thing every case must satisfy: it fits the room the row actually has.
 	private static void assertFits(String line, String share)
 	{
 		FontMetrics fm = ChroniclePanel.rowMetrics();
@@ -119,8 +104,6 @@ public class ChaseLineFitTest
 			fm.stringWidth(line) <= room);
 	}
 
-	// No figure may be printed part-read: every run of digits in the line has to be
-	// one of the figures the chase holds, whole.
 	private static void assertFiguresWhole(String line, String... figures) throws Exception
 	{
 		List<String> allowed = Arrays.asList(figures);
@@ -151,7 +134,6 @@ public class ChaseLineFitTest
 		GrindBook.PetChase c = boss(37, "Thermonuclear Smoke Devil", 1402L);
 		String line = ChroniclePanel.fitChase(c, share(c));
 		assertTrue(line + " lost its count", line.endsWith(", kc 1,402"));
-		// enough of the name to know the boss on sight
 		assertTrue(line + " is not recognisable as the boss",
 			line.startsWith("Thermonu"));
 		assertTrue(line + " should say it was cut", line.contains(ellipsis()));
@@ -164,13 +146,11 @@ public class ChaseLineFitTest
 	{
 		GrindBook.PetChase c = boss(73, "Callisto", 1500L, "Artio", 900L);
 		String line = ChroniclePanel.fitChase(c, share(c));
-		// the source that carried the grind is named in full, whatever else goes
 		assertTrue(line + " mangled the leading source",
 			line.startsWith("Callisto, kc 1,500"));
 		assertFiguresWhole(line, "1,500", "900", "1");
 		if (!line.contains("Artio"))
 		{
-			// dropped rather than mangled, and the row says so
 			assertFalse(line + " kept a stub of the second source",
 				line.contains("Art" + ellipsis()));
 			assertTrue(line + " dropped a source without saying so", line.endsWith(" +1"));
@@ -182,11 +162,6 @@ public class ChaseLineFitTest
 		assertFits(line, share(c));
 	}
 
-	/**
-	 * Two names that would both fit if both were cut. They are not both cut: the
-	 * source that carried the grind is named in full and the other one gives way,
-	 * because a line that reads "Cha…, kc 1 · Cra…, kc 1" names nothing at all.
-	 */
 	@Test
 	public void theLeadingSourceIsNeverCutWhileATrailingOneCanGiveWay() throws Exception
 	{
@@ -235,12 +210,6 @@ public class ChaseLineFitTest
 		assertFits(line, share(c));
 	}
 
-	/**
-	 * The font the panel draws rows in is a pixel font with holes in it. An em dash
-	 * is why none of these strings carry one. The single-character ellipsis is not
-	 * one of the holes: it paints three pixels, where a glyph the font lacks paints
-	 * the .notdef box instead.
-	 */
 	@Test
 	public void theEllipsisIsAGlyphTheGameFontHas() throws Exception
 	{
@@ -250,13 +219,12 @@ public class ChaseLineFitTest
 		{
 			assertTrue("the game font has no " + ch, f.canDisplay(ch));
 			int drawn = ink(f, ch);
-			int missing = ink(f, '█');   // a full block: the font has no such glyph
+			int missing = ink(f, '█');
 			assertTrue(ch + " painted nothing", drawn > 0);
 			assertTrue(ch + " painted the .notdef box, not a glyph", drawn < missing / 4);
 		}
 	}
 
-	// Pixels a glyph actually paints at the row's own size.
 	private static int ink(java.awt.Font f, char ch)
 	{
 		BufferedImage im = new BufferedImage(40, 40, BufferedImage.TYPE_INT_RGB);
@@ -281,10 +249,6 @@ public class ChaseLineFitTest
 		return n;
 	}
 
-	// The hover names the source that carried a grind because the fitted line spent
-	// itself on the activity instead. Where the activity IS the source there is
-	// nothing to disclose, and the clause repeats the line back at itself: "Mad
-	// Angel, 124 kills, mostly mad angel".
 	@Test
 	public void aSingleSourceChaseDoesNotNameItselfTwice() throws Exception
 	{
@@ -294,8 +258,6 @@ public class ChaseLineFitTest
 		assertFalse("[" + tip + "] said the source twice", tip.contains("mostly"));
 	}
 
-	// Two sources and the clause earns its place: the line said Woodcutting and the
-	// count, and the hover says which tree most of it was.
 	@Test
 	public void aSpreadChaseStillNamesTheSourceThatCarriedIt() throws Exception
 	{
@@ -306,8 +268,6 @@ public class ChaseLineFitTest
 			tip.endsWith("Woodcutting, 19,389 logs, mostly yew trees."));
 	}
 
-	// A boss chase names its sources outright in the line, so the clause was never
-	// its business either way.
 	@Test
 	public void aBossChaseNeverTakesTheClause() throws Exception
 	{

@@ -21,23 +21,15 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * Dryness ledger. Weighs the bundled wiki rate book (per-kill 1/N denominators
- * for collection-log uniques) against the journal's own kill counts and stored
- * collection log. Dry percentile is (1 - (1 - 1/rate)^kc) * 100: the share of
- * players who have the drop by this kill count.
- */
 @Slf4j
 @RequiredArgsConstructor
 class GrindBook
 {
-	// rate denominator floor for a row to count as a chase; commoner drops aren't a grind.
 	private static final int MIN_DRY_RATE = 100;
 	private static final int MAX_ROWS = 20;
 
 	private final Gson gson;
 
-	// boss display name -> {item name -> rate denominator}, loaded on first use.
 	private volatile Map<String, Map<String, Integer>> drops;
 
 	private Map<String, Map<String, Integer>> book()
@@ -71,7 +63,6 @@ class GrindBook
 						}
 						catch (RuntimeException ignored)
 						{
-							// non-numeric rate, skip it
 						}
 					}
 					out.put(b.getKey(), items);
@@ -86,9 +77,6 @@ class GrindBook
 		return out;
 	}
 
-	// "Abyssal Sire" and "abyssal_sire" both normalise to "abyssalsire". Plurals
-	// survive, so a ledger source "Tormented Demon" will not join the clog page
-	// "Tormented Demons". Other joins in the plugin strip the trailing s and do.
 	private static String norm(String s)
 	{
 		StringBuilder sb = new StringBuilder(s.length());
@@ -102,10 +90,6 @@ class GrindBook
 		return sb.toString();
 	}
 
-	// The clog page a rate block reads its obtained set from. A block keyed to the
-	// container a roll is paid for, "Reward pool (Tempoross)", has no page under that
-	// name: the log files those items under the boss in the brackets. Only consulted
-	// when the key itself names no page, so no ordinary key changes hands.
 	private static Set<String> pageFor(String key, Map<String, Set<String>> pageItems)
 	{
 		Set<String> page = pageItems.get(norm(key));
@@ -122,8 +106,6 @@ class GrindBook
 		return null;
 	}
 
-	// Reads the stored clog (kcs, clog_items, by_cat) plus the drop sources for a second
-	// kc signal. Called off the client thread; nothing in here may touch the client.
 	List<GrindRow> grinds(JsonObject clog,
 		List<LocalStore.SourceRow> dropSources)
 	{
@@ -133,10 +115,6 @@ class GrindBook
 			return new ArrayList<>();
 		}
 		Map<String, Long> kcByNorm = killCounts(clog, dropSources);
-		// an item counts as obtained from the global clog set, the drop ledger's bags
-		// (a unique already looted is owned whether or not the log has caught up: the
-		// unlock notification may be off, or the page not reopened since), or the
-		// boss's own page.
 		Set<String> obtained = clogItems(clog);
 		obtained.addAll(looted(dropSources));
 		Map<String, Set<String>> pageItems = new HashMap<>();
@@ -189,7 +167,6 @@ class GrindBook
 		return out.size() > MAX_ROWS ? new ArrayList<>(out.subList(0, MAX_ROWS)) : out;
 	}
 
-	// kc per normalised boss key: clog page kcs, raised by the drop ledger's own counts.
 	private static Map<String, Long> killCounts(JsonObject clog,
 		List<LocalStore.SourceRow> dropSources)
 	{
@@ -219,25 +196,11 @@ class GrindBook
 		return kcByNorm;
 	}
 
-	// ------------------------------------------------------------------
-	// Pets
-	// ------------------------------------------------------------------
-
-	// No player has killed anything this many times; past it the odds are already
-	// pinned at certainty and the figure is a corrupt count, not a grind.
 	private static final long MAX_KC = 100_000_000L;
 
-	// A skilling roll stops improving here; the wiki's level term is flat past 99.
 	private static final int LEVEL_CAP = 99;
-	// Below this a denominator is not a grind any more, and a level term that ate
-	// the whole base would print certainty off a handful of actions.
 	private static final long MIN_RATE = 2;
 
-	/**
-	 * One place a pet rolls from, and how far the journal has gone there. For a boss
-	 * that is a kill count; for a skilling pet it is the activity's own unit, and
-	 * {@code rate} is the denominator after the level term has been taken off.
-	 */
 	@RequiredArgsConstructor
 	static final class PetSource
 	{
@@ -246,22 +209,13 @@ class GrindBook
 		final long rate;
 	}
 
-	/**
-	 * An unearned pet weighed against every source that drops it. {@code percentileDry}
-	 * is the share of players who would hold the pet by this point:
-	 * 1 - product over sources of (1 - 1/N_i)^kc_i. Sources with no kills are left
-	 * out; a pet with none of them is not a chase and gets no row at all.
-	 */
 	@RequiredArgsConstructor
 	static final class PetChase
 	{
 		final String pet;
-		final long kc;                    // kills across the sources that contributed
+		final long kc;
 		final double percentileDry;
-		final List<PetSource> sources;    // heaviest first
-		// A skilling pet answers to a craft, not a monster: the activity it was
-		// worked at, the noun its attempts are counted in, and the level the odds
-		// were read at. All null/0 on a boss chase, which reads as it always did.
+		final List<PetSource> sources;
 		final String activity;
 		final String unit;
 		final long level;
@@ -272,23 +226,6 @@ class GrindBook
 		}
 	}
 
-	/**
-	 * The chase behind each pet a collection log page lists, keyed by lower-cased pet
-	 * name. Only pets the log has not lit, that one of the two rate books prices, and
-	 * that the journal has counted something for. Everything else is absent from the
-	 * map: the page renders those slots exactly as it did before. Off the client
-	 * thread or on; reads nothing but its arguments.
-	 *
-	 * <p>A skilling pet is weighed the same way, off {@code counters} rather than kill
-	 * counts, and off {@code skills} for the level its odds are read at. Where a pet
-	 * is in both books the skilling book wins outright: Tangleroot is the one that is,
-	 * and the boss table's Hespori denominator is this same formula frozen at Farming
-	 * 65, so admitting both would print two numbers for one event.
-	 *
-	 * <p>A pet the book gives a {@code requires} is weighed only once {@code achievements}
-	 * says the account holds the unlock. Until then the attempts rolled nothing at all,
-	 * and the pet is left out of the map entirely: a chase not yet begun is not a dry one.
-	 */
 	Map<String, PetChase> petChases(JsonObject clog, List<LocalStore.SourceRow> dropSources,
 		Map<String, Long> counters, Map<String, long[]> skills, JsonObject achievements,
 		Collection<String> pets)
@@ -307,9 +244,6 @@ class GrindBook
 		Map<String, Long> kcByNorm = killCounts(clog, dropSources);
 		Set<String> obtained = allObtained(clog);
 		obtained.addAll(looted(dropSources));
-		// pet name (lower-cased) -> every boss whose table holds it. A pet with two
-		// sources (Callisto and Artio, Chaos Elemental and Chaos Fanatic) is one
-		// chase fed from both, never the better-looking half of the pair.
 		Map<String, List<PetSource>> bySource = new HashMap<>();
 		for (Map.Entry<String, Map<String, Integer>> boss : rates.entrySet())
 		{
@@ -344,9 +278,6 @@ class GrindBook
 			SkillPet spec = skilling.get(key);
 			if (spec != null)
 			{
-				// An unlock the account has not taken means every attempt the journal
-				// counted rolled nothing. There is no percentage to print over that,
-				// and printing one calls a player unlucky in a draw he never entered.
 				if (spec.requires != null && !spec.requires.met(achievements))
 				{
 					continue;
@@ -370,8 +301,6 @@ class GrindBook
 		return out;
 	}
 
-	// The misses are multiplied in the order the sources are given, which is left to
-	// the caller; the chase then lists them heaviest first.
 	private static PetChase chase(String pet, List<PetSource> sources, String activity,
 		String unit, long level)
 	{
@@ -379,8 +308,6 @@ class GrindBook
 		long kc = 0;
 		for (PetSource s : sources)
 		{
-			// the chance of missing it every kill at this source; the pet is a
-			// chase across all of them, so the misses multiply.
 			miss *= Math.pow(1.0 - 1.0 / s.rate, s.kc);
 			kc += s.kc;
 		}
@@ -390,18 +317,6 @@ class GrindBook
 			level);
 	}
 
-	// ------------------------------------------------------------------
-	// Skilling pets
-	// ------------------------------------------------------------------
-
-	/**
-	 * One way a skilling pet is rolled for, and the counter that counts it. Either
-	 * {@code counter} names a key outright, or {@code suffix} takes a whole family of
-	 * them ({@code manPickpockets}, {@code guardPickpockets}) less the ones
-	 * {@code notSuffix} holds back and the ones this pet prices by name. {@code minus}
-	 * takes another counter off the first, which is how the altars that have a rate of
-	 * their own come out of the essence total.
-	 */
 	@RequiredArgsConstructor
 	private static final class SkillSource
 	{
@@ -413,16 +328,6 @@ class GrindBook
 		final long base;
 	}
 
-	/**
-	 * A source counted in kills rather than actions. Hespori is one; so is every pet
-	 * whose attempts a collection log page or the drop ledger already counted for it,
-	 * a search of the Rewards Guardian or a master casket opened as readily as a boss
-	 * killed. {@code orKc} names the same event again where the log and the ledger
-	 * spell it differently ("Mad Angel" against "The Mad Angel"): the larger of the
-	 * two is the count, never the sum, because they are one record read twice.
-	 * {@code flat} holds the level term off a source that does not take one, which is
-	 * Fishing Trawler alone among the fishing rows.
-	 */
 	@RequiredArgsConstructor
 	private static final class SkillKill
 	{
@@ -433,31 +338,14 @@ class GrindBook
 		final boolean flat;
 	}
 
-	/**
-	 * What an account must already hold before a pet can drop at all. The unit an
-	 * attempt is counted in goes on climbing without it: chompy birds fall to anyone,
-	 * and none of them rolls the chick until the elite Western Provinces diary is done
-	 * and its rewards taken.
-	 *
-	 * <p>Read off the journal's own achievements object, which the character sheet has
-	 * carried all along: {@code quests} by name against their state, {@code diaries} by
-	 * region against each tier's completion, and {@code combat} tiers against their
-	 * status. A clause the book does not name is not asked about; every clause it does
-	 * name has to hold.
-	 */
 	@RequiredArgsConstructor
 	private static final class Requirement
 	{
-		final String diaryRegion;    // "western", as AchievementSync spells it
-		final String diaryTier;      // "easy" / "medium" / "hard" / "elite"
-		final String quest;          // Quest.getName(), finished when the state is FINISHED
-		final String combatTier;     // "easy" ... "grandmaster", held once its status is past 0
+		final String diaryRegion;
+		final String diaryTier;
+		final String quest;
+		final String combatTier;
 
-		/**
-		 * True only where the journal says outright that the unlock is held. A sheet
-		 * never gathered answers nothing, and nothing is not yes: the pet stays off the
-		 * page rather than being priced on a guess.
-		 */
 		boolean met(JsonObject achievements)
 		{
 			if (achievements == null)
@@ -503,17 +391,16 @@ class GrindBook
 		}
 	}
 
-	/** A skilling pet: the craft it answers to, and every way it is rolled for. */
 	private static final class SkillPet
 	{
-		final String skill;          // skillSheet key, lower-cased Skill name
-		final String activity;       // what the row calls the grind
-		final String unit;           // the noun its attempts are counted in
+		final String skill;
+		final String activity;
+		final String unit;
 		final boolean levelScaled;
 		final List<SkillSource> sources;
 		final List<SkillKill> kills;
-		final Requirement requires;  // null where the pet is open to everyone
-		final Set<String> named;     // counters this pet prices by name
+		final Requirement requires;
+		final Set<String> named;
 
 		SkillPet(String skill, String activity, String unit, boolean levelScaled,
 			List<SkillSource> sources, List<SkillKill> kills, Requirement requires)
@@ -536,7 +423,6 @@ class GrindBook
 		}
 	}
 
-	// lower-cased pet name -> its book entry, loaded on first use.
 	private volatile Map<String, SkillPet> skillPets;
 
 	private Map<String, SkillPet> skillBook()
@@ -595,7 +481,7 @@ class GrindBook
 				long base = safeLong(s.get("base"));
 				if (base <= 0)
 				{
-					continue;   // an unpriced row is left unpriced, never guessed
+					continue;
 				}
 				sources.add(new SkillSource(str(s, "counter"), str(s, "suffix"),
 					str(s, "notSuffix"), strings(s, "minus"), str(s, "name"), base));
@@ -614,14 +500,12 @@ class GrindBook
 				long base = safeLong(k.get("base"));
 				if (base <= 0 || str(k, "kc") == null)
 				{
-					continue;   // an unpriced row is left unpriced, never guessed
+					continue;
 				}
 				kills.add(new SkillKill(str(k, "kc"), strings(k, "orKc"), str(k, "name"), base,
 					k.has("flat") && k.get("flat").getAsBoolean()));
 			}
 		}
-		// A pet rolled only off kill counts is priced the same way; what it may not
-		// be is priced off nothing at all.
 		if (sources.isEmpty() && kills.isEmpty())
 		{
 			return null;
@@ -631,9 +515,6 @@ class GrindBook
 			readRequirement(o));
 	}
 
-	// The unlock a pet waits on, or null where it waits on none. Each kind is its own
-	// object, so a pet that one day wants a quest or a combat tier beside its diary
-	// takes another key here and the rest of the book is untouched.
 	private static Requirement readRequirement(JsonObject o)
 	{
 		JsonObject r = obj(o, "requires");
@@ -644,9 +525,6 @@ class GrindBook
 		JsonObject diary = obj(r, "diary");
 		JsonObject quest = obj(r, "quest");
 		JsonObject combat = obj(r, "combat");
-		// A clause named but not filled in is not a clause that passes: it is kept, as
-		// a name nothing answers to, so a half-written requirement bars the pet rather
-		// than letting it through unasked.
 		String region = diary != null ? nz(str(diary, "region")) : null;
 		String tier = diary != null ? nz(str(diary, "tier")) : null;
 		String name = quest != null ? nz(str(quest, "name")) : null;
@@ -688,14 +566,6 @@ class GrindBook
 			? o.get(field).getAsString() : null;
 	}
 
-	/**
-	 * A skilling pet weighed against its own activity. The odds are read at the level
-	 * the player holds NOW, which is not the level each past attempt was made at: an
-	 * account that levelled along the way rolled worse odds early than this prices
-	 * them, so the figure runs a little dry. The panel says so where it prints it.
-	 * Null when nothing has been counted, or when a level-scaled pet has no level to
-	 * read: a guessed level is a guessed percentage.
-	 */
 	private PetChase skillingChase(String pet, SkillPet spec, Map<String, Long> counters,
 		Map<String, long[]> skills, Map<String, Long> kcByNorm)
 	{
@@ -733,9 +603,6 @@ class GrindBook
 		}
 	}
 
-	// The kills behind one source. Where the log and the ledger spell the same event
-	// two ways, the fuller record stands for it: the log is only as fresh as the last
-	// time it was opened, and the two added together would count every kill twice.
 	private static long killCount(SkillKill k, Map<String, Long> kcByNorm)
 	{
 		Long kc = kcByNorm.get(norm(k.kc));
@@ -751,9 +618,6 @@ class GrindBook
 		return n;
 	}
 
-	// What the journal has counted for one source. A family sweep takes every key in
-	// it except the ones held back by name: a failed pickpocket is spelled like a
-	// pickpocket and rolls nothing.
 	private static long count(SkillSource s, SkillPet spec, Map<String, Long> counters)
 	{
 		if (counters == null || counters.isEmpty())
@@ -788,7 +652,6 @@ class GrindBook
 		return Math.max(0L, n);
 	}
 
-	/** The global set's names, lower-cased; empty without one. */
 	private static Set<String> clogItems(JsonObject clog)
 	{
 		Set<String> out = new HashSet<>();
@@ -803,8 +666,6 @@ class GrindBook
 		return out;
 	}
 
-	// Every item the stored log holds, whole-log set and each page's own capture
-	// folded together: a pet is owned wherever the log says so.
 	private static Set<String> allObtained(JsonObject clog)
 	{
 		Set<String> out = clogItems(clog);
@@ -826,9 +687,6 @@ class GrindBook
 		return out;
 	}
 
-	// Every item name the drop ledger holds a copy of, across all its sources. The
-	// ledger is keyed by name alone, as the site's was: a helm looted anywhere is
-	// the same helm on every page that lists it.
 	private static Set<String> looted(List<LocalStore.SourceRow> dropSources)
 	{
 		Set<String> out = new HashSet<>();
@@ -857,7 +715,6 @@ class GrindBook
 		}
 	}
 
-	/** One dry chase: the journal's own kc weighed against the bundled wiki rate book. */
 	@RequiredArgsConstructor
 	public static final class GrindRow
 	{

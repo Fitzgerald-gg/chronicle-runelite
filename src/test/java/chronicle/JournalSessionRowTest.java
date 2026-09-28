@@ -19,14 +19,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A closed sitting's line on the Journal is drawn as two columns, like every
- * other row on the panel, with the whole sentence on hover.
- *
- * <p>As one sentence it ran past the column on any longer sitting and cut at
- * "75 drops (", which was the one line the Journal had for what a sitting
- * amounted to.
- */
 public class JournalSessionRowTest
 {
 	@BeforeClass
@@ -99,7 +91,6 @@ public class JournalSessionRowTest
 		assertTrue(hover, hover.startsWith("Session: 1h 22m") && hover.contains("gp"));
 	}
 
-	/** A closed sitting that kept its split says what the xp mostly was. */
 	@Test
 	public void theSittingSaysWhatTheXpMostlyWas() throws Exception
 	{
@@ -119,7 +110,6 @@ public class JournalSessionRowTest
 		assertEquals("Session: 1h 22m · +412k xp, most in Runecraft", fl.invoke(null, e));
 		d.remove("skills");
 		assertEquals("Session: 1h 22m · +412k xp", fl.invoke(null, e));
-		// one drop is a drop
 		d.addProperty("drops", 1);
 		d.addProperty("dropsGp", 46);
 		assertEquals("Session: 1h 22m · +412k xp · 1 drop (46 gp)", fl.invoke(null, e));

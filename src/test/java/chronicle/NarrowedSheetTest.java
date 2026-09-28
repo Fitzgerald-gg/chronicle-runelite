@@ -17,22 +17,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * What a narrowed period is allowed to show, on the two grids of the sheet.
- *
- * <p>Both were drawing a LIFETIME under a heading naming a week. The boss grid
- * is seventy strong and nobody kills seventy things in a week, so every period
- * but the lifetime drew a handful of counts in a field of dashes and the dashes
- * were the board. The activity tiles carry standings - every clue ever opened,
- * the whole collection log - and a standing that stands still under a heading
- * naming a week reads as the week's work.
- *
- * <p>So the boss grid shows what the period holds, and an activity tile the
- * period never touched reads dim, the same way a skill that gained nothing
- * does. A lifetime is exempt from both: there the roster is a checklist of what
- * the account has and has not met, which is a different question, and every
- * standing is by construction a thing the lifetime moved.
- */
 public class NarrowedSheetTest
 {
 	private static final java.awt.Color DIM = ColorScheme.LIGHT_GRAY_COLOR.darker();
@@ -116,11 +100,6 @@ public class NarrowedSheetTest
 		return n;
 	}
 
-	/**
-	 * TRAP: a dash is not a small thing said quietly, it is the board. Seventy of
-	 * them say one thing seventy times and bury the three counts that are the
-	 * answer.
-	 */
 	@Test
 	public void aNarrowedBossGridDrawsOnlyWhatItHolds() throws Exception
 	{
@@ -136,11 +115,6 @@ public class NarrowedSheetTest
 			dashes(week) <= 2);
 	}
 
-	/**
-	 * And the lifetime keeps every one of them, dash and all: there the grid is a
-	 * checklist of what this account has and has not met. Whole, not a glance
-	 * with the rest behind a click: the owner did not agree to it collapsing.
-	 */
 	@Test
 	public void theLifetimeKeepsTheWholeRoster() throws Exception
 	{
@@ -158,15 +132,6 @@ public class NarrowedSheetTest
 		}
 	}
 
-	/**
-	 * An activity tile's figure and the colour it is drawn in, as {text, colour},
-	 * or null if the tile is not on the sheet.
-	 *
-	 * <p>BOTH, because a tile with nothing behind it draws a dash and is dim for
-	 * that reason alone. Asserting the colour without the text passes over an
-	 * empty tile whatever the rule does, which is how this test first went green
-	 * against a build that had the rule switched off.
-	 */
 	private static Object[] tile(String name) throws Exception
 	{
 		final Object[][] found = {null};
@@ -178,8 +143,6 @@ public class NarrowedSheetTest
 				m.setAccessible(true);
 				List<Component> flat = new ArrayList<>();
 				flatten((Component) m.invoke(panel), flat);
-				// the tile is a row: its icon, then its figure. Find the figure by
-				// walking to the cell whose tooltip names this activity.
 				for (Component c : flat)
 				{
 					if (!(c instanceof javax.swing.JComponent))
@@ -223,23 +186,13 @@ public class NarrowedSheetTest
 			+ ", which is the wrong way round", want != DIM.equals(t[1]));
 	}
 
-	/**
-	 * TRAP: the tile keeps its STANDING figure either way, so the two states are
-	 * the same shape and the same number. Only the colour tells them apart, which
-	 * is exactly the kind of rule a structural test cannot see.
-	 */
 	@Test
 	public void anActivityThePeriodNeverTouchedReadsDim() throws Exception
 	{
-		// A lifetime moved everything it holds, by construction.
 		period("Lifetime");
 		lit("Collection log", true);
 		lit("Rifts closed", true);
 
-		// Both readings inside ONE period, which is the comparison that matters.
-		// The fixture logged a collection slot two hours ago and closed no rift
-		// today, so the day moved one of these and not the other - and the rift
-		// tile still SAYS five thousand two hundred and eighteen either way.
 		period("Day");
 		lit("Collection log", true);
 		lit("Rifts closed", false);

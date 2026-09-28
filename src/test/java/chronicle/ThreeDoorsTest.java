@@ -22,14 +22,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Three refinements from a walk of the panel as a reader.
- *
- * <p>A period pick used to throw the reader back to today; the combat tile said
- * only where it stood while the total beside it said where it had come from;
- * and three of the six search groups drew rows that named a thing and did
- * nothing when pressed.
- */
 public class ThreeDoorsTest
 {
 	private static PanelPreviewTest.StubPlugin stub;
@@ -73,10 +65,6 @@ public class ThreeDoorsTest
 		return f.get(panel);
 	}
 
-	/**
-	 * TRAP: the reader who stepped Day back to find something and then picked
-	 * Week to read the week around it was thrown back to the present.
-	 */
 	@Test
 	public void pickingAPeriodKeepsTheReadersPlace() throws Exception
 	{
@@ -111,18 +99,16 @@ public class ThreeDoorsTest
 			!cursor.isAfter(then) && !cursor.isBefore(then.minusDays(7)));
 	}
 
-	/** The combat tile says where it opened, the shape the total tile draws. */
 	@Test
 	public void theCombatTileNamesWhereItOpenedOnAPeriod() throws Exception
 	{
 		set("histGranularity", "Week");
 		set("histFrom", null);
-		// seven opening levels, all below where the fixture's account stands (125)
 		Map<String, Long> xp = new HashMap<>();
 		for (String k : new String[]{"attack", "strength", "defence", "hitpoints",
 			"ranged", "magic", "prayer"})
 		{
-			xp.put(k, 5_346_332L);   // level 90
+			xp.put(k, 5_346_332L);
 		}
 		Method at = ChroniclePanel.class.getDeclaredMethod("baselineAt", Map.class);
 		at.setAccessible(true);
@@ -160,7 +146,6 @@ public class ThreeDoorsTest
 			figure[0].endsWith(" to " + stub.combatLevel()));
 	}
 
-	/** TRAP: a row that names a thing and does nothing when pressed. */
 	@Test
 	public void aJournalHitInSearchIsADoor() throws Exception
 	{

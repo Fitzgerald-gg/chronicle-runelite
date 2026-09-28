@@ -23,12 +23,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A minute is filed under the NPC the hit landed on, and half the roster is
- * not named after one: a raid is named for the place, Barrows for the chest at
- * the end of it, the Gauntlet for the room rather than the Hunllef standing in
- * it. The fight's page adds up every name it is fought as.
- */
 public class FoughtAsTest
 {
 	@BeforeClass
@@ -49,10 +43,6 @@ public class FoughtAsTest
 		});
 	}
 
-	/**
-	 * The page's time row over a month the minutes cover whole: a time row is
-	 * drawn only there, never over a lifetime the minutes began part way into.
-	 */
 	private static String timeRow(String source, Map<String, Long> minutes) throws Exception
 	{
 		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
@@ -105,7 +95,7 @@ public class FoughtAsTest
 		minutes.put("timeGreatOlm", 40L);
 		minutes.put("timeTekton", 25L);
 		minutes.put("timeVespula", 15L);
-		minutes.put("timeVorkath", 600L);   // another fight entirely
+		minutes.put("timeVorkath", 600L);
 		assertEquals("1h 20m", timeRow("Chambers of Xeric", minutes));
 	}
 
@@ -145,7 +135,6 @@ public class FoughtAsTest
 		assertNull(timeRow("Zulrah", new java.util.LinkedHashMap<>()));
 	}
 
-	/** Every name in the table is one fight's, so no minute is counted twice. */
 	@Test
 	@SuppressWarnings("unchecked")
 	public void noNpcBelongsToTwoFights() throws Exception
@@ -160,9 +149,6 @@ public class FoughtAsTest
 			for (String npc : e.getValue())
 			{
 				String had = owner.put(npc, e.getKey());
-				// the two Wilderness pairs share their spawn, and a raid shares
-				// its rooms with its own harder mode: those are one fight read
-				// two ways, never two fights counted apart
 				if (had != null)
 				{
 					assertTrue(npc + " is fought as " + had + " and " + e.getKey(),

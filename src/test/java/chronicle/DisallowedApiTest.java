@@ -16,26 +16,8 @@ import java.util.stream.Stream;
 import org.junit.Test;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The things the Plugin Hub's packager rejects a plugin for.
- *
- * <p>Its check runs on the Hub's own runner, against a commit already pushed, and
- * its logs are not readable anonymously, so a rejection arrives as a failure with
- * nothing attached to it. Held here instead, where it costs a second.
- *
- * <p>This looks at the SOURCE rather than at the bytecode, because it is the
- * source that has to be fixed and because the test has to be readable by whoever
- * trips it. Only src/main is examined: the test tree is not packaged, and it
- * legitimately builds its own Gson.
- */
 public class DisallowedApiTest
 {
-	/**
-	 * A constructor call, whatever package qualification it is written with.
-	 * "new Gson()", "new com.google.gson.Gson()" and "new
-	 * com . google . gson . Gson ()" are the same call to the compiler and the
-	 * same rejection from the packager.
-	 */
 	private static Pattern constructorOf(String simpleName)
 	{
 		return Pattern.compile("\\bnew\\s+(?:[A-Za-z_$][\\w$]*\\s*\\.\\s*)*"
@@ -43,9 +25,6 @@ public class DisallowedApiTest
 	}
 
 	private static final String[][] BANNED = {
-		// A plugin must take RuneLite's Gson, which is configured for the client's
-		// own conventions. This one has escaped twice: once written plainly, and
-		// once fully qualified, where it answered no grep for "new Gson()".
 		{"Gson", "inject RuneLite's Gson and pass it in, as bossRoster and taxonomy do"},
 		{"GsonBuilder", "inject RuneLite's Gson and reconfigure it with newBuilder()"},
 		{"OkHttpClient", "inject RuneLite's OkHttpClient"},
@@ -61,7 +40,6 @@ public class DisallowedApiTest
 		}
 	}
 
-	/** Strips line comments, block comments and string literals. */
 	private static String code(String src)
 	{
 		return src.replaceAll("(?s)/\\*.*?\\*/", " ")
@@ -97,10 +75,6 @@ public class DisallowedApiTest
 			+ String.join("\n  ", bad), bad.isEmpty());
 	}
 
-	/**
-	 * WidgetInfo is removed from the client, and java.awt.Desktop opens the user's
-	 * browser or mail client from inside the game, which the Hub does not allow.
-	 */
 	@Test
 	public void theShippedSourceTouchesNoRemovedOrForbiddenClientApi() throws Exception
 	{
@@ -119,25 +93,6 @@ public class DisallowedApiTest
 		assertTrue(String.join("\n  ", bad), bad.isEmpty());
 	}
 
-	/**
-	 * Case folding without a locale.
-	 *
-	 * <p>This plugin lowercases game text and matches it with contains() against
-	 * ASCII literals that are never folded themselves, which is an asymmetric
-	 * compare: whether it holds depends on the machine's locale. On a Turkish or
-	 * Azeri client String.toLowerCase() turns I into a dotless i, so "Lunar Isle",
-	 * "Ice Plateau", "Harmony Island" and "Icy Basalt" stop matching their own
-	 * destination keys and those teleports quietly stop being counted.
-	 *
-	 * <p>The same call also writes into the journal: a combat achievement tier
-	 * upper-cased without a locale is persisted as "ELITE" with a dotted capital
-	 * I, and stays in the feed for good.
-	 *
-	 * <p>Every one of these in this plugin is producing a key or a stored value
-	 * rather than text for a reader, so Locale.ROOT is right for all of them. The
-	 * test is here rather than a comment because it costs one line to reintroduce
-	 * and the machine that reintroduces it will never be the machine that notices.
-	 */
 	@Test
 	public void noCaseFoldingHappensInWhicheverLocaleTheClientRunsIn() throws Exception
 	{

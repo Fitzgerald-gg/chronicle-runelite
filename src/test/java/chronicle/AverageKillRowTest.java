@@ -19,10 +19,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A source's page carries the ordinary time beside the best, and the best
- * says when it was set and what it beat. The Journal names the record.
- */
 public class AverageKillRowTest
 {
 	@BeforeClass
@@ -89,7 +85,6 @@ public class AverageKillRowTest
 		assertNotNull(best);
 		assertTrue(best, best.startsWith("1:10 · set "));
 		assertEquals("Was 1:12", rowNamed(page[0], "Personal best").getToolTipText());
-		// and the Journal names it
 		Method fl = ChroniclePanel.class.getDeclaredMethod("feedLine", JsonObject.class);
 		fl.setAccessible(true);
 		assertEquals("Record: Vorkath 1:10, was 1:12", fl.invoke(null, record(set, "Vorkath", 70.0, 72.0)));

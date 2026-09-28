@@ -7,12 +7,6 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The item taxonomy, and in particular the traps in it.
- *
- * <p>Every one of these assertions is a name that reads as one kind and is
- * another. They are the reason the rules are ordered rather than a pattern.
- */
 public class ItemKindsTest
 {
 	@Test
@@ -35,10 +29,6 @@ public class ItemKindsTest
 		}
 	}
 
-	/**
-	 * The whole reason this file exists. Eleven of these are in the owner's own
-	 * ledger, and a substring search for "rune" hands back a weapon shop.
-	 */
 	@Test
 	public void nothingMerelyMadeOfRuniteIsARune()
 	{
@@ -57,11 +47,6 @@ public class ItemKindsTest
 		assertEquals("Materials", ItemKinds.kindOf("Pure essence"));
 	}
 
-	/**
-	 * A trailing (n) is a dose only when the name says so. In OSRS it is far
-	 * more often charges or a produce basket, and reading it as a dose files a
-	 * jewellery box and a greengrocer under Potions.
-	 */
 	@Test
 	public void aNumberInBracketsIsNotAlwaysADose()
 	{
@@ -76,10 +61,6 @@ public class ItemKindsTest
 		assertEquals("Food", ItemKinds.kindOf("Strawberries(5)"));
 	}
 
-	/**
-	 * The family word is not always the last word, and a word boundary does
-	 * not fire inside a compound. Both leave an end-anchored rule blind.
-	 */
 	@Test
 	public void theFamilyWordIsNotAlwaysWhereTheRuleLooks()
 	{
@@ -94,10 +75,6 @@ public class ItemKindsTest
 		assertEquals("Ammunition", ItemKinds.kindOf("Adamant dart(p)"));
 	}
 
-	/**
-	 * Sixty pieces of armour end in "legs" and four dishes do, so the four are
-	 * named outright rather than the word being read as food.
-	 */
 	@Test
 	public void legsAreArmourSixtyTimesAndDinnerFour()
 	{
@@ -108,11 +85,6 @@ public class ItemKindsTest
 		assertEquals("Armour", ItemKinds.kindOf("Bandos tassets"));
 	}
 
-	/**
-	 * The Gauntlet's seeds are a weapon, a tool and a set of armour. Left to
-	 * the farming rule they file as Seeds and, because the row ranks by value,
-	 * they BECOME the Seeds row.
-	 */
 	@Test
 	public void aCrystalSeedIsNotPlanted()
 	{
@@ -148,10 +120,6 @@ public class ItemKindsTest
 		assertEquals("Clues and caskets", ItemKinds.kindOf("Scroll box (hard)"));
 	}
 
-	/**
-	 * Null is a real answer. Most of what drops is a unique, and inventing a
-	 * kind for it would be worse than leaving it findable by name.
-	 */
 	@Test
 	public void whatNothingClaimsAnswersNull()
 	{
@@ -179,7 +147,6 @@ public class ItemKindsTest
 		assertNull(ItemKinds.named(null));
 	}
 
-	/** Asking twice is free, which a three hundred row board relies on. */
 	@Test
 	public void theAnswerIsRemembered()
 	{
@@ -189,7 +156,6 @@ public class ItemKindsTest
 		assertNotEquals(ItemKinds.kindOf("Fire rune"), ItemKinds.kindOf("Rune scimitar"));
 	}
 
-	/** Every kind the strip offers must be reachable from some rule. */
 	@Test
 	public void everyKindOfferedIsAKindSomethingCanBe()
 	{

@@ -25,11 +25,6 @@ import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 
-/**
- * A lifetime-counter tracker. {@link ChronicleCounters} hands every subscribed event to
- * each tracker, so a tracker overrides only the handlers it needs and the rest no-op here.
- * Tallies go into the shared {@link StatStore}.
- */
 public interface StatTracker
 {
 	default void onMenuOptionClicked(MenuOptionClicked event) {}
@@ -52,7 +47,6 @@ public interface StatTracker
 
 	default void onItemContainerChanged(ItemContainerChanged event) {}
 
-	// the three channels the game's own lines arrive on
 	static boolean gameChat(ChatMessage event)
 	{
 		ChatMessageType type = event.getType();
@@ -61,7 +55,6 @@ public interface StatTracker
 			|| type == ChatMessageType.MESBOX;
 	}
 
-	// the pack as item id to quantity, or null when the change is to another container
 	static Map<Integer, Integer> inventory(Client client, ItemContainerChanged event)
 	{
 		if (event.getItemContainer() != client.getItemContainer(InventoryID.INVENTORY))

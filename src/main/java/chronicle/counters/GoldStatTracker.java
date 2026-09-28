@@ -20,24 +20,14 @@ import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.InterfaceID;
 
-/**
- * Splits coin movement at a shop into money spent and money earned.
- *
- * <p>There's no shop-trade event to subscribe to. This samples the pack's coin stack
- * each tick and only while the shop widget is open; coins moving for any other reason
- * (a drop, a player trade, a bank withdrawal) fall outside that window and aren't
- * counted.
- */
 @RequiredArgsConstructor
 public class GoldStatTracker implements StatTracker
 {
-	// no shop open. -1 is safe as a sentinel: a real coin count is never negative
 	private static final int IDLE = -1;
 
 	private final StatStore statStore;
 	private final Client client;
 
-	// pack coins at the end of the previous tick, or IDLE
 	private int coinsLastTick = IDLE;
 
 	@Override
@@ -45,7 +35,6 @@ public class GoldStatTracker implements StatTracker
 	{
 		if (event.getGroupId() == InterfaceID.SHOP_INVENTORY)
 		{
-			// prime with the pre-shop total so the first trade has something to measure against
 			coinsLastTick = packCoins();
 		}
 	}
@@ -70,7 +59,7 @@ public class GoldStatTracker implements StatTracker
 		int coins = packCoins();
 		if (coins == IDLE)
 		{
-			return;   // pack unreadable this tick; keep the last figure and retry
+			return;
 		}
 
 		int change = coins - coinsLastTick;
@@ -90,14 +79,10 @@ public class GoldStatTracker implements StatTracker
 	{
 		if (event.getGameState() != GameState.LOGGED_IN)
 		{
-			// a dropped connection tears down the shop with no WidgetClosed, and the pack
-			// moves unobserved while we're away. drop the stale reading.
 			coinsLastTick = IDLE;
 		}
 	}
 
-	// coins in the pack, or IDLE if the container isn't loaded. only the pack: a purchase
-	// paid for out of a rune pouch or looting bag is invisible here
 	private int packCoins()
 	{
 		ItemContainer pack = client.getItemContainer(InventoryID.INVENTORY);

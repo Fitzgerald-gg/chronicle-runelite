@@ -15,17 +15,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A line that repeats the line above it is not a line.
- *
- * <p>"Drops taken" is the loot events less the kills that left a stack on the
- * floor. Where a sitting left nothing - which is most sittings - that is the
- * received count exactly, and the strip printed the same number twice, one
- * under the other, the second saying nothing the first had not.
- *
- * <p>It is drawn only where it differs, which is exactly when "Left behind" is
- * drawn too, so the two arrive together and mean something between them.
- */
 public class SittingStripTest
 {
 	private static PanelPreviewTest.StubPlugin stub;
@@ -88,7 +77,6 @@ public class SittingStripTest
 		}
 	}
 
-	/** TRAP: a sitting that dropped nothing on the floor, which is most of them. */
 	@Test
 	public void aSittingThatLeftNothingDoesNotSayTheSameNumberTwice() throws Exception
 	{
@@ -102,7 +90,6 @@ public class SittingStripTest
 		assertFalse("and claimed a floor it did not leave", said.contains("Left behind"));
 	}
 
-	/** And where they differ, both halves of the difference are on screen. */
 	@Test
 	public void aSittingThatLeftSomethingSaysBothHalves() throws Exception
 	{

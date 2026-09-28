@@ -31,35 +31,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * The journal's calendar spine: one JSON line per day per account, appended to
- * {@code <slug>.history.jsonl} beside the journal. A line is
- * that day's closing baseline ({@code {"date","skills","counters","kcs"}}). A
- * period's gain is one baseline minus another. Login, rollover and logout all
- * append, and the later one replaces the day's earlier line rather than stacking
- * beside it, so a date appears once. Readers still take the last line for a date
- * and skip a torn one, which is what makes the replacement safe. The History tab
- * and PaceBook read it back.
- *
- * <p>A day's line is that day's close, the way the site's nightly snapshot was:
- * the first append after midnight first sets the previous day's line to the
- * state it finds (the nearest thing to a midnight close the plugin has), and
- * only then opens today's line from it. A session run past midnight therefore
- * leaves its evening on the day it was played rather than on the day after.
- *
- * <p>A line also carries {@code "kv"}, the version of the kill-count reckoning
- * that wrote it, and where the counts moved for any reason but play, an
- * {@code "adj"}: how much of the step from the day before was not kills. A
- * newer way of reconciling the counts is one such reason, the game stating a
- * count for the first time (the Kill Log opened, a log page read, a chat line
- * after a gap) is the other. Read back, every line before an adjustment is
- * shifted by it, so the step reads as no kills at all while every day-to-day
- * change before it keeps its size. Nothing already written is ever rewritten.
- */
 @Slf4j
 class HistoryLog
 {
-	// The spine sits beside the journal's own <slug>.json.
 	static final String SPINE_SUFFIX = ".history.jsonl";
 
 	private final Gson gson;
@@ -69,23 +43,8 @@ class HistoryLog
 		this.gson = gson;
 	}
 
-	// Last date appended, per account, for this session; gates the rollover append
-	// and names the day the first append after midnight closes.
-	// Keyed per account: two characters played on the same day each still get a line.
 	private final Map<String, String> lastAppendedDate = new ConcurrentHashMap<>();
 
-	/**
-	 * Append today's closing baseline. Called at login-load, day rollover and
-	 * logout. {@code today} is the day this state belongs to. When this
-	 * process last appended under an earlier date, nothing has closed that day
-	 * since, so the state is written under it first (its close) and then under
-	 * {@code today} (today's opening baseline, to be replaced as the day goes).
-	 *
-	 * @return null once every line is written; otherwise whatever adjustment is
-	 *     now on no line of the file, {@code adj} and anything a cut line was
-	 *     carrying, for the caller to lay by again. Empty when the failure came
-	 *     after the adjustment had landed.
-	 */
 	synchronized Adjust append(File dir, String rsn, Map<String, Long> skills,
 		Map<String, Long> counters, Map<String, Long> kcs, int kv, Adjust adj, LocalDate today)
 	{
@@ -100,7 +59,6 @@ class HistoryLog
 		JsonObject state = new JsonObject();
 		state.add("skills", tree(skills));
 		state.add("counters", tree(counters));
-		// kcs arrived after the rest. Older lines on the stream carry none.
 		state.add("kcs", tree(kcs));
 		state.addProperty("kv", kv);
 		try
@@ -111,17 +69,10 @@ class HistoryLog
 				return unwritten;
 			}
 			File f = new File(dir, slug + SPINE_SUFFIX);
-			// The day turned since this process last wrote: that day's line still
-			// holds its login-time state, so close it at the state in hand before
-			// today's line starts from the same point.
-			// An adjustment belongs to the day the state it describes closes,
-			// which on a rollover is the day just ended.
 			String previous = lastAppendedDate.get(slug);
 			if (previous != null && previous.compareTo(date) < 0)
 			{
 				writeLine(f, previous, state, adj);
-				// On that line now. A retry closes the same day again and carries
-				// it from there, so handing it back as well would lay it twice.
 				unwritten = new Adjust();
 				writeLine(f, date, state, null);
 			}
@@ -132,22 +83,20 @@ class HistoryLog
 			lastAppendedDate.put(slug, date);
 			return null;
 		}
-		catch (Unwritten e)   // the line was cut and not replaced
+		catch (Unwritten e)
 		{
 			log.debug("history append failed", e);
 			return e.adj;
 		}
-		catch (Exception e)   // best-effort; the next append retries
+		catch (Exception e)
 		{
 			log.debug("history append failed", e);
 			return unwritten;
 		}
 	}
 
-	/** A line that could not be written after the one it replaces was cut. */
 	private static final class Unwritten extends IOException
 	{
-		// what the cut line carried, with the adjustment meant for its successor
 		final transient Adjust adj;
 
 		Unwritten(Adjust adj, IOException cause)
@@ -157,8 +106,6 @@ class HistoryLog
 		}
 	}
 
-	// One line for `date` carrying `state`, in place of any line the tail already
-	// holds for that date, and carrying forward whatever adjustment that line had.
 	private void writeLine(File f, String date, JsonObject state, Adjust adj) throws IOException
 	{
 		JsonObject line = new JsonObject();
@@ -167,10 +114,6 @@ class HistoryLog
 		{
 			line.add(e.getKey(), e.getValue());
 		}
-		// Appends are chronological, so any line already bearing this date is at
-		// the tail. Cut it and let this one stand in its place: the reader would
-		// have taken the last of them anyway. Its adjustment is not the day's
-		// counts but a fact about them, and goes on with the day.
 		Adjust carried = dropTrailingDate(f, date);
 		carried.add(adj);
 		if (!carried.isEmpty())
@@ -179,8 +122,6 @@ class HistoryLog
 		}
 		try
 		{
-			// A tail torn mid-line would have this line run on from it, and the
-			// reader skips the pair as one unreadable line.
 			boolean open = endsMidLine(f);
 			try (Writer w = new OutputStreamWriter(new FileOutputStream(f, true), StandardCharsets.UTF_8))
 			{
@@ -216,31 +157,16 @@ class HistoryLog
 		final Map<String, Long> skills = new HashMap<>();
 		final Map<String, Long> counters = new HashMap<>();
 		final Map<String, Long> kcs = new HashMap<>();
-		/**
-		 * A complete snapshot: the line carries "overall" and the skills it
-		 * lists sum exactly to it, so a skill it does not list stood at zero
-		 * that day. A line with no overall, or one whose parts do not add up to
-		 * the overall it carries, speaks only for the skills it names. Derived
-		 * as the line is parsed; the stored format carries no such field.
-		 */
 		boolean complete;
-		// the kill-count reckoning that wrote the line, -1 for a line from before
-		// lines said
 		int kv = -1;
-		// what of the step from the day before was not play; applied on read
 		final Adjust adj = new Adjust();
 	}
 
-	/**
-	 * How much of a day's change in the counts was not play, per key: a kill
-	 * count in {@link #kcs}, a counter (the kills sum) in {@link #counters}.
-	 */
 	static final class Adjust
 	{
 		final Map<String, Long> kcs = new HashMap<>();
 		final Map<String, Long> counters = new HashMap<>();
 
-		/** Fold another adjustment into this one; null folds nothing. */
 		void add(Adjust other)
 		{
 			if (other == null)
@@ -294,7 +220,6 @@ class HistoryLog
 		return o;
 	}
 
-	// Whether the skills a line lists account for the overall it carries.
 	private static boolean whole(Map<String, Long> skills)
 	{
 		Long overall = skills.get("overall");
@@ -313,20 +238,6 @@ class HistoryLog
 		return sum == overall;
 	}
 
-	/**
-	 * The state standing on {@code on}: every line dated up to and including it,
-	 * applied in date order. A complete snapshot replaces the skills wholly, a
-	 * skill it does not list having been at zero that day, so every skill the
-	 * record had carried by then is written down at zero and the line's own
-	 * figures stand over them. A partial line merges instead: a skill it does not
-	 * list keeps the value carried to it. Counters and kill counts always merge,
-	 * being cumulative. A key no line has recorded by then stays absent, and the
-	 * state says whether it rests on a complete snapshot, which is what makes an
-	 * absent skill readable as zero rather than as silence.
-	 *
-	 * <p>A fresh state, never one of the spine's own baselines: the caller may
-	 * hold it as long as it likes.
-	 */
 	static Baseline stateAt(TreeMap<LocalDate, Baseline> spine, LocalDate on)
 	{
 		Baseline out = new Baseline();
@@ -352,14 +263,6 @@ class HistoryLog
 		return out;
 	}
 
-	/**
-	 * The baseline a period is measured from: the last line closed before
-	 * {@code start}, or, when nothing predates the window, the earliest line on
-	 * record up to {@code end}. The site measured the same way, from its first
-	 * snapshot when none came before the window, so a fresh record's first week
-	 * reads from its first day rather than as nothing. Null when no line is dated
-	 * on or before {@code end}.
-	 */
 	static Map.Entry<LocalDate, Baseline> windowStart(
 		TreeMap<LocalDate, Baseline> spine, LocalDate start, LocalDate end)
 	{
@@ -376,12 +279,6 @@ class HistoryLog
 		return first.getKey().isAfter(end) ? null : first;
 	}
 
-	/**
-	 * Each key's earliest recorded value on any line dated up to {@code upTo},
-	 * inclusive. The base for a key the start line does not carry: a counter or
-	 * kill count first minted inside the window, or a skill the imported past
-	 * predates. A recorded value, never absence read as zero.
-	 */
 	static Baseline earliest(TreeMap<LocalDate, Baseline> spine, LocalDate upTo)
 	{
 		Baseline out = new Baseline();
@@ -402,13 +299,6 @@ class HistoryLog
 		return out;
 	}
 
-	/**
-	 * The date of the earliest line whose counters carry {@code key}, or carry
-	 * any counter at all when {@code key} is null; null when no line does. What
-	 * the History tab says a period's counters measure from: imported baselines
-	 * predate the counters, and the journal-derived totals (dropsReceived and
-	 * the rest) joined the line later than the trackers.
-	 */
 	static LocalDate firstCarrying(SortedMap<LocalDate, Baseline> spine, String key)
 	{
 		if (spine == null)
@@ -430,24 +320,12 @@ class HistoryLog
 		return null;
 	}
 
-	/**
-	 * Positive gains from {@code start} to {@code end}, per key, in {@code end}'s
-	 * order. A key the start side lacks measures from its earliest recorded value
-	 * instead; a key recorded nowhere before the end line has no gain to show.
-	 */
 	static Map<String, Long> gained(Map<String, Long> start, Map<String, Long> earliest,
 		Map<String, Long> end)
 	{
 		return gained(start, earliest, end, false);
 	}
 
-	/**
-	 * The same, measured from a state that rests on a complete snapshot: a key
-	 * the start side lacks was at zero there, so it measures its whole standing
-	 * figure. Only skills are read this way. A counter or a kill count absent
-	 * from a complete line was never recorded rather than zero, and keeps the
-	 * earliest-recorded base.
-	 */
 	static Map<String, Long> gained(Map<String, Long> start, Map<String, Long> earliest,
 		Map<String, Long> end, boolean startComplete)
 	{
@@ -484,51 +362,18 @@ class HistoryLog
 		return out;
 	}
 
-	/**
-	 * The levels a state draws: one per skill asked for, the total they sum to,
-	 * how many drew a level at all and how many stand at 99. A level of 0 is a
-	 * skill the state cannot speak for.
-	 */
 	static final class Levels
 	{
 		final Map<String, Integer> of = new LinkedHashMap<>();
-		/**
-		 * The same levels counted past 99.
-		 *
-		 * <p>Beside {@link #of} rather than instead of it. The totals and the
-		 * count of 99s are the game's own statistics and stop at 99 where the
-		 * game does; what a skill tile SHOWS is what the account has actually
-		 * done, which carries on.
-		 */
 		final Map<String, Integer> virtual = new LinkedHashMap<>();
 		int total;
 		int drawn;
 		int nines;
 	}
 
-	// The one skill no account can stand below: a new character is made at
-	// 1,154 hitpoints xp, level 10. PaceBook.levelAt stays the pure curve,
-	// since its own next-level arithmetic needs it unclamped.
 	private static final String HITPOINTS = "hitpoints";
 	private static final int HITPOINTS_FLOOR = 10;
 
-	/**
-	 * Read {@code skills} off {@code state}, in the order asked for. A skill the
-	 * state carries draws the level its xp has reached. A skill it does not
-	 * carry draws level 1 when the state rests on a complete snapshot: a
-	 * complete line lists every skill that had any xp at all, so one no line
-	 * ever listed stood at zero, and zero xp is level 1. The total then counts
-	 * every skill in the game, which is how the site reads it. On a record of
-	 * partial lines alone the skill draws nothing, absence there being silence
-	 * rather than zero.
-	 *
-	 * <p>Hitpoints alone has a floor. Every account is made at 1,154 hitpoints
-	 * xp, which is level 10, so a state reading below that is reading below the
-	 * game's own minimum: an imported line carrying a rounded figure, or a
-	 * complete line omitting hitpoints, which says zero xp and is the same
-	 * impossibility. Wherever the state speaks for hitpoints at all it draws
-	 * 10 at the least, which is what the site publishes.
-	 */
 	static Levels levels(Baseline state, List<String> skills)
 	{
 		Levels out = new Levels();
@@ -545,8 +390,6 @@ class HistoryLog
 				level = Math.max(HITPOINTS_FLOOR, level);
 			}
 			out.of.put(key, level);
-			// The same floor: the game gives a new account ten hitpoints, and a
-			// virtual reading of the curve alone would put it at nine.
 			int past = xp != null ? PaceBook.virtualLevelAt(xp) : level;
 			if (HITPOINTS.equals(key) && past > 0)
 			{
@@ -566,12 +409,6 @@ class HistoryLog
 		return out;
 	}
 
-	/**
-	 * Cut any trailing lines already carrying {@code date}, so the caller's line
-	 * becomes the only one for that day. Walks back from the end because appends
-	 * are in date order. Leaves the file untouched if the tail is a different day,
-	 * and gives up quietly on anything it cannot read.
-	 */
 	private Adjust dropTrailingDate(File f, String date)
 	{
 		Adjust carried = new Adjust();
@@ -595,9 +432,6 @@ class HistoryLog
 				{
 					break;
 				}
-				// The newest of them only: every writer carries the line it replaces
-				// forward, so the last line already holds the whole day's. Two can
-				// survive when a cut failed, and summing them would count one twice.
 				if (!line.isEmpty() && !found)
 				{
 					JsonObject o = parseLine(line, needle);
@@ -614,18 +448,13 @@ class HistoryLog
 				raf.setLength(keep);
 			}
 		}
-		catch (Exception e)   // best-effort; a plain append still reads correctly
+		catch (Exception e)
 		{
 			log.debug("history tail trim failed", e);
 		}
 		return carried;
 	}
 
-	/**
-	 * A line of the day, or null. A line torn by a crash can have the next one
-	 * run on from it, so an unreadable line is read again from the last place
-	 * the day's own line starts.
-	 */
 	private JsonObject parseLine(String line, String needle)
 	{
 		for (String text : new String[]{line, line.substring(Math.max(0, line.lastIndexOf("{" + needle)))})
@@ -640,13 +469,11 @@ class HistoryLog
 			}
 			catch (RuntimeException torn)
 			{
-				// tried again from the day's own start, then given up on
 			}
 		}
 		return null;
 	}
 
-	// Offset just past the newline before `end`, i.e. where that last line begins.
 	private static long lineStart(RandomAccessFile raf, long end) throws IOException
 	{
 		long i = end - 1;
@@ -662,12 +489,6 @@ class HistoryLog
 		return 0;
 	}
 
-	/**
-	 * The kill-count reckoning the spine's last line was written under: null
-	 * with no line at all, 0 for a line from before lines said, which only the
-	 * Plugin Hub's build to 7bd5812 wrote. Reads the tail, not the whole spine;
-	 * appends are in date order, so the last readable line is the newest.
-	 */
 	static Integer newestKv(Gson gson, File dir, String rsn)
 	{
 		File f = new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX);
@@ -700,7 +521,6 @@ class HistoryLog
 				}
 				catch (RuntimeException torn)
 				{
-					// the line before it, then
 				}
 			}
 		}
@@ -710,21 +530,6 @@ class HistoryLog
 		}
 		return null;
 	}
-	/**
-	 * Rewrite the spine keeping one line per date, the last, in date order. Only
-	 * touches a file that repeats a date, which older builds produced by
-	 * appending at login, rollover and logout, or one whose dates are out of
-	 * order, which an import leaves behind. Writes a sibling first and renames
-	 * over the top, so an interrupted compaction leaves the original standing.
-	 * A line's own content is never touched, only its place in the file.
-	 * Returns the number of lines dropped.
-	 *
-	 * <p>A rewrite can only write back what it could read, so a file holding a
-	 * line this cannot parse is left standing: a torn write or a hand-edited
-	 * line would be destroyed by the rename, and the spine is the only copy of
-	 * the record. The reader skips such a line and the file still reads; the
-	 * repeated dates it also holds cost nothing but their bytes.
-	 */
 	synchronized int compact(File dir, String rsn)
 	{
 		if (rsn == null || rsn.isEmpty())
@@ -739,7 +544,6 @@ class HistoryLog
 		TreeMap<String, String> keep = new TreeMap<>();
 		int seen = 0;
 		int unreadable = 0;
-		// ISO dates sort as text, so the map's own order is the calendar's.
 		String previous = null;
 		boolean ordered = true;
 		try (BufferedReader r = new BufferedReader(new InputStreamReader(
@@ -755,8 +559,6 @@ class HistoryLog
 				String date = dateOf(line);
 				if (date == null)
 				{
-					// same torn line the reader skips; a line with no day has no
-					// place to be put
 					unreadable++;
 					continue;
 				}
@@ -766,7 +568,7 @@ class HistoryLog
 					ordered = false;
 				}
 				previous = date;
-				keep.put(date, line);   // last for a date wins, as the reader has it
+				keep.put(date, line);
 			}
 		}
 		catch (Exception e)
@@ -793,8 +595,6 @@ class HistoryLog
 				w.write(line);
 				w.write('\n');
 			}
-			// on the platter before the rename, or a crash between the two
-			// leaves the record standing as an empty file
 			w.flush();
 			out.getFD().sync();
 		}
@@ -827,7 +627,7 @@ class HistoryLog
 		}
 		catch (RuntimeException torn)
 		{
-			return null;   // half-written line, skipped as on read
+			return null;
 		}
 	}
 
@@ -863,11 +663,10 @@ class HistoryLog
 						b.kv = o.get("kv").getAsInt();
 					}
 					b.adj.add(Adjust.from(o.get("adj")));
-					out.put(date, b);   // later lines for a date overwrite: last wins
+					out.put(date, b);
 				}
 				catch (RuntimeException torn)
 				{
-					// torn tail from a crash, skip it
 				}
 			}
 		}
@@ -879,12 +678,6 @@ class HistoryLog
 		return out;
 	}
 
-	/**
-	 * Apply every adjustment to the lines before it, newest first: a line is
-	 * shifted by the sum of the adjustments on every line after it, on the keys
-	 * it already carries and no others. The newest line stays as it was
-	 * written, so it still agrees with the live counts it closes on.
-	 */
 	static void settle(TreeMap<LocalDate, Baseline> spine)
 	{
 		Map<String, Long> kcs = new HashMap<>();
@@ -914,19 +707,11 @@ class HistoryLog
 				}
 				catch (RuntimeException ignored)
 				{
-					// non-numeric value, skip
 				}
 			}
 		}
 	}
 
-	/**
-	 * Fold another spine file into this account's, keeping only dates not already
-	 * on record. Readers take the last line for a date, and an import must never
-	 * sit on top of a day this client measured itself.
-	 *
-	 * @return how many days came across.
-	 */
 	synchronized int importSpine(File dir, String rsn, File source)
 	{
 		if (rsn == null || rsn.isEmpty() || source == null || !source.isFile())
@@ -976,26 +761,16 @@ class HistoryLog
 		return added;
 	}
 
-	/**
-	 * True while no baseline has been appended for this account today. A predicate,
-	 * not a latch: it keeps saying true until append() records today's date. Two
-	 * callers ahead of an append both see it.
-	 */
 	boolean dayRolledOver(String rsn)
 	{
 		if (rsn == null || rsn.isEmpty())
 		{
-			return false;   // nothing to key on; append() refuses a nameless account too
+			return false;
 		}
 		String today = LocalDate.now(ZoneId.systemDefault()).toString();
 		return !today.equals(lastAppendedDate.get(LocalStore.slug(rsn)));
 	}
 
-	/**
-	 * Whether midnight has passed since this process last wrote a line for the
-	 * account: the day it wrote under is over and nothing has closed it. False
-	 * before the first line of a login, which the login's own write makes.
-	 */
 	boolean dayTurned(String rsn)
 	{
 		String previous = rsn == null ? null : lastAppendedDate.get(LocalStore.slug(rsn));

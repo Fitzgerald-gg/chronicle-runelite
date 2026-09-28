@@ -17,11 +17,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The imported past carries skills and nothing else. A board reading a window
- * inside it found no kill moved and said nothing was killed, which is a claim
- * about the account the record cannot make: it was not counting. It says so.
- */
 public class NotCountingTest
 {
 	private static final LocalDate KEPT_FROM = LocalDate.of(2026, 8, 31);
@@ -46,7 +41,6 @@ public class NotCountingTest
 	private static PanelPreviewTest.StubPlugin record()
 	{
 		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
-		// the imported year: skills only
 		for (int m = 1; m <= 12; m++)
 		{
 			HistoryLog.Baseline b = new HistoryLog.Baseline();
@@ -54,7 +48,6 @@ public class NotCountingTest
 			b.skills.put("overall", 200_000_000L + m * 1_000_000L);
 			s.history.put(LocalDate.of(2025, m, 1).withDayOfMonth(LocalDate.of(2025, m, 1).lengthOfMonth()), b);
 		}
-		// the plugin's own lines, which carry counters and kill counts
 		for (int d = 0; d < 3; d++)
 		{
 			HistoryLog.Baseline b = new HistoryLog.Baseline();
@@ -125,7 +118,6 @@ public class NotCountingTest
 		assertFalse(skill, skill.contains("Nothing is tracked under Woodcutting"));
 	}
 
-	/** Once it was counting, an empty window is an empty window again. */
 	@Test
 	public void aWindowAfterCountingBeganStillSaysNothingWhenNothingHappened() throws Exception
 	{

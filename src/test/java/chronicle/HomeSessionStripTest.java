@@ -26,15 +26,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The Home tab's session strip, its three loot rows: "Drops received" (the loot
- * events and their gp), "Drops taken" (those events less the kills that left a
- * stack on the floor, floored at none) and "Left behind" (the stacks and their
- * gp). The middle row is in one unit with the first, and is drawn only where it
- * DIFFERS from it: taking everything is the ordinary case, and there it repeated
- * the received count verbatim. So it appears exactly when the third row does.
- * The stacks under that third row are never what it subtracts.
- */
 public class HomeSessionStripTest
 {
 	@BeforeClass
@@ -56,8 +47,6 @@ public class HomeSessionStripTest
 		return s;
 	}
 
-	// the Home tab's labels, once the read the panel primes when it is built has
-	// landed, so nothing lands over the render
 	private static List<String> home(PanelPreviewTest.StubPlugin stub) throws Exception
 	{
 		return home(stub, new String[0]);
@@ -102,7 +91,6 @@ public class HomeSessionStripTest
 		}
 	}
 
-	// the figure beside a named row, or null when the row is absent
 	private static String beside(List<String> strip, String label)
 	{
 		int at = strip.indexOf(label);
@@ -137,8 +125,6 @@ public class HomeSessionStripTest
 	@Test
 	public void theThreeRowsReadInOrderWithTheirFigures() throws Exception
 	{
-		// 37 loot events, six of which left a stack: 31 taken. Nine stacks were
-		// left, and that count is not what was subtracted.
 		List<String> strip = home(stub(37, 1_204_113L, 6, 9, 44_120L));
 		int at = strip.indexOf("Drops received");
 		assertTrue(strip.toString(), at > 0);
@@ -151,8 +137,6 @@ public class HomeSessionStripTest
 	@Test
 	public void moreKillsLeavingLootThanDropsReceivedFloorsAtNone() throws Exception
 	{
-		// a kill whose loot arrived before the session's count started can leave
-		// its stack inside it: the figure floors rather than going negative
 		List<String> strip = home(stub(2, 500, 5, 7, 100));
 		assertEquals("2 · 500 gp", beside(strip, "Drops received"));
 		assertEquals("0", beside(strip, "Drops taken"));
@@ -168,16 +152,6 @@ public class HomeSessionStripTest
 		assertEquals("4 · 100 gp", beside(strip, "Left behind"));
 	}
 
-	/**
-	 * Nothing left behind means every drop was taken - and so the strip does not
-	 * say so. The taken count is the received count exactly here, and printing it
-	 * put the same number twice, one line under the other, the second saying
-	 * nothing the first had not. It is drawn only where it differs, which is
-	 * exactly when Left behind is drawn too.
-	 *
-	 * <p>The arithmetic it used to assert is still held, by the two cases that DO
-	 * differ: the floor above, and a sitting that left a handful.
-	 */
 	@Test
 	public void nothingLeftBehindIsNotWorthAnotherLine() throws Exception
 	{
@@ -187,8 +161,6 @@ public class HomeSessionStripTest
 			strip.contains("Drops taken"));
 		assertFalse(strip.toString(), strip.contains("Left behind"));
 	}
-
-	// ---- what else the session moved, under the parent it belongs to --------
 
 	private static PanelPreviewTest.StubPlugin moved(Object... pairs)
 	{
@@ -200,8 +172,6 @@ public class HomeSessionStripTest
 		return s;
 	}
 
-	// the strip with a set of folds already open, so a test can read both what a
-	// parent says shut and what it holds
 	private static List<String> home(PanelPreviewTest.StubPlugin stub, String... open)
 		throws Exception
 	{
@@ -231,8 +201,6 @@ public class HomeSessionStripTest
 	@Test
 	public void everyTrackerSitsUnderAHeading() throws Exception
 	{
-		// one rule for the whole strip: a combat tracker is not left bare while a
-		// skilling one gets a parent. Every row has a heading above it.
 		List<String> strip = home(moved(
 			"hitsBlocked", 6, "herbsSacked", 248, "distanceWalked", 169,
 			"foodEaten", 20));
@@ -255,7 +223,6 @@ public class HomeSessionStripTest
 			lastHeadingBefore(strip, strip.indexOf(StatRegistry.label("distanceWalked"))));
 	}
 
-	// the heading a row reads under, or null when it stands loose
 	private static String lastHeadingBefore(List<String> strip, int at)
 	{
 		String head = null;
@@ -275,8 +242,6 @@ public class HomeSessionStripTest
 	@Test
 	public void aHerbSackRunIsOneRowAndNamesTheTrackerThatMoved() throws Exception
 	{
-		// the sack types every herb it swallows; the session moved one tracker,
-		// and the row says which one rather than naming a family
 		List<String> strip = home(moved(
 			"herbsSacked", 248, "guamLeafSacked", 60, "cadantineSacked", 35,
 			"kwuarmSacked", 40, "avantoeSacked", 27, "dwarfWeedSacked", 12));
@@ -299,7 +264,6 @@ public class HomeSessionStripTest
 	@Test
 	public void aTrackerWhoseParentNeverMovedKeepsItsOwnRow() throws Exception
 	{
-		// nothing above it can speak for it, so hiding it would lose the session
 		List<String> strip = home(moved("teleportsVarrock", 2));
 		assertEquals(strip.toString(), "2", beside(strip, StatRegistry.label("teleportsVarrock")));
 	}
@@ -307,8 +271,6 @@ public class HomeSessionStripTest
 	@Test
 	public void theLogsAFletcherCutReconcileToOneRow() throws Exception
 	{
-		// mapleLogsFletched and its siblings are logsFletched typed by log, and
-		// they sum to it exactly
 		List<String> strip = home(moved("logsFletched", 14_556,
 			"mapleLogsFletched", 12_865, "magicLogsFletched", 866,
 			"yewLogsFletched", 420, "willowLogsFletched", 405));
@@ -325,9 +287,7 @@ public class HomeSessionStripTest
 	@Test
 	public void aHeadingCarriesNoFigureUntilItIsShut() throws Exception
 	{
-		// open, the rows beneath speak for it; shut, it says what it is holding
 		List<String> open = home(moved("hitsBlocked", 6, "deaths", 2));
-		// nothing stands between the heading and the first row it holds
 		assertEquals(open.toString(), StatRegistry.label("hitsBlocked"),
 			beside(open, "COMBAT"));
 		assertEquals(open.toString(), "6", beside(open, StatRegistry.label("hitsBlocked")));
@@ -340,7 +300,6 @@ public class HomeSessionStripTest
 	@Test
 	public void theDamageSplitOpensFromTheDamageItSplits() throws Exception
 	{
-		// the three styles are one figure broken up, not three more trackers
 		List<String> shut = home(moved("damageDealt", 355, "damageDealtMelee", 81,
 			"damageDealtRanged", 253, "damageDealtMagic", 21));
 		assertEquals(shut.toString(), "355", beside(shut, "Damage dealt"));
@@ -355,8 +314,6 @@ public class HomeSessionStripTest
 	@Test
 	public void aParentRowOpensOnThePlacesItStandsFor() throws Exception
 	{
-		// the total is what the session moved; the places are what it moved it on,
-		// and a click is meant to reach them
 		List<String> shut = home(moved(
 			"teleportsTotal", 5, "teleportsVarrock", 3, "teleportsLumbridge", 1));
 		assertEquals(shut.toString(), "5", beside(shut, StatRegistry.label("teleportsTotal")));
@@ -369,7 +326,6 @@ public class HomeSessionStripTest
 			beside(open, StatRegistry.rowLabel("teleportsVarrock")));
 		assertEquals(open.toString(), "1",
 			beside(open, StatRegistry.rowLabel("teleportsLumbridge")));
-		// five journeys, four of them placed: the fifth is drawn, not dropped
 		assertEquals(open.toString(), "1", beside(open, "Other means"));
 	}
 

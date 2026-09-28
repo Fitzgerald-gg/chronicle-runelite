@@ -13,15 +13,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The boss roster comes from RuneLite, not from a file we ship.
- *
- * <p>A plugin update is a Hub review and a month. RuneLite ships weekly, and its
- * HiscoreSkill enum carries the name, the type and the sprite id of every boss
- * the official panel draws. Reading it means a boss Jagex adds turns up on its
- * own, with its icon, and the bundled file is only there for a client whose enum
- * has moved under us.
- */
 public class SelfHealingRosterTest
 {
 	@SuppressWarnings("unchecked")
@@ -50,7 +41,6 @@ public class SelfHealingRosterTest
 		return f.getInt(boss);
 	}
 
-	/** Every boss RuneLite knows about, and only those. */
 	@Test
 	public void theRosterIsWhateverRuneLiteSaysItIs() throws Exception
 	{
@@ -71,10 +61,6 @@ public class SelfHealingRosterTest
 		assertEquals("the roster and RuneLite's own list have parted", theirs, mine);
 	}
 
-	/**
-	 * And each one arrives with its icon. A boss added without a sprite would draw
-	 * a blank tile, which is the thing the bundled file existed to avoid.
-	 */
 	@Test
 	public void everyBossBringsItsOwnSprite() throws Exception
 	{
@@ -84,11 +70,6 @@ public class SelfHealingRosterTest
 		}
 	}
 
-	/**
-	 * The bundle is the fallback, so it has to stay loadable and stay roughly the
-	 * right shape. If it rots to nothing, a client whose enum has moved shows an
-	 * empty board and nobody finds out until then.
-	 */
 	@Test
 	public void theFallbackIsStillThere()
 	{
@@ -106,7 +87,6 @@ public class SelfHealingRosterTest
 		assertTrue("the fallback holds only " + arr.size() + " bosses", arr.size() > 50);
 	}
 
-	/** A new boss is exactly the case this exists for, so name one that is recent. */
 	@Test
 	public void aRecentBossIsAlreadyHereWithoutAPluginUpdate() throws Exception
 	{

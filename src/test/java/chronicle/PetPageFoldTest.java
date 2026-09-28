@@ -26,16 +26,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A collection log pets page is a list of names and nothing else. Each name that has
- * something under it (where an owned pet came from, or how far the chase for an
- * unearned one has run) gives it up on a click and takes it back on the next. A name
- * with nothing under it is not a fold at all.
- *
- * <p>The state is the panel's one fold register, the same Set every other fold in the
- * panel keys into, so it outlives the rebuilds the home ticker fires and is dropped
- * whole when the account changes.
- */
 public class PetPageFoldTest
 {
 	private static final String NOTE =
@@ -47,10 +37,6 @@ public class PetPageFoldTest
 		System.setProperty("java.awt.headless", "true");
 	}
 
-	// ------------------------------------------------------------------
-	// A panel over a journal with one owned pet and two chases
-	// ------------------------------------------------------------------
-
 	private PanelPreviewTest.StubPlugin stub()
 	{
 		PanelPreviewTest.StubPlugin s =
@@ -58,9 +44,7 @@ public class PetPageFoldTest
 		s.rsn = "Folder";
 		JsonObject clog = new JsonObject();
 		JsonObject kcs = new JsonObject();
-		// a boss chase, whose odds are not read off any level
 		kcs.addProperty("abyssal sire", 214);
-		// and the Tempoross record three ways over, for the source test below
 		kcs.addProperty("tempoross", 46);
 		clog.add("kcs", kcs);
 		JsonObject items = new JsonObject();
@@ -71,7 +55,6 @@ public class PetPageFoldTest
 			4_112_005L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		s.sources.add(new LocalStore.SourceRow("Casket (Tempoross)", 25, 25,
 			812_400L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
-		// an owned pet, with the provenance line the page folds away
 		s.petRows.add(new LocalStore.PetRow("Pet kraken", "Kraken", 2_147,
 			java.time.Instant.parse("2024-11-08T20:14:00Z").toEpochMilli()));
 		return s;
@@ -91,20 +74,14 @@ public class PetPageFoldTest
 		return holder[0];
 	}
 
-	// ------------------------------------------------------------------
-	// The fold
-	// ------------------------------------------------------------------
-
 	@Test
 	public void everyPetStartsFoldedSoThePageIsJustAList() throws Exception
 	{
 		ChroniclePanel p = petsPage(stub());
 		List<String> text = labels(p);
-		// the names are all there
 		assertTrue(text.contains("Abyssal orphan"));
 		assertTrue(text.contains("Pet kraken"));
 		assertTrue(text.contains("Tiny tempor"));
-		// and not one of them has said anything else
 		assertNull(detailUnder(p, "Abyssal orphan"));
 		assertNull(detailUnder(p, "Pet kraken"));
 		assertNull(detailUnder(p, "Tiny tempor"));
@@ -116,7 +93,6 @@ public class PetPageFoldTest
 		ChroniclePanel p = petsPage(stub());
 		click(p, "Abyssal orphan");
 		assertEquals("Abyssal Sire, kc 214", detailUnder(p, "Abyssal orphan"));
-		// its neighbours are untouched: one click opens one pet
 		assertNull(detailUnder(p, "Pet kraken"));
 		click(p, "Abyssal orphan");
 		assertNull(detailUnder(p, "Abyssal orphan"));
@@ -141,8 +117,6 @@ public class PetPageFoldTest
 		assertNotNull(detailUnder(p, "Pet kraken"));
 	}
 
-	// The home ticker rebuilds the panel every three seconds. A fold that did not
-	// survive that would shut on the reader between one glance and the next.
 	@Test
 	public void anOpenFoldSurvivesARebuild() throws Exception
 	{
@@ -153,8 +127,6 @@ public class PetPageFoldTest
 		assertEquals("Abyssal Sire, kc 214", detailUnder(p, "Abyssal orphan"));
 	}
 
-	// Every other view built from the last account's journal is dropped on a switch,
-	// and a fold opened over one account's numbers is no different.
 	@Test
 	public void theFoldsCloseWhenTheAccountChanges() throws Exception
 	{
@@ -176,26 +148,17 @@ public class PetPageFoldTest
 		assertNull(detailUnder(p, "Pet kraken"));
 	}
 
-	// A row with nothing behind it must not pretend otherwise: no hand cursor, no
-	// hover, and a click that does nothing because there is nothing listening.
 	@Test
 	public void aPetWithNothingToSayIsNotAFold() throws Exception
 	{
 		ChroniclePanel p = petsPage(stub());
-		// Dom has a rate the wiki prints and no counter that can ask for it, so the
-		// page has nothing to put under it whatever the journal holds
 		JPanel row = rowFor(p, "Dom");
 		assertNotNull(row);
 		assertEquals(0, row.getMouseListeners().length);
 		assertEquals(Cursor.getDefaultCursor(), row.getCursor());
 		assertNull(row.getToolTipText());
-		// clicking it is not an action, and the register stays empty
 		assertTrue(register(p).isEmpty());
 	}
-
-	// ------------------------------------------------------------------
-	// The note
-	// ------------------------------------------------------------------
 
 	@Test
 	public void theNoteReadsExactlyAsSpecified() throws Exception
@@ -204,8 +167,6 @@ public class PetPageFoldTest
 		assertEquals(NOTE, note(p));
 	}
 
-	// The note is the page telling the reader the rows open. It belongs on any page
-	// where one of them does, not only on a page carrying a level-scaled chase.
 	@Test
 	public void theNoteRidesAnyPageWithAFoldOnIt() throws Exception
 	{
@@ -217,7 +178,6 @@ public class PetPageFoldTest
 		clog.add("kcs", kcs);
 		s.clog = clog;
 		ChroniclePanel p = petsPage(s);
-		// the one chase on the page is a boss chase, read off no level at all
 		click(p, "Abyssal orphan");
 		assertEquals("Abyssal Sire, kc 214", detailUnder(p, "Abyssal orphan"));
 		assertEquals(NOTE, note(p));
@@ -233,12 +193,6 @@ public class PetPageFoldTest
 		assertNull(note(p));
 	}
 
-	// ------------------------------------------------------------------
-	// One mechanism, not two
-	// ------------------------------------------------------------------
-
-	// Home's xp breakdown was a boolean of its own. It is a key in the same register
-	// now, which is what lets the next fold be a key and not a third field.
 	@Test
 	public void homesXpFoldIsAKeyInTheSameRegister() throws Exception
 	{
@@ -256,13 +210,6 @@ public class PetPageFoldTest
 		assertFalse(register(p).contains("home:xp"));
 	}
 
-	// ------------------------------------------------------------------
-	// Walking the built panel
-	// ------------------------------------------------------------------
-
-	// The ghost line drawn directly under one pet's name row, or null where the page
-	// drew none. Read off the mounted components, not off the model, so it says what
-	// a reader would actually see.
 	private String detailUnder(ChroniclePanel p, String pet)
 	{
 		List<Component> flat = new ArrayList<>();
@@ -278,7 +225,6 @@ public class PetPageFoldTest
 			{
 				continue;
 			}
-			// the very next row panel is the detail, unless it is another pet's name
 			for (int j = i + 1; j < flat.size(); j++)
 			{
 				if (!(flat.get(j) instanceof JPanel))
@@ -298,8 +244,6 @@ public class PetPageFoldTest
 		return null;
 	}
 
-	// True where the string names a slot on the page under the glass, which is how a
-	// detail line is told from the next pet down.
 	private boolean isPetName(ChroniclePanel p, String s)
 	{
 		try
@@ -333,9 +277,6 @@ public class PetPageFoldTest
 		return null;
 	}
 
-	// Press a row the way a reader does. clicker() listens on mousePressed, and the
-	// toggle rebuilds the panel under us, so nothing held from before the press is
-	// still mounted after it.
 	private void click(ChroniclePanel p, String name) throws Exception
 	{
 		JPanel row = rowFor(p, name);
@@ -352,8 +293,6 @@ public class PetPageFoldTest
 		});
 	}
 
-	// The wrapped page note, joined back into one sentence, or null where the page
-	// drew none. A note is a stack of labels, one a line, inside its own panel.
 	private String note(ChroniclePanel p)
 	{
 		List<Component> flat = new ArrayList<>();
@@ -423,10 +362,6 @@ public class PetPageFoldTest
 			}
 		}
 	}
-
-	// ------------------------------------------------------------------
-	// Reflection into the panel
-	// ------------------------------------------------------------------
 
 	@SuppressWarnings("unchecked")
 	private static java.util.Set<String> register(ChroniclePanel p) throws Exception

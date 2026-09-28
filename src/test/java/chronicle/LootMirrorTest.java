@@ -16,16 +16,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Received and Left behind are one board read two ways.
- *
- * <p>They did not look like it. Received drew two-line source cards under an
- * axis strip; Left behind drew single-line rows, in red, under no axis at all,
- * with its two lists stacked one below the other - the scroll-to-discover this
- * panel does not do anywhere else. And the same lens drew in two palettes a
- * click apart, because the windowed path never used the red the lifetime path
- * put on every row.
- */
 public class LootMirrorTest
 {
 	private static ChroniclePanel panel;
@@ -120,7 +110,6 @@ public class LootMirrorTest
 		return false;
 	}
 
-	/** Both readings carry the second axis, and it is the same control. */
 	@Test
 	public void bothSidesOfTheCoinOfferTheSameAxes() throws Exception
 	{
@@ -134,7 +123,6 @@ public class LootMirrorTest
 			exactly(left, "By source"));
 	}
 
-	/** And the axis names what that side actually holds. */
 	@Test
 	public void theSecondAxisNamesWhatEachSideHolds() throws Exception
 	{
@@ -144,11 +132,6 @@ public class LootMirrorTest
 			exactly(texts(drops(true, true)), "By item"));
 	}
 
-	/**
-	 * One list at a time. Left behind used to draw sources AND items stacked,
-	 * which is the one place in the panel a reader had to scroll to find a view
-	 * rather than choose it.
-	 */
 	@Test
 	public void leftBehindDrawsOneListAtATime() throws Exception
 	{
@@ -161,11 +144,6 @@ public class LootMirrorTest
 		assertFalse(exactly(byItem, "Sources"));
 	}
 
-	/**
-	 * Red is the head's, not every row's. A colour on every row of a list says
-	 * nothing the list does not already say, and it was the thing that made one
-	 * lens read in two palettes depending on the period.
-	 */
 	@Test
 	public void redBelongsToTheHeadAndNotToEveryRow() throws Exception
 	{
@@ -186,7 +164,6 @@ public class LootMirrorTest
 			reds <= 12);
 	}
 
-	/** The two readings draw the same shape: a head card, then cards. */
 	@Test
 	public void bothReadingsDrawTheSameShape() throws Exception
 	{

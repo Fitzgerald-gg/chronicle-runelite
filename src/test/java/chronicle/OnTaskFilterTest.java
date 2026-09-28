@@ -15,16 +15,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The All / On task filter: where it appears, what it narrows, and the two
- * things it must never do.
- *
- * <p>It must never appear where the record has no on-task side to show, and it
- * must never put a gp figure from the task bag beside one from the ledger. The
- * two bags are priced on different days, so on the owner's own record 19 items
- * are worth MORE on task than in the entire ledger while never exceeding it by
- * quantity. Counts cross the filter; money does not.
- */
 @SuppressWarnings("unchecked")
 public class OnTaskFilterTest
 {
@@ -115,7 +105,6 @@ public class OnTaskFilterTest
 		}
 	}
 
-	/** Card titles and group headings are drawn uppercase, so match without case. */
 	private static boolean has(List<String> said, String what)
 	{
 		for (String s : said)
@@ -141,14 +130,6 @@ public class OnTaskFilterTest
 		return null;
 	}
 
-	/**
-	 * An item a task paid gets the filter. One no task paid does not.
-	 *
-	 * <p>Read on the axis being drawn at all rather than on one of its labels,
-	 * the same way the board's own test reads it: this page draws the one toggle
-	 * the board draws now, and a toggle shows the reading it is ON, so at the
-	 * default setting it says "All".
-	 */
 	@Test
 	public void theFilterAppearsOnlyWhereThereIsSomethingToFilter() throws Exception
 	{
@@ -161,11 +142,6 @@ public class OnTaskFilterTest
 			has(never, "On task") || has(never, "All"));
 	}
 
-	/**
-	 * And it is the SAME control on both, not a second design for one piece of
-	 * state. The page used to draw a pair of pills whose dark half named the
-	 * reading the reader had not chosen, which is what toggle() replaced.
-	 */
 	@Test
 	public void thePageAndTheBoardDrawTheSameControl() throws Exception
 	{
@@ -183,11 +159,6 @@ public class OnTaskFilterTest
 		assertFalse(on.toString(), exactly(on, "All"));
 	}
 
-	/**
-	 * A label in its own right, not a substring of one. The page carries rows
-	 * called "All sources" and "Obtained on task", so a contains() check answers
-	 * yes to both readings of the toggle at once.
-	 */
 	private static boolean exactly(List<String> said, String label)
 	{
 		for (String s : said)
@@ -200,7 +171,6 @@ public class OnTaskFilterTest
 		return false;
 	}
 
-	/** And a page with no filter on it ignores the setting entirely. */
 	@Test
 	public void aPageWithNoFilterIsNotGovernedByOne() throws Exception
 	{
@@ -212,12 +182,6 @@ public class OnTaskFilterTest
 		assertFalse(has(said, "On task"));
 	}
 
-	/**
-	 * Both readings carry the same rows. The money on each is true of a
-	 * different day, and the on-task row says so rather than inviting a
-	 * subtraction: 19 of the owner's 287 on-task items price HIGHER than the
-	 * same item does across his whole ledger.
-	 */
 	@Test
 	public void bothReadingsCarryAWorthAndSayWhichDayItIsFrom() throws Exception
 	{
@@ -226,18 +190,9 @@ public class OnTaskFilterTest
 		List<String> said = say(p, "buildItemDetail", "Fire rune");
 		assertEquals("×600", after(said, "Obtained on task"));
 		assertEquals("×900", after(said, "All sources"));
-		// Both readings carry a Worth, and this journal is built so they
-		// disagree the way the owner's does: the tasks logged 10,009 gp for six
-		// hundred fire runes while the ledger holds 900 for nine hundred of
-		// them, because the two bags froze their prices on different days. The
-		// row has to say which day it is quoting.
 		assertEquals("10k gp", after(said, "Worth"));
 	}
 
-	/**
-	 * Under a period the head reads the period's tasks, as the rows beneath it
-	 * do: a lifetime's six hundred on task sat over a day that no task paid.
-	 */
 	@Test
 	public void anOnTaskHeadReadsItsPeriod() throws Exception
 	{
@@ -248,7 +203,6 @@ public class OnTaskFilterTest
 		assertEquals(said.toString(), "×0", after(said, "Obtained on task"));
 	}
 
-	/** The split is by task, because the record cannot say which monster. */
 	@Test
 	public void theItemSplitsByTaskNotByMonster() throws Exception
 	{
@@ -261,27 +215,17 @@ public class OnTaskFilterTest
 		assertFalse("a monster was named as if it had paid", has(said, "Blue dragon ×"));
 	}
 
-	/**
-	 * A monster's page is never filtered. It states its on-task kills, which are
-	 * exact, and lists the assignments it turned up in, labelled for the task,
-	 * because a task's take belongs to the task.
-	 */
 	@Test
 	public void aMonsterStatesItsKillsAndNamesTheTask() throws Exception
 	{
 		ChroniclePanel p = panel();
 		set(p, "onTaskOnly", true);
-		// the on-task figure sits with the other counts of the same fight, under
-		// a fold that opens on a click
 		Field folds = ChroniclePanel.class.getDeclaredField("openFolds");
 		folds.setAccessible(true);
 		((java.util.Set<String>) folds.get(p)).add("kcsrc:Blue dragon");
 		List<String> said = say(p, "buildSourceDetail", "Blue dragon");
 		assertEquals("the game's own count, not the ledger's", "400", after(said, "Kills"));
 		assertTrue(has(said, "What says so"));
-		// 45 DROPPED on task, which is not the same as 45 killed: the journal
-		// counts a monster on a task when it pays, and 271 of my own on-task
-		// kills paid nothing at all.
 		assertEquals("400", after(said, "Kill Log"));
 		assertEquals("300", after(said, "Drops logged"));
 		assertEquals("45", after(said, "Dropped on task"));
@@ -289,11 +233,9 @@ public class OnTaskFilterTest
 		assertEquals("45", after(said, "Task: Blue dragons"));
 		assertFalse("a monster page grew a filter it cannot honour",
 			has(said, "All"));
-		// the whole ledger bag is still there, uncut
 		assertTrue(has(said, "Dragon bones"));
 	}
 
-	/** A monster never assigned says nothing about tasks at all. */
 	@Test
 	public void aMonsterNeverAssignedSaysNothing() throws Exception
 	{
@@ -303,13 +245,10 @@ public class OnTaskFilterTest
 		assertFalse(has(said, "Killed on task"));
 	}
 
-	/** The loot board offers it over kinds, and never over sources. */
 	@Test
 	public void theLootBoardOffersItOverKindsOnly() throws Exception
 	{
 		ChroniclePanel p = panel();
-		// The axis is one toggle reading "On task" or "All", so the rule is
-		// tested on the axis being drawn at all, not on one of its two labels.
 		set(p, "dropsByKind", false);
 		List<String> bySource = say(p, "buildDrops");
 		assertFalse("By source cannot answer it and must not offer it",
@@ -319,7 +258,6 @@ public class OnTaskFilterTest
 		assertTrue(has(byKind, "On task") || has(byKind, "All"));
 	}
 
-	/** On task, the board reads the tasks rather than the ledger. */
 	@Test
 	public void theLootBoardNarrowsToTheTasks() throws Exception
 	{
@@ -331,10 +269,6 @@ public class OnTaskFilterTest
 		assertEquals("600 fire runes across two tasks", "600", after(said, "Items"));
 	}
 
-	/**
-	 * A period that closed no task says so and keeps the control, rather than
-	 * dropping the reader onto the ledger's own note with no way back.
-	 */
 	@Test
 	public void aPeriodWithNoTaskInItSaysSo() throws Exception
 	{
@@ -347,11 +281,6 @@ public class OnTaskFilterTest
 		assertTrue(has(said, "No task closed inside"));
 	}
 
-	/**
-	 * A picture carries less than the board does. Two lines are the reader's
-	 * own bookkeeping rather than anything about the fight, and one of them can
-	 * name a day before the account existed on a ledger holding imported rows.
-	 */
 	@Test
 	public void aPictureLeavesTheReadersOwnBookkeepingBehind() throws Exception
 	{
@@ -393,12 +322,6 @@ public class OnTaskFilterTest
 		assertTrue("the picture lost the fight itself", has(shared, "Kills"));
 	}
 
-	/**
-	 * The card in the list and the page it opens carry the same two figures.
-	 * They used to disagree: the card took the ledger's own kill count and the
-	 * page worked out another, so Nechryael read 686 on one and 1,236 on the
-	 * other, one click apart.
-	 */
 	@Test
 	public void theListCardAgreesWithThePageItOpens() throws Exception
 	{
@@ -409,21 +332,10 @@ public class OnTaskFilterTest
 			"400", after(page, "Kills"));
 		assertTrue("the card leads with a different number than the page: " + card,
 			has(card, "400 kc"));
-		// and the rate is over drops on both, because the worth accrues per
-		// drop and dividing it by kills was reading high
 		assertTrue(has(card, "gp/drop"));
 		assertTrue(has(page, "gp/drop"));
 	}
 
-	/**
-	 * Searching a kind opens the LOOT TRACKER, not the slayer board.
-	 *
-	 * <p>It used to hard-code PvM's Slayer tab with its Drops lens up, so a
-	 * reader who typed "runes" wanting every rune they had ever been given got
-	 * only the ones tasks paid, with nothing on screen saying so. Both readings
-	 * are offered now, as two rows, and the slayer one only where the tasks
-	 * actually paid some of that kind.
-	 */
 	@Test
 	public void searchingAKindOpensTheLootTracker() throws Exception
 	{
@@ -436,19 +348,16 @@ public class OnTaskFilterTest
 		assertFalse("the old on-task-only caption survived", has(said, "on-task loot"));
 	}
 
-	/** And a kind no task ever paid is offered once, not twice. */
 	@Test
 	public void aKindWithNoSlayerSideIsOfferedOnce() throws Exception
 	{
 		ChroniclePanel p = panel();
-		// the journal's only on-task item is a Fire rune, so Hides has none
 		List<String> said = say(p, "buildSearch", "hides");
 		assertTrue(has(said, "every one you have had"));
 		assertFalse("a slayer row was offered for a kind no task paid",
 			has(said, "from slayer tasks"));
 	}
 
-	/** Both rows land on the loot board, one on each reading. */
 	@Test
 	public void bothRowsLandOnTheLootBoard() throws Exception
 	{
@@ -481,7 +390,6 @@ public class OnTaskFilterTest
 			kind.setAccessible(true);
 			assertEquals("Runes", kind.get(p));
 		}
-		// the ledger reading holds 900 fire runes, the slayer one 600 of them
 		Field lens = ChroniclePanel.class.getDeclaredField("onTaskOnly");
 		lens.setAccessible(true);
 		lens.setBoolean(p, false);
@@ -490,15 +398,6 @@ public class OnTaskFilterTest
 		assertEquals("600", after(say(p, "buildDrops"), "Items"));
 	}
 
-	/**
-	 * Something that is killed says kills, however the Kill Log spells it.
-	 *
-	 * <p>Two ways a killed thing was being called looted. The Kill Log names the
-	 * assignment, "Jellies", and the ledger names the monster, "Jelly", and the
-	 * bridge between them stripped one trailing s and produced "jellie", which
-	 * meets nothing. And the Kill Log has no line at all for a superior, so a
-	 * Choke devil had no statement to be recognised by.
-	 */
 	@Test
 	public void aKilledThingSaysKillsHoweverItIsSpelled() throws Exception
 	{
@@ -507,8 +406,6 @@ public class OnTaskFilterTest
 		assertEquals("the Kill Log's plural never reached the ledger's singular",
 			"979", after(jelly, "Kills"));
 
-		// a superior the Kill Log does not list, recognised by the task it was
-		// fought on instead
 		List<String> choke = say(p, "buildSourceDetail", "Choke devil");
 		assertTrue("a superior killed on a task was called looted",
 			has(choke, "Kills"));

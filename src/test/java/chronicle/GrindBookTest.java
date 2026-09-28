@@ -15,11 +15,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Pet dryness against the bundled rate book: the odds a pet would have landed by
- * the kill count the journal holds. A pet with several sources is one chase fed
- * from all of them, never the flattering half of the pair.
- */
 public class GrindBookTest
 {
 	private static final List<String> PETS = Arrays.asList(
@@ -49,8 +44,6 @@ public class GrindBookTest
 			new java.util.HashMap<>(), new java.util.HashMap<>(), new JsonObject(), PETS);
 	}
 
-	// 2,023 Zalcano against Smolcano's 1/2,250: 1 - (1 - 1/2250)^2023 = 59.3%.
-	// Not 2023/2250 = 89.9%, which is the mistake this row exists to avoid.
 	@Test
 	public void singleSourceCompoundsPerKill()
 	{
@@ -62,8 +55,6 @@ public class GrindBookTest
 		assertEquals(2250, c.sources.get(0).rate);
 	}
 
-	// The drop ledger's own kill count feeds the same chase when the log has no
-	// page for the boss.
 	@Test
 	public void ledgerKillsCount()
 	{
@@ -73,10 +64,6 @@ public class GrindBookTest
 		assertEquals(59.3, c.percentileDry, 0.05);
 	}
 
-	// Callisto cub drops at Callisto (1/1,500) and Artio (1/2,800). 1,500 kills at
-	// the first alone is 63.2%, 900 at the second alone is 27.5%; together the
-	// misses multiply and the chase is 73.3%. Picking one source would report a
-	// player far drier than they are.
 	@Test
 	public void severalSourcesMultiplyTheirMisses()
 	{
@@ -86,15 +73,12 @@ public class GrindBookTest
 		assertTrue(c.percentileDry > 63.2);
 		assertEquals(2400, c.kc);
 		assertEquals(2, c.sources.size());
-		// heaviest first, so a clipped column keeps the source that carried it
 		assertEquals("Callisto", c.sources.get(0).boss);
 		assertEquals(1500, c.sources.get(0).kc);
 		assertEquals("Artio", c.sources.get(1).boss);
 		assertEquals(900, c.sources.get(1).kc);
 	}
 
-	// The heaviest source leads, whichever way round the rate book holds them: the
-	// column clips, and what survives the clip has to be the one that carried it.
 	@Test
 	public void theHeaviestSourceLeads()
 	{
@@ -105,7 +89,6 @@ public class GrindBookTest
 		assertEquals("Callisto", c.sources.get(1).boss);
 	}
 
-	// A source with no kills is not part of the chase and is not listed as one.
 	@Test
 	public void aSourceWithoutKillsIsLeftOut()
 	{
@@ -115,7 +98,6 @@ public class GrindBookTest
 		assertEquals("Callisto", c.sources.get(0).boss);
 	}
 
-	// Nothing killed anywhere: no row at all. "0 kills, 0% dry" is noise.
 	@Test
 	public void noKillsNoChase()
 	{
@@ -124,7 +106,6 @@ public class GrindBookTest
 		assertNull(out.get("smolcano"));
 	}
 
-	// A pet the log holds is finished business, however many kills stand behind it.
 	@Test
 	public void anOwnedPetHasNoChase()
 	{
@@ -134,7 +115,6 @@ public class GrindBookTest
 		clog.add("clog_items", items);
 		assertFalse(chases(clog).containsKey("smolcano"));
 
-		// and the same when only the pet's own log page recorded it
 		JsonObject byPage = clog("Zalcano", "2023");
 		JsonObject page = new JsonObject();
 		page.addProperty("Smolcano", 1);
@@ -144,9 +124,6 @@ public class GrindBookTest
 		assertFalse(chases(byPage).containsKey("smolcano"));
 	}
 
-	// Bloodhound is priced, but only off a "Clue Scroll (Master)" count. "Master
-	// Treasure Trail" is a different key, matches nothing, and leaves the pet out
-	// of the map rather than in it at 0%. Pets the book did count still stand.
 	@Test
 	public void aPetWithoutARateHasNoChase()
 	{
@@ -156,8 +133,6 @@ public class GrindBookTest
 		assertTrue(out.containsKey("smolcano"));
 	}
 
-	// A corrupt or absurd kill count is held to a number a row can print, and the
-	// odds never run past certainty.
 	@Test
 	public void absurdKillCountsAreHeld()
 	{

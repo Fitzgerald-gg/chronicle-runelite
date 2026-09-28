@@ -18,13 +18,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Today's baseline is not written until the day rolls over or the client
- * closes. Until then a window ending today holds only the line it opened on,
- * and every board that measures between two lines read as empty on a day the
- * player had plainly been playing: no skills on the sheet, no boss grid, no
- * counters. The live sheet, ledger and trackers close it instead.
- */
 public class TodayClosesOnTheClientTest
 {
 	@BeforeClass
@@ -45,13 +38,11 @@ public class TodayClosesOnTheClientTest
 		});
 	}
 
-	/** A record whose newest line is YESTERDAY, as every client has until it closes. */
 	private static PanelPreviewTest.StubPlugin cold(LocalDate newest)
 	{
 		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
 		s.history.put(newest.minusDays(1), line(200_000_000L, 12_000L));
 		s.history.put(newest, line(201_000_000L, 12_400L));
-		// the live sheet, which is where a window reaching today closes
 		s.skills.put("attack", new long[]{99, 202_000_000L});
 		s.skills.put("overall", new long[]{2_200, 202_000_000L});
 		s.lifetime.put("tilesRan", 13_000L);
@@ -105,7 +96,6 @@ public class TodayClosesOnTheClientTest
 		assertFalse(all, all.contains("The imported past resolves by month"));
 		assertFalse(all, all.contains("Nothing recorded in this period"));
 		assertFalse(all, all.contains("holds fewer than two"));
-		// the grid, and today's gain over yesterday's line
 		assertTrue(all, said.contains("ATT"));
 		assertTrue(all, said.contains("+1.0M"));
 	}
@@ -122,10 +112,6 @@ public class TodayClosesOnTheClientTest
 		assertTrue(all, said.contains("ATT"));
 	}
 
-	/**
-	 * And a record three days cold still says so: measuring to the client
-	 * would carry three days of gain under today's date.
-	 */
 	@Test
 	public void aRecordDaysColdDoesNotPrintThoseDaysUnderToday() throws Exception
 	{

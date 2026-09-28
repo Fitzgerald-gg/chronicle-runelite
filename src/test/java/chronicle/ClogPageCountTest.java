@@ -11,17 +11,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * What a collection log page's header says, and which of it is a kill count.
- *
- * <p>A page header can carry several counters, and the plugin used to print
- * whichever one came out of the unlabelled figure beside them. On most pages
- * that is the kill count and the label was right. On the pages that carry more
- * than one line it was not, and both of those are in the owner's own journal:
- * Wintertodt's figure is rewards claimed, and Tempoross's is a personal best,
- * which is a TIME. The board printed "46 kc" for an account with 455 Tempoross
- * kills.
- */
 public class ClogPageCountTest
 {
 	@SuppressWarnings("unchecked")
@@ -33,22 +22,16 @@ public class ClogPageCountTest
 		return (Map<String, Long>) m.invoke(null, cl);
 	}
 
-	/** A page header shaped the way the game writes the awkward ones. */
 	private static JsonObject clog()
 	{
 		return new Gson().fromJson("{\"kcs\":{"
-			// the unlabelled figures, as the game leaves them: two of these are
-			// the wrong number for their page, and two are the only number there is
 			+ "\"Wintertodt\":1078,\"Tempoross\":46,\"Barbarian Assault\":2,"
 			+ "\"Barrows Chests\":25,\"General Graardor\":14},"
 			+ "\"kc_lines\":{"
-			// rewards first, kills second: the order the game gives them
 			+ "\"Wintertodt\":{\"Rewards claimed\":1078,\"Wintertodt kills\":447},"
-			// a personal best FIRST, which is a time and not a count of anything
 			+ "\"Tempoross\":{\"Personal Best: 3\":46,"
 			+ "\"Reward permits claimed\":1048,\"Tempoross kills\":455},"
 			+ "\"Zalcano\":{\"Zalcano kills\":2023},"
-			// a page whose only line is a gamble: no kill count exists for it
 			+ "\"Barbarian Assault\":{\"High-level Gambles\":2},"
 			+ "\"Abyssal Sire\":{}"
 			+ "}}", JsonObject.class);
@@ -62,7 +45,6 @@ public class ClogPageCountTest
 			Long.valueOf(447L), kc.get("Wintertodt"));
 	}
 
-	/** TRAP: a personal best is a time. It must never become a number of kills. */
 	@Test
 	public void aPersonalBestIsNeverReadAsACount()
 	{
@@ -77,10 +59,6 @@ public class ClogPageCountTest
 		assertEquals(Long.valueOf(2023L), LocalStore.pageKillLines(clog()).get("Zalcano"));
 	}
 
-	/**
-	 * And a page that never gave a kill count gets none. Printing the figure it
-	 * did give, under a "kc" label, is the whole defect.
-	 */
 	@Test
 	public void aPageWithNoKillLineHasNoKillCount()
 	{
@@ -89,7 +67,6 @@ public class ClogPageCountTest
 		assertFalse("an empty header is not a kill count", kc.containsKey("Abyssal Sire"));
 	}
 
-	/** The whole header is still reachable, in the game's own words. */
 	@Test
 	public void theHoverKeepsEveryLineThePageGave() throws Exception
 	{
@@ -104,12 +81,6 @@ public class ClogPageCountTest
 			null, m.invoke(null, clog(), "Abyssal Sire"));
 	}
 
-	/**
-	 * A page with no captured lines keeps its bare figure. Dropping those to fix
-	 * the two mislabelled pages would have silently taken the count off thirty
-	 * eight of the owner's forty nine pages, which is a bigger lie than the one
-	 * being fixed.
-	 */
 	@Test
 	public void aPageWithNoLinesAtAllKeepsItsBareFigure() throws Exception
 	{
@@ -118,7 +89,6 @@ public class ClogPageCountTest
 		assertEquals(Long.valueOf(14L), c.get("general graardor"));
 	}
 
-	/** And on the board, the lines win wherever there are lines. */
 	@Test
 	public void wherePagesHaveLinesTheLinesWin() throws Exception
 	{

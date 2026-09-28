@@ -13,14 +13,6 @@ import java.util.regex.Pattern;
 import org.junit.Test;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The README as the Plugin Hub serves it.
- *
- * <p>The Hub fetches this file at the MARKER COMMIT and rewrites every relative
- * image source onto raw.githubusercontent at that same ref. So a picture that is
- * missing, or added after the marker was cut, is a broken image on the plugin's
- * public page and nowhere else - it looks perfect in the repository.
- */
 public class ReadmeTest
 {
 	private static String readme() throws Exception
@@ -53,10 +45,6 @@ public class ReadmeTest
 			missing.isEmpty());
 	}
 
-	/**
-	 * The Hub downgrades an animated gif to a plain link rather than showing it,
-	 * so one here is a picture nobody sees.
-	 */
 	@Test
 	public void noPictureIsAGif() throws Exception
 	{
@@ -68,7 +56,6 @@ public class ReadmeTest
 		}
 	}
 
-	/** And it does not describe a panel this plugin no longer has. */
 	@Test
 	public void itNamesTheTabsThePanelActuallyCarries() throws Exception
 	{
@@ -78,7 +65,6 @@ public class ReadmeTest
 			assertTrue("the README never mentions the " + tab + " tab",
 				text.contains(tab));
 		}
-		// the three the restructure removed, and the name Standing replaced
 		for (String gone : new String[]{"### PvM", "### Skilling", "### Collection log",
 			"### Hiscores"})
 		{
@@ -87,13 +73,6 @@ public class ReadmeTest
 		}
 	}
 
-	/**
-	 * The two places a version is written say the same thing.
-	 *
-	 * <p>The Hub shows the one in runelite-plugin.properties verbatim on the
-	 * plugin's page; gradle.properties names the jar. They are written by hand,
-	 * in different files, and nothing has ever compared them.
-	 */
 	@Test
 	public void theTwoVersionsAgree() throws Exception
 	{

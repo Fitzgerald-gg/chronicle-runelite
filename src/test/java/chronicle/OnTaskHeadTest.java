@@ -16,18 +16,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * What the on-task card counts.
- *
- * <p>It used to say "Distinct items", which the list underneath already says
- * sixteen times over. What it could not say was the one thing that makes the
- * rest of the card mean anything: how many TASKS the take came off. Eighty one
- * million gp is a different sentence over ninety three tasks than over four.
- *
- * <p>And the whole card used to vanish the moment a reader picked one task,
- * because the figures were every task in the window and would have been a lie
- * under one task's name. They are narrowed now, so they can stay.
- */
 public class OnTaskHeadTest
 {
 	private static final String JOURNAL =
@@ -109,7 +97,6 @@ public class OnTaskHeadTest
 		}
 	}
 
-	/** The row after a label, which is how every card line is built. */
 	private static String after(List<String> said, String label)
 	{
 		for (int i = 0; i < said.size() - 1; i++)
@@ -135,10 +122,6 @@ public class OnTaskHeadTest
 		org.junit.Assert.assertEquals("one nechryarch", "2", after(said, "Superiors"));
 	}
 
-	/**
-	 * Narrowed to one task, every figure is that task's. Two Nechryael
-	 * assignments, two hundred kills, one superior pair.
-	 */
 	@Test
 	public void oneTaskCountsOnlyItsOwn() throws Exception
 	{
@@ -152,7 +135,6 @@ public class OnTaskHeadTest
 		org.junit.Assert.assertEquals("only Nechryael superiors", "2", after(said, "Superiors"));
 	}
 
-	/** The picture says the same thing the board does. */
 	@Test
 	public void thePictureCarriesTheSameCard() throws Exception
 	{

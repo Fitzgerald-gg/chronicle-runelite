@@ -21,11 +21,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-/**
- * The two pages that were reachable only by typing their names into the
- * search box have doors: Info from the Journal's nameplate, All trackers
- * from the Trackers head.
- */
 public class EveryPageHasADoorTest
 {
 	@BeforeClass

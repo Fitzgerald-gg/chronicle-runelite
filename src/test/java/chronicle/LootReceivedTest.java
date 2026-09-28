@@ -26,15 +26,6 @@ import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The core Loot Tracker's own event, and the only way non-NPC loot reaches the
- * journal: clue caskets, Barrows and raid chests, implings, the Tempoross and
- * Wintertodt reward pools, Hespori, pickpockets.
- *
- * <p>No test called this handler. Every one of those sources entered the record
- * through code the suite never ran, and the two kinds it deliberately REFUSES
- * are the kinds that would double-count or carry another player's name.
- */
 public class LootReceivedTest
 {
 	private ChronicleEventCapture capture;
@@ -88,10 +79,6 @@ public class LootReceivedTest
 		assertEquals("PICKPOCKET", recorded().get("category").getAsString());
 	}
 
-	/**
-	 * NPC loot arrives through onServerNpcLoot as well, and recording it here too
-	 * would count every ordinary kill twice.
-	 */
 	@Test
 	public void npcLootIsRefusedBecauseTheOtherHandlerHasIt()
 	{
@@ -100,11 +87,6 @@ public class LootReceivedTest
 			Mockito.anyString(), Mockito.any(JsonObject.class), Mockito.anyString());
 	}
 
-	/**
-	 * And PLAYER loot is refused outright. A kill in the wilderness carries the
-	 * victim's display name and their inventory, and this plugin records its own
-	 * account and nothing else. This is the hard rule, not a preference.
-	 */
 	@Test
 	public void playerLootIsNeverRecorded()
 	{

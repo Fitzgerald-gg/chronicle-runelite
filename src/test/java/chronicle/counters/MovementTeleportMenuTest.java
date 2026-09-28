@@ -31,21 +31,8 @@ import static chronicle.counters.CounterTestKeys.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-/**
- * Teleports chosen from a menu in MovementStatTracker: the scrollable list a cape's
- * "Teleport" opens (group 187), the chatbox options a rubbed item shows (group 219), and
- * the POH jewellery box (group 590). The opener arms the means, the row chosen re-arms
- * with the place, and while a chat menu is on screen the pending does not expire, so a
- * slow choice or a keyboard-picked row still lands inside the window. Closing the
- * interface, or walking out of the house, drops it: no phantom on the exit.
- *
- * <p>The clock is the mocked tick count; a "jump" is a one-tick move far past
- * TELEPORT_MIN_JUMP, which is what a landing looks like to the tracker.
- */
 public class MovementTeleportMenuTest
 {
-	// a child of the jewellery box outside the six sections DUELING..GLORY, in case the
-	// live interface keeps its rows under a layer of its own
 	private static final int JEWELLERY_BOX_OTHER_CHILD = InterfaceID.PohJewelleryBox.GLORY + 1;
 
 	private StatStore store;
@@ -66,17 +53,15 @@ public class MovementTeleportMenuTest
 		Mockito.when(client.getLocalPlayer()).thenReturn(local);
 		tracker = new MovementStatTracker(store, client, items);
 		at(0);
-		standAt(3200, 3200);   // settle the tracker's last position
+		standAt(3200, 3200);
 	}
 
-	// set the clock
 	private void at(int t)
 	{
 		tick = t;
 		Mockito.when(client.getTickCount()).thenReturn(t);
 	}
 
-	// let the ticks pass, the player standing still, up to and including `upTo`
 	private void idleUntil(int upTo)
 	{
 		while (tick < upTo)
@@ -92,8 +77,6 @@ public class MovementTeleportMenuTest
 		tracker.onGameTick(new GameTick());
 	}
 
-	// a landing: the player is far from where they stood a tick ago. Each landing
-	// takes a fresh tile, so two in a row both read as jumps.
 	private void jumpAt(int t)
 	{
 		at(t);
@@ -109,8 +92,6 @@ public class MovementTeleportMenuTest
 		tracker.onMenuOptionClicked(new MenuOptionClicked(entry));
 	}
 
-	// a click on row `index` of the component `componentId`, whose child there reads
-	// `text`. param1 is the component, param0 the row, as the client posts them.
 	private void rowClick(int componentId, int index, String text, String option)
 	{
 		Widget row = Mockito.mock(Widget.class);
@@ -128,8 +109,6 @@ public class MovementTeleportMenuTest
 		tracker.onMenuOptionClicked(new MenuOptionClicked(entry));
 	}
 
-	// a click on a static child of an interface, no row under it: the close button,
-	// which the client posts with param0 -1
 	private void closeClick(int componentId)
 	{
 		MenuEntry entry = Mockito.mock(MenuEntry.class);
@@ -140,7 +119,6 @@ public class MovementTeleportMenuTest
 		tracker.onMenuOptionClicked(new MenuOptionClicked(entry));
 	}
 
-	// a scene rebuild: what a house exit, an instance hop or a boat looks like
 	private void loadingAt(int t)
 	{
 		at(t);
@@ -149,7 +127,6 @@ public class MovementTeleportMenuTest
 		tracker.onGameStateChanged(e);
 	}
 
-	// put a menu's root on screen, or take it down
 	private void menuShowing(int rootId, boolean open)
 	{
 		if (!open)
@@ -167,7 +144,6 @@ public class MovementTeleportMenuTest
 		return store.getStat(key);
 	}
 
-	// every teleport counter credited, the total and the means left out: the places
 	private Map<String, Integer> places()
 	{
 		Map<String, Integer> out = new HashMap<>();
@@ -183,11 +159,6 @@ public class MovementTeleportMenuTest
 		return out;
 	}
 
-	/**
-	 * A click on a row that is only a hitbox: the row you click carries no words
-	 * and the label sits at the same index of a list beside it, the way the
-	 * nexus's ROWS and TEXT1 are built.
-	 */
 	private void hitboxRowClick(int clickedId, int textId, int index, String text,
 		String option)
 	{
@@ -215,8 +186,6 @@ public class MovementTeleportMenuTest
 		tracker.onMenuOptionClicked(new MenuOptionClicked(entry));
 	}
 
-	// the nth component of the menu's own interface that no other stub in this
-	// test has taken, in the order the scan walks them
 	private static int freeMenuComponent(int nth)
 	{
 		int group = InterfaceID.Menu.LJ_LAYER1 >>> 16;
@@ -235,8 +204,6 @@ public class MovementTeleportMenuTest
 		}
 	}
 
-	// a component with no child list at all, carrying one line of its own: a
-	// title, which answers for every index if anything lets it
 	private void headerReading(int componentId, String text)
 	{
 		Widget w = Mockito.mock(Widget.class);
@@ -245,7 +212,6 @@ public class MovementTeleportMenuTest
 		Mockito.when(client.getWidget(componentId)).thenReturn(w);
 	}
 
-	// a list beside the rows carrying `text` at `index`
 	private void listReading(int componentId, int index, String text)
 	{
 		Widget cell = Mockito.mock(Widget.class);
@@ -260,12 +226,8 @@ public class MovementTeleportMenuTest
 	@Test
 	public void theRowsPlaceBeatsAHeadersTextAndAKeybindColumn()
 	{
-		// a real menu is more than two components: a title above it, a column of
-		// keybind numbers, then the labels. The place must come from the row's own
-		// index in the list that holds places, not from the first text anywhere in
-		// the interface.
-		headerReading(freeMenuComponent(0), "Varrock");          // a title, no rows
-		listReading(freeMenuComponent(1), 3, "4:");              // the keybind column
+		headerReading(freeMenuComponent(0), "Varrock");
+		listReading(freeMenuComponent(1), 3, "4:");
 		click("Teleport", "Construct. cape(t)");
 		menuShowing(InterfaceID.Menu.LJ_LAYER2, true);
 		hitboxRowClick(InterfaceID.Menu.LJ_LAYER1, freeMenuComponent(2), 3,
@@ -281,11 +243,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aRowThatIsOnlyAHitboxTakesItsPlaceFromTheListBesideIt()
 	{
-		// report 2, raised twice: every construction cape teleport but the house
-		// one landed with nowhere against it. The cape's list is built like the
-		// nexus, a column of bare hitboxes with the words in a list beside them,
-		// so reading only the row that was clicked found no place and the teleport
-		// was credited to its means alone.
 		click("Teleport", "Construct. cape(t)");
 		menuShowing(InterfaceID.Menu.LJ_LAYER2, true);
 		idleUntil(6);
@@ -302,9 +259,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aListBesideTheRowsNamesNoPlaceForARowThatIsNotThere()
 	{
-		// the scan reads one index, not the whole list: a row the record cannot
-		// place still credits the teleport and its means, and claims no other
-		// row's destination
 		click("Teleport", "Construct. cape(t)");
 		menuShowing(InterfaceID.Menu.LJ_LAYER2, true);
 		hitboxRowClick(InterfaceID.Menu.LJ_LAYER1, freeMenuComponent(0), 2,
@@ -320,9 +274,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void capeListRowChosenAfterTheWindowStillCreditsItsPlace()
 	{
-		// report 1: "Teleport" on the construction cape opens the list, the player takes
-		// twelve ticks over it, picks Taverley, lands. The menu on screen holds the
-		// pending open; the row re-arms with the place and keeps the cape as the means.
 		click("Teleport", "Construct. cape(t)");
 		menuShowing(InterfaceID.Menu.LJ_LAYER2, true);
 		idleUntil(12);
@@ -338,7 +289,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void capeListRowInsideTheWindowNeedsNoRubAndNoMenuWidget()
 	{
-		// the pending alone lets the row through: no rub, no menu on screen
 		click("Teleport", "Max cape");
 		at(4);
 		rowClick(InterfaceID.Menu.LJ_LAYER1, 5, "Rellekka", "Continue");
@@ -352,8 +302,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void keyboardChoiceFromTheCapeListCreditsTotalAndMeans()
 	{
-		// no row click at all: the list is on screen until tick 13 and the player lands
-		// at 14. The total and the cape are known; the place is not.
 		click("Teleport", "Construct. cape(t)");
 		menuShowing(InterfaceID.Menu.LJ_LAYER2, true);
 		idleUntil(13);
@@ -368,8 +316,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aMenuThatOpensLateStillHoldsThePending()
 	{
-		// a laggy server shows the list only at tick 11. The refresh runs before the
-		// expiry check, so the pending is still there for the list to hold.
 		click("Teleport", "Construct. cape(t)");
 		idleUntil(10);
 		menuShowing(InterfaceID.Menu.LJ_LAYER2, true);
@@ -385,7 +331,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void theListLayerAloneShowingHoldsThePendingToo()
 	{
-		// tolerant of the live layout: the root may read hidden while the list layer shows
 		click("Teleport", "Construct. cape(t)");
 		menuShowing(InterfaceID.Menu.LJ_LAYER1, true);
 		idleUntil(13);
@@ -424,7 +369,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void chatboxRowAfterARubCreditsPlaceAndJewellery()
 	{
-		// a rubbed ring of dueling shows its places in the chatbox (group 219)
 		click("Rub", "Ring of dueling(8)");
 		at(2);
 		rowClick(InterfaceID.Chatmenu.OPTIONS, 1, "Castle Wars", "Continue");
@@ -438,8 +382,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void chatboxRowAfterARubWhoseArmExpiredStillArmsOffTheRub()
 	{
-		// the rub gate: no menu on screen, the rub's own arm is twelve ticks stale, and
-		// the row still lands as jewellery to its place
 		click("Rub", "Amulet of glory(6)");
 		idleUntil(12);
 		rowClick(InterfaceID.Chatmenu.OPTIONS, 0, "Edgeville", "Continue");
@@ -467,7 +409,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aRowTheTableCannotPlaceLeavesThePendingAsItIs()
 	{
-		// "Tele to POH" is already the house; a row naming nothing must not unseat it
 		click("Tele to POH", "Construct. cape(t)");
 		at(2);
 		rowClick(InterfaceID.Menu.LJ_LAYER1, 3, "Somewhere new", "Continue");
@@ -481,7 +422,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aChatMenuRowWithNothingPendingArmsNothing()
 	{
-		// an ordinary dialogue naming a town, no teleport in flight: no phantom
 		at(1);
 		rowClick(InterfaceID.Chatmenu.OPTIONS, 0, "Varrock", "Continue");
 		jumpAt(2);
@@ -493,9 +433,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aPendingStillExpiresWhenNoMenuIsOnScreen()
 	{
-		// a cancelled cape click ages out. It is given long enough to read a list
-		// of ten places, since the client shows some of those lists in interfaces
-		// this code cannot name, and no longer than that.
 		click("Teleport", "Construct. cape(t)");
 		idleUntil(51);
 		jumpAt(52);
@@ -507,7 +444,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aMenuRootPresentButHiddenDoesNotHoldThePending()
 	{
-		// a root the client keeps loaded but off screen is not a menu the player is in
 		click("Teleport", "Construct. cape(t)");
 		Widget root = Mockito.mock(Widget.class);
 		Mockito.when(root.isHidden()).thenReturn(true);
@@ -521,8 +457,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aChatMenuRowAfterALandedRubArmsNothing()
 	{
-		// the rub gate closes with the row it was for: a dialogue a few ticks after the
-		// landing must not arm off the old rub
 		click("Rub", "Ring of dueling(8)");
 		at(2);
 		rowClick(InterfaceID.Chatmenu.OPTIONS, 1, "Castle Wars", "Continue");
@@ -539,8 +473,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void jewelleryBoxRowUnderAnotherChildStillCredits()
 	{
-		// report 2: left-click "Teleport Menu" opens the box, the row sits under a child
-		// outside DUELING..GLORY, and the place is still read off its text
 		click("Teleport Menu", "Ornate jewellery box");
 		at(1);
 		rowClick(JEWELLERY_BOX_OTHER_CHILD, 4, "Edgeville", "Teleport");
@@ -565,7 +497,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void jewelleryBoxSectionRowStillCredits()
 	{
-		// the layout the handler always knew: a row under one of the six sections
 		at(1);
 		rowClick(InterfaceID.PohJewelleryBox.SKILLS, 1, "Mining Guild", "Teleport");
 		jumpAt(2);
@@ -577,7 +508,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void jewelleryBoxCloseArmsNothing()
 	{
-		// Close names no place, and the house exit that follows is not a teleport
 		at(1);
 		rowClick(InterfaceID.PohJewelleryBox.FRAME, 0, "Close", "Close");
 		jumpAt(2);
@@ -588,7 +518,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void jewelleryBoxOpenerAloneCreditsTotalAndJewellery()
 	{
-		// a row picked from the keyboard posts no click: the opener's own arm credits
 		click("Teleport Menu", "Fancy jewellery box");
 		jumpAt(3);
 
@@ -600,8 +529,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void jewelleryBoxCloseDropsTheOpenersPending()
 	{
-		// Close is the player choosing nothing: the opener's arm goes with the box, so
-		// the house exit that follows is not a teleport
 		click("Teleport Menu", "Basic jewellery box");
 		at(1);
 		rowClick(InterfaceID.PohJewelleryBox.FRAME, 0, "Close", "Close");
@@ -614,8 +541,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void jewelleryBoxClosedThenTheHouseExitRebuildCreditsNothing()
 	{
-		// the exit portal is a room from the box, and its scene rebuild fires well
-		// inside the window
 		click("Teleport Menu", "Ornate jewellery box");
 		at(1);
 		rowClick(InterfaceID.PohJewelleryBox.FRAME, 0, "Close", "Close");
@@ -628,8 +553,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void jewelleryBoxDismissedFromTheKeyboardThenTheHouseExitCreditsNothing()
 	{
-		// Esc posts no click at all. The exit portal's own click inside the house is
-		// on foot, and it drops the opener's arm before the rebuild
 		click("Teleport Menu", "Ornate jewellery box");
 		Mockito.when(client.isInInstancedRegion()).thenReturn(true);
 		at(3);
@@ -644,7 +567,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void theHousePortalOutsideStillArmsTheHouse()
 	{
-		// the same click outside is the way in, and a teleport
 		at(1);
 		click("Enter", "Portal");
 		loadingAt(3);
@@ -656,7 +578,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void jewelleryBoxNamesNoPlaceOfItsOwn()
 	{
-		// the opener's label must not fall on a table row by accident
 		assertNull(matchDestinationKey("teleport menu ornate jewellery box"));
 		assertNull(matchDestinationKey("teleport menu fancy jewellery box"));
 		assertNull(matchDestinationKey("teleport menu basic jewellery box"));
@@ -677,9 +598,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void nexusCloseButtonArmsNothing()
 	{
-		// the list's close button is a static child of group 17 (param0 -1, under the
-		// frame); read as a row it would arm an empty label as Nexus, and the house
-		// exit after it would credit the phantom
 		click("Teleport Menu", "Portal Nexus");
 		at(1);
 		closeClick(InterfaceID.TelenexusTeleport.FRAME);
@@ -692,8 +610,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aSpiritTreeStopStaysCreditedToTheTree()
 	{
-		// the tree's list is stops on one network, like fairy rings: a hop to the
-		// Grand Exchange is a spirit-tree hop, not a Grand Exchange teleport
 		click("Travel", "Spirit tree");
 		at(2);
 		rowClick(InterfaceID.Menu.LJ_LAYER1, 3, "4 :  Grand Exchange", "Continue");
@@ -707,8 +623,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aRubAnsweredByNowhereIsSpent()
 	{
-		// "Nowhere" is the glory's own cancel. The rub gate closes on it, so a town
-		// named in some dialogue thirteen ticks later arms nothing off the old rub
 		click("Rub", "Amulet of glory(6)");
 		at(2);
 		rowClick(InterfaceID.Chatmenu.OPTIONS, 4, "Nowhere", "Continue");
@@ -725,7 +639,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void nexusRowStillCreditsThroughItsOwnList()
 	{
-		// the nexus list is not a chat menu and keeps its own path
 		Widget cell = Mockito.mock(Widget.class);
 		Mockito.when(cell.getText()).thenReturn("5 :  Camelot");
 		Widget textList = Mockito.mock(Widget.class);
@@ -747,8 +660,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aCastThatNeverLandedDoesNotRideOutAnUnrelatedDialogue()
 	{
-		// a blocked Varrock cast, then an NPC dialogue kept open past the window, then
-		// a region hop on foot: nothing the cast can claim
 		click("Cast", "Varrock Teleport");
 		menuShowing(InterfaceID.Chatmenu.UNIVERSE, true);
 		idleUntil(30);
@@ -762,7 +673,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aCapeChoiceStillWaitsOnItsOwnList()
 	{
-		// the guard above must not take the cape's list away from it
 		click("Teleport", "Construct. cape(t)");
 		menuShowing(InterfaceID.Menu.LJ_LAYER2, true);
 		idleUntil(30);
@@ -776,8 +686,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void handlingACapeIsNotTeleportingWithIt()
 	{
-		// "Wear" and the bank verbs name no place, and a place the table has
-		// never heard of arms nothing either
 		click("Wear", "Construct. cape(t)");
 		click("Taverley", "Oak plank");
 		jumpAt(3);
@@ -788,10 +696,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aCapeListTakesAsLongAsItTakesToRead()
 	{
-		// report 3, raised twice more: the construction cape's "Teleport" opens a
-		// list of ten house locations. Six seconds is not long enough to read one,
-		// and the pending died before the place was ever picked, so nothing at all
-		// was counted.
 		click("Teleport", "Construct. cape(t)");
 		idleUntil(28);
 		rowClick(InterfaceID.Menu.LJ_LAYER1, 3, "Pollnivneach", "Continue");
@@ -805,9 +709,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void theChoiceCountsFromWhicheverInterfaceTheClientShowsIt()
 	{
-		// the chat menus are groups 187 and 219; a cape's own list need not be
-		// either, and naming every interface the client might use is a game of
-		// catch-up. Any click naming a place is taken while a teleport waits.
 		int elsewhere = (90 << 16) | 4;
 		click("Teleport", "Construct. cape(t)");
 		rowClick(elsewhere, 2, "Taverley", "Continue");
@@ -820,8 +721,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aClickNamingNoPlaceLeavesThePendingAsItWas()
 	{
-		// the widened gate takes a click only when it names a place the table
-		// knows, so an unrelated click cannot steal or cancel the choice
 		int elsewhere = (90 << 16) | 4;
 		click("Teleport", "Construct. cape(t)");
 		rowClick(elsewhere, 1, "Close", "Continue");
@@ -835,18 +734,12 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aCastThatNeverLandedStillExpires()
 	{
-		// only a pending waiting on a list gets the long window; a cast that was
-		// never going to land must not ride out half a minute and claim the next
-		// region hop
 		click("Cast", "Varrock Teleport");
 		idleUntil(14);
 		jumpAt(15);
 		assertEquals(0, stat(TELEPORTS_TOTAL));
 	}
 
-	// an item operation: the option names the place, the target is empty, and the
-	// item is in the click's own id. Read off a live client on 2026-09-12:
-	// opt='Pollnivneach' tgt='' group=149 child=0 param0=27
 	private void itemOpClick(String option, int itemId, String itemName)
 	{
 		if (itemName != null)
@@ -861,11 +754,6 @@ public class MovementTeleportMenuTest
 		Mockito.when(entry.getOption()).thenReturn(option);
 		Mockito.when(entry.getTarget()).thenReturn("");
 		Mockito.when(entry.getItemId()).thenReturn(itemId);
-		// FALSE, which is the proven value. The client returns true from
-		// isItemOp() only when the entry's identifier falls inside a 1-to-7
-		// switch (injected-client rl5.isItemOp), and a sub-option's identifier
-		// is ((sub + 1) << 16) | (op + 1), which never does. Stubbing this true
-		// is what made the previous fix look verified when it could not work.
 		Mockito.when(entry.isItemOp()).thenReturn(false);
 		Mockito.when(entry.getParam0()).thenReturn(27);
 		Mockito.when(entry.getParam1()).thenReturn((149 << 16));
@@ -875,11 +763,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void aCapeWhoseOptionIsThePlaceCountsIt()
 	{
-		// THE REPORTED BUG, read off the owner's own client rather than guessed:
-		// a construction cape teleport to Pollnivneach arrives as one click whose
-		// option is "Pollnivneach" and whose target is EMPTY, because it is an
-		// item operation. Three fixes tested the target for "cape" and could
-		// never match, so every one of these went uncounted.
 		itemOpClick("Pollnivneach", 9789, "Construct. cape(t)");
 		jumpAt(3);
 
@@ -891,7 +774,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void theMeansIsReadOffTheItemSinceTheClickDoesNotNameIt()
 	{
-		// the same shape on a ring names jewellery, not a cape
 		itemOpClick("Castle Wars", 2552, "Ring of dueling(8)");
 		jumpAt(3);
 		assertEquals(1, stat(TELEPORTS_CASTLE_WARS));
@@ -902,8 +784,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void handlingAnItemIsNotTeleportingWithIt()
 	{
-		// an option that names no place arms nothing, and neither do the verbs
-		// that move an item about
 		itemOpClick("Wear", 9789, "Construct. cape(t)");
 		itemOpClick("Drop", 9789, "Construct. cape(t)");
 		itemOpClick("Examine", 9789, "Construct. cape(t)");
@@ -915,9 +795,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void theCapesHomeOptionIsThePlayersHouse()
 	{
-		// "Home" is the cape's first destination and the table has no entry for
-		// the bare word, so it resolved to nothing and the teleport arrived with
-		// no place against it
 		itemOpClick("Home", 9789, "Construct. cape(t)");
 		jumpAt(3);
 		assertEquals(1, stat(TELEPORTS_HOUSE));
@@ -927,8 +804,6 @@ public class MovementTeleportMenuTest
 	@Test
 	public void theClickIsRecognisedWithoutTheClientCallingItAnItemOp()
 	{
-		// the whole point: nothing here leans on isItemOp(), whose real value
-		// for a sub-option is false, nor on a target, which is empty
 		MenuEntry entry = Mockito.mock(MenuEntry.class);
 		Mockito.when(entry.getOption()).thenReturn("Rellekka");
 		Mockito.when(entry.getTarget()).thenReturn("");

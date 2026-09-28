@@ -12,7 +12,6 @@ import java.util.Collections;
 import java.util.Set;
 import org.junit.Test;
 
-/** Which family and section a counter key files under, and what it is called. */
 public class StatRegistryTest
 {
 	@Test
@@ -28,12 +27,10 @@ public class StatRegistryTest
 	{
 		assertEquals("· by jewellery", StatRegistry.label("teleportsViaJewellery"));
 		assertEquals("Teleports", StatRegistry.label("teleportsTotal"));
-		// destinations read as place names, punctuation and all
 		assertEquals("Varrock", StatRegistry.label("teleportsVarrock"));
 		assertEquals("Seers' Village", StatRegistry.label("teleportsSeersVillage"));
 	}
 
-	// the registry's spine-only summary keys, read off its own set
 	@SuppressWarnings("unchecked")
 	public static Set<String> summaryKeys() throws Exception
 	{
@@ -45,8 +42,6 @@ public class StatRegistryTest
 	@Test
 	public void summaryKeysLiveOffTheStatsTab() throws Exception
 	{
-		// spine-only totals: named and priced for the History summary, hidden from
-		// every Stats family so a journal carrying them lists nothing extra
 		for (String key : summaryKeys())
 		{
 			assertTrue(key, StatRegistry.hidden(key));
@@ -59,10 +54,8 @@ public class StatRegistryTest
 		assertEquals("Drops received", StatRegistry.label("dropsReceived"));
 		assertEquals("Loot value", StatRegistry.label("lootValue"));
 		assertEquals("Slayer tasks completed", StatRegistry.label("slayerTasksCompleted"));
-		// the journey's own figure for a period, named here like the rest
 		assertEquals("Slayer kills", StatRegistry.label("slayerKills"));
 		assertFalse(StatRegistry.isGp("slayerKills"));
-		// the feed's dated entries counted for a period, named here too
 		assertEquals("Pets", StatRegistry.label("petsObtained"));
 		assertEquals("Quests completed", StatRegistry.label("questsCompleted"));
 		assertEquals("Diaries completed", StatRegistry.label("diariesCompleted"));
@@ -77,11 +70,9 @@ public class StatRegistryTest
 		assertEquals("Left on the floor", StatRegistry.label("lootLeftCount"));
 		assertEquals("Value left on the floor", StatRegistry.label("lootLeftValue"));
 		assertEquals("Kills", StatRegistry.label("kills"));
-		// the kills that left a stack ride the spine for "Drops taken" to subtract
 		assertEquals("Kills that left loot", StatRegistry.label("lootLeftKills"));
 		assertTrue(summaryKeys().contains("lootLeftKills"));
 		assertFalse(StatRegistry.isGp("lootLeftKills"));
-		// derived on the History tab, named here all the same
 		assertEquals("Loot kept", StatRegistry.label("lootKept"));
 		assertEquals("Drops taken", StatRegistry.label("dropsTaken"));
 		assertFalse(StatRegistry.isGp("dropsTaken"));
@@ -92,7 +83,6 @@ public class StatRegistryTest
 		assertFalse(StatRegistry.isGp("lootLeftCount"));
 		assertFalse(StatRegistry.isGp("kills"));
 		assertFalse(summaryKeys().contains("damageDealt"));
-		// the spine pair is not the imported lifetime pair
 		assertFalse(summaryKeys().contains("untakenLootCount"));
 		assertFalse(summaryKeys().contains("untakenLootValue"));
 	}
@@ -100,15 +90,12 @@ public class StatRegistryTest
 	@Test
 	public void aTypedRowCanSpellItsVerb()
 	{
-		// where a list holds more than one verb the bare row labels repeat, so
-		// the verb goes back on, lower-cased after the name
 		assertEquals("Shark cooked", StatRegistry.rowLabelWithVerb("sharkCooked"));
 		assertEquals("Shark burned", StatRegistry.rowLabelWithVerb("sharkBurned"));
 		assertEquals("Abyssal heads reanimated", StatRegistry.rowLabelWithVerb("abyssalHeadsReanimated"));
 		assertEquals("Guard failed pickpockets", StatRegistry.rowLabelWithVerb("guardFailedPickpockets"));
 		assertEquals("Iron ore mined", StatRegistry.rowLabelWithVerb("ironOreMined"));
 		assertEquals("Ranarr planted", StatRegistry.rowLabelWithVerb("ranarrPlanted"));
-		// a key with no verb keeps its row label
 		assertEquals("Herbs cleaned", StatRegistry.rowLabelWithVerb("herbsCleaned"));
 		assertEquals("Lesser ghostly", StatRegistry.rowLabelWithVerb("lesserGhostlyThrallsSummoned"));
 		assertEquals("Shark", StatRegistry.rowLabelWithVerb("sharkEaten"));
@@ -131,7 +118,6 @@ public class StatRegistryTest
 		assertEquals("Skilling", StatRegistry.family("bonesBuried"));
 		assertEquals("Skilling", StatRegistry.family("wyrmBonesBuried"));
 		assertEquals("Skilling", StatRegistry.family("creaturesTrapped"));
-		// a key no rule claims still shows up, under odds & ends
 		assertEquals("Ledger & Roads", StatRegistry.family("clueScrollsCompleted"));
 		assertEquals("Odds & ends", StatRegistry.subgroup("clueScrollsCompleted"));
 	}
@@ -139,7 +125,6 @@ public class StatRegistryTest
 	@Test
 	public void skillOwnershipClaimsBeforeSuffixes()
 	{
-		// Hunter's explicit claim beats Fishing's broad "Caught" suffix
 		assertEquals("Hunter", StatRegistry.skillOf("implingsCaught"));
 		assertEquals("Fishing", StatRegistry.skillOf("anglerfishCaught"));
 		assertEquals("Cooking", StatRegistry.skillOf("foodBurned"));
@@ -154,13 +139,11 @@ public class StatRegistryTest
 	@Test
 	public void floorsHeadSectionsNotRows()
 	{
-		// a floor is the generic total; it heads its section instead of listing as a row
 		assertTrue(StatRegistry.isFloor("logsChopped"));
 		assertTrue(StatRegistry.isFloor("bonesBuried"));
 		assertTrue(StatRegistry.isFloor("teleportsTotal"));
 		assertFalse(StatRegistry.isFloor("willowLogsChopped"));
-		assertFalse(StatRegistry.isFloor("foodEaten"));   // flat Living row
-		// typed rows reconcile against the floor; explicit extras do not
+		assertFalse(StatRegistry.isFloor("foodEaten"));
 		assertTrue(StatRegistry.typed("willowLogsChopped"));
 		assertTrue(StatRegistry.typed("sharkEaten"));
 		assertFalse(StatRegistry.typed("foodBurned"));
@@ -170,20 +153,16 @@ public class StatRegistryTest
 	@Test
 	public void typedRowsShedTheirVerb()
 	{
-		// the section header carries the craft. The row keeps just the item
 		assertEquals("Willow", StatRegistry.rowLabel("willowLogsChopped"));
 		assertEquals("Wyrm", StatRegistry.rowLabel("wyrmBonesBuried"));
 		assertEquals("Shark", StatRegistry.rowLabel("sharkEaten"));
 		assertEquals("Wrath", StatRegistry.rowLabel("wrathRunecrafted"));
-		// explicit keys keep their full label
 		assertEquals("Herbs cleaned", StatRegistry.rowLabel("herbsCleaned"));
 	}
 
 	@Test
 	public void theTwoPetCountersFileWithTheirCraft()
 	{
-		// essence is a Runecraft row, not an "Odds & ends" leftover, and it is
-		// claimed by name so the Runecrafted floor arithmetic never sees it
 		assertEquals("Runecraft", StatRegistry.skillOf("essenceCrafted"));
 		assertEquals("Skilling", StatRegistry.family("essenceCrafted"));
 		assertEquals("Runecraft", StatRegistry.subgroup("essenceCrafted"));
@@ -191,7 +170,6 @@ public class StatRegistryTest
 		assertFalse(StatRegistry.typed("essenceCrafted"));
 		assertFalse(StatRegistry.isFloor("essenceCrafted"));
 
-		// a planted crop is a typed Farming row that sheds its verb like the rest
 		assertEquals("Farming", StatRegistry.skillOf("potatoPlanted"));
 		assertEquals("Skilling", StatRegistry.family("potatoPlanted"));
 		assertEquals("Farming", StatRegistry.subgroup("potatoPlanted"));
@@ -199,7 +177,6 @@ public class StatRegistryTest
 		assertEquals("Planted", StatRegistry.suffixOf("potatoPlanted"));
 		assertEquals("Potato", StatRegistry.rowLabel("potatoPlanted"));
 		assertEquals("Bittercap mushroom", StatRegistry.rowLabel("bittercapMushroomPlanted"));
-		// and the aggregate it was added beside is untouched
 		assertEquals("Farming", StatRegistry.skillOf("seedsPlanted"));
 		assertFalse(StatRegistry.typed("seedsPlanted"));
 		assertNull(StatRegistry.suffixOf("seedsPlanted"));
@@ -229,7 +206,6 @@ public class StatRegistryTest
 	@Test
 	public void theChatCountedKeysHaveHomes()
 	{
-		// a key with no home falls to "Odds & ends"; none of these may
 		String[] all = {"herbsSacked", "guamLeafSacked", "ranarrWeedSacked",
 			"letveksShooed", "bloodwoodSapBucketsFilled", "thrallsSummoned",
 			"lesserGhostlyThrallsSummoned", "greaterZombifiedThrallsSummoned",
@@ -243,7 +219,6 @@ public class StatRegistryTest
 			assertFalse(key, StatRegistry.subgroup(key).isEmpty());
 		}
 
-		// the herb sack: a Herblore floor under typed herb rows
 		assertEquals("Herblore", StatRegistry.skillOf("herbsSacked"));
 		assertTrue(StatRegistry.isFloor("herbsSacked"));
 		assertEquals("Herbs sacked", StatRegistry.label("herbsSacked"));
@@ -254,12 +229,10 @@ public class StatRegistryTest
 		assertEquals("Ranarr weed", StatRegistry.rowLabel("ranarrWeedSacked"));
 		assertEquals("herbsSacked", StatRegistry.suffixFloor("Herblore", "Sacked"));
 		assertEquals("Herbs sacked", StatRegistry.suffixLabel("Sacked"));
-		// the unfinished potion stays a named Herblore row
 		assertEquals("Herblore", StatRegistry.skillOf("unfinishedPotionsMade"));
 		assertFalse(StatRegistry.typed("unfinishedPotionsMade"));
 		assertEquals("Unfinished potions made", StatRegistry.rowLabel("unfinishedPotionsMade"));
 
-		// the tanner: a Crafting floor under typed hide rows
 		assertEquals("Crafting", StatRegistry.skillOf("hidesTanned"));
 		assertTrue(StatRegistry.isFloor("hidesTanned"));
 		assertEquals("Hides tanned", StatRegistry.label("hidesTanned"));
@@ -270,11 +243,9 @@ public class StatRegistryTest
 		assertEquals("Green dragonhide", StatRegistry.rowLabel("greenDragonhideTanned"));
 		assertEquals("hidesTanned", StatRegistry.suffixFloor("Crafting", "Tanned"));
 		assertEquals("Hides tanned", StatRegistry.suffixLabel("Tanned"));
-		// and the armour keys it sits beside are untouched
 		assertEquals("Crafting", StatRegistry.skillOf("dhideCrafted"));
 		assertFalse(StatRegistry.typed("dhideCrafted"));
 
-		// the Vampyrium pair are named Woodcutting rows
 		assertEquals("Woodcutting", StatRegistry.skillOf("letveksShooed"));
 		assertEquals("Woodcutting", StatRegistry.skillOf("bloodwoodSapBucketsFilled"));
 		assertEquals("Letveks shooed", StatRegistry.rowLabel("letveksShooed"));
@@ -283,13 +254,11 @@ public class StatRegistryTest
 		assertFalse(StatRegistry.typed("letveksShooed"));
 		assertFalse(StatRegistry.isFloor("bloodwoodSapBucketsFilled"));
 
-		// Tempoross is a named Fishing row
 		assertEquals("Fishing", StatRegistry.skillOf("spiritPoolsHarpooned"));
 		assertEquals("Skilling", StatRegistry.family("spiritPoolsHarpooned"));
 		assertEquals("Spirit pools harpooned", StatRegistry.rowLabel("spiritPoolsHarpooned"));
 		assertFalse(StatRegistry.typed("spiritPoolsHarpooned"));
 
-		// thralls: Combat's one fold, a floor with typed rows that shed the suffix
 		assertEquals("Combat", StatRegistry.family("thrallsSummoned"));
 		assertEquals("Combat", StatRegistry.family("lesserGhostlyThrallsSummoned"));
 		assertEquals("Thralls", StatRegistry.subgroup("thrallsSummoned"));
@@ -305,14 +274,12 @@ public class StatRegistryTest
 		assertEquals(java.util.Collections.singletonList("thrallsSummoned"),
 			StatRegistry.floorKeys("Thralls"));
 		assertEquals(java.util.Arrays.asList("", "Thralls"), StatRegistry.fixedSections("Combat"));
-		// the flat Combat rows did not move
 		assertEquals("", StatRegistry.subgroup("damageDealt"));
 	}
 
 	@Test
 	public void labelsPolish()
 	{
-		// keys like logsLogsChopped stutter; polish collapses the doubled word
 		assertEquals("Logs chopped", StatRegistry.prettify("logsLogsChopped"));
 		assertEquals("Guard (lvl 21) pickpockets",
 			StatRegistry.prettify("guard(level21)Pickpockets"));
@@ -353,7 +320,6 @@ public class StatRegistryTest
 		assertEquals("Moonlight antelope", StatRegistry.rowLabel("moonlightAntelopeBurned"));
 		assertEquals("Cake", StatRegistry.rowLabel("cakeBurned"));
 		assertEquals("Karambwanji", StatRegistry.rowLabel("karambwanjiBurned"));
-		// the burns reconcile against their own floor, as the cooked rows do
 		assertTrue(StatRegistry.isFloor("foodBurned"));
 		assertFalse(StatRegistry.typed("foodBurned"));
 		assertEquals("foodBurned", StatRegistry.suffixFloor("Cooking", "Burned"));
@@ -361,7 +327,6 @@ public class StatRegistryTest
 		assertEquals("Burned", StatRegistry.suffixLabel("Burned"));
 		assertEquals(java.util.Arrays.asList("foodCooked", "foodBurned"),
 			StatRegistry.floorKeys("Cooking"));
-		// and a burnt log is still Firemaking's
 		assertEquals("Firemaking", StatRegistry.skillOf("willowLogsBurned"));
 		assertEquals("LogsBurned", StatRegistry.suffixOf("willowLogsBurned"));
 		assertEquals("Firemaking", StatRegistry.subgroup("logsBurned"));

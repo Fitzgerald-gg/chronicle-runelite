@@ -11,14 +11,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
-/**
- * The Recap and the sheet read one period two ways, and must say one figure.
- *
- * <p>The Recap subtracted two bare lines and skipped any skill the opening
- * line did not carry; the sheet measures between the folded states with the
- * earliest recorded base. On a year of imported months, where a line names
- * only the skills it has, the two disagreed by four million.
- */
 public class RecapAgreesWithSheetTest
 {
 	@BeforeClass
@@ -42,7 +34,6 @@ public class RecapAgreesWithSheetTest
 	public void aPartialOpeningLineDoesNotLoseASkill() throws Exception
 	{
 		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
-		// the eve of the year names attack alone; fishing first appears inside it
 		HistoryLog.Baseline eve = new HistoryLog.Baseline();
 		eve.skills.put("attack", 1_000_000L);
 		s.history.put(LocalDate.of(2024, 12, 31), eve);
@@ -86,7 +77,6 @@ public class RecapAgreesWithSheetTest
 				throw new RuntimeException(e);
 			}
 		});
-		// attack +1M from the eve; fishing +4M from its first recorded value
 		assertEquals(5_000_000L, recap[0]);
 		assertEquals(sheet[0], recap[0]);
 	}

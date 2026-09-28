@@ -22,12 +22,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Read contract for the history spine. A date gets written several times over a
- * session; the last line for it wins, and a line that won't parse costs only itself.
- * Also the close rule (a session past midnight closes yesterday first) and the
- * window rules the History tab measures a period by.
- */
 public class HistoryLogTest
 {
 	private static final String RSN = "Tester";
@@ -54,8 +48,6 @@ public class HistoryLogTest
 		return new File(dir, LocalStore.slug(rsn) + HistoryLog.SPINE_SUFFIX);
 	}
 
-	// Put a line on the stream directly: past days the plugin never played through,
-	// and lines the real writer never produces (hand-edited, or cut off mid-write).
 	private void rawLine(String rsn, String text, boolean terminated) throws Exception
 	{
 		try (Writer w = new OutputStreamWriter(
@@ -83,18 +75,9 @@ public class HistoryLogTest
 		HistoryLog.Baseline b = got.firstEntry().getValue();
 		assertEquals(140L, (long) b.skills.get("attack"));
 		assertEquals(90L, (long) b.counters.get("tilesWalked"));
-		// the later line replaces the earlier one, so logsChopped goes with it
 		assertNull(b.counters.get("logsChopped"));
 	}
 
-	/**
-	 * TRAP: a count that moved for any reason but play. The Kill Log opened for
-	 * the first time said Tempoross 455 where the record had 46, and the day it
-	 * was read claimed 409 kills. The line that first carries the new figure
-	 * says how much of the step was not play, and every line before it is read
-	 * shifted by that: the step reads as no kills, and the days before it keep
-	 * their own changes.
-	 */
 	@Test
 	public void anAdjustmentCarriesNoKillsAcrossItsLine() throws Exception
 	{
@@ -111,15 +94,12 @@ public class HistoryLogTest
 		assertEquals(1, c.kv);
 		assertEquals(449L, (long) a.kcs.get("Tempoross"));
 		assertEquals(455L, (long) b.kcs.get("Tempoross"));
-		// the day across the step: no Tempoross at all, Vorkath's one kill
 		Map<String, Long> moved = HistoryLog.gained(b.kcs, b.kcs, c.kcs);
 		assertNull("the first reading read as kills: " + moved, moved.get("Tempoross"));
 		assertEquals(1L, (long) moved.get("Vorkath"));
-		// and the day before the step keeps its six
 		assertEquals(6L, (long) HistoryLog.gained(a.kcs, a.kcs, b.kcs).get("Tempoross"));
 	}
 
-	/** A count that falls is the same: Wintertodt's page said rewards claimed. */
 	@Test
 	public void aFallIsShiftedToo() throws Exception
 	{
@@ -128,12 +108,10 @@ public class HistoryLogTest
 			+ "\"adj\":{\"kcs\":{\"Wintertodt\":-631}}}", true);
 		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
 		assertEquals(447L, (long) got.get(LocalDate.parse("2026-09-13")).kcs.get("Wintertodt"));
-		// three real kills across the step, where the raw lines read a fall
 		assertEquals(3L, (long) HistoryLog.gained(got.get(LocalDate.parse("2026-09-13")).kcs,
 			new HashMap<>(), got.get(LocalDate.parse("2026-09-14")).kcs).get("Wintertodt"));
 	}
 
-	/** A line without the key keeps without it: a shift never mints a figure. */
 	@Test
 	public void aShiftNeverAddsAKeyALineLacks() throws Exception
 	{
@@ -143,11 +121,6 @@ public class HistoryLogTest
 		assertNull(log.read(dir, RSN).get(LocalDate.parse("2026-09-13")).kcs.get("Tempoross"));
 	}
 
-	/**
-	 * The day's line is replaced as the day goes, and a correction laid on an
-	 * earlier line of the same day goes on with the day rather than with the
-	 * line: it is a fact about the counts, not about that write.
-	 */
 	@Test
 	public void aDaysCorrectionsSurviveItsLaterLines()
 	{
@@ -166,7 +139,6 @@ public class HistoryLogTest
 		assertEquals(468L, (long) b.adj.counters.get("kills"));
 	}
 
-	/** On a rollover the correction goes on the day the state closes: the day just ended. */
 	@Test
 	public void aRolloverPutsTheCorrectionOnTheDayItCloses()
 	{
@@ -181,7 +153,6 @@ public class HistoryLogTest
 		assertTrue(got.get(tuesday).adj.isEmpty());
 	}
 
-	/** Compaction moves lines and never touches one, their corrections included. */
 	@Test
 	public void compactionKeepsACorrection() throws Exception
 	{
@@ -197,8 +168,8 @@ public class HistoryLogTest
 	{
 		rawLine(RSN, "{\"date\":\"2026-01-01\",\"skills\":{\"attack\":50},\"counters\":{}}", true);
 		rawLine(RSN, "{\"date\":\"2026-01-02\",\"skills\":{\"attack\":60},\"counters\":{}}", true);
-		rawLine(RSN, "", true);                                    // an empty line
-		rawLine(RSN, "{\"date\":\"2026-01-03\",\"skills\":{", false);   // torn mid-write
+		rawLine(RSN, "", true);
+		rawLine(RSN, "{\"date\":\"2026-01-03\",\"skills\":{", false);
 
 		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
 		assertEquals(2, got.size());
@@ -211,7 +182,6 @@ public class HistoryLogTest
 	public void aDamagedLineDoesNotTruncateTheDaysAfterIt() throws Exception
 	{
 		rawLine(RSN, "{\"date\":\"2026-01-01\",\"skills\":{\"attack\":50},\"counters\":{}}", true);
-		// one line cut short by a crash, one whose date won't parse
 		rawLine(RSN, "{\"date\":\"2026-01-02\",\"skills\":{\"attack\":60", true);
 		rawLine(RSN, "{\"date\":\"01/02/2026\",\"skills\":{}}", true);
 		rawLine(RSN, "{\"date\":\"2026-01-03\",\"skills\":{\"attack\":70},\"counters\":{}}", true);
@@ -222,24 +192,21 @@ public class HistoryLogTest
 		assertEquals(70L, (long) got.get(LocalDate.parse("2026-01-03")).skills.get("attack"));
 	}
 
-	// a value that won't read as a number drops itself; the rest of the day's baseline stays
 	@Test
 	public void aLineSurvivesTheValuesInsideItThatDoNot() throws Exception
 	{
 		rawLine(RSN, "{\"date\":\"2026-02-02\",\"skills\":{\"attack\":\"lots\",\"defence\":70},"
 			+ "\"counters\":{}}", true);
-		rawLine(RSN, "{\"date\":\"2026-02-03\"}", true);   // no containers at all
+		rawLine(RSN, "{\"date\":\"2026-02-03\"}", true);
 
 		TreeMap<LocalDate, HistoryLog.Baseline> got = log.read(dir, RSN);
 		assertEquals(2, got.size());
 		HistoryLog.Baseline partial = got.get(LocalDate.parse("2026-02-02"));
 		assertEquals(70L, (long) partial.skills.get("defence"));
 		assertNull(partial.skills.get("attack"));
-		// a dated line with nothing in it still counts as a day
 		assertTrue(got.get(LocalDate.parse("2026-02-03")).skills.isEmpty());
 	}
 
-	// overall xp outgrew an int long ago; a narrowing read turns the total into a loss
 	@Test
 	public void figuresBeyondAnIntSurviveTheRoundTrip()
 	{
@@ -263,7 +230,6 @@ public class HistoryLogTest
 		assertTrue(spine("Beta").isFile());
 	}
 
-	// the client reports "Alpha Two" where the login was alpha_two; slug() folds both to one file
 	@Test
 	public void oneAccountIsOneSpineHoweverItsNameIsSpelt() throws Exception
 	{
@@ -276,7 +242,6 @@ public class HistoryLogTest
 		assertEquals(200L, (long) got.get(LocalDate.parse("2026-06-02")).skills.get("overall"));
 	}
 
-	// with no name slug() falls back to the shared "profile" file, so append refuses to write
 	@Test
 	public void anAppendWithoutAnAccountWritesNothing()
 	{
@@ -348,11 +313,6 @@ public class HistoryLogTest
 	@Test
 	public void compactionLeavesAFileHoldingALineItCannotReadAlone() throws Exception
 	{
-		// a repeated day and an unordered one, either of which would have it
-		// rewrite, beside a torn line and a line with no date. The rewrite can
-		// only write back what it could read, and the spine is the only copy of
-		// the record: the file stands exactly as it was, and nothing is claimed
-		// to have been dropped.
 		rawLine(RSN, dayLine("2026-01-02", 1L), true);
 		rawLine(RSN, dayLine("2026-01-01", 2L), true);
 		rawLine(RSN, dayLine("2026-01-01", 3L), true);
@@ -367,8 +327,6 @@ public class HistoryLogTest
 	@Test
 	public void compactionStillFoldsAFileItCanReadWholly() throws Exception
 	{
-		// the same shape with nothing torn in it: an out-of-order file with a
-		// repeat is rewritten in calendar order, the repeat folded
 		rawLine(RSN, dayLine("2026-01-02", 1L), true);
 		rawLine(RSN, dayLine("2026-01-01", 2L), true);
 		rawLine(RSN, dayLine("2026-01-01", 3L), true);
@@ -397,9 +355,6 @@ public class HistoryLogTest
 		return java.util.Collections.emptyMap();
 	}
 
-	// A 20:00 to 02:00 session: the login line is dated D; the first append after
-	// midnight finds the day turned. D's line must close at that state, not stay
-	// at the login state, and D+1 starts from the same point.
 	@Test
 	public void theFirstAppendAfterMidnightClosesYesterdayAtThatState() throws Exception
 	{
@@ -416,7 +371,6 @@ public class HistoryLogTest
 		assertEquals(8L, (long) yesterday.kcs.get("zulrah"));
 		assertEquals(140L, (long) got.get(D.plusDays(1)).skills.get("attack"));
 
-		// the 02:00 logout moves only today; yesterday's close stands
 		log.append(dir, RSN, map("attack", 180L), map("tilesWalked", 120L), map("zulrah", 9L), LocalStore.KILLS_VERSION, null,
 			D.plusDays(1));
 		got = log.read(dir, RSN);
@@ -425,8 +379,6 @@ public class HistoryLogTest
 		assertEquals(180L, (long) got.get(D.plusDays(1)).skills.get("attack"));
 	}
 
-	// A process that has not written yet knows nothing about how yesterday ended,
-	// so its first append never reaches back: an earlier day's line is left alone.
 	@Test
 	public void aFreshProcessNeverRewritesAnEarlierDay() throws Exception
 	{
@@ -439,8 +391,6 @@ public class HistoryLogTest
 		assertEquals(200L, (long) got.get(D).skills.get("attack"));
 	}
 
-	// An import lands lines this process did not write; the next append must not
-	// treat the day it last wrote as still open behind them.
 	@Test
 	public void anImportEndsTheOpenDay() throws Exception
 	{
@@ -471,9 +421,6 @@ public class HistoryLogTest
 		return b;
 	}
 
-	// The site measured from its first snapshot when none came before the window.
-	// A record three days old has no line before this week: the week reads from
-	// its first line, not as nothing.
 	@Test
 	public void nothingBeforeTheWindowMeasuresFromTheEarliestLine()
 	{
@@ -490,7 +437,6 @@ public class HistoryLogTest
 		assertEquals(80L, (long) gains.get("attack"));
 	}
 
-	// A line closed before the window still wins over the earliest one
 	@Test
 	public void aLineBeforeTheWindowIsPreferredToTheEarliest()
 	{
@@ -500,19 +446,15 @@ public class HistoryLogTest
 		spine.put(D, baseline(180L, null, null));
 
 		assertEquals(D.minusDays(9), HistoryLog.windowStart(spine, D.minusDays(6), D).getKey());
-		// and a window before every line has no start at all
 		assertNull(HistoryLog.windowStart(spine, D.minusDays(40), D.minusDays(30)));
 	}
 
-	// The site's counter rule: a key the start line lacks measures from its earliest
-	// recorded value. Kill counts entered the spine late; a month whose start line
-	// predates them still reads the kills since their first line, not nothing.
 	@Test
 	public void aKeyFirstRecordedInsideTheWindowMeasuresFromItsFirstValue()
 	{
 		TreeMap<LocalDate, HistoryLog.Baseline> spine = new TreeMap<>();
-		spine.put(D.minusDays(10), baseline(100L, null, null));      // start line: no kcs
-		spine.put(D.minusDays(5), baseline(120L, 500L, 300L));      // first line carrying them
+		spine.put(D.minusDays(10), baseline(100L, null, null));
+		spine.put(D.minusDays(5), baseline(120L, 500L, 300L));
 		spine.put(D.minusDays(2), baseline(150L, 700L, 320L));
 		spine.put(D, baseline(180L, 900L, 350L));
 
@@ -522,13 +464,10 @@ public class HistoryLogTest
 			.get("zulrah"));
 		assertEquals(400L, (long) HistoryLog.gained(start.counters, earliest.counters,
 			spine.get(D).counters).get("tilesWalked"));
-		// the start line's own value still wins where it has one
 		assertEquals(80L, (long) HistoryLog.gained(start.skills, earliest.skills,
 			spine.get(D).skills).get("attack"));
 	}
 
-	// A key first recorded on the end line itself has nothing earlier to measure
-	// from, and absence is never read as zero
 	@Test
 	public void aKeyRecordedOnlyAtTheEndHasNoGain()
 	{
@@ -541,13 +480,10 @@ public class HistoryLogTest
 			spine.get(D).kcs).isEmpty());
 		assertTrue(HistoryLog.gained(spine.get(D.minusDays(3)).counters, earliest.counters,
 			spine.get(D).counters).isEmpty());
-		// and with no earliest value to hand at all, the key is skipped, not read as 0
 		assertTrue(HistoryLog.gained(spine.get(D.minusDays(3)).kcs, none(),
 			spine.get(D).kcs).isEmpty());
 		assertTrue(HistoryLog.gained(spine.get(D.minusDays(3)).kcs, null,
 			spine.get(D).kcs).isEmpty());
-		// the earliest map stops at the end line: a key first minted after it is
-		// not on record yet, and a later line never displaces an earlier value
 		HistoryLog.Baseline later = baseline(100L, 1L, 1L);
 		later.counters.put("logsChopped", 7L);
 		spine.put(D.plusDays(1), later);
@@ -555,16 +491,14 @@ public class HistoryLogTest
 		assertNull(HistoryLog.earliest(spine, D).counters.get("logsChopped"));
 	}
 
-	// The History tab says what a period's card measures from: the first line
-	// that carries any counter, and the first that carries a given key
 	@Test
 	public void theFirstLineCarryingAKeyIsItsDate()
 	{
 		TreeMap<LocalDate, HistoryLog.Baseline> spine = new TreeMap<>();
-		spine.put(D.minusDays(10), baseline(100L, null, null));      // imported: no counters
-		spine.put(D.minusDays(5), baseline(120L, 500L, null));       // the trackers join
+		spine.put(D.minusDays(10), baseline(100L, null, null));
+		spine.put(D.minusDays(5), baseline(120L, 500L, null));
 		HistoryLog.Baseline withLoot = baseline(150L, 700L, null);
-		withLoot.counters.put("dropsReceived", 40L);                 // the journal totals join
+		withLoot.counters.put("dropsReceived", 40L);
 		spine.put(D.minusDays(2), withLoot);
 		HistoryLog.Baseline last = baseline(180L, 900L, null);
 		last.counters.put("dropsReceived", 52L);
@@ -573,19 +507,12 @@ public class HistoryLogTest
 		assertEquals(D.minusDays(5), HistoryLog.firstCarrying(spine, null));
 		assertEquals(D.minusDays(5), HistoryLog.firstCarrying(spine, "tilesWalked"));
 		assertEquals(D.minusDays(2), HistoryLog.firstCarrying(spine, "dropsReceived"));
-		// a key no line carries, an empty spine, and no spine at all
 		assertNull(HistoryLog.firstCarrying(spine, "kills"));
 		assertNull(HistoryLog.firstCarrying(new TreeMap<>(), null));
 		assertNull(HistoryLog.firstCarrying(null, "dropsReceived"));
-		// bounded to a head map, the lookup stops where the period does
 		assertNull(HistoryLog.firstCarrying(spine.headMap(D.minusDays(5), false), null));
 	}
 
-	/**
-	 * Each line of a day already holds the whole day's correction, so when two
-	 * survive (a cut that failed), the next line takes the newest's and does
-	 * not add the older one in again.
-	 */
 	@Test
 	public void twoLinesOfADayHandOnTheNewestCorrectionOnly() throws Exception
 	{
@@ -600,7 +527,6 @@ public class HistoryLogTest
 		assertEquals(468L, (long) b.adj.kcs.get("Kurask"));
 	}
 
-	/** A tail torn mid-line does not swallow the next line. */
 	@Test
 	public void aLineAfterATornTailStandsOnItsOwn() throws Exception
 	{
@@ -610,7 +536,6 @@ public class HistoryLogTest
 		assertEquals(70L, (long) log.read(dir, RSN).get(LocalDate.parse("2026-01-03")).skills.get("attack"));
 	}
 
-	/** And a day's line that ran on from a torn one still hands its correction on. */
 	@Test
 	public void aDaysLineRunOnFromATornOneKeepsItsCorrection() throws Exception
 	{
@@ -623,7 +548,6 @@ public class HistoryLogTest
 			.adj.kcs.get("Tempoross"));
 	}
 
-	/** A line that could not be written hands its correction back; one that was, nothing. */
 	@Test
 	public void aFailedLineHandsBackItsCorrection() throws Exception
 	{
@@ -631,14 +555,12 @@ public class HistoryLogTest
 		adj.kcs.put("Tempoross", 409L);
 		assertNull(log.append(dir, RSN, map("attack", 1L), none(), none(), 1, adj, D));
 		File blocked = Files.createTempDirectory("chronicle-blocked").toFile();
-		// the spine's own name taken by a directory: no line can be opened there
 		assertTrue(new File(blocked, LocalStore.slug(RSN) + HistoryLog.SPINE_SUFFIX).mkdir());
 		HistoryLog.Adjust back = new HistoryLog(new Gson()).append(blocked, RSN, map("attack", 1L),
 			none(), none(), 1, adj, D);
 		assertEquals(409L, (long) back.kcs.get("Tempoross"));
 	}
 
-	/** The reckoning of the newest line, read off the tail: unstamped is the Hub's 0. */
 	@Test
 	public void theNewestLineSaysItsReckoning() throws Exception
 	{
@@ -652,7 +574,6 @@ public class HistoryLogTest
 		assertEquals(Integer.valueOf(1), HistoryLog.newestKv(gson, dir, RSN));
 	}
 
-	/** Midnight is noticed from the day this process last wrote under, and only then. */
 	@Test
 	public void theDayTurnsOnlyAfterALineUnderAnEarlierDay()
 	{

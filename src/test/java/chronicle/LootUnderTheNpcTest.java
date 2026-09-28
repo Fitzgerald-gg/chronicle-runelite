@@ -12,12 +12,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
-/**
- * The loot tracker names the NPC that dropped the loot, not the encounter: the
- * Guardians' loot sits under Dusk and the Titans' under whichever king fell
- * last. A boss cell opens where its loot actually is, and an activity that
- * pays in something spent rather than dropped opens its collection log page.
- */
 public class LootUnderTheNpcTest
 {
 	private static ChroniclePanel panel;
@@ -67,10 +61,8 @@ public class LootUnderTheNpcTest
 	public void aBossOpensWhereItsLootIsFiled() throws Exception
 	{
 		assertEquals("Dusk", opens("Grotesque Guardians"));
-		// the dearer of the two kings
 		assertEquals("Eldric the Ice King", opens("The Royal Titans"));
 		assertEquals("Barrows", opens("Barrows Chests"));
-		// and a boss with no loot anywhere still opens itself, not a neighbour
 		assertEquals("Dagannoth Rex", opens("Dagannoth Rex"));
 	}
 

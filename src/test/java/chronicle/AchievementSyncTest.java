@@ -17,18 +17,12 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Three things: the change gate that decides whether a snapshot is worth pushing,
- * the per-tick cache both callers share, and what reset() clears at an account
- * boundary.
- */
 public class AchievementSyncTest
 {
 	private AchievementSync sync;
 
 	private final Map<Integer, Integer> varbits = new HashMap<>();
 	private int tick;
-	// what the quest-status script leaves on the stack: 2 = finished, 1 = not started
 	private int[] questStack;
 
 	@Before
@@ -44,17 +38,12 @@ public class AchievementSyncTest
 		sync = new AchievementSync(client, new com.google.gson.Gson());
 	}
 
-	// a new tick drops the cache; this is how a test gets a fresh snapshot
 	private JsonObject nextTick()
 	{
 		tick++;
 		return sync.snapshot();
 	}
 
-	// ── The per-tick snapshot ────────────────────────────────────────────
-
-	// the journal refresh and the push harvest in the same client-thread pass, and
-	// the quest sweep is a clientscript per quest.
 	@Test
 	public void oneTickBuildsOneSnapshotHoweverManyCallersAskForIt()
 	{
@@ -65,7 +54,6 @@ public class AchievementSyncTest
 		assertNotSame(first, nextTick());
 	}
 
-	// the cache is keyed on the tick. A varbit set mid-tick isn't seen until it turns
 	@Test
 	public void aChangeWithinTheTickIsSeenOnTheNextOne()
 	{
@@ -80,9 +68,6 @@ public class AchievementSyncTest
 			.getAsJsonObject("varrock").get("easy").getAsBoolean());
 	}
 
-	// ── The gate ─────────────────────────────────────────────────────────
-
-	// nothing acked yet: a fresh install's whole state goes up on the first push
 	@Test
 	public void anUnacknowledgedSnapshotAlwaysGoesUp()
 	{
@@ -95,7 +80,6 @@ public class AchievementSyncTest
 		JsonObject snap = sync.snapshot();
 		sync.markSynced(snap);
 		assertFalse(sync.changedSince(snap));
-		// the gate compares JSON text, so a fresh object over unchanged state still matches
 		JsonObject later = nextTick();
 		assertNotSame(snap, later);
 		assertFalse(sync.changedSince(later));
@@ -109,7 +93,6 @@ public class AchievementSyncTest
 		assertTrue(sync.changedSince(nextTick()));
 	}
 
-	// covers both halves of the combat section: the points figure and a tier status
 	@Test
 	public void aCombatAchievementChangeReopensTheGate()
 	{
@@ -122,18 +105,14 @@ public class AchievementSyncTest
 		assertTrue(sync.changedSince(nextTick()));
 	}
 
-	// quests come off a clientscript, not a varbit. A gate built from varbits alone
-	// compares equal across a completion and never sends it.
 	@Test
 	public void aQuestCompletionReopensTheGate()
 	{
 		sync.markSynced(sync.snapshot());
-		questStack = new int[]{2};   // every quest now reads as finished
+		questStack = new int[]{2};
 		assertTrue(sync.changedSince(nextTick()));
 	}
 
-	// karamja's easy, medium and hard have no completion varbit; they're derived
-	// from task counts against the game's own tier totals.
 	@Test
 	public void karamjasDerivedTiersTurnOverAtTheirTaskTotals()
 	{
@@ -144,7 +123,6 @@ public class AchievementSyncTest
 		assertFalse(karamja.get("easy").getAsBoolean());
 		assertTrue(karamja.get("medium").getAsBoolean());
 		assertTrue(karamja.get("hard").getAsBoolean());
-		// elite is the one karamja tier Jagex gave a completion varbit
 		assertFalse(karamja.get("elite").getAsBoolean());
 
 		varbits.put(VarbitID.KARAMJA_EASY_COUNT, 10);
@@ -154,8 +132,6 @@ public class AchievementSyncTest
 		assertTrue(done.get("elite").getAsBoolean());
 	}
 
-	// the derivation is a threshold: a Jagex task addition can't un-finish a diary
-	// the player has already done.
 	@Test
 	public void aDerivedTierStaysCompletePastItsTotal()
 	{
@@ -164,10 +140,6 @@ public class AchievementSyncTest
 			.getAsJsonObject("karamja").get("medium").getAsBoolean());
 	}
 
-	// ── The account boundary ─────────────────────────────────────────────
-
-	// two accounts can hold identical achievement state (a pair of fresh irons);
-	// without the clear the second one's snapshot would match the first one's ack.
 	@Test
 	public void resetForcesTheNextAccountToSyncEvenIfItLooksTheSame()
 	{
@@ -178,11 +150,10 @@ public class AchievementSyncTest
 		sync.reset();
 
 		JsonObject beta = nextTick();
-		assertEquals(alpha.toString(), beta.toString());   // byte-identical state
-		assertTrue(sync.changedSince(beta));               // and still sent
+		assertEquals(alpha.toString(), beta.toString());
+		assertTrue(sync.changedSince(beta));
 	}
 
-	// a snapshot taken under the outgoing account must not outlive the boundary
 	@Test
 	public void resetDropsTheCachedSnapshotWithinTheSameTick()
 	{
@@ -191,10 +162,6 @@ public class AchievementSyncTest
 		assertNotSame(before, sync.snapshot());
 	}
 
-	// ── The wire shape ───────────────────────────────────────────────────
-
-	// one shape for both the journal file and the push: three sections, every
-	// diary region with four named tiers, combat carrying points and six statuses.
 	@Test
 	public void theSnapshotCarriesTheSectionsTheServerDerivesFrom()
 	{
@@ -204,7 +171,6 @@ public class AchievementSyncTest
 		assertTrue(snap.has("combat"));
 
 		JsonObject diaries = snap.getAsJsonObject("diaries");
-		// the eleven fully-varbitted diaries plus karamja
 		assertEquals(12, diaries.size());
 		for (Map.Entry<String, com.google.gson.JsonElement> e : diaries.entrySet())
 		{
@@ -221,7 +187,6 @@ public class AchievementSyncTest
 		assertEquals(6, combat.getAsJsonObject("tiers").size());
 		assertTrue(combat.getAsJsonObject("tiers").has("grandmaster"));
 
-		// quests travel as raw enum-state names, ungraded
 		assertTrue(snap.getAsJsonObject("quests").size() > 100);
 		assertEquals("NOT_STARTED", snap.getAsJsonObject("quests")
 			.entrySet().iterator().next().getValue().getAsString());

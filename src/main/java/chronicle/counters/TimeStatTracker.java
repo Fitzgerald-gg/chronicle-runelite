@@ -20,32 +20,17 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.StatChanged;
 
-/**
- * Files each minute of a sitting under the one activity that owned it.
- *
- * <p>Every tick goes to exactly one of: the NPC the player is fighting, held
- * for a short grace after the last hit so the walk between kills stays with
- * the boss; else the skill that earned the most xp in the last three minutes,
- * so a slow craft keeps its minutes between drops and a craft done on the
- * side does not take them; else idle. A hundred ticks is a
- * minute, and a minute is written as a counter (timeVorkath, timeFishing,
- * timeIdle), which is what lets the spine carry it and any period answer
- * "how long here". Nothing here is a rate: the pages divide.
- */
 @RequiredArgsConstructor
 public class TimeStatTracker implements StatTracker
 {
 	static final int TICKS_A_MINUTE = 100;
-	/** After the last hit or the last look at a monster, how long it still owns the tick. */
 	static final int FIGHT_GRACE = 50;
-	/** How far back the xp drops are weighed to decide which skill owns the tick. */
 	static final int SKILL_GRACE = 300;
 
 	private final StatStore store;
 	private final Client client;
 	private final Map<Skill, Integer> xpSeen = new EnumMap<>(Skill.class);
 	private final Map<String, Integer> pending = new HashMap<>();
-	// the xp drops of the last SKILL_GRACE ticks, oldest first: {tick, skill ordinal, xp}
 	private final Deque<int[]> drops = new ArrayDeque<>();
 	private String lastNpc;
 	private int lastNpcTick = Integer.MIN_VALUE / 2;
@@ -59,14 +44,10 @@ public class TimeStatTracker implements StatTracker
 			return;
 		}
 		Integer prev = xpSeen.put(skill, event.getXp());
-		// the first reading of a skill is the career total, not a drop
 		if (prev == null || event.getXp() <= prev)
 		{
 			return;
 		}
-		// A fight's own xp does not make it a craft. Attack and Hitpoints drop
-		// on every hit, and seeding the skill branch with them filed the walk
-		// after the fight under Attack and then rated the fight's xp over it.
 		if (fighting())
 		{
 			return;
@@ -74,14 +55,6 @@ public class TimeStatTracker implements StatTracker
 		drops.addLast(new int[]{client.getTickCount(), skill.ordinal(), event.getXp() - prev});
 	}
 
-	/**
-	 * The skill that earned the most in the window, or null for none.
-	 *
-	 * <p>Not the last to drop. A player hunting herbiboar while fletching darts
-	 * between tunnels earns twenty nine thousand hunter xp and three thousand
-	 * fletching, and the darts drop every few seconds: the last-drop rule filed
-	 * twelve of the twenty minutes under Fletching and three under Hunter.
-	 */
 	private Skill leading(int now)
 	{
 		while (!drops.isEmpty() && now - drops.peekFirst()[0] > SKILL_GRACE)
@@ -105,19 +78,11 @@ public class TimeStatTracker implements StatTracker
 		return Skill.values()[top];
 	}
 
-	/** Whether a fight still owns the tick. */
 	private boolean fighting()
 	{
 		return lastNpc != null && client.getTickCount() - lastNpcTick <= FIGHT_GRACE;
 	}
 
-	/**
-	 * A hit I dealt is the one thing that starts a fight.
-	 *
-	 * <p>Interaction alone is not: a fishing spot, a banker, a pickpocket
-	 * target and an impling are all NPCs, and letting any of them claim the
-	 * tick filed an hour of fishing under the shoal rather than under Fishing.
-	 */
 	@Override
 	public void onHitsplatApplied(HitsplatApplied event)
 	{
@@ -141,8 +106,6 @@ public class TimeStatTracker implements StatTracker
 			return;
 		}
 		int now = client.getTickCount();
-		// Still on the thing last hit: the fight goes on through a phase nobody
-		// is landing damage in, but it cannot begin from standing near one.
 		Player me = client.getLocalPlayer();
 		Actor with = me == null ? null : me.getInteracting();
 		if (with instanceof NPC && lastNpc != null && lastNpc.equals(with.getName())
@@ -174,8 +137,6 @@ public class TimeStatTracker implements StatTracker
 	@Override
 	public void onGameStateChanged(GameStateChanged event)
 	{
-		// LOGIN_SCREEN only, as the xp tracker: LOADING and HOPPING keep the
-		// same character, and the minutes in hand belong to the sitting.
 		if (event.getGameState() == GameState.LOGIN_SCREEN)
 		{
 			xpSeen.clear();

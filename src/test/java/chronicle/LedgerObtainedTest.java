@@ -15,11 +15,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The drop ledger's bags count as obtained for dryness: a unique already looted
- * is never a chase, whether or not the stored collection log has caught up with
- * it (the unlock notification off, or the page not reopened since).
- */
 public class LedgerObtainedTest
 {
 	private static JsonObject clog(String boss, long kc)
@@ -48,8 +43,6 @@ public class LedgerObtainedTest
 		return out;
 	}
 
-	// 156 Vorkath with a Draconic visage in the bag and nothing in the log: the
-	// visage is owned, its twin is still the chase.
 	@Test
 	public void aLootedUniqueIsNotChased()
 	{
@@ -60,8 +53,6 @@ public class LedgerObtainedTest
 		assertTrue(chased.toString(), chased.contains("Vorkath / Skeletal visage"));
 	}
 
-	// The same rows read with the log alone still chase the visage: the fold is
-	// what removes it, not the rate book.
 	@Test
 	public void theLogAloneStillChasesIt()
 	{
@@ -70,8 +61,6 @@ public class LedgerObtainedTest
 		assertTrue(chased(clog("Vorkath", 156), sources).contains("Vorkath / Draconic visage"));
 	}
 
-	// The ledger is read by name across every source, as the site's was: a dragon
-	// med helm looted off a Mad Angel is the same helm the Barrows page lists.
 	@Test
 	public void aNameLootedAnywhereCountsOnEveryPage()
 	{
@@ -81,7 +70,6 @@ public class LedgerObtainedTest
 		assertFalse(chased.toString(), chased.contains("Barrows Chests / Dragon med helm"));
 	}
 
-	// A pet sitting in a bag is owned on the pet page's chase too.
 	@Test
 	public void aLootedPetIsNotAPetChase()
 	{

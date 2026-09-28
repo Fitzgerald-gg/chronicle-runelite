@@ -15,13 +15,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The ledger read by what a thing IS rather than by what dropped it.
- *
- * <p>Every assertion here is a number or a control a reader would believe: a
- * head that totals the wrong bag, a count of items called a count of kinds, a
- * lens that disappears when the period changes. None of them throw.
- */
 public class LootByKindTest
 {
 	private static final String JOURNAL =
@@ -53,7 +46,6 @@ public class LootByKindTest
 		f.set(p, v);
 	}
 
-	/** The Drops board as it would be drawn, with the fields the test set. */
 	private static List<String> board(ChroniclePanel p) throws Exception
 	{
 		final List<String> said = new ArrayList<>();
@@ -105,14 +97,6 @@ public class LootByKindTest
 		return false;
 	}
 
-	/**
-	 * The lens is a control on the board, not a control on one period.
-	 *
-	 * <p>Including the sitting, which briefly had no axis because the dated roll
-	 * keeps one entry a day and so could not be asked what a few hours took. The
-	 * sitting keeps its own entry now, in the same shape, so it has two readings
-	 * like every other period and is offered the control that swaps them.
-	 */
 	@Test
 	public void theKindLensIsOfferedAtEveryPeriod() throws Exception
 	{
@@ -121,14 +105,11 @@ public class LootByKindTest
 		{
 			set(p, "histGranularity", period);
 			List<String> said = board(p);
-			// One toggle carrying the reading it is on, so only one of the two
-			// labels is ever drawn. The rule is that the axis is OFFERED here.
 			assertTrue("the grouping control vanished at " + period + ": " + said,
 				says(said, "By kind") || says(said, "By source"));
 		}
 	}
 
-	/** Left behind is a list of items already; there is nothing to regroup. */
 	@Test
 	public void theLensIsNotOfferedOnWhatWasLeft() throws Exception
 	{
@@ -139,7 +120,6 @@ public class LootByKindTest
 			says(board(p), "By kind"));
 	}
 
-	/** A drilled kind totals THAT kind. The bag's own totals are a lie under it. */
 	@Test
 	public void aDrilledKindTotalsItself() throws Exception
 	{
@@ -149,15 +129,12 @@ public class LootByKindTest
 		set(p, "lootKind", "Runes");
 		List<String> said = board(p);
 		assertTrue("the head is not the kind's", says(said, "Runes"));
-		// 400 fire + 50 death = 450 items, worth 300. The bag is 452 items
-		// worth 30,300, and that is what the head used to say.
 		assertTrue("the head did not total the kind", says(said, "450"));
 		assertFalse("the head totalled the whole bag under the kind's name",
 			says(said, "452"));
 		assertTrue("two runes are two distinct items", says(said, "2 items"));
 	}
 
-	/** A kind the bag holds none of says so rather than drawing nothing. */
 	@Test
 	public void anEmptyKindSaysSo() throws Exception
 	{
@@ -171,7 +148,6 @@ public class LootByKindTest
 		assertTrue("there was no way back out of it", says(said, "All kinds"));
 	}
 
-	/** The summary counts distinct items, and does not call them kinds. */
 	@Test
 	public void theSummaryCallsItemsItems() throws Exception
 	{
@@ -185,7 +161,6 @@ public class LootByKindTest
 			says(said, "kinds of thing"));
 	}
 
-	/** Reading by kind is a lens, and survives a look at another tab. */
 	@Test
 	public void theLensSurvivesATabMove() throws Exception
 	{
@@ -220,7 +195,6 @@ public class LootByKindTest
 		assertTrue("a tab move put the reader back on sources", f.getBoolean(p));
 	}
 
-	/** Whatever applyCommon takes, called with nothing in particular. */
 	private static Object[] callArgs(Method m) throws Exception
 	{
 		Object[] args = new Object[m.getParameterCount()];

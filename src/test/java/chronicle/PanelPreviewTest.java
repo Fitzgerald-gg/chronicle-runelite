@@ -29,44 +29,30 @@ import net.runelite.client.util.AsyncBufferedImage;
 import org.junit.Test;
 import org.mockito.Mockito;
 
-/**
- * Renders every ChroniclePanel surface to a PNG under {@code build/panel-preview/}
- * with no client and no login: a fixture set first, then a second set read from
- * the real journal in {@code ~/.runelite/chronicle/} when
- * {@code -Dchronicle.realJournal} asks for it. Also a regression test, since a
- * surface that throws while building fails here.
- */
 public class PanelPreviewTest
 {
-	private static final int PANEL_W = 242;   // non-wrapped PluginPanel width
+	private static final int PANEL_W = 242;
 	private static final int MAX_H = 2600;
 
 	@Test
 	public void renderAllSurfaces() throws Exception
 	{
 		System.setProperty("java.awt.headless", "true");
-		// the client's own LAF, so scrollbars and text metrics match the sidebar
 		edt(() -> javax.swing.UIManager.setLookAndFeel(
 			new net.runelite.client.ui.laf.RuneLiteLAF()));
 		File out = new File("build/panel-preview");
-		//noinspection ResultOfMethodCallIgnored
 		out.mkdirs();
-		// wipe the last run's PNGs, or a surface that stopped rendering keeps
-		// showing its old picture
 		File[] stale = out.listFiles((d, n) -> n.endsWith(".png"));
 		if (stale != null)
 		{
 			for (File f : stale)
 			{
-				//noinspection ResultOfMethodCallIgnored
 				f.delete();
 			}
 		}
 
 		renderSet(out, "fix", fixtureStub());
 
-		// Only when asked. A stranger running the suite should not have their own
-		// journal read, and the fixture set covers every surface anyway.
 		StubPlugin real = System.getProperty("chronicle.realJournal") != null
 			? realJournalPlugin() : null;
 		if (real != null)
@@ -75,7 +61,6 @@ public class PanelPreviewTest
 		}
 	}
 
-	// all panel work goes through the EDT, same as in the client
 	private static void edt(ThrowingRunnable r) throws Exception
 	{
 		final Exception[] err = {null};
@@ -101,7 +86,6 @@ public class PanelPreviewTest
 		void run() throws Exception;
 	}
 
-	// SkillGain's constructor is package-private to counters, so build one reflectively.
 	private static chronicle.counters.ExperienceStatTracker.SkillGain gain(
 		net.runelite.api.Skill skill, long xp, long perHour) throws Exception
 	{
@@ -119,56 +103,40 @@ public class PanelPreviewTest
 		ChroniclePanel panel = holder[0];
 
 		shoot(panel, out, prefix + "-home", "HOME");
-		// the xp fold open: the rows only exist in this state, so the closed shot
-		// above cannot tell anyone whether they still render
 		expandSection(panel, "home:xp");
 		shoot(panel, out, prefix + "-home-xp", "HOME");
 		collapseAll(panel);
-		// the boss board, which is the hiscores roster and not the log's pages
 		shoot(panel, out, prefix + "-kills", "KILLS");
-		// and the whole sheet it now sits at the bottom of. The history read has
-		// to have landed first: the skills band is drawn from the spine, so
-		// without this the sheet was photographed saying "Reading your history"
-		// and every render of it since has been of a board with no skills on it.
 		regatherHistory(panel);
 		awaitHistory(panel);
 		shoot(panel, out, prefix + "-sheet", "SHEET");
-		// the sheet's activity pages (the log has its own shot, above)
 		for (String page : new String[]{"clues", "quests", "diaries", "combat"})
 		{
 			set(panel, "sheetPage", page);
 			shoot(panel, out, prefix + "-page-" + page, "SHEET");
 		}
-		// one combat tier opened, where the rows actually live
 		set(panel, "sheetPage", "combat");
 		expandSection(panel, "ca:easy");
 		shoot(panel, out, prefix + "-page-combat-open", "SHEET");
 		collapseAll(panel);
 		set(panel, "sheetPage", null);
 		shoot(panel, out, prefix + "-drops", "DROPS");
-		// the log narrowed: what the journal dates as landing inside the window
 		set(panel, "histGranularity", "Month");
 		shoot(panel, out, prefix + "-log-month", "LOG");
 		set(panel, "histGranularity", "Lifetime");
 
-		// the same board narrowed: off the dated roll, not the running totals
 		set(panel, "histGranularity", "Month");
 		shoot(panel, out, prefix + "-drops-month", "DROPS");
 		set(panel, "histGranularity", "Lifetime");
-		// the journey lands via invokeLater after the first paint, so shoot twice
-		// and let the settled view overwrite the file
 		shoot(panel, out, prefix + "-slayer", "SLAYER");
 		shoot(panel, out, prefix + "-slayer", "SLAYER");
 
-		// a skill under the glass, which the grid cell now opens on
 		set(panel, "detailSkill", "Woodcutting");
 		shoot(panel, out, prefix + "-skill-detail", "HISTORY");
-		// a skill whose ground the ledger has loot for, which Woodcutting's has not
 		set(panel, "detailSkill", "Fishing");
 		shoot(panel, out, prefix + "-skill-ground", "HISTORY");
 		set(panel, "detailSkill", null);
 
-		// drilled: a source, then an item inside one
 		List<LocalStore.SourceRow> src = stub.dropSources();
 		if (!src.isEmpty())
 		{
@@ -178,8 +146,6 @@ public class PanelPreviewTest
 			set(panel, "detailSource", null);
 		}
 
-		// the very picture the copy puts on the clipboard: a fresh page with the
-		// loot cap lifted, drawn at its whole height
 		if (!src.isEmpty())
 		{
 			final String top = src.get(0).name;
@@ -194,8 +160,6 @@ public class PanelPreviewTest
 					String.class);
 				bd.setAccessible(true);
 				javax.swing.JPanel page = (javax.swing.JPanel) bd.invoke(panel, top);
-				// the same strip copySourcePage does, or the shot shows navigation
-				// the clipboard never receives
 				if (page.getComponentCount() > 2)
 				{
 					page.remove(1);
@@ -212,7 +176,6 @@ public class PanelPreviewTest
 				}
 				shown.remove(top);
 
-				// and the item page's own picture
 				List<LocalStore.BagItem> topBag = stub.sourceItems(top);
 				if (!topBag.isEmpty())
 				{
@@ -248,7 +211,6 @@ public class PanelPreviewTest
 			}
 		}
 
-		// a task drilled, then left-behind by source and by item
 		set(panel, "detailTask", 0);
 		shoot(panel, out, prefix + "-slayer-task", "SLAYER");
 		set(panel, "detailTask", -1);
@@ -266,7 +228,6 @@ public class PanelPreviewTest
 			shoot(panel, out, prefix + "-leftbehind-item", "DROPS");
 			set(panel, "leftBehindItem", null);
 		}
-		// every tracker in one place, which the search opens on "trackers"
 		set(panel, "allTrackers", true);
 		shoot(panel, out, prefix + "-all-trackers", "HOME");
 		set(panel, "allTrackers", false);
@@ -278,9 +239,6 @@ public class PanelPreviewTest
 		set(panel, "clogTab", "Other");
 		set(panel, "clogPageSel", "All Pets");
 		shoot(panel, out, prefix + "-log-pets", "LOG");
-		// two pets open on the same page: the detail only exists in this state, so
-		// the folded shot above cannot say whether it still renders, and two at once
-		// is the keyed register doing what one boolean could not
 		expandSection(panel, "pets:All Pets:" + firstFoldablePet(stub, "All Pets"));
 		expandSection(panel, "pets:All Pets:tiny tempor");
 		shoot(panel, out, prefix + "-log-pets-open", "LOG");
@@ -315,8 +273,6 @@ public class PanelPreviewTest
 			String slug = fam.toLowerCase().replaceAll("[^a-z]+", "-");
 			shoot(panel, out, prefix + "-stats-" + slug, "STATS");
 		}
-		// one craft open for its rows and the leftover "Other"; Prayer goes a
-		// level deeper into its verb folds
 		set(panel, "statsFamily", "Skilling");
 		expandSection(panel, "Skilling:Cooking");
 		expandSection(panel, "Skilling:Prayer");
@@ -324,7 +280,6 @@ public class PanelPreviewTest
 		expandSection(panel, "Skilling:Prayer:BonesBuried");
 		shoot(panel, out, prefix + "-stats-skilling-open", "STATS");
 		collapseAll(panel);
-		// Teleports open with Destinations nested inside it
 		set(panel, "statsFamily", "Ledger & Roads");
 		expandSection(panel, "Ledger & Roads:Teleports");
 		expandSection(panel, "Ledger & Roads:Destinations");
@@ -332,10 +287,6 @@ public class PanelPreviewTest
 		collapseAll(panel);
 		set(panel, "statsFamily", chronicle.panel.StatRegistry.FAMILIES[0]);
 
-		// The History tab's shots. Around them, and only them, the plugin hands
-		// out the journey and the feed the fixture grew for this tab, and the
-		// tab reads the plugin again each way, the path a mounted journal
-		// takes; the surfaces before and after draw the fixture's own.
 		LocalStore.SlayerJourney journey = stub.journey;
 		List<JsonObject> feed = stub.feed;
 		boolean grown = stub.historyJourney != null || stub.historyFeed != null;
@@ -353,9 +304,6 @@ public class PanelPreviewTest
 		for (String g : new String[]{"Day", "Week", "Month", "Year"})
 		{
 			set(panel, "histGranularity", g);
-			// The Year shot steps back into the year before, the way the back
-			// arrow does: a period that reaches today draws the live sheet, and
-			// only a closed year can show the levels it ended on.
 			if ("Year".equals(g))
 			{
 				set(panel, "histCursor", LocalDate.now().withDayOfYear(1).minusDays(1));
@@ -363,12 +311,6 @@ public class PanelPreviewTest
 			shoot(panel, out, prefix + "-history-" + g.toLowerCase(), "HISTORY");
 		}
 		set(panel, "histCursor", LocalDate.now());
-		// The groups open, each showing a level of the shape the shut shots
-		// cannot: a group's own figures, a figure opened to the names the
-		// journal holds for it, a section reconciling to its floor with the
-		// leftover "Other", and the ranked per-skill gains. Cooking holds two
-		// verbs, so each row there names its own. The folds are keyed apart
-		// from the Stats tab's.
 		set(panel, "histGranularity", "Week");
 		expandSection(panel, "history:Experience");
 		expandSection(panel, "history:Combat");
@@ -387,9 +329,6 @@ public class PanelPreviewTest
 		expandSection(panel, "history:The rest");
 		shoot(panel, out, prefix + "-history-groups-open", "HISTORY");
 		collapseAll(panel);
-		// The year before, with its groups open: the window the tab steps back
-		// into holds longer lists, and their "Show N more" tails only exist
-		// there.
 		set(panel, "histGranularity", "Year");
 		set(panel, "histCursor", LocalDate.now().withDayOfYear(1).minusDays(1));
 		expandSection(panel, "history:Experience");
@@ -409,7 +348,6 @@ public class PanelPreviewTest
 
 		shoot(panel, out, prefix + "-journal", "JOURNAL");
 
-		// the sitting, which is a period of its own rather than a date range
 		set(panel, "histGranularity", "Session");
 		shoot(panel, out, prefix + "-session-sheet", "SHEET");
 		shoot(panel, out, prefix + "-session-stats", "STATS");
@@ -417,21 +355,11 @@ public class PanelPreviewTest
 
 		setSearch(panel, "dragon");
 		shoot(panel, out, prefix + "-search", "HOME");
-		// a query the bundled tables answer and the record cannot
 		setSearch(panel, "barrows");
 		shoot(panel, out, prefix + "-search-achv", "HOME");
 		setSearch(panel, "");
 	}
 
-	// ------------------------------------------------------------------
-	// Fixture data: long names and dense lists, the states that clip
-	// ------------------------------------------------------------------
-
-	/**
-	 * The fixture account. Package-visible and static because other tests hold
-	 * invariants over every surface and need the same dense, long-named data this
-	 * one draws: a second copy would drift from the one the renders are taken of.
-	 */
 	static StubPlugin fixtureStub() throws Exception
 	{
 		StubPlugin s = new StubPlugin(mockItems());
@@ -453,8 +381,6 @@ public class PanelPreviewTest
 		s.lifetime.put("teleportsGrandExchange", 899L);
 		s.lifetime.put("coinsFromAlchemy", 12_400_310L);
 		s.lifetime.put("coinsSpentAtShops", 1_002_113L);
-		// resourcesDropped is a slice of itemsDropped, so keep it under or the
-		// row shows a part bigger than its whole
 		s.lifetime.put("itemsDroppedValue", 1_488_120L);
 		s.lifetime.put("resourcesGatheredValue", 4_233_800L);
 		s.lifetime.put("resourcesDroppedValue", 1_142_600L);
@@ -475,11 +401,6 @@ public class PanelPreviewTest
 		s.lifetime.put("clueScrollsCompleted", 213L);
 		s.lifetime.put("deaths", 148L);
 
-		// The skilling pets' own attempts, and the levels their odds are read at.
-		// Between them these light every skilling row the pets page can draw, and
-		// three counters that must stay out of it: agilityObstacles is obstacles
-		// where the roll is laps, the failed pickpockets never rolled, and
-		// bloodwood is rolled per swing rather than per log.
 		s.skills.put("woodcutting", new long[]{92, 6_517_253L});
 		s.skills.put("mining", new long[]{85, 3_258_594L});
 		s.skills.put("thieving", new long[]{78, 1_629_200L});
@@ -513,8 +434,6 @@ public class PanelPreviewTest
 		s.lifetime.put("torstolPlanted", 120L);
 		s.lifetime.put("oakPlanted", 88L);
 		s.lifetime.put("yewPlanted", 44L);
-		// Heron off three fish the counter can name, beside a Trawler count the
-		// level never touches; Soup off the salvage the ledger can tier.
 		s.skills.put("fishing", new long[]{96, 10_692_629L});
 		s.lifetime.put("sharkCaught", 21_204L);
 		s.lifetime.put("anglerfishCaught", 8_112L);
@@ -532,14 +451,11 @@ public class PanelPreviewTest
 		s.session.put("consumedValue", 112_400);
 		s.session.put("sharkEaten", 42);
 		s.session.put("teleportsTotal", 12);
-		// the fold header is a pinned row, so it needs the total to exist at all;
-		// this is the sum of the four skills below it
 		s.session.put("totalXpGained", 533_100);
 		s.skillXp.add(gain(net.runelite.api.Skill.RUNECRAFT, 400_000, 250_000));
 		s.skillXp.add(gain(net.runelite.api.Skill.SLAYER, 96_400, 60_250));
 		s.skillXp.add(gain(net.runelite.api.Skill.HITPOINTS, 32_100, 20_060));
 		s.skillXp.add(gain(net.runelite.api.Skill.FLETCHING, 4_600, 2_875));
-		// past the dozen the Home card used to stop at, so the render proves it does not
 		s.session.put("headlessArrowsFletched", 26_955);
 		s.session.put("distanceRan", 5_739);
 		s.session.put("distanceWalked", 3_786);
@@ -556,10 +472,7 @@ public class PanelPreviewTest
 		s.sessionLoots = 37;
 		s.sessionLootValue = 1_204_113L;
 		s.sessionUntaken = new long[]{9, 44_120L};
-		// six of the 37 kills left a stack, so "Drops taken" reads 31
 		s.sessionUntakenKills = 6;
-		// The same sitting the bare tallies above describe, now broken down: the
-		// boards read this through the roll's own shape.
 		s.sessionWindow = new LocalStore.LootWindow();
 		s.sessionWindow.loots = 37;
 		s.sessionWindow.value = 1_204_113L;
@@ -578,9 +491,6 @@ public class PanelPreviewTest
 		s.sources.add(new LocalStore.SourceRow("Crazy archaeologist", 88, 88, 1_204_113L, 31.8, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		s.sources.add(new LocalStore.SourceRow("Thermonuclear smoke devil", 1_402, 1_390, 19_113_205L, 22.2, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		s.sources.add(new LocalStore.SourceRow("Brutal black dragon", 950, 921, 15_204_113L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
-		// Tempoross three ways: the subdue count, the reward pool searches those
-		// permits bought, and the caskets one of those searches handed over. Tiny
-		// tempor is priced off the middle one alone.
 		s.sources.add(new LocalStore.SourceRow("Reward pool (Tempoross)", 114, 114, 4_112_005L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		s.sources.add(new LocalStore.SourceRow("Casket (Tempoross)", 25, 25, 812_400L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 
@@ -603,7 +513,6 @@ public class PanelPreviewTest
 			s.recent.add(new LocalStore.RecentDrop(4151 + i, i == 2 ? 340 : 1, "Drop " + i));
 		}
 
-		// clog: a plausible partial log
 		JsonObject clog = new JsonObject();
 		clog.addProperty("finished", 412);
 		clog.addProperty("available", 1_568);
@@ -615,21 +524,12 @@ public class PanelPreviewTest
 		JsonObject kcs = new JsonObject();
 		kcs.addProperty("abyssal sire", 214);
 		kcs.addProperty("zulrah", 502);
-		// the pets page reads these: Smolcano out of one source, Callisto cub out of
-		// two, Baby mole past the drought line, and a Kraken kc under a pet the log
-		// already holds, which must stay silent
 		kcs.addProperty("zalcano", 2_023);
 		kcs.addProperty("callisto", 1_500);
 		kcs.addProperty("artio", 900);
 		kcs.addProperty("giant mole", 12_000);
 		kcs.addProperty("kraken", 3_000);
-		// Tangleroot's other half: the Hespori kill count, which the skilling book
-		// prices off the same formula as the patches
 		kcs.addProperty("hespori", 61);
-		// And the pets counted the same way a boss is, in the unit their roll is
-		// asked in: a search, a crate, a casket, a high gamble, a loot sack, a trip,
-		// a kill. Two of them are spelled the way the log spells them and two the
-		// way the ledger does, which is the join the book has to make.
 		kcs.addProperty("guardians of the rift", 5_218);
 		kcs.addProperty("soul wars", 346);
 		kcs.addProperty("clue scroll (master)", 300);
@@ -645,9 +545,6 @@ public class PanelPreviewTest
 		kcs.addProperty("fishing trawler", 410);
 		kcs.addProperty("tempoross", 46);
 		clog.add("kcs", kcs);
-		// The chompy chick waits on the elite Western Provinces diary and rolls
-		// nothing before it. The fixture holds it, so the row is drawn; the
-		// real-journal set does not, and draws none.
 		JsonObject diaries = new JsonObject();
 		JsonObject western = new JsonObject();
 		western.addProperty("easy", true);
@@ -664,7 +561,6 @@ public class PanelPreviewTest
 		clog.add("slayer_kcs", skcs);
 		s.clog = clog;
 
-		// cloud on so Manage draws its sync section; the journey fills Slayer
 		s.cloud = true;
 		List<LocalStore.SlayerTask> tasks = new ArrayList<>();
 		tasks.add(new LocalStore.SlayerTask("Abyssal demons", 121, 184, 4,
@@ -677,8 +573,6 @@ public class PanelPreviewTest
 			8_204_113L, tasks);
 		s.consumVals.put("sharkEaten", 1_985_000L);
 		s.consumVals.put("potionDoses", 3_204_000L);
-		// One pet the journal holds, so a pets page has a provenance line to fold
-		// away beside the chases: the log already lights this one.
 		s.petRows.add(new LocalStore.PetRow("Pet kraken", "Kraken", 2_147,
 			java.time.Instant.parse("2024-11-08T20:14:00Z").toEpochMilli()));
 		s.grinds.add(new GrindBook.GrindRow("Abyssal demons", "Abyssal head",
@@ -686,22 +580,13 @@ public class PanelPreviewTest
 		s.clogFinished = 412;
 		s.clogAvailable = 1_568;
 
-		// What the ledger and the log count between them, a few kills past the
-		// spine's last line: the History tab's Kills lens reads this on a period
-		// that reaches today, and the spine's own counts on any earlier one.
-		// Nechryael is the ledger's alone, so it stands apart from the log's
-		// pages there.
 		s.kcs.put("Abyssal demons", 4_425L);
 		s.kcs.put("Zulrah", 552L);
 		s.kcs.put("Nechryael", 2_204L);
 		s.ledgerKcs.put("Nechryael", 2_204L);
 
-		// feed: a few days of milestones
 		long now = System.currentTimeMillis();
 		s.feed.add(feedEntry(now - 3_600_000L, "PET", "petName", "Abyssal orphan"));
-		// Two hours ago, but never before the day began: tests read this slot as
-		// "logged today", and a suite run after 02:00 in the morning would put it
-		// on yesterday and fail for the time on the clock.
 		s.feed.add(feedEntry(Math.max(now - 7_200_000L, java.time.LocalDate.now()
 			.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
 			+ 60_000L), "COLLECTION", "itemName", "Abyssal head"));
@@ -710,17 +595,6 @@ public class PanelPreviewTest
 		s.feed.add(feedEntry(now - 180_000_000L, "COMBAT_ACHIEVEMENT", "task", "Perfect Zulrah"));
 		s.feed.add(feedEntry(now - 190_000_000L, "DEATH", "killerName", "Commander Zilyana"));
 
-		// The History card's lines that read the journal itself see a journey
-		// and a feed grown past the two above, for that tab's shots alone:
-		// three closed segments dated inside the week and one before it, one
-		// more than the fixture spine's delta says; collection log slots inside
-		// the week with one entry older than the week, so the feed reaches
-		// back past its start and the card counts the slots from the feed
-		// rather than the spine; and one dated entry of each other type the
-		// card counts (a death, a pet, a quest, a diary, a combat achievement,
-		// a level), inside the week, so every line the feed alone can draw is
-		// on the shot. The Slayer, Journal and Search surfaces draw the journey
-		// and the feed above, and their pictures stay put.
 		LocalDate day = LocalDate.now();
 		LocalDate priorYear = day.minusYears(1);
 		List<LocalStore.SlayerTask> grown = new ArrayList<>(tasks);
@@ -728,8 +602,6 @@ public class PanelPreviewTest
 			System.currentTimeMillis() / 1000.0 - 150_000, 612_113L, false));
 		grown.add(2, new LocalStore.SlayerTask("Bloodvelds", 188, 0, 0,
 			System.currentTimeMillis() / 1000.0 - 300_000, 402_113L, false));
-		// two closed today, so the Day shot has its own tasks, and eight through
-		// the year before, so the Year shot's list runs past its cap
 		grown.add(1, new LocalStore.SlayerTask("Dust devils", 174, 0, 2,
 			noon(day) / 1000.0, 512_004L, false));
 		grown.add(2, new LocalStore.SlayerTask("Kalphites", 141, 0, 0,
@@ -745,16 +617,9 @@ public class PanelPreviewTest
 		s.historyJourney = new LocalStore.SlayerJourney(214, 48_231, 61_204_113L,
 			8_204_113L, grown);
 
-		// The feed the History tab reads. Every window the tab's shots step to
-		// (today, this week, this month, the year before) holds dated entries of
-		// its own, and one entry sits two and a half years back so the slice
-		// reaches past every one of those windows' starts: a slice that begins
-		// inside a window cannot say what it missed, and the tab draws no count
-		// and no list from it.
 		s.historyFeed = new ArrayList<>(s.feed);
 		s.historyFeed.add(feedEntry(noon(day.minusYears(2).minusMonths(6)), "COLLECTION",
 			"itemName", "Rune platebody"));
-		// today
 		s.historyFeed.add(session(noon(day) - 3_600_000L, 95, 412_004, 31, 2_204_113L));
 		s.historyFeed.add(session(noon(day) - 18_000_000L, 42, 96_400, 12, 812_400L));
 		s.historyFeed.add(feedEntry(noon(day), "COLLECTION", "itemName", "Kraken tentacle"));
@@ -766,7 +631,6 @@ public class PanelPreviewTest
 		s.historyFeed.add(feedEntry(noon(day) - 10_800_000L, "COMBAT_ACHIEVEMENT", "task",
 			"Vorkath Speed-Chaser", "tier", "MASTER"));
 		s.historyFeed.add(feedEntry(noon(day) - 12_600_000L, "DEATH", "killerName", "Vorkath"));
-		// the rest of the week
 		s.historyFeed.add(session(noon(day.minusDays(2)), 110, 604_113, 48, 3_112_400L));
 		s.historyFeed.add(session(noon(day.minusDays(4)), 65, 188_204, 19, 904_113L));
 		s.historyFeed.add(feedEntry(noon(day.minusDays(2)), "COLLECTION", "itemName",
@@ -779,14 +643,11 @@ public class PanelPreviewTest
 		s.historyFeed.add(feedEntry(noon(day.minusDays(5)), "QUEST", "questName",
 			"Desert Treasure II"));
 		s.historyFeed.add(feedEntry(noon(day.minusDays(6)), "DEATH", "killerName", "Zulrah"));
-		// the rest of the month: the first of it, whatever day the suite runs on
 		s.historyFeed.add(session(noon(day.withDayOfMonth(1)), 140, 812_004, 61, 4_112_005L));
 		s.historyFeed.add(feedEntry(noon(day.withDayOfMonth(1)), "COLLECTION", "itemName",
 			"Dragon pickaxe"));
 		s.historyFeed.add(feedEntry(noon(day.withDayOfMonth(1)), "DIARY", "area", "Kandarin",
 			"difficulty", "Hard"));
-		// the year before, which the Year shot steps back into: enough of each
-		// to run a list past its cap and show the "Show N more" tail
 		String[] logSlots = {"Bandos chestplate", "Armadyl helmet", "Zamorakian spear",
 			"Saradomin sword", "Dragon warhammer", "Kraken tentacle", "Occult necklace"};
 		String[] levelled = {"Attack", "Hitpoints", "Mining", "Slayer", "Farming", "Herblore",
@@ -831,23 +692,8 @@ public class PanelPreviewTest
 			"killerName", "Commander Zilyana"));
 		s.historyFeed.add(feedEntry(noon(priorYear.withMonth(10).withDayOfMonth(12)), "DEATH",
 			"killerName", "Cerberus"));
-		// newest first, the order the journal keeps
 		s.historyFeed.sort((a, b) -> Long.compare(b.get("ts").getAsLong(), a.get("ts").getAsLong()));
 
-		// history: the imported year before the plugin, resolved by quarter, then
-		// five weeks of daily baselines with drifting xp. The spine joined in
-		// stages, as a real record does: the imported lines carry every skill but
-		// Sailing and neither counters nor kill counts, the way the site's
-		// snapshots did (they predate Sailing, so the Year shot's head sums the
-		// skills the record carried and the Sailing cell draws no level), the
-		// daily lines open with five more days of skills alone, then the trackers,
-		// then the journal-derived extras ten days later, so a card says what it
-		// measures from. Every level in the imported year sits under the live
-		// sheet's (mining 85, woodcutting 92, fishing 96, runecraft 91), and the
-		// daily lines open above the year's close, so the Year shot, which steps
-		// back into this year, shows that year's closing levels rather than
-		// today's. Six skills move over the year; the rest hold, so the grid keeps
-		// quiet cells. The live sheet stays as it is: the shot has to differ from it.
 		LocalDate d = LocalDate.now();
 		LocalDate lastYear = d.minusYears(1);
 		Map<String, Long> yearEnd = new LinkedHashMap<>();
@@ -892,11 +738,6 @@ public class PanelPreviewTest
 			LocalDate quarterEnd = lastYear.withMonth(3 * (q + 1));
 			s.history.put(quarterEnd.withDayOfMonth(quarterEnd.lengthOfMonth()), imported);
 		}
-		// The plugin's own lines through the back half of that year, monthly, so
-		// the Year shot the tab steps back into has counters and kill counts to
-		// group rather than skills alone. They begin in April, after the first
-		// imported quarter the year opens on, so that shot also carries the line
-		// saying what its counters are measured from.
 		for (int m = 4; m <= 12; m++)
 		{
 			HistoryLog.Baseline b = new HistoryLog.Baseline();
@@ -962,8 +803,6 @@ public class PanelPreviewTest
 			b.counters.put("tilesRan", 900_000L + (35 - i) * 5_204L);
 			b.counters.put("resourcesGatheredValue", 9_000_000L + (35 - i) * 61_000L);
 			b.counters.put("resourcesDroppedValue", 700_000L + (35 - i) * 4_100L);
-			// typed crafts, the table and the roads, each growing under its
-			// floor, so the tracked-progress card has folds and ghosts to draw
 			b.counters.put("fishCaught", 4_000L + (35 - i) * 61L);
 			b.counters.put("sharkCaught", 2_500L + (35 - i) * 40L);
 			b.counters.put("logsChopped", 9_000L + (35 - i) * 120L);
@@ -971,7 +810,6 @@ public class PanelPreviewTest
 			b.counters.put("magicLogsChopped", 1_200L + (35 - i) * 15L);
 			b.counters.put("pickPockets", 3_000L + (35 - i) * 70L);
 			b.counters.put("guardPickpockets", 1_800L + (35 - i) * 52L);
-			// two verbs under one craft, so an open fold names each row's verb
 			b.counters.put("foodCooked", 3_000L + (35 - i) * 33L);
 			b.counters.put("sharkCooked", 2_000L + (35 - i) * 25L);
 			b.counters.put("foodBurned", 300L + (35 - i) * 4L);
@@ -980,8 +818,6 @@ public class PanelPreviewTest
 			b.counters.put("sharkEaten", 4_000L + (35 - i) * 28L);
 			b.counters.put("potionDoses", 6_000L + (35 - i) * 24L);
 			b.counters.put("prayerDoses", 3_500L + (35 - i) * 20L);
-			// a family's flat rows, so Living and Combat each draw the fold that
-			// carries no figure (meals beside vials, damage taken beside misses)
 			b.counters.put("vialsShattered", 900L + (35 - i) * 3L);
 			b.counters.put("damageTaken", 700_000L + (35 - i) * 4_200L);
 			b.counters.put("hitsMissed", 40_000L + (35 - i) * 150L);
@@ -990,8 +826,6 @@ public class PanelPreviewTest
 			b.counters.put("teleportsCastleWars", 400L + (35 - i) * 4L);
 			b.counters.put("distanceRan", 400_000L + (35 - i) * 3_000L);
 			b.counters.put("distanceWalked", 200_000L + (35 - i) * 1_500L);
-			// the upkeep bill and the purse, so those two groups draw their own
-			// gp figures beside the counts
 			b.counters.put("consumedValue", 2_000_000L + (35 - i) * 18_000L);
 			b.counters.put("coinsFromAlchemy", 8_000_000L + (35 - i) * 120_000L);
 			b.counters.put("coinsSpentAtShops", 900_000L + (35 - i) * 11_000L);
@@ -1003,7 +837,6 @@ public class PanelPreviewTest
 			{
 				continue;
 			}
-			// the spine extras the plugin writes beside the counters
 			b.counters.put("dropsReceived", 8_000L + (35 - i) * 41L);
 			b.counters.put("lootValue", 61_000_000L + (35 - i) * 412_000L);
 			b.counters.put("lootLeftCount", 120L + (35 - i) * 2L);
@@ -1027,8 +860,6 @@ public class PanelPreviewTest
 		return e;
 	}
 
-	// the same with a second field: the level a skill reached, a diary's
-	// difficulty, a combat achievement's tier
 	private static JsonObject feedEntry(long ts, String type, String key, String val,
 		String key2, String val2)
 	{
@@ -1037,7 +868,6 @@ public class PanelPreviewTest
 		return e;
 	}
 
-	// one played session: the minutes it ran and what it brought in
 	private static JsonObject session(long ts, long minutes, long xp, long drops, long dropsGp)
 	{
 		JsonObject e = new JsonObject();
@@ -1052,22 +882,11 @@ public class PanelPreviewTest
 		return e;
 	}
 
-	// noon on a day, so a dated entry lands inside its own window whatever the
-	// clock reads when the suite runs
 	private static long noon(LocalDate d)
 	{
 		return d.atTime(12, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
 	}
 
-	/**
-	 * A plugin fed from a named journal in a named directory.
-	 *
-	 * <p>The /example crawler calls this by reflection to build the panel over
-	 * the fixture journal rather than over whatever this machine happens to have
-	 * played. It is the same assembly as {@link #realJournalPlugin()}, which
-	 * finds its own journal instead; both exist because the preview harness
-	 * wants the newest real one and the crawler wants a named one.
-	 */
 	static StubPlugin journalStub(String dirPath, String rsn) throws Exception
 	{
 		File dir = new File(dirPath);
@@ -1105,13 +924,8 @@ public class PanelPreviewTest
 		return s;
 	}
 
-	// the same assembly again, fed from the real journal on this machine, when
-	// there is one
 	private StubPlugin realJournalPlugin()
 	{
-		// -Dchronicle.realJournal=1 reads this machine's own journal; given a
-		// directory instead, it reads that one, which is how a doctored copy gets
-		// rendered without touching the real file.
 		String at = System.getProperty("chronicle.realJournal");
 		File dir = at != null && new File(at).isDirectory()
 			? new File(at)
@@ -1122,11 +936,6 @@ public class PanelPreviewTest
 			return null;
 		}
 		String rsn = journalRsn(journal);
-		// The name the panel PRINTS, which is not the name it loads by. Renders
-		// taken for the plugin's own documentation go out to the Plugin Hub, and
-		// the one line in this panel that carries an account name is the
-		// journal's front card. -Dchronicle.asName replaces it there and nowhere
-		// else, so the record shown is real and the name over it is not.
 		String shown = System.getProperty("chronicle.asName");
 		ItemManager im = mockItems();
 		LocalStore store = new LocalStore(im, new Gson());
@@ -1151,11 +960,6 @@ public class PanelPreviewTest
 		s.grinds = new GrindBook(new Gson()).grinds(store.clogSnapshot(), store.dropSources());
 		JsonObject clKc = store.clogSnapshot();
 		s.kcs.putAll(LocalStore.clogKillCounts(clKc));
-		// Splits off the ledger sources the log has no page for, which is what
-		// ledgerKills() previews. NOT the fold ChroniclePlugin.killCounts does:
-		// that is reconciledKills, which REPLACES the page counter with the Kill
-		// Log and the chat line rather than max-merging onto it. The merge that
-		// used to sit here was the older fold the reconciler was written to stop.
 		for (Map.Entry<String, Long> e
 			: LocalStore.sourceKills(clKc, store.dropSources()).entrySet())
 		{
@@ -1167,8 +971,6 @@ public class PanelPreviewTest
 		return s;
 	}
 
-	// newest journal in the folder; a rename files the record under a new slug, so
-	// we can't name one. .json only: the history spine is .jsonl, temp writes .tmp
 	private static File newestJournal(File dir)
 	{
 		File[] found = dir.listFiles((d, n) -> n.endsWith(".json"));
@@ -1186,8 +988,6 @@ public class PanelPreviewTest
 		return newest;
 	}
 
-	// LocalStore reaches a file by slugging the name it's given, so the rsn inside
-	// is only usable when it slugs back to this file. the stem always does.
 	private static String journalRsn(File journal)
 	{
 		String name = journal.getName();
@@ -1207,21 +1007,10 @@ public class PanelPreviewTest
 		}
 		catch (Exception ignored)
 		{
-			// unreadable record still renders under the stem it's filed by
 		}
 		return stem;
 	}
 
-	/**
-	 * The sprite cache, answered with the game's own art where it has been dumped
-	 * out of the cache (-Dchronicle.exampleSprites=&lt;dir&gt; holding
-	 * sprite-&lt;id&gt;-&lt;frame&gt;.png), and with a plain token otherwise.
-	 *
-	 * <p>The token matters for the tests, which only care that something was
-	 * drawn. The real art matters for the /example recording: the boss board is
-	 * seventy one cells each wearing an IconBoss25x25 sprite, and a recording
-	 * made against the token says every one of them is the same brown oval.
-	 */
 	private static net.runelite.client.game.SpriteManager mockSprites()
 	{
 		String dir = System.getProperty("chronicle.exampleSprites");
@@ -1265,9 +1054,6 @@ public class PanelPreviewTest
 
 	private static ItemManager mockItems()
 	{
-		// a client thread that actually runs what it is handed: an image the cache
-		// already holds answers onLoaded through it, so a mock that swallows the
-		// task renders every cached icon blank
 		ClientThread ct = Mockito.mock(ClientThread.class);
 		Mockito.doAnswer(inv ->
 		{
@@ -1290,17 +1076,12 @@ public class PanelPreviewTest
 		return im;
 	}
 
-	// ------------------------------------------------------------------
-	// The stub: every panel-facing read answered with plain data
-	// ------------------------------------------------------------------
-
 	static class StubPlugin extends ChroniclePlugin
 	{
 		String rsn;
 		ChronicleEventCapture.SlayerView slayer;
 		Map<String, Long> lifetime = new LinkedHashMap<>();
 		Map<String, Integer> session = new LinkedHashMap<>();
-		// standing levels, in the shape LocalStore keeps them: {level, xp}
 		Map<String, long[]> skills = new LinkedHashMap<>();
 		final java.util.List<chronicle.counters.ExperienceStatTracker.SkillGain> skillXp =
 			new java.util.ArrayList<>();
@@ -1324,17 +1105,14 @@ public class PanelPreviewTest
 		int clogFinished;
 		int clogAvailable;
 		TreeMap<LocalDate, HistoryLog.Baseline> history = new TreeMap<>();
-		LocalStore store;   // set for the real-journal variant
+		LocalStore store;
 		boolean cloud;
 		LocalStore.SlayerJourney journey;
-		// the journey and the feed the History tab alone reads, when a fixture
-		// grows them past the two above; null to read the same as every surface
 		LocalStore.SlayerJourney historyJourney;
 		List<JsonObject> historyFeed;
 		Map<String, Long> consumVals = new LinkedHashMap<>();
 		List<GrindBook.GrindRow> grinds = new ArrayList<>();
 		List<LocalStore.PetRow> petRows = new ArrayList<>();
-		// a test that needs real item images supplies its own manager
 		ItemManager itemManager;
 
 		StubPlugin(ItemManager im)
@@ -1342,8 +1120,6 @@ public class PanelPreviewTest
 			this.itemManager = im;
 		}
 
-		// a sitting in progress, where a test wants Now to know one; unset, the
-		// plugin's own answer stands, which SessionPeriodTest sets by hand
 		long sessionStartMs;
 		long sessionElapsed;
 
@@ -1377,8 +1153,8 @@ public class PanelPreviewTest
 			return lifetime;
 		}
 
-		java.time.LocalDate lootRollDay;       // the day the roll begins, null for none
-		LocalStore.LootWindow lootWindow;      // what it holds for any window asked
+		java.time.LocalDate lootRollDay;
+		LocalStore.LootWindow lootWindow;
 
 		@Override
 		long lootRollFrom()
@@ -1388,8 +1164,6 @@ public class PanelPreviewTest
 				return lootRollDay.atStartOfDay(java.time.ZoneId.systemDefault())
 					.toInstant().toEpochMilli();
 			}
-			// a real journal behind the stub answers for itself, so a preview of
-			// the loot board shows the roll the account actually has
 			return store != null ? store.lootRollFrom() : 0;
 		}
 
@@ -1478,9 +1252,7 @@ public class PanelPreviewTest
 				: new java.util.ArrayList<>();
 		}
 
-		// when an item landed, where a test says so
 		Map<String, long[]> itemDays = new LinkedHashMap<>();
-		// the roll by day, where a test says so
 		Map<String, long[]> dayTotals = new java.util.TreeMap<>();
 
 		@Override
@@ -1594,9 +1366,6 @@ public class PanelPreviewTest
 			return new ArrayList<>(bags.getOrDefault(source, new ArrayList<>()));
 		}
 
-		// A period's own items per source: off the store where there is one, the
-		// fixture's otherwise. Left to the plugin, this asked a store the stub
-		// never injects and threw on every source page opened under a period.
 		final java.util.Map<String, java.util.List<LocalStore.BagItem>> periodBags =
 			new java.util.LinkedHashMap<>();
 
@@ -1608,8 +1377,6 @@ public class PanelPreviewTest
 			{
 				return store.itemsBySource(from, to);
 			}
-			// the sitting's, and only the sitting's: a page that asked for its
-			// days would find nothing here and show it
 			java.util.Map<String, java.util.List<LocalStore.BagItem>> out = new java.util.LinkedHashMap<>();
 			if (from == null)
 			{
@@ -1654,14 +1421,11 @@ public class PanelPreviewTest
 			return feed.subList(0, Math.min(n, feed.size()));
 		}
 
-		/** A sitting in progress, where a test wants one. */
 		JsonObject liveSitting;
 
 		@Override
 		java.util.List<JsonObject> feedWithSitting(int n)
 		{
-			// No client, so no sitting in progress unless a test supplies one:
-			// the real plugin puts the running sitting at the head.
 			if (liveSitting == null)
 			{
 				return feedNewest(n);
@@ -1780,7 +1544,6 @@ public class PanelPreviewTest
 		@Override
 		PaceBook.Pace pace(String skill)
 		{
-			// run the real PaceBook over the stub's history rather than faking a pace
 			long xp = 0;
 			if (!history.isEmpty())
 			{
@@ -1829,9 +1592,6 @@ public class PanelPreviewTest
 		@Override
 		java.util.Map<String, Long> killCounts()
 		{
-			// The same reconciliation the client runs, not a second one. A stub
-			// that answers this question its own way lets a panel test agree
-			// with nothing the player will ever see.
 			if (store != null)
 			{
 				return LocalStore.reconciledKills(store.clogSnapshot(),
@@ -1845,12 +1605,7 @@ public class PanelPreviewTest
 
 		final Map<String, Long> kcs = new LinkedHashMap<>();
 
-		// headless: nothing wears a sprite, so the icon columns simply stay
-		// empty. Set to have the manager throw, the way the real one does when
-		// asked off the client thread.
 		boolean spritesThrow;
-		// a manager that counts what it is asked for, so a test can prove the
-		// panel asks once and not once a build
 		net.runelite.client.game.SpriteManager spriteManager;
 		final java.util.List<Integer> spriteAsks = new java.util.ArrayList<>();
 
@@ -1864,8 +1619,6 @@ public class PanelPreviewTest
 			return spriteManager;
 		}
 
-		// headless by default: skillIcon() catches the NPE and the grid shows a
-		// bare level. A test that wants the skill icons supplies its own.
 		net.runelite.client.game.SkillIconManager skillIconManager;
 
 		@Override
@@ -1883,7 +1636,7 @@ public class PanelPreviewTest
 		@Override
 		com.google.gson.Gson gson()
 		{
-			return new Gson();   // the stub has no injector
+			return new Gson();
 		}
 
 		@Override
@@ -1892,21 +1645,12 @@ public class PanelPreviewTest
 			return itemManager;
 		}
 
-
 		@Override
 		void actionPushNow()
 		{
 		}
-
 	}
 
-	// ------------------------------------------------------------------
-	// Driving + rendering
-	// ------------------------------------------------------------------
-
-	// The first slot on a pets page the panel would draw a fold on: one the journal
-	// owns with a provenance line, or one it prices a chase for. Falls back to the
-	// first slot, which renders an inert row and says so in the picture.
 	private String firstFoldablePet(StubPlugin stub, String page) throws Exception
 	{
 		Method m = ChroniclePanel.class.getDeclaredMethod("taxonomy", com.google.gson.Gson.class);
@@ -1925,8 +1669,6 @@ public class PanelPreviewTest
 		return slots.get(0).toLowerCase(Locale.ROOT);
 	}
 
-	// Whether one slot has anything under it, asked of the panel's own petDetail so
-	// the harness cannot disagree with what the page draws.
 	private boolean foldablePet(StubPlugin stub, String slot) throws Exception
 	{
 		LocalStore.PetRow own = null;
@@ -1966,10 +1708,6 @@ public class PanelPreviewTest
 		edt(() ->
 		{
 			setEnum(panel, "view", "chronicle.ChroniclePanel$View", view);
-			// A board is reached by a tab and a sub-tab now, so setting the view
-			// alone leaves the strip above it naming another tab's boards. The
-			// panel already knows which pair owns a board; ask it, or the shot
-			// shows a sub-tab strip that could never appear over that board.
 			Object v = get(panel, "view");
 			Method tabFor = ChroniclePanel.class.getDeclaredMethod("tabFor",
 				Class.forName("chronicle.ChroniclePanel$View"));
@@ -1990,9 +1728,6 @@ public class PanelPreviewTest
 			rebuild.setAccessible(true);
 			rebuild.invoke(panel);
 		});
-		// An icon that arrives while the build is running dresses its label on a
-		// later pass of the event queue. Captured in the same pass, every one of
-		// them would be missing from the shot and the shot would be a lie.
 		edt(() ->
 		{
 		});
@@ -2039,10 +1774,6 @@ public class PanelPreviewTest
 		return f.get(panel);
 	}
 
-	// Ask the History tab to read the plugin again, the way a mounted journal
-	// does, and wait for the read to land: the shots after it draw what the
-	// plugin holds now. The read the panel primed when it was built is waited
-	// for first, so it cannot land over the new one.
 	static void regatherHistory(ChroniclePanel panel) throws Exception
 	{
 		awaitHistory(panel);
@@ -2055,8 +1786,6 @@ public class PanelPreviewTest
 		awaitHistory(panel);
 	}
 
-	// the read is flagged in flight on the EDT when it starts and cleared
-	// there when its worker is done
 	static void awaitHistory(ChroniclePanel panel) throws Exception
 	{
 		long deadline = System.currentTimeMillis() + 10_000;

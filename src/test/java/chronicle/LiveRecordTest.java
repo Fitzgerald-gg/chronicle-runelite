@@ -10,20 +10,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The record has to be readable the instant it moves.
- *
- * <p>Two separate things had to be true for that and only one of them was. The
- * panel is redrawn when the stores say they have been written to, which is what
- * the revision counters are for; and what it then READS has to be the record as
- * it stands, not as it was last written to disk.
- *
- * <p>The second was the one that was wrong. Lifetime counters came from the
- * journal's persisted trackers, which only move when the journal is flushed, so
- * a board showing what an account had gathered sat still through an hour of
- * gathering and jumped on logout. Redrawing it more often would have changed
- * nothing at all: it would have drawn the same stale figure more times.
- */
 public class LiveRecordTest
 {
 	private static chronicle.counters.StatStore store()
@@ -51,7 +37,6 @@ public class LiveRecordTest
 		assertNotEquals(at, s.revision());
 	}
 
-	/** Reading is not writing: a board drawn every tick must not cause the next. */
 	@Test
 	public void readingDoesNotMoveIt()
 	{
@@ -64,10 +49,6 @@ public class LiveRecordTest
 			at, s.revision());
 	}
 
-	/**
-	 * The lifetime arithmetic, done against counters as they stand rather than as
-	 * last flushed. This is the half that made the difference.
-	 */
 	@Test
 	public void lifetimeIsBasePlusSessionWithoutWaitingForAFlush() throws Exception
 	{
@@ -90,7 +71,6 @@ public class LiveRecordTest
 			Long.valueOf(73L), live.get("highestHit"));
 	}
 
-	/** And with nothing done this session it is simply the base. */
 	@Test
 	public void withNothingDoneYetItIsJustTheBase() throws Exception
 	{
@@ -107,7 +87,6 @@ public class LiveRecordTest
 			Long.valueOf(1000L), ls.lifetimeOf(null).get("logsChopped"));
 	}
 
-	/** A counter at zero is absent rather than printed as a zero row. */
 	@Test
 	public void aCounterThatIsStillZeroIsNotCarried() throws Exception
 	{

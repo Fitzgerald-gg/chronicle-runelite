@@ -17,10 +17,6 @@ import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.client.game.ItemManager;
 
-/**
- * Item interactions with no attempt count of their own: examines, drops (and the value
- * binned), cabbage and flax picks. All of them arrive as a menu click or a line of chat.
- */
 @RequiredArgsConstructor
 public class ItemStatTracker implements StatTracker
 {
@@ -28,14 +24,11 @@ public class ItemStatTracker implements StatTracker
 	private final Client client;
 	private final ItemManager itemManager;
 
-	// tells a gathered resource apart from bank junk at the click. nullable: without
-	// one, a drop only feeds the plain dropped-value stat.
 	private final GatheredLedger gatheredLedger;
 
 	@Override
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
-		// constant first: a menu entry can carry no option text.
 		final String option = event.getMenuOption();
 		if ("Examine".equals(option))
 		{
@@ -48,14 +41,11 @@ public class ItemStatTracker implements StatTracker
 		}
 	}
 
-	// the click carries the item id; the stack size comes from the inventory slot in
-	// param0. priced at drop time via ItemManager, canonicalised so notes and
-	// placeholders resolve.
 	private void recordDroppedValue(MenuOptionClicked event)
 	{
 		if (!event.isItemOp())
 		{
-			return;   // a non-inventory "Drop" has no item to price
+			return;
 		}
 		final int itemId = event.getItemId();
 		if (itemId <= 0)
@@ -78,13 +68,9 @@ public class ItemStatTracker implements StatTracker
 		{
 			return;
 		}
-		// clamp: StatStore takes an int, and a full stack of anything valuable overflows one
 		final long value = each * qty;
 		final int banked = value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
 		statStore.incrementStatBy("itemsDroppedValue", banked);
-		// the total above counts every bin, bank clear-outs included. this second figure
-		// sits beside gathered value and only counts what this account pulled out of the
-		// world itself.
 		if (gatheredLedger != null && gatheredLedger.wasGathered(canonical))
 		{
 			statStore.incrementStatBy("resourcesDroppedValue", banked);
@@ -108,8 +94,6 @@ public class ItemStatTracker implements StatTracker
 
 		if (message.contains("You pick a") || message.contains("You pick some"))
 		{
-			// "You pick a cabbage." / "You pick some flax." take the trailing word:
-			// last space up to the period after it. no period there, not a pick.
 			final int from = message.lastIndexOf(' ') + 1;
 			final int dot = message.indexOf('.', from);
 			if (dot < 0)

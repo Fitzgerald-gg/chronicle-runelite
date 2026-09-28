@@ -33,10 +33,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Key derivation for the per-food and per-potion counters. A wrong key fails silently:
- * it splits one tally across two counters.
- */
 public class FoodStatTrackerTest
 {
 	@Test
@@ -51,8 +47,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void historicalKeyNamesAreReproduced()
 	{
-		// These names predate the derivation rule. If it stops matching them the
-		// journal totals fork.
 		assertEquals("troutEaten", FoodStatTracker.perFoodKey("Trout"));
 		assertEquals("cabbageEaten", FoodStatTracker.perFoodKey("Cabbage"));
 	}
@@ -67,8 +61,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void partEatenFoodsFoldOntoTheWholeItem()
 	{
-		// Digits survive the key builder, so leaving the portion prefix on would give
-		// a fresh 23CakeEaten per bite.
 		assertEquals("cakeEaten", FoodStatTracker.perFoodKey("2/3 cake"));
 		assertEquals("cakeEaten", FoodStatTracker.perFoodKey("1/3 cake"));
 		assertEquals("cakeEaten", FoodStatTracker.perFoodKey("Slice of cake"));
@@ -83,14 +75,12 @@ public class FoodStatTrackerTest
 		assertEquals("cake", FoodStatTracker.baseFoodName("2/3 cake"));
 		assertEquals("Chocolate cake", FoodStatTracker.baseFoodName("Chocolate cake"));
 		assertEquals("Cooked karambwan", FoodStatTracker.baseFoodName("Cooked karambwan"));
-		// "half" only marks a portion when an "a"/"an" follows it. Half moon is an item.
 		assertEquals("Half moon", FoodStatTracker.baseFoodName("Half moon"));
 	}
 
 	@Test
 	public void unnamedItemsProduceNoKey()
 	{
-		// itemName() returns "" for an unresolvable id; that must not become "Eaten".
 		assertEquals("", FoodStatTracker.perFoodKey(""));
 		assertEquals("", FoodStatTracker.perFoodKey("   "));
 	}
@@ -98,7 +88,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void potionNameFromDrinkMessage()
 	{
-		// The doses-left tally is a second sentence, so the first full stop ends the name.
 		assertEquals("prayer potion", FoodStatTracker.potionName(
 			"You drink some of your prayer potion. You have 2 doses of potion left."));
 		assertEquals("divine super combat potion", FoodStatTracker.potionName(
@@ -121,17 +110,13 @@ public class FoodStatTrackerTest
 	@Test
 	public void fourDoseNamesBridgeTheDrinkNameAndTheCatalogueName()
 	{
-		// As drunk first, then the sibling spelling, so an exact catalogue row wins.
 		assertEquals(List.of("super restore potion(4)", "super restore(4)"),
 			FoodStatTracker.fourDoseNames("super restore potion"));
 		assertEquals(List.of("Saradomin brew(4)", "Saradomin brew potion(4)"),
 			FoodStatTracker.fourDoseNames("Saradomin brew"));
-		// The trailing word is matched without regard to case.
 		assertEquals(List.of("Prayer Potion(4)", "Prayer(4)"),
 			FoodStatTracker.fourDoseNames("Prayer Potion"));
 	}
-
-	// ---- pricing through the chat handler, against a substring-matching catalogue ----
 
 	private final StatStore store = new StatStore();
 	private final ItemManager items = Mockito.mock(ItemManager.class);
@@ -142,13 +127,6 @@ public class FoodStatTrackerTest
 	private final List<String> queries = new ArrayList<>();
 	private int searches;
 
-	/**
-	 * RuneLite's ItemManager.search is a case-insensitive substring match over item
-	 * names (runelite master: name.toLowerCase().contains(itemName)). The stub keeps
-	 * that shape, since it is exactly why "super restore potion(4)" finds nothing.
-	 * getItemPrice answers off the same rows by id, and the client hands back one
-	 * inventory container so pack changes are seen.
-	 */
 	private FoodStatTracker trackerOver(Object... catalogue)
 	{
 		for (int i = 0; i < catalogue.length; i += 2)
@@ -184,7 +162,6 @@ public class FoodStatTrackerTest
 		return new FoodStatTracker(store, client, items, sunk::put);
 	}
 
-	/** A catalogue row under the id the pack would show it by. */
 	private void priced(int id, String name, int price)
 	{
 		ItemPrice row = new ItemPrice();
@@ -194,11 +171,6 @@ public class FoodStatTrackerTest
 		rows.add(row);
 	}
 
-	/**
-	 * What the client calls this item id, and the five actions its pack menu offers. A
-	 * potion's menu unless the test says otherwise: "Drink" first, "Drop" last, the
-	 * three between empty.
-	 */
 	private void named(int id, String name, String... actions)
 	{
 		ItemComposition definition = Mockito.mock(ItemComposition.class);
@@ -208,7 +180,6 @@ public class FoodStatTrackerTest
 		Mockito.when(client.getItemDefinition(id)).thenReturn(definition);
 	}
 
-	/** The pack as the client now reports it, as id, quantity pairs. */
 	private void pack(FoodStatTracker tracker, int... idQty)
 	{
 		Item[] held = new Item[idQty.length / 2];
@@ -234,7 +205,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void potionDrunkWithATrailingPotionPricesOffTheBareCatalogueName()
 	{
-		// The audit's case: chat "super restore potion", GE "Super restore(4)".
 		FoodStatTracker tracker = trackerOver(
 			"Super restore(4)", 10000,
 			"Super restore(3)", 7000,
@@ -248,7 +218,6 @@ public class FoodStatTrackerTest
 		assertEquals(1, store.getStat("superRestorePotionDoses"));
 		assertEquals(Integer.valueOf(2500), sunk.get("superRestorePotionDoses"));
 
-		// Others of the same shape.
 		drink(tracker, "antipoison potion");
 		assertEquals(Integer.valueOf(100), sunk.get("antipoisonPotionDoses"));
 		drink(tracker, "anti-venom potion");
@@ -262,9 +231,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void potionDrunkBareStillPricesWhenTheCatalogueSaysPotion()
 	{
-		// The rule runs both ways, as the site's alias did: a drink name without the
-		// word finds a "<x> potion(4)" row. No live potion is known to need this
-		// direction; it is here so the bridge stays symmetric.
 		FoodStatTracker tracker = trackerOver("Stamina potion(4)", 8000);
 		drink(tracker, "stamina");
 		assertEquals(2000, store.getStat(CONSUMED_VALUE));
@@ -289,7 +255,7 @@ public class FoodStatTrackerTest
 		FoodStatTracker tracker = trackerOver("Super restore(4)", 10000);
 		drink(tracker, "super restore potion");
 		int walked = searches;
-		assertEquals(2, walked);   // as drunk (empty), then the sibling (hit)
+		assertEquals(2, walked);
 		drink(tracker, "super restore potion");
 		drink(tracker, "super restore potion");
 		assertEquals(walked, searches);
@@ -300,8 +266,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void unloadedPriceListIsNotCachedAsUnpriced()
 	{
-		// Neither spelling came back with anything: the client's price list may not
-		// be up yet. Try again next dose rather than pinning a zero.
 		FoodStatTracker tracker = trackerOver();
 		drink(tracker, "super restore potion");
 		drink(tracker, "super restore potion");
@@ -311,8 +275,6 @@ public class FoodStatTrackerTest
 		assertEquals(2, store.getStat("superRestorePotionDoses"));
 		assertNull(sunk.get("superRestorePotionDoses"));
 	}
-
-	// ---- pricing off the item the pack shows leaving ----
 
 	private static final int PRAYER_POTION4 = 2434;
 	private static final int PRAYER_POTION3 = 139;
@@ -335,14 +297,9 @@ public class FoodStatTrackerTest
 	@Test
 	public void prayerPotionIsPricedOffTheItemThatLeftThePack()
 	{
-		// The owner's journal: 58 restorePrayerPotionDoses and no gp against them. The
-		// chat says "restore prayer potion", the catalogue "Prayer potion(4)", and no
-		// spelling of the one bridges to the other. The pack knows which item it was.
 		FoodStatTracker tracker = prayerTracker();
 		pack(tracker, PRAYER_POTION3, 1);
 
-		// (3) -> (2): a lower dose finds its 4-dose sibling by catalogue name, once,
-		// and is priced by that row's id.
 		pack(tracker, PRAYER_POTION2, 1);
 		drink(tracker, "restore prayer potion");
 		assertEquals(3000, store.getStat(CONSUMED_VALUE));
@@ -352,7 +309,6 @@ public class FoodStatTrackerTest
 		assertEquals(List.of("Prayer potion(4)"), queries);
 		Mockito.verify(items).getItemPrice(PRAYER_POTION4);
 
-		// (2) -> (1): remembered, no second walk.
 		pack(tracker, PRAYER_POTION1, 1);
 		drink(tracker, "restore prayer potion");
 		assertEquals(6000, store.getStat(CONSUMED_VALUE));
@@ -364,7 +320,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void fourDoseInThePackIsTheCatalogueRowItself()
 	{
-		// No walk at all: the item that shrank is the (4) row, priced by its own id.
 		FoodStatTracker tracker = prayerTracker();
 		pack(tracker, PRAYER_POTION4, 1);
 		pack(tracker, PRAYER_POTION3, 1);
@@ -378,8 +333,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void drinkLineArrivingBeforeThePackChangeWaitsForIt()
 	{
-		// The server writes the message before it flushes the pack, so the line can
-		// land first. Nothing is priced until the pack says which potion.
 		FoodStatTracker tracker = prayerTracker();
 		pack(tracker, PRAYER_POTION3, 1);
 		drink(tracker, "restore prayer potion");
@@ -392,15 +345,12 @@ public class FoodStatTrackerTest
 		assertEquals(3000, store.getStat(CONSUMED_VALUE));
 		assertEquals(3000, store.getStat("potionsConsumedValue"));
 		assertEquals(Integer.valueOf(3000), sunk.get("restorePrayerPotionDoses"));
-		// The name path was never consulted for it.
 		assertEquals(List.of("Prayer potion(4)"), queries);
 	}
 
 	@Test
 	public void drinkLineWithNoPackChangeFallsBackToTheNameAsItsWindowCloses()
 	{
-		// A pack is watched but never shows a dose leaving. The line waits its two
-		// ticks, then prices the old way, off the name as drunk.
 		FoodStatTracker tracker = prayerTracker();
 		pack(tracker, 995, 100);
 		drink(tracker, "super restore potion");
@@ -412,7 +362,6 @@ public class FoodStatTrackerTest
 		assertEquals(2500, store.getStat("potionsConsumedValue"));
 		assertEquals(Integer.valueOf(2500), sunk.get("superRestorePotionDoses"));
 		assertEquals(List.of("super restore potion(4)", "super restore(4)"), queries);
-		// Priced once; the window does not re-run.
 		tick(tracker);
 		assertEquals(2500, store.getStat(CONSUMED_VALUE));
 		assertEquals(2500, store.getStat("potionsConsumedValue"));
@@ -424,13 +373,11 @@ public class FoodStatTrackerTest
 		FoodStatTracker tracker = prayerTracker();
 		pack(tracker, PRAYER_POTION1, 1);
 
-		// (1) -> Vial: nothing of the potion is left to grow.
 		pack(tracker, VIAL, 1);
 		drink(tracker, "restore prayer potion");
 		assertEquals(3000, store.getStat(CONSUMED_VALUE));
 		assertEquals(3000, store.getStat("potionsConsumedValue"));
 
-		// (1) -> nothing: the vial was smashed on the same tick.
 		pack(tracker, VIAL, 1, PRAYER_POTION1, 1);
 		pack(tracker, VIAL, 1);
 		drink(tracker, "restore prayer potion");
@@ -443,8 +390,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void aDoseThatShrinksWithoutItsNextDoseAppearingIsNotADrink()
 	{
-		// A (3) dropped or banked is not a dose drunk: no (2) took its place. The line
-		// that follows finds nothing to pair with and falls back to its name.
 		FoodStatTracker tracker = prayerTracker();
 		pack(tracker, PRAYER_POTION3, 1);
 		pack(tracker);
@@ -459,8 +404,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void unloadedPriceListDoesNotPinTheItemPathAtZero()
 	{
-		// The first dose sees no price at all; the second, once the list is up, must
-		// price. A remembered zero would leave the potion unpriced all session.
 		FoodStatTracker tracker = trackerOver();
 		named(PRAYER_POTION3, "Prayer potion(3)");
 		named(PRAYER_POTION2, "Prayer potion(2)");
@@ -481,9 +424,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void potionWithoutAFourDoseFormIsLeftUnpriced()
 	{
-		// Named only in the client, not in the catalogue: an untradeable potion. The
-		// pack pairs it (the brackets in its own name survive the dose suffix coming
-		// off), the catalogue has no (4) row, nothing is guessed.
 		FoodStatTracker tracker = prayerTracker();
 		named(11731, "Overload (+)(3)");
 		named(11732, "Overload (+)(2)");
@@ -500,9 +440,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void aLowerDoseFindsItsOwnFourDoseRowNotALongerNameAroundIt()
 	{
-		// The client's search is a substring match and walks the catalogue in its own
-		// order: "Combat potion(4)" sits inside "Super combat potion(4)", which here
-		// comes first. Only the row spelt exactly as wanted prices the sip.
 		FoodStatTracker tracker = trackerOver();
 		priced(SUPER_COMBAT4, "Super combat potion(4)", 12000);
 		priced(COMBAT_POTION4, "Combat potion(4)", 1000);
@@ -516,8 +453,6 @@ public class FoodStatTrackerTest
 		Mockito.verify(items).getItemPrice(COMBAT_POTION4);
 		Mockito.verify(items, Mockito.never()).getItemPrice(SUPER_COMBAT4);
 	}
-
-	// ---- what the pack shows leaving is not always a potion ----
 
 	private static final int COMBAT_POTION4 = 9739;
 	private static final int COMBAT_POTION3 = 9741;
@@ -544,10 +479,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void aChargedItemCountingDownIsNoDoseWhateverItsNameShares()
 	{
-		// "Combat bracelet(4)" -> "(3)" is a teleport: it counts down in a potion's
-		// brackets and shares a word with the combat potion sipped on the next tick.
-		// The menu decides. Only an item offering "Drink" can be the dose a line is
-		// paired with, so the sip is priced off the potion and never off the bracelet.
 		FoodStatTracker tracker = trackerOver();
 		priced(COMBAT_BRACELET4, "Combat bracelet(4)", 20000);
 		priced(COMBAT_POTION4, "Combat potion(4)", 1000);
@@ -569,9 +500,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void aTeleportAndAWateringBesideTheSipLeaveThePotionToPriceIt()
 	{
-		// A ring rubbed in the very event the potion shrinks, a patch watered the
-		// tick before, and the line arriving inside the window: neither charge is
-		// asked its price, and the (4) row of the ring is never looked up.
 		FoodStatTracker tracker = prayerTracker();
 		priced(RING_OF_DUELING4, "Ring of dueling(4)", 1000);
 		named(RING_OF_DUELING8, "Ring of dueling(8)", JEWELLERY_MENU);
@@ -592,11 +520,6 @@ public class FoodStatTrackerTest
 	@Test
 	public void aWaterskinSipInTheWindowIsNotTakenForThePotion()
 	{
-		// Waterskin(4) -> (3) drinks like a potion and counts down like one, so the
-		// menu lets it through. The desert sips it beside the stamina dose, and the
-		// dose and the line are paired by name: the waterskin's shrink waits on a line
-		// of its own that never comes, and the potion prices the sip, whichever half
-		// lands first.
 		FoodStatTracker tracker = trackerOver();
 		priced(WATERSKIN4, "Waterskin(4)", 40);
 		priced(STAMINA4, "Stamina potion(4)", 8000);
@@ -608,7 +531,6 @@ public class FoodStatTrackerTest
 		named(STAMINA1, "Stamina potion(1)");
 		pack(tracker, WATERSKIN4, 1, STAMINA3, 1);
 
-		// the pack first: the waterskin's shrink is waiting when the line arrives
 		pack(tracker, WATERSKIN3, 1, STAMINA3, 1);
 		tick(tracker);
 		drink(tracker, "stamina potion");
@@ -616,7 +538,6 @@ public class FoodStatTrackerTest
 		assertEquals(2000, store.getStat(CONSUMED_VALUE));
 		assertEquals(2000, store.getStat("potionsConsumedValue"));
 
-		// the line first: the waterskin's shrink arrives while the line is parked
 		tick(tracker);
 		tick(tracker);
 		tick(tracker);
@@ -637,9 +558,7 @@ public class FoodStatTrackerTest
 		assertTrue(FoodStatTracker.namesAgree("super restore potion", "Super restore"));
 		assertTrue(FoodStatTracker.namesAgree("overload potion", "Overload (+)"));
 		assertTrue(FoodStatTracker.namesAgree("Saradomin brew", "Saradomin brew"));
-		// one spelling runs on into the other
 		assertTrue(FoodStatTracker.namesAgree("super antipoison potion", "Superantipoison"));
-		// a shared word other than "potion"
 		assertTrue(FoodStatTracker.namesAgree("prayer regeneration potion", "Prayer potion"));
 		assertFalse(FoodStatTracker.namesAgree("stamina potion", "Waterskin"));
 		assertFalse(FoodStatTracker.namesAgree("stamina potion", "Prayer potion"));

@@ -16,39 +16,8 @@ import java.util.regex.Pattern;
 import org.junit.Test;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A memo answered once per build has to be forgotten once per build.
- *
- * <p>The panel answers a handful of expensive questions once and keeps the
- * answer for the rest of the pass: the sources, the collection log, the spine's
- * span, the per-source kill counts. Every one of them depends on the PERIOD, so
- * an answer surviving into the next build is not a stale number, it is a wrong
- * one - and it reads as a board quietly showing another period's figures, which
- * is the hardest kind of wrong to notice.
- *
- * <p>This has bitten twice. rolledKcs was cleared inside buildKills, which draws
- * AFTER the activity tiles that also ask it, so on a period change those tiles
- * answered from the last window. And a probe that cleared every memo but
- * buildSpan printed a lifetime figure under a week's heading, which is exactly
- * what the panel would do if the clearing were ever dropped.
- *
- * <p>So: every memo is cleared at the top of rebuildNow, and anything that is
- * deliberately not has to say why here.
- */
 public class MemoClearedTest
 {
-	/**
-	 * State that outlives a build ON PURPOSE, and would be a defect if cleared.
-	 *
-	 * <p>journeyFetching guards a fetch that is still in the air; cleared on a
-	 * rebuild it would launch a second one over the first. searchFirst is the
-	 * door Enter opens, set while the results are built and read when the key
-	 * is pressed, which is a later pass by definition. journeyCache is the
-	 * whole record's slayer journey, answering no period: the Tasks board
-	 * paints from it without a flicker while the next read is in the air, and
-	 * a search's task door keeps the list its index was read from. The account
-	 * change clears it.
-	 */
 	private static final Set<String> OUTLIVES_A_BUILD = new LinkedHashSet<>(
 		Arrays.asList("journeyFetching", "searchFirst", "lootTask", "journeyCache"));
 
@@ -66,9 +35,7 @@ public class MemoClearedTest
 			fields.add(f.group(1));
 		}
 
-		// a memo: a field filled in behind its own null (or false) check
 		Set<String> memos = new LinkedHashSet<>();
-		// A field filled in behind its own null check.
 		Matcher m = Pattern.compile("if \\((\\w+) == null\\)\\s*\\n\\s*\\{").matcher(src);
 		while (m.find())
 		{
@@ -80,9 +47,6 @@ public class MemoClearedTest
 				memos.add(name);
 			}
 		}
-		// And the other shape, which the first pass missed and which is the one
-		// that misled a probe into printing a lifetime under a week's heading:
-		// a boolean that guards an early return, with the answer beside it.
 		Matcher b = Pattern.compile(
 			"if \\((\\w+)\\)\\s*\\n\\s*\\{\\s*\\n\\s*return (\\w+);\\s*\\n\\s*\\}\\s*\\n\\s*\\1 = true;")
 			.matcher(src);
@@ -101,9 +65,6 @@ public class MemoClearedTest
 
 		int at = src.indexOf("private void rebuildNow()");
 		assertTrue("rebuildNow is gone", at > 0);
-		// To the end of the clearing run, not a count of characters: the block
-		// grows every time a memo is added, which is exactly when this test is
-		// needed, and a fixed window would quietly stop covering the new lines.
 		int until = src.indexOf("facetWaiting.clear();", at);
 		assertTrue("the clearing run no longer ends where this test looks for it",
 			until > at);
@@ -130,7 +91,6 @@ public class MemoClearedTest
 			+ "with the reason it must survive.", loose.isEmpty());
 	}
 
-	/** And the exceptions have to still exist, or the list is a comment. */
 	@Test
 	public void theExceptionsAreRealFields() throws Exception
 	{

@@ -21,14 +21,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The Recap's picture: the period whole on one sheet, up to 1920 by 1080.
- *
- * <p>It is a copy of the Recap, so every figure on it has to be the figure
- * the board it belongs to prints; it leaves the reader's machine, so nothing on
- * it may say when the record began; and it has a ceiling, so a list the ceiling
- * cuts has to say so.
- */
 public class RecapPictureTest
 {
 	@BeforeClass
@@ -70,7 +62,6 @@ public class RecapPictureTest
 		return m.invoke(p);
 	}
 
-	/** The period, then the facts over it, read the way a rebuild leaves them. */
 	private static RecapPicture.Facts facts(ChroniclePanel p, String g, LocalDate c) throws Exception
 	{
 		final RecapPicture.Facts[] out = new RecapPicture.Facts[1];
@@ -116,7 +107,6 @@ public class RecapPictureTest
 		return out;
 	}
 
-	/** A year with a skill climbing, a boss killed and a monster killed, closed in the past. */
 	private static PanelPreviewTest.StubPlugin year()
 	{
 		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
@@ -145,11 +135,6 @@ public class RecapPictureTest
 		}
 	}
 
-	/**
-	 * TRAP: a record bigger than the sheet. The lists give up their tails at the
-	 * ceiling and each says how many; without the ceiling the picture ran on,
-	 * and without the saying so it silently stopped short.
-	 */
 	@Test
 	public void aRecordBiggerThanTheSheetGivesUpRowsAndSaysSo() throws Exception
 	{
@@ -173,11 +158,6 @@ public class RecapPictureTest
 		assertTrue("rows were lost and nothing was dropped by count", f.dropped > 0);
 	}
 
-	/**
-	 * Every figure is the one its own board prints: each skill's gain is the
-	 * sheet's, they sum to the Recap's xp, and a boss's two ends subtract to
-	 * its cell's own figure.
-	 */
 	@Test
 	public void itAgreesWithTheBoardsItCopies() throws Exception
 	{
@@ -222,10 +202,6 @@ public class RecapPictureTest
 		assertEquals(Long.valueOf(130), vorkath.end);
 	}
 
-	/**
-	 * The monsters leave out the bosses and every name a boss's fight is fought
-	 * as: Dusk is the Grotesque Guardians, not a monster killed forty times.
-	 */
 	@Test
 	public void theMonstersAreNotTheBossesOrTheirFights() throws Exception
 	{
@@ -244,11 +220,6 @@ public class RecapPictureTest
 		}
 	}
 
-	/**
-	 * The levels the period reached are the skills table's own, not the
-	 * journal's level lines: those began with the plugin, and a year that took
-	 * fishing up twelve levels named none of them.
-	 */
 	@Test
 	public void theLevelsAreTheTablesNotTheFeeds() throws Exception
 	{
@@ -259,10 +230,6 @@ public class RecapPictureTest
 		assertTrue(levels.toString(), levels.stream().anyMatch(l -> l.startsWith("Fishing ")));
 	}
 
-	/**
-	 * TRAP: the picture leaves the reader's machine. Nothing on it says when the
-	 * record began: not a first date, not a "since", not the day counts started.
-	 */
 	@Test
 	public void nothingOnItSaysWhenTheRecordBegan() throws Exception
 	{
@@ -270,10 +237,7 @@ public class RecapPictureTest
 		ChroniclePanel p = panel(s);
 		List<String> said = new ArrayList<>();
 		said.addAll(strings(facts(p, "Lifetime", LocalDate.now())));
-		// a window from before the record kept its counts
 		said.addAll(strings(facts(p, "Year", LocalDate.now().minusYears(40))));
-		// Neither of these windows names a day of its own, so no day may appear
-		// on either: whatever day one showed would be the record's own start.
 		java.util.regex.Pattern day = java.util.regex.Pattern.compile(
 			"\\b\\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec)");
 		for (String line : said)
@@ -285,12 +249,6 @@ public class RecapPictureTest
 		}
 	}
 
-	/**
-	 * The copy always answers. The boss icons are asked for and may never
-	 * land, a dev client with no sprite cache has none to give, and the copy
-	 * still reports after a moment and a half rather than reading "copying"
-	 * forever.
-	 */
 	@Test
 	public void theCopyAlwaysAnswers() throws Exception
 	{

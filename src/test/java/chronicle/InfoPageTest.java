@@ -14,14 +14,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The counts-of-the-record page: what the journal holds, rather than what the
- * account has done.
- *
- * <p>It carries no date and no name anywhere, which is the point. It is the
- * page somebody hands over when they are being helped, so handing it over must
- * not hand over the account with it.
- */
 public class InfoPageTest
 {
 	private static final String JOURNAL =
@@ -123,7 +115,6 @@ public class InfoPageTest
 		return false;
 	}
 
-	/** Found by typing, from the first letter, because it has no tab. */
 	@Test
 	public void itIsFoundWhileBeingTyped() throws Exception
 	{
@@ -137,7 +128,6 @@ public class InfoPageTest
 			has(say(p, "buildSearch", "zzz"), "what the journal holds"));
 	}
 
-	/** Every figure is a count of the record, and they are the record's. */
 	@Test
 	public void itCountsWhatTheJournalHolds() throws Exception
 	{
@@ -152,15 +142,9 @@ public class InfoPageTest
 		assertEquals("214 of 1,717", after(said, "Slots filled"));
 		assertEquals("1", after(said, "Kill Log lines"));
 		assertEquals("3", after(said, "Trackers"));
-		// not asserted: the store normalises the feed on load, so a fixture's
-		// raw entry count is not what the page will report
 		assertEquals("1", after(said, "Schema"));
 	}
 
-	/**
-	 * Nothing on it names the account or dates it. The journal holds an rsn and
-	 * a first_seen, and neither reaches this page.
-	 */
 	@Test
 	public void itHandsOverNoAccount() throws Exception
 	{
@@ -172,11 +156,6 @@ public class InfoPageTest
 		assertFalse(has(said, "Sept"));
 	}
 
-	/**
-	 * The back row leaves. It is not a page anybody drilled into, so it is not
-	 * on the detail stack, and popping an empty stack left the reader standing
-	 * on the page they were trying to leave.
-	 */
 	@Test
 	public void theBackRowLeaves() throws Exception
 	{
@@ -202,15 +181,6 @@ public class InfoPageTest
 			f.getBoolean(p));
 	}
 
-	/**
-	 * A tab click leaves it, like a tab click leaves every other page a reader
-	 * was sent to.
-	 *
-	 * <p>rebuild() tests showInfo BEFORE it looks at which view is up, so a
-	 * flag left standing means every tab, every sub-tab and every search
-	 * redraws the info page and the panel stops navigating at all. The back row
-	 * was only half of it.
-	 */
 	@Test
 	public void aTabClickLeavesIt() throws Exception
 	{
@@ -240,7 +210,6 @@ public class InfoPageTest
 		}
 	}
 
-	/** And so does opening anything from search. */
 	@Test
 	public void openingSomethingElseLeavesIt() throws Exception
 	{

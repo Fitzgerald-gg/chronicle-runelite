@@ -19,12 +19,6 @@ import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A stated count plus what has been seen since it. The Kill Log is read by
- * opening an interface, so on its own it is frozen: Abyssal demons sat on 1,798
- * while the game itself had reached 2,523. Held beside the ledger's own count
- * at the moment it was read, it moves again without anything being opened.
- */
 public class AnchoredKillCountTest
 {
 	private static final String RSN = "Tester";
@@ -49,7 +43,6 @@ public class AnchoredKillCountTest
 		return store;
 	}
 
-	/** One kill that dropped something, under the ledger's spelling. */
 	private void kill(LocalStore store, String source, Integer stated)
 	{
 		JsonObject d = new JsonObject();
@@ -75,12 +68,9 @@ public class AnchoredKillCountTest
 		{
 			kill(store, "Abyssal demon", null);
 		}
-		// the Kill Log is opened and says 2,523 -- everything, including kills
-		// made before this journal existed and kills that dropped nothing
 		store.anchorKill("Abyssal demons", 2_523, "log", RSN);
 		assertEquals(Long.valueOf(2_523), store.anchoredKills().get("Abyssal demons"));
 
-		// four more kills, no interface opened
 		for (int i = 0; i < 4; i++)
 		{
 			kill(store, "Abyssal demon", null);
@@ -92,16 +82,12 @@ public class AnchoredKillCountTest
 	@Test
 	public void theKillItWasStatedAtIsNotCountedTwice()
 	{
-		// The chat box speaks BEFORE the drop lands: "Your Sarachnis kill count
-		// is: 52" arrives, then the loot event for that same kill. Counting that
-		// row as a kill SINCE would read 53.
 		LocalStore store = mounted();
 		kill(store, "Sarachnis", 51);
 		store.noteKillCount("Sarachnis", 52, RSN);
-		kill(store, "Sarachnis", 52);        // the lagging row for kill 52
+		kill(store, "Sarachnis", 52);
 		assertEquals(Long.valueOf(52), store.anchoredKills().get("Sarachnis"));
 
-		// and the next kill still counts
 		kill(store, "Sarachnis", 53);
 		assertEquals(Long.valueOf(53), store.anchoredKills().get("Sarachnis"));
 	}
@@ -109,9 +95,6 @@ public class AnchoredKillCountTest
 	@Test
 	public void aSlayerTaskCounterIsNotMistakenForTheStatedKill()
 	{
-		// A slayer monster's loot row carries its TASK counter, not a lifetime
-		// count. If that were read as "the kill the anchor was taken at", every
-		// slayer kill would be absorbed and the number would never move again.
 		LocalStore store = mounted();
 		store.anchorKill("Nechryael", 1_234, "log", RSN);
 		kill(store, "Nechryael", 12);
@@ -134,7 +117,6 @@ public class AnchoredKillCountTest
 	@Test
 	public void aJournalWithFewerObservationsIsNotNegativeKills() throws Exception
 	{
-		// carried to a machine that watched less of it, or restored from a backup
 		LocalStore store = mounted();
 		for (int i = 0; i < 6; i++)
 		{
@@ -142,7 +124,6 @@ public class AnchoredKillCountTest
 		}
 		store.anchorKill("Vorkath", 156, "log", RSN);
 		store.flush(dir);
-		// the journal comes back from a backup that watched two kills, not six
 		File f = new File(dir, "tester.json");
 		String json = new String(java.nio.file.Files.readAllBytes(f.toPath()),
 			java.nio.charset.StandardCharsets.UTF_8).replace("\"loots\":6", "\"loots\":2");
@@ -160,8 +141,6 @@ public class AnchoredKillCountTest
 		kill(store, "Vorkath", null);
 		kill(store, "Vorkath", null);
 		assertEquals(Long.valueOf(158), store.anchoredKills().get("Vorkath"));
-		// the Kill Log is opened again and still reads 156, because it was read
-		// before those two landed. Re-baselining here would lose them.
 		store.anchorKill("Vorkath", 156, "log", RSN);
 		assertEquals(Long.valueOf(158), store.anchoredKills().get("Vorkath"));
 	}
@@ -171,11 +150,8 @@ public class AnchoredKillCountTest
 	{
 		LocalStore store = mounted();
 		store.anchorKill("Zulrah", 600, "log", RSN);
-		// the game itself then says otherwise on the kill; a dated reading
-		// superseding a dated reading, not a guess at a maximum
 		store.anchorKill("Zulrah", 501, "chat", RSN);
 		assertEquals(Long.valueOf(501), store.anchoredKills().get("Zulrah"));
-		// and the older kind may not displace it again
 		store.anchorKill("Zulrah", 600, "log", RSN);
 		assertEquals(Long.valueOf(501), store.anchoredKills().get("Zulrah"));
 	}
@@ -184,9 +160,9 @@ public class AnchoredKillCountTest
 	public void oneFightIsOneRowHoweverItIsSpelled()
 	{
 		Map<String, Long> out = new LinkedHashMap<>();
-		out.put("Abyssal demon", 2_346L);      // the ledger's spelling
+		out.put("Abyssal demon", 2_346L);
 		Map<String, Long> stated = new LinkedHashMap<>();
-		stated.put("Abyssal demons", 1_798L);  // the Kill Log's
+		stated.put("Abyssal demons", 1_798L);
 		LocalStore.placeByKind(out, stated, true);
 		assertEquals("a stale reading pulled a live count down",
 			Long.valueOf(2_346), out.get("Abyssal demon"));
@@ -197,9 +173,9 @@ public class AnchoredKillCountTest
 	public void anAnchoredCountReplacesWhereABareOneOnlyFloors()
 	{
 		Map<String, Long> out = new LinkedHashMap<>();
-		out.put("Zalcano", 2_024L);            // the ledger, one row above the truth
+		out.put("Zalcano", 2_024L);
 		Map<String, Long> anchored = new HashMap<>();
-		anchored.put("Zalcano", 2_023L);       // stated, and knows what came after
+		anchored.put("Zalcano", 2_023L);
 		LocalStore.placeByKind(out, anchored, false);
 		assertEquals(Long.valueOf(2_023), out.get("Zalcano"));
 	}

@@ -18,20 +18,6 @@ import lombok.RequiredArgsConstructor;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 
-/**
- * The Recap as one picture: the whole period on a single sheet, no wider than
- * 1920 and no taller than 1080.
- *
- * <p>The panel's Recap is a dozen figures, each a door. A picture has no doors,
- * so this one carries what they open onto: every skill from where the period
- * found it to where it left it, every boss the same way, the monsters, the loot,
- * the counters and what the period achieved. The figures are gathered by the
- * panel, the way its own boards read them; this class only lays them out.
- *
- * <p>Nothing in a picture can be hovered or opened, so nothing on it may lean
- * on a hover to be understood, and a list that does not fit says how much of it
- * was left off rather than stopping short.
- */
 final class RecapPicture
 {
 	static final int WIDTH = 1920;
@@ -48,7 +34,6 @@ final class RecapPicture
 	private static final int HEAD = 22;
 	private static final int TILE_H = 84;
 	private static final int NOTE_ROW = 15;
-	// the least a page is drawn at, so a quiet sitting is still a sheet and not a strip
 	private static final int MIN_BODY = 260;
 
 	private static final Color GROUND = ColorScheme.DARK_GRAY_COLOR;
@@ -58,10 +43,8 @@ final class RecapPicture
 	private static final Color DIM = ColorScheme.LIGHT_GRAY_COLOR.darker();
 	private static final Color ACCENT = ColorScheme.BRAND_ORANGE;
 
-	// The game's font has no arrow; the sheet says "124 to 125" and so does this.
 	private static final String ARROW = " to ";
 
-	/** Everything the picture says, gathered by the panel. */
 	static final class Facts
 	{
 		String title = "";
@@ -69,7 +52,6 @@ final class RecapPicture
 		boolean session;
 		final List<Tile> tiles = new ArrayList<>();
 		final List<SkillLine> skills = new ArrayList<>();
-		// the total and combat rows under the skills: {start, end}, null where unknown
 		Long[] totalLevel;
 		Long[] totalXp;
 		Long[] combat;
@@ -88,11 +70,9 @@ final class RecapPicture
 		String trackersNote;
 		final Map<String, List<String>> feats = new LinkedHashMap<>();
 		final List<String> notes = new ArrayList<>();
-		// rows the ceiling took off the ends of lists, each list saying so; set by paint
 		int dropped;
 	}
 
-	/** One figure across the top: what it is, the figure, and a line under it. */
 	@RequiredArgsConstructor
 	static final class Tile
 	{
@@ -101,7 +81,6 @@ final class RecapPicture
 		final String under;
 	}
 
-	/** A skill's standing at either end of the period; start null where the record cannot say. */
 	@RequiredArgsConstructor
 	static final class SkillLine
 	{
@@ -118,7 +97,6 @@ final class RecapPicture
 		}
 	}
 
-	/** A boss's kill count at either end, or only what moved where that is all that is known. */
 	@RequiredArgsConstructor
 	static final class BossLine
 	{
@@ -129,7 +107,6 @@ final class RecapPicture
 		final long gained;
 	}
 
-	/** A plain line: a name, its figure, and a gp figure beside it where there is one. */
 	@RequiredArgsConstructor
 	static final class Named
 	{
@@ -142,18 +119,12 @@ final class RecapPicture
 	{
 	}
 
-	// ------------------------------------------------------------------
-	// Pieces: a card is a caption over pieces, and pieces are what a column
-	// breaks between
-	// ------------------------------------------------------------------
-
 	private interface Piece
 	{
 		int height();
 
 		void draw(Graphics2D g, int x, int y, int w);
 
-		// a subheading is never the last thing before a column breaks
 		default boolean keepsWithNext()
 		{
 			return false;
@@ -165,7 +136,6 @@ final class RecapPicture
 	{
 		final String title;
 		final List<Piece> pieces = new ArrayList<>();
-		// whether this block may lose rows off its end when the page is full
 		final boolean trims;
 		int dropped;
 	}
@@ -185,8 +155,6 @@ final class RecapPicture
 		return FontManager.getRunescapeBoldFont().deriveFont(32f);
 	}
 
-	// A measure off a scratch image, since the pieces are sized before there is
-	// anything to draw on.
 	private static final Graphics2D MEASURE = new BufferedImage(1, 1,
 		BufferedImage.TYPE_INT_RGB).createGraphics();
 
@@ -195,7 +163,6 @@ final class RecapPicture
 		return MEASURE.getFontMetrics(f);
 	}
 
-	/** Text cut to a width with the font's own ellipsis, or whole where it fits. */
 	static String cut(String s, Font f, int w)
 	{
 		FontMetrics m = fm(f);
@@ -230,7 +197,6 @@ final class RecapPicture
 		return right - w;
 	}
 
-	/** Each a name on the left, a figure on the right, a gp figure beside it in the accent. */
 	private static List<Piece> lines(List<Named> all)
 	{
 		List<Piece> out = new ArrayList<>();
@@ -262,13 +228,11 @@ final class RecapPicture
 		return out;
 	}
 
-	/** Grey small text, wrapped to the card: an aside the reader should still see. */
 	private static List<Piece> note(String s, int w)
 	{
 		return rows(wrap(s, small(), w, " "), small(), DIM, NOTE_ROW, 11);
 	}
 
-	/** Names run on as one paragraph, broken only between names. */
 	private static List<Piece> names(List<String> all, int w)
 	{
 		return rows(wrap(String.join(" · ", all), regular(), w, " · "), regular(), TEXT, ROW - 2, 14);
@@ -295,7 +259,6 @@ final class RecapPicture
 		return out;
 	}
 
-	/** Greedy wrap on a separator, a piece that is still too wide being cut rather than lost. */
 	static List<String> wrap(String s, Font f, int w, String sep)
 	{
 		FontMetrics m = fm(f);
@@ -394,14 +357,6 @@ final class RecapPicture
 		return String.format(java.util.Locale.UK, "%,d", n);
 	}
 
-	// ------------------------------------------------------------------
-	// The sheet
-	// ------------------------------------------------------------------
-
-	/**
-	 * Draw the facts. The icons are asked for by id and may answer null, which
-	 * leaves a name standing on its own rather than holding the picture up.
-	 */
 	static BufferedImage paint(Facts f, Function<net.runelite.api.Skill, BufferedImage> skillIcons,
 		Function<Integer, BufferedImage> sprites)
 	{
@@ -409,17 +364,13 @@ final class RecapPicture
 		int inner = COL - 2 * PAD;
 		int wideInner = 2 * COL + GAP - 2 * PAD;
 
-		// the head: the period, then the figures across
 		int headH = TOP + 12 + 4 + 34 + 16 + (f.tiles.isEmpty() ? 0 : TILE_H + 18);
 		int footNotes = f.notes.size();
 		int footH = 14 + footNotes * NOTE_ROW + 20;
 		int maxBody = MAX_HEIGHT - headH - footH;
 
-		// the skills table sits in the first two columns, whole
 		int tableH = skillsTableHeight(f);
 
-		// the left two columns carry the period's achievements under the table;
-		// the other four carry everything else, in this order
 		List<Block> left = new ArrayList<>();
 		for (Map.Entry<String, List<String>> e : f.feats.entrySet())
 		{
@@ -498,12 +449,6 @@ final class RecapPicture
 			right.add(b);
 		}
 
-		// One run of cards over all six columns, the first two starting under
-		// the skills: what the period achieved, then everything else. Run to
-		// the least height that holds all of it, so the columns come out even
-		// rather than the first ones full and the last ones empty; never past
-		// the ceiling, where the longest lists give up their tails and each
-		// says how many it gave up.
 		List<Block> run = new ArrayList<>(left);
 		run.addAll(right);
 		int[] tops = {tableH + GAP, tableH + GAP, 0, 0, 0, 0};
@@ -516,16 +461,12 @@ final class RecapPicture
 		body = Math.min(body, maxBody);
 		while (!place(null, run, cols, tops, even(body), false) && trimOne(run, inner))
 		{
-			// trimmed one row; try again
 		}
 		f.dropped = 0;
 		for (Block b : run)
 		{
 			f.dropped += b.dropped;
 		}
-		// The four columns beside the table stop at the least height that
-		// still holds everything, so a short period is a row of cards across
-		// the page and not one tall column beside three empty ones.
 		int beside = 0;
 		for (Block b : run)
 		{
@@ -554,7 +495,6 @@ final class RecapPicture
 		g.setColor(GROUND);
 		g.fillRect(0, 0, WIDTH, height);
 
-		// the head
 		int y = TOP;
 		text(g, "RECAP", small(), ACCENT, LEFT, y + 11);
 		y += 16;
@@ -573,7 +513,6 @@ final class RecapPicture
 			y += TILE_H + 18;
 		}
 
-		// the body
 		int bodyTop = y;
 		drawSkillsTable(g, f, skillIcons, LEFT, bodyTop, 2 * COL + GAP, tableH, wideInner);
 		int[] colX = new int[COLUMNS];
@@ -590,7 +529,6 @@ final class RecapPicture
 		}
 		place(g, run, colX, at, foot, true);
 
-		// the foot
 		y = bodyTop + body + 14;
 		for (String n : f.notes)
 		{
@@ -634,7 +572,6 @@ final class RecapPicture
 		int cy = y + PAD;
 		text(g, "SKILLS", small(), ACCENT, ix, cy + 13);
 		cy += HEAD;
-		// the columns, right edges: level, then xp at the start, at the end, and gained
 		int right = ix + inner;
 		int gainedR = right;
 		int endR = right - 100;
@@ -743,14 +680,6 @@ final class RecapPicture
 		return h;
 	}
 
-	/**
-	 * Lay the cards into columns: each whole into the first column with room
-	 * for it, so a short card fills a gap an earlier column left, and a list
-	 * too long for that running on from the first column that takes a fair
-	 * start of it into the columns after, never leaving fewer than three rows
-	 * on either side of a break nor a subheading at the foot of one. False
-	 * when they do not all fit. Draws as it goes when asked to.
-	 */
 	private static boolean place(Graphics2D g, List<Block> blocks, int[] xs, int[] tops, int[] bottoms,
 		boolean draw)
 	{
@@ -797,8 +726,6 @@ final class RecapPicture
 					j--;
 					h -= b.pieces.get(j).height();
 				}
-				// a list opens with a fair share of itself, not five rows at the
-				// foot of a column it then has to be followed out of
 				boolean last = j == size;
 				boolean fair = (j - i >= (i == 0 ? Math.min(8, size) : 3) || (last && j > i))
 					&& (last || size - j >= 3);
@@ -857,10 +784,6 @@ final class RecapPicture
 		}
 	}
 
-	/**
-	 * Take one row off the longest list that may lose some, and say so at its
-	 * foot; false when there is nothing left that may give.
-	 */
 	private static boolean trimOne(List<Block> run, int inner)
 	{
 		Block longest = null;
@@ -876,8 +799,6 @@ final class RecapPicture
 		{
 			return false;
 		}
-		// the tail line saying how many were left off is itself a piece: drop it
-		// before counting, put it back after
 		if (longest.dropped > 0)
 		{
 			longest.pieces.remove(longest.pieces.size() - 1);

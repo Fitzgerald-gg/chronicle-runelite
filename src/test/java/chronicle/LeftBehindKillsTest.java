@@ -40,14 +40,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The "kills" figure on a LOOT_UNTAKEN event: how many kills of the source left
- * at least one stack on the floor, whatever the number of stacks. It is the unit
- * "Drops taken" subtracts from the loot events, so a kill that left two stacks is
- * one kill and a stack that was picked up counts nothing. A ground item carries a
- * tile and a tick but no kill, so a stack is matched to the NPC death that stood
- * on (or beside) its tile, and by tick alone only when no such death is known.
- */
 public class LeftBehindKillsTest
 {
 	private static final int SPIKE = 30_000;
@@ -95,7 +87,6 @@ public class LeftBehindKillsTest
 		return new WorldPoint(3200 + x, 3200 + y, 0);
 	}
 
-	// the loot script's ServerNpcLoot for a kill of ours
 	private void kill(int t, String source)
 	{
 		tick(t);
@@ -105,8 +96,6 @@ public class LeftBehindKillsTest
 		capture.onServerNpcLoot(new ServerNpcLoot(comp, new ArrayList<ItemStack>()));
 	}
 
-	// an NPC dying in scene, ours or anyone's: ActorDeath with the tile it stood on
-	// (its south-west tile when larger than one)
 	private void death(int t, int index, String name, WorldPoint at, int size)
 	{
 		tick(t);
@@ -120,8 +109,6 @@ public class LeftBehindKillsTest
 		capture.onActorDeath(new ActorDeath(npc));
 	}
 
-	// a kill of ours the way the client shows it: the NPC's death on the tick
-	// before, the loot script's ServerNpcLoot on t
 	private void kill(int t, String source, int index, WorldPoint at)
 	{
 		death(t - 1, index, source, at, 1);
@@ -133,7 +120,6 @@ public class LeftBehindKillsTest
 		return spawn(t, id, tile);
 	}
 
-	// a self-owned stack landing on a tile whose world location is readable
 	private TileItem spawnAt(int t, int id, WorldPoint at)
 	{
 		return spawnAt(t, id, at, TileItem.OWNERSHIP_SELF);
@@ -163,14 +149,12 @@ public class LeftBehindKillsTest
 		return it;
 	}
 
-	// the stack despawns before its scheduled tick: picked up
 	private void pickUp(int t, TileItem item)
 	{
 		tick(t);
 		capture.onItemDespawned(new ItemDespawned(tile, item));
 	}
 
-	// the stacks reach their own despawn tick on the ground, and the next tick flushes
 	private void leave(TileItem... items)
 	{
 		tick(DESPAWN);
@@ -272,9 +256,6 @@ public class LeftBehindKillsTest
 		assertTrue(untakenRows().isEmpty());
 	}
 
-	// an AoE burst: two kills of one source posted on the same tick, with no death
-	// seen and no readable tile (the shared tile mock has no world location). A
-	// stack then knows its kill by tick alone, so they read as one kill.
 	@Test
 	public void twoKillsOnOneTickCollapseToOneKill()
 	{
@@ -311,9 +292,6 @@ public class LeftBehindKillsTest
 		assertEquals(2, kills(rowFor(rows, WOLF)));
 	}
 
-	// A tracked stack that carries no kill (nothing promotes one today; the guard
-	// is for a future path that tracks a stack without a kill) counts no kill: the
-	// figure is kills, and none is known.
 	@Test
 	@SuppressWarnings("unchecked")
 	public void aStackWithoutAKillCountsNoKill() throws Exception
@@ -334,16 +312,9 @@ public class LeftBehindKillsTest
 		assertEquals(0, kills(rows.get(0)));
 	}
 
-	// leaving the scene banks whatever is still on the ground as left behind; the
-	// sweep carries each stack's kill along, so the figure is the same as if the
-	// stacks had timed out
 	@Test
 	public void theStacksSweptUpAtAnUnloadKeepTheirKills()
 	{
-		// A HOP, not a region change: the world goes away and no despawn is ever
-		// coming, so the sweep is the only chance to count these. A region change
-		// reloads the scene in place and is handled the other way round -- see
-		// aSceneReloadIsNotLeavingTheLoot.
 		kill(100, BEAR);
 		spawn(101, BONES);
 		gameTick(101);
@@ -361,12 +332,6 @@ public class LeftBehindKillsTest
 		assertEquals(2, kills(rows.get(0)));
 	}
 
-	// A region change reloads the scene in place. The client re-announces every
-	// ground item that survived it -- the same TileItem objects, a new scene base,
-	// no despawn in between -- so an item is still there and still ours. Treating
-	// the reload as a departure recorded 23,591 coins as abandoned while they sat
-	// in the inventory, because banking them dropped the tracking and the pickup a
-	// second later had nothing left to correct.
 	@Test
 	public void aSceneReloadIsNotLeavingTheLoot()
 	{
@@ -379,18 +344,14 @@ public class LeftBehindKillsTest
 		capture.onGameStateChanged(reload);
 		gameTick(102);
 
-		// the client replaying what survived, on the same object
 		capture.onItemSpawned(new ItemSpawned(tile, bones));
 		gameTick(103);
 
-		// and then taken, well before its despawn tick
 		pickUp(104, bones);
 		gameTick(105);
 		assertEquals("a reload is not a departure", 0, untakenRows().size());
 	}
 
-	// and the replay must not be read as a second drop, or one stack is counted
-	// twice over: once as the kill's loot and once as a stack of its own
 	@Test
 	public void theReplayedStackIsNotASecondDrop()
 	{
@@ -409,23 +370,18 @@ public class LeftBehindKillsTest
 		assertEquals("the replay was counted as a second stack", 1, items(rows.get(0)));
 	}
 
-	// Walking far from a stack unloads it with the scene and no despawn is posted.
-	// Without a sweep it would be neither counted nor released, so the record would
-	// quietly stop seeing the commonest way loot is left: walked away from.
 	@Test
 	public void aStackWalkedAwayFromIsStillCountedWhenItsTimeIsUp()
 	{
 		kill(100, BEAR);
 		spawn(101, BONES);
 		gameTick(101);
-		// a region change, then nothing: no replay, no despawn, we simply left
 		GameStateChanged reload = new GameStateChanged();
 		reload.setGameState(GameState.LOADING);
 		capture.onGameStateChanged(reload);
 		gameTick(102);
 		assertEquals("counted before its time was up", 0, untakenRows().size());
 
-		// its own despawn tick passes with nobody telling us
 		gameTick(DESPAWN + 10);
 		List<JsonObject> rows = untakenRows();
 		assertEquals(1, rows.size());
@@ -433,10 +389,6 @@ public class LeftBehindKillsTest
 		assertEquals("the kill it came from was lost", 1, kills(rows.get(0)));
 	}
 
-	// Leaving the area entirely destroys the TileItems; coming back rebuilds the
-	// stack as a NEW object. Tracking keyed on identity would miss the pickup and
-	// the sweep would bank it the moment its time was up -- so going back for your
-	// loot would be recorded as having abandoned it.
 	@Test
 	public void lootFetchedOnASecondTripIsNotAbandoned()
 	{
@@ -444,33 +396,25 @@ public class LeftBehindKillsTest
 		TileItem first = spawnAt(101, BONES, HERE);
 		gameTick(101);
 
-		// away: the scene unloads, no despawn is posted, the object dies
 		GameStateChanged away = new GameStateChanged();
 		away.setGameState(GameState.LOADING);
 		capture.onGameStateChanged(away);
 		gameTick(102);
 
-		// back again, and the same stack returns as a different object
 		TileItem rebuilt = spawnAt(140, BONES, HERE);
 		assertNotSame(first, rebuilt);
 		gameTick(141);
 
-		// and taken, before its despawn tick
 		pickUp(142, rebuilt);
 		gameTick(143);
 		assertEquals("going back for it was read as leaving it",
 			0, untakenRows().size());
 
-		// and it is no longer tracked, so the sweep cannot bank it later either
 		gameTick(DESPAWN + 10);
 		assertEquals("the sweep banked a stack already taken",
 			0, untakenRows().size());
 	}
 
-	// ── kills told apart by tile ───────────────────────────────────────────
-
-	// the same AoE burst, with the two deaths seen where they stood: each stack
-	// sits on its own NPC's tile, so the two kills of one tick count two
 	@Test
 	public void twoKillsOnOneTickAtDifferentTilesAreTwoKills()
 	{
@@ -489,9 +433,6 @@ public class LeftBehindKillsTest
 		assertEquals(2, kills(rows.get(0)));
 	}
 
-	// a barrage pack: the NPCs stand shoulder to shoulder, so each stack is one tile
-	// from the neighbour's death as well as on its own. The death standing on the
-	// tile wins, and the two kills stay two.
 	@Test
 	public void adjacentKillsOnOneTickEachKeepTheirOwnStack()
 	{
@@ -509,9 +450,6 @@ public class LeftBehindKillsTest
 		assertEquals(2, kills(rows.get(0)));
 	}
 
-	// A stack spawning the tick after its kill while another kill of the same source
-	// lands on that tick: by tick alone it would file under the later kill and the
-	// two kills would read as one. By tile each stack finds its own.
 	@Test
 	public void aLateStackFilesUnderItsOwnKillNotTheLatest()
 	{
@@ -530,8 +468,6 @@ public class LeftBehindKillsTest
 		assertEquals(2, kills(rows.get(0)));
 	}
 
-	// two kills of different sources on one tick: by tick alone the first-armed
-	// kill would take both stacks; by tile each source counts its own kill
 	@Test
 	public void twoSourcesOnOneTickEachCountTheirOwnKill()
 	{
@@ -551,8 +487,6 @@ public class LeftBehindKillsTest
 		assertEquals(1, kills(rowFor(rows, WOLF)));
 	}
 
-	// LootManager knows NPCs whose drop lands a tile off where they stood: a stack
-	// one tile from a footprint still finds that death, on any side
 	@Test
 	public void aStackOneTileOffTheFootprintStillFindsItsKill()
 	{
@@ -570,8 +504,6 @@ public class LeftBehindKillsTest
 		assertEquals(2, kills(rows.get(0)));
 	}
 
-	// a large NPC's stack can land anywhere on its footprint, not only the
-	// south-west tile its location names
 	@Test
 	public void aStackAnywhereOnALargeFootprintFindsItsKill()
 	{
@@ -589,9 +521,6 @@ public class LeftBehindKillsTest
 		assertEquals(2, kills(rows.get(0)));
 	}
 
-	// A stack on a tile no death stood on or beside (the NPC died out of scene, or
-	// the client could not read where) keeps the tick rule: it is the armed kill's,
-	// and two such kills on one tick still read as one.
 	@Test
 	public void aStackNoDeathMatchesFallsBackToTheTickRule()
 	{
@@ -608,9 +537,6 @@ public class LeftBehindKillsTest
 		assertEquals(1, kills(rows.get(0)));
 	}
 
-	// a death of a source that never armed a kill (another player's, or one the loot
-	// script posted nothing for) is nobody's kill of ours, whatever tile the stack
-	// lands on: the stack keeps the armed kill under the tick rule
 	@Test
 	public void aDeathOfASourceThatNeverArmedIsIgnored()
 	{
@@ -627,8 +553,6 @@ public class LeftBehindKillsTest
 		assertEquals(1, kills(rows.get(0)));
 	}
 
-	// a death alone arms nothing: a self-owned stack on its tile with no kill of
-	// ours in the window is a manual drop, as before
 	@Test
 	public void aDeathWithoutAKillArmsNothing()
 	{
@@ -641,10 +565,6 @@ public class LeftBehindKillsTest
 		assertTrue(untakenRows().isEmpty());
 	}
 
-	// A stack still pending when the next pack dies on its tiles (our tick ran before
-	// the loot script spoke, so the kill was seen a tick late): a death after the
-	// spawn cannot be its kill, so both stacks stay with the one kill under the
-	// tick rule.
 	@Test
 	public void aDeathAfterTheSpawnIsNotItsKill()
 	{
@@ -664,9 +584,6 @@ public class LeftBehindKillsTest
 		assertEquals(1, kills(rows.get(0)));
 	}
 
-	// a group-owned stack is held to a kill on its own tick (a team-mate's drops
-	// arrive group-owned too), and the death it may use is held to that tick as
-	// well: a death of a source armed earlier does not reach it
 	@Test
 	public void aGroupOwnedStackHoldsItsDeathToItsOwnTick()
 	{
@@ -682,8 +599,6 @@ public class LeftBehindKillsTest
 		assertEquals(1, kills(rows.get(0)));
 	}
 
-	// a death seen before a login belongs to the scene left behind: after the reset
-	// two kills whose deaths went unseen are two kills, not one under it
 	@Test
 	public void aDeathDoesNotOutliveTheSession()
 	{
@@ -705,9 +620,6 @@ public class LeftBehindKillsTest
 		assertEquals(2, kills(rows.get(0)));
 	}
 
-	// a death older than the memory window is forgotten even on the stack's tile:
-	// two later kills whose deaths went unseen are two kills under the tick rule,
-	// not one under the stale death
 	@Test
 	public void aDeathOlderThanTheWindowIsNotUsed()
 	{

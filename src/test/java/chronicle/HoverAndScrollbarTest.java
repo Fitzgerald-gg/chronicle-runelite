@@ -14,14 +14,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The two pieces of chrome the reader actually feels: a row that answers the
- * cursor, and a bar that is not there until it is needed.
- *
- * <p>Neither is reachable from the preview harness, which never has a mouse and
- * lays every board out at its full height so no bar is ever raised. Without
- * these, both could be broken for a release and the suite would stay green.
- */
 public class HoverAndScrollbarTest
 {
 	private static MouseAdapter clicker() throws Exception
@@ -33,7 +25,6 @@ public class HoverAndScrollbarTest
 		});
 	}
 
-	/** A row as the panel builds one: transparent, over an opaque card. */
 	private static JPanel rowOverCard(Color card)
 	{
 		JPanel holder = new JPanel();
@@ -67,21 +58,10 @@ public class HoverAndScrollbarTest
 			card, row.getBackground());
 		assertTrue(row.getBackground().getRed() > card.getRed());
 
-		// Outside its own bounds: the pointer has really gone.
 		hover.mouseExited(at(row, MouseEvent.MOUSE_EXITED, -5, -5));
 		assertFalse("and the row is transparent again", row.isOpaque());
 	}
 
-	/**
-	 * The rule an exit is judged by.
-	 *
-	 * <p>Crossing onto a child fires an exit on the parent while the pointer has
-	 * not left it, and the row must stay lit. The event's own coordinates cannot
-	 * tell that from a real exit: on a quick move off the edge of a grid the exit
-	 * can be stamped with a point that still falls inside, and the cell was then
-	 * left lit with nothing to put it back, which is how a sheet ends up with
-	 * half a dozen tiles glowing at once.
-	 */
 	@Test
 	public void anExitIsJudgedByWhereThePointerActuallyIs() throws Exception
 	{
@@ -89,24 +69,15 @@ public class HoverAndScrollbarTest
 			boolean.class, boolean.class, boolean.class);
 		rule.setAccessible(true);
 
-		// on the component: crossing onto a child, and it stays lit
 		assertTrue((Boolean) rule.invoke(null, true, true, false));
 
-		// a pointer exists and is not on it: a real exit, whatever the event says
 		assertFalse("an exit stamped inside was believed over the pointer itself",
 			(Boolean) rule.invoke(null, false, true, true));
 
-		// no pointer to ask about at all: the event's own reading is all there is
 		assertTrue((Boolean) rule.invoke(null, false, false, true));
 		assertFalse((Boolean) rule.invoke(null, false, false, false));
 	}
 
-	/**
-	 * The hover colour is the client's own for that ground, not a lightening by
-	 * some amount. A row on a card and a tile in a grid used to come out at 45
-	 * and 55, so one panel had two hover colours depending on what a thing
-	 * happened to be sitting in, and neither was a colour the client uses.
-	 */
 	@Test
 	public void theHoverColourIsTheClientsOwn() throws Exception
 	{
@@ -119,7 +90,6 @@ public class HoverAndScrollbarTest
 			hoverOf.invoke(null, net.runelite.client.ui.ColorScheme.DARK_GRAY_COLOR));
 	}
 
-	/** A tile that paints its own ground is hovered as itself, not as its grid. */
 	@Test
 	public void aTilePaintingItsOwnGroundIsHoveredAsItself() throws Exception
 	{
@@ -148,7 +118,6 @@ public class HoverAndScrollbarTest
 		MouseAdapter hover = clicker();
 		row.addMouseListener(hover);
 
-		// An exit with no entry: nothing to restore, and nothing to damage.
 		hover.mouseExited(at(row, MouseEvent.MOUSE_EXITED, -5, -5));
 		assertFalse(row.isOpaque());
 		assertEquals(before, row.getBackground());
@@ -167,8 +136,6 @@ public class HoverAndScrollbarTest
 		overlay.invoke(null, scroll);
 		JScrollBar bar = scroll.getVerticalScrollBar();
 
-		// chaseRoom() subtracts scrollbarWidth() from the room a name has. If the
-		// bar is wider than that, a name is cut to a width the bar then covers.
 		assertEquals("the bar takes exactly what the layout arithmetic says",
 			((Integer) width.invoke(null)).intValue(),
 			bar.getPreferredSize().width);
@@ -194,12 +161,6 @@ public class HoverAndScrollbarTest
 		}
 	}
 
-	/**
-	 * The comment above chaseRoom itemises the arithmetic term by term and then
-	 * totals it. The total was four pixels out: every term was right and the sum
-	 * line said 189 where they come to 193. A worked example in a comment is worth
-	 * having precisely because it can be checked, so it is checked here.
-	 */
 	@Test
 	public void theWorkedExampleAboveChaseRoomAddsUp() throws Exception
 	{

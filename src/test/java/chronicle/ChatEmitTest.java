@@ -22,15 +22,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 
-/**
- * A chat line all the way through to a recorded event.
- *
- * <p>COLLECTION, CLUE, COMBAT_ACHIEVEMENT, DIARY and PET are emitted from nowhere
- * but onChatMessage, and the suite tested the regexes alone. A pattern that still
- * matches while the handler around it stops emitting, or emits under a changed
- * kind, is a whole class of milestone going quietly missing from the journal with
- * the corpus staying green.
- */
 public class ChatEmitTest
 {
 	private ChronicleEventCapture capture;
@@ -57,7 +48,6 @@ public class ChatEmitTest
 			new ChatMessage(null, ChatMessageType.GAMEMESSAGE, "", text, null, 0));
 	}
 
-	/** The one event of that kind the store was handed, or a failure. */
 	private JsonObject emitted(String kind)
 	{
 		ArgumentCaptor<JsonObject> cap = ArgumentCaptor.forClass(JsonObject.class);
@@ -82,7 +72,6 @@ public class ChatEmitTest
 		assertEquals("Insanity", d.get("task").getAsString());
 	}
 
-	/** The points suffix the game appends is not part of the task's name. */
 	@Test
 	public void theTaskNameLosesItsPointsSuffix()
 	{
@@ -108,10 +97,6 @@ public class ChatEmitTest
 			Mockito.eq("DIARY"), Mockito.any(JsonObject.class), Mockito.eq("Tester"));
 	}
 
-	/**
-	 * The feeling line names no pet, so it arms a wait rather than emitting. The
-	 * collection log line that follows is what gives it a name.
-	 */
 	@Test
 	public void aPetIsRecordedOnceTheLineAfterItNamesIt()
 	{
@@ -123,7 +108,6 @@ public class ChatEmitTest
 		assertEquals("Baby mole", emitted("PET").get("petName").getAsString());
 	}
 
-	/** And a feeling nothing ever named expires instead of hanging about. */
 	@Test
 	public void anUnnamedPetExpires()
 	{
@@ -137,7 +121,6 @@ public class ChatEmitTest
 			Mockito.eq("PET"), Mockito.any(JsonObject.class), Mockito.anyString());
 	}
 
-	/** A line that is nearly one of these is still not one of these. */
 	@Test
 	public void aNearMissEmitsNothing()
 	{

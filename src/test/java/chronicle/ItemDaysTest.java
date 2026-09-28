@@ -26,11 +26,6 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-/**
- * An item's page carries the dates the record already holds: the dated roll
- * keeps one entry a day with its items, so when a thing first and last landed,
- * and on how many days, is a question it can answer.
- */
 public class ItemDaysTest
 {
 	private static final DateTimeFormatter FULL = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK);
@@ -53,7 +48,6 @@ public class ItemDaysTest
 			}
 		});
 		File dir = new File(System.getProperty("java.io.tmpdir"), "chronicle-item-days");
-		//noinspection ResultOfMethodCallIgnored
 		dir.mkdirs();
 		try (FileWriter w = new FileWriter(new File(dir, "runner.json")))
 		{
@@ -129,10 +123,6 @@ public class ItemDaysTest
 		assertNull(beside(page, "Days it landed"));
 	}
 
-	/**
-	 * Where the dated days hold fewer than the record has had, the first of them
-	 * is the day the roll began and not the day the item first dropped.
-	 */
 	@Test
 	public void datesTheRollCannotStandBehindAreLeftOff() throws Exception
 	{
@@ -140,7 +130,6 @@ public class ItemDaysTest
 		assertNull(beside(page, "First dropped"));
 	}
 
-	/** And a picture carries none: the first is near enough the install day. */
 	@Test
 	public void aPictureCarriesNoDropDates() throws Exception
 	{

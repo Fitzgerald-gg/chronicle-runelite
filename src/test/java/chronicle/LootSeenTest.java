@@ -18,11 +18,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * What a live kill leaves on its source besides the counters: first_seen and
- * last_seen as a running min/max in epoch millis, and the bag's names as the
- * ledger's obtained set.
- */
 public class LootSeenTest
 {
 	private static final String RSN = "Tester";
@@ -96,7 +91,6 @@ public class LootSeenTest
 		assertTrue("last_seen " + row.lastMs, row.lastMs >= before && row.lastMs <= after);
 	}
 
-	// An imported source keeps the tracker's earlier date; only the latest moves.
 	@Test
 	public void anEarlierFirstSeenStandsAndLastSeenExtends() throws Exception
 	{
@@ -110,8 +104,6 @@ public class LootSeenTest
 		assertTrue("last_seen " + row.lastMs, row.lastMs >= before);
 	}
 
-	// The bag's names, lower-cased, are the row's looted set; a zero-quantity entry
-	// is a name the bag once knew, not an item in hand.
 	@Test
 	public void theBagNamesAreTheLootedSet() throws Exception
 	{

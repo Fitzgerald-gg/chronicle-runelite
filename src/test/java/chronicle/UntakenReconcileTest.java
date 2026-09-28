@@ -14,12 +14,6 @@ import org.junit.Test;
 import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 
-/**
- * The uncollected ledger keeps the same leavings by source, by item and by the pair.
- * The pairs carry the detail, so the by-item totals are rebuilt from them on load,
- * but only when the pairs account for every source, since that is what makes them
- * safe to sum.
- */
 public class UntakenReconcileTest
 {
 	private LocalStore store;
@@ -53,8 +47,6 @@ public class UntakenReconcileTest
 	@Test
 	public void byItemTotalsAreRebuiltFromThePairs() throws Exception
 	{
-		// Bones is inflated and Swamp tar has no pair at all: the shape left behind
-		// when something edits one store and not the others.
 		write("{\"schema\":1,\"rsn\":\"Tester\","
 			+ "\"untaken\":{\"Dust devil\":{\"qty\":12,\"value\":120}},"
 			+ "\"untaken_items\":{\"Bones\":{\"qty\":999,\"value\":9990},"
@@ -64,7 +56,6 @@ public class UntakenReconcileTest
 		List<LocalStore.UntakenRow> items = store.untakenItems();
 		assertEquals(1, items.size());
 		assertEquals(12, qtyOf(items, "Bones"));
-		// the sourceless row is gone rather than standing on its own
 		assertEquals(-1, qtyOf(items, "Swamp tar"));
 	}
 
@@ -95,7 +86,6 @@ public class UntakenReconcileTest
 	@Test
 	public void aJournalWithNoPairsIsLeftAlone() throws Exception
 	{
-		// Written before the pair store existed: its by-item totals are all there is.
 		write("{\"schema\":1,\"rsn\":\"Tester\","
 			+ "\"untaken\":{\"Dust devil\":{\"qty\":12,\"value\":120}},"
 			+ "\"untaken_items\":{\"Bones\":{\"qty\":999,\"value\":9990}}}");
@@ -106,8 +96,6 @@ public class UntakenReconcileTest
 	@Test
 	public void pairsThatMissASourceAreNotTrustedToSumFrom() throws Exception
 	{
-		// Nechryael's leavings are known by source but have no pairs, so summing the
-		// pairs would silently drop them.
 		write("{\"schema\":1,\"rsn\":\"Tester\","
 			+ "\"untaken\":{\"Dust devil\":{\"qty\":12,\"value\":120},"
 			+ "\"Nechryael\":{\"qty\":5,\"value\":50}},"

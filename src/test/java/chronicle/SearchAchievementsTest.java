@@ -16,14 +16,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Searching the two bundled tables.
- *
- * <p>Every other group in the search reads the RECORD, and so can only answer
- * about things already done. These two are the only ones that answer about a
- * thing the player has not done yet, which is the question the search box gets
- * asked: what does this one want from me.
- */
 public class SearchAchievementsTest
 {
 	private static final String JOURNAL =
@@ -34,7 +26,6 @@ public class SearchAchievementsTest
 	private static ChroniclePanel panel() throws Exception
 	{
 		File dir = new File(System.getProperty("java.io.tmpdir"), "chronicle-search-achv");
-		//noinspection ResultOfMethodCallIgnored
 		dir.mkdirs();
 		try (FileWriter w = new FileWriter(new File(dir, "somebody.json")))
 		{
@@ -64,7 +55,6 @@ public class SearchAchievementsTest
 					{
 						out.add(((JLabel) c).getText());
 					}
-					// what a row asks for and where is its hover: one line a row
 					if (c instanceof javax.swing.JComponent
 						&& ((javax.swing.JComponent) c).getToolTipText() != null)
 					{
@@ -104,10 +94,6 @@ public class SearchAchievementsTest
 		return false;
 	}
 
-	/**
-	 * The record here is empty, so anything the search answers with came from the
-	 * bundled table rather than from something this account has done.
-	 */
 	@Test
 	public void aCombatAchievementIsFoundByNameWithWhatItAsksFor() throws Exception
 	{
@@ -119,7 +105,6 @@ public class SearchAchievementsTest
 			has(said, "Kill an Aberrant Spectre"));
 	}
 
-	/** A diary entry has no name, so the task text is what has to match. */
 	@Test
 	public void aDiaryEntryIsFoundByWhatItAsksFor() throws Exception
 	{
@@ -130,12 +115,6 @@ public class SearchAchievementsTest
 		assertTrue("found, but without what it needs: " + said, has(said, "5 Hunter"));
 	}
 
-	/**
-	 * TRAP: a short query. Two letters match a third of both tables, and the
-	 * cheapest way to lose the guard is to stop passing the query length through,
-	 * at which point typing the first letter of anything buries every other group
-	 * under achievements the reader did not ask about.
-	 */
 	@Test
 	public void aTwoLetterQueryDoesNotOpenTheWholeTable() throws Exception
 	{
@@ -145,11 +124,6 @@ public class SearchAchievementsTest
 			has(search(panel(), "kil"), "ACHIEVEMENTS"));
 	}
 
-	/**
-	 * And by what it asks for, not only by its name: a combat achievement's name
-	 * is a pun as often as it is a description ("Noxious Foe" for an aberrant
-	 * spectre), so the monster the task names has to be a way in too.
-	 */
 	@Test
 	public void aCombatAchievementIsAlsoFoundByTheMonsterItsTaskNames() throws Exception
 	{

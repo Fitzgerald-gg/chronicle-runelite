@@ -24,11 +24,6 @@ import org.mockito.Mockito;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Thralls are the one fold on the Combat tab: the floor heads it with the total,
- * and it opens to a row per tier and kind with the unresolved remainder as a
- * ghost "Other", the way a craft does on the Skilling tab.
- */
 public class ThrallFoldTest
 {
 	@BeforeClass
@@ -123,7 +118,6 @@ public class ThrallFoldTest
 		ChroniclePanel p = panel(stub);
 		set(p, "statsFamily", "Combat");
 
-		// shut: the fold head carries the floor total, and the floor is no row
 		List<String> shut = statsLabels(p);
 		assertTrue(shut.toString(), shut.contains("Damage dealt"));
 		assertTrue(shut.toString(), shut.contains("THRALLS"));
@@ -131,7 +125,6 @@ public class ThrallFoldTest
 		assertFalse(shut.toString(), shut.contains("Thralls raised"));
 		assertFalse(shut.toString(), shut.contains("Lesser ghostly"));
 
-		// open: one row per tier and kind, and the one the rows leave over
 		openFolds(p).add("Combat:Thralls");
 		List<String> open = statsLabels(p);
 		assertTrue(open.toString(), open.contains("Lesser ghostly"));

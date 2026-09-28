@@ -22,12 +22,6 @@ import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The dated loot roll. A loot event knows when it happened and the ledger kept
- * only what it was, so a period could be told a lifetime total and nothing else.
- * One entry a day now carries the day's take and the day's floor, with the items
- * and sources beside them, which is as fine as any window the panel offers.
- */
 public class DatedLootRollTest
 {
 	@Rule
@@ -134,8 +128,6 @@ public class DatedLootRollTest
 		store.record("LOOT", loot("Vorkath", 2, 50, "Dear thing"), "Tester");
 		LocalDate today = LocalDate.now();
 		LocalStore.LootWindow w = store.lootBetween(today, today);
-		// a source is named by the payload, so the ranking reads off it directly.
-		// Items are named from the game's own cache, which a test has none of.
 		assertEquals(w.sources.toString(), 2, w.sources.size());
 		assertEquals("Vorkath", w.sources.get(0)[0]);
 		assertEquals("Zulrah", w.sources.get(1)[0]);

@@ -23,12 +23,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-/**
- * Nothing is bound to the search box. Every capped list opens from where it
- * stands, on the one "Show N more" control the panel uses; the kill log
- * stopped at twenty and sent the reader to search for the rest, and an
- * item's sources and tasks stopped at forty with a label and no door.
- */
 public class EveryListOpensTest
 {
 	@BeforeClass
@@ -80,7 +74,6 @@ public class EveryListOpensTest
 		return (JPanel) m.invoke(p);
 	}
 
-	/** Rows whose left label passes {@code test}, in order. */
 	private static List<JPanel> rows(Component c)
 	{
 		List<Component> flat = new ArrayList<>();
@@ -200,7 +193,6 @@ public class EveryListOpensTest
 		assertNull(rowStarting(opened, "Show "));
 	}
 
-	/** And the sweep: no board anywhere hands a list off to the search box. */
 	@Test
 	public void noBoardHandsAListToTheSearchBox() throws Exception
 	{
@@ -209,8 +201,6 @@ public class EveryListOpensTest
 			java.nio.charset.StandardCharsets.UTF_8);
 		assertFalse("a list still ends in a pointer to search",
 			src.contains("Search finds") || src.contains("search finds"));
-		// and no list ends in an inert "+ N more" tail; the one board that drew
-		// it, an on-task picture nothing built, is gone
 		int tails = 0;
 		int at = -1;
 		while ((at = src.indexOf("ghostRow(\"+ \"", at + 1)) >= 0)

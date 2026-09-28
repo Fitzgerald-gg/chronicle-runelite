@@ -20,13 +20,6 @@ import static chronicle.counters.CounterTestKeys.TOTAL_XP_GAINED;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The session's xp split by skill, and the rate Home quotes beside each skill.
- *
- * <p>The split has to add up to the total it sits under, and the rate has to be
- * measured over the same window the xp was counted in. A rate divided by somebody
- * else's clock is wrong in a way that reads perfectly plausibly.
- */
 public class ExperienceStatTrackerTest
 {
 	private static final long MINUTE = 60_000L;
@@ -44,7 +37,6 @@ public class ExperienceStatTrackerTest
 		tracker = new ExperienceStatTracker(store, () -> now);
 	}
 
-	// StatChanged carries a career total, so a skill's first reading is only a baseline.
 	private void xp(Skill skill, int careerTotal)
 	{
 		tracker.onStatChanged(new StatChanged(skill, careerTotal, 1, 1));
@@ -69,8 +61,6 @@ public class ExperienceStatTrackerTest
 		return null;
 	}
 
-	// the split
-
 	@Test
 	public void eachSkillKeepsItsOwnShareOfTheSessionTotal()
 	{
@@ -87,8 +77,6 @@ public class ExperienceStatTrackerTest
 	@Test
 	public void theSplitAddsUpToTheTotalItSitsUnder()
 	{
-		// Home hangs these rows under the "Xp gained" total. If the two ever part
-		// company the card contradicts itself.
 		xp(Skill.ATTACK, 1_000);
 		xp(Skill.HITPOINTS, 2_000);
 		xp(Skill.ATTACK, 1_400);
@@ -106,8 +94,6 @@ public class ExperienceStatTrackerTest
 	@Test
 	public void aSkillsFirstReadingIsOnlyABaseline()
 	{
-		// Login sends the whole account's career totals. Counting those would report
-		// a fresh session as tens of millions of xp.
 		xp(Skill.WOODCUTTING, 13_034_431);
 
 		assertTrue(tracker.sessionGains().isEmpty());
@@ -120,7 +106,6 @@ public class ExperienceStatTrackerTest
 		xp(Skill.FISHING, 8_000);
 		xp(Skill.COOKING, 9_000);
 		xp(Skill.FARMING, 400);
-		// Fishing gains; the other two are read again at the same total.
 		xp(Skill.FISHING, 8_500);
 		xp(Skill.COOKING, 9_000);
 		xp(Skill.FARMING, 400);
@@ -147,13 +132,9 @@ public class ExperienceStatTrackerTest
 		assertEquals(Skill.AGILITY, gains.get(2).skill);
 	}
 
-	// the rate
-
 	@Test
 	public void theRateIsMeasuredFromTheFirstXpNotFromTheLogin()
 	{
-		// Twenty minutes at the bank before the first swing. Charging those to the
-		// rate would report two thirds of the xp per hour actually being made.
 		xp(Skill.RUNECRAFT, 0);
 		now += 20 * MINUTE;
 		xp(Skill.RUNECRAFT, 10_000);
@@ -179,8 +160,6 @@ public class ExperienceStatTrackerTest
 	@Test
 	public void noRateUntilTheWindowIsWorthDividingBy()
 	{
-		// Ten seconds in, the xp stands on its own and the rate is left off. A
-		// negative perHour is the panel's signal to print the xp alone.
 		xp(Skill.HERBLORE, 0);
 		xp(Skill.HERBLORE, 5_000);
 		now += 10_000L;
@@ -204,8 +183,6 @@ public class ExperienceStatTrackerTest
 	@Test
 	public void aClockThatRunsBackwardsQuotesNoRate()
 	{
-		// An NTP correction can put the window's start ahead of now. Dividing by a
-		// negative span would print a negative xp per hour.
 		xp(Skill.CRAFTING, 0);
 		xp(Skill.CRAFTING, 20_000);
 		now -= 5 * MINUTE;
@@ -213,8 +190,6 @@ public class ExperienceStatTrackerTest
 		assertEquals(20_000, gain(Skill.CRAFTING).xp);
 		assertTrue(gain(Skill.CRAFTING).perHour < 0);
 	}
-
-	// the session boundary
 
 	@Test
 	public void theLoginScreenClearsTheSplitAndRestartsItsClock()
@@ -226,8 +201,6 @@ public class ExperienceStatTrackerTest
 		loginScreen();
 		assertTrue(tracker.sessionGains().isEmpty());
 
-		// An hour idle at the login screen, then a new session. The old window must
-		// not still be running: it would halve the new session's rate.
 		now += HOUR;
 		xp(Skill.MAGIC, 100_000);
 		xp(Skill.MAGIC, 105_000);
@@ -240,8 +213,6 @@ public class ExperienceStatTrackerTest
 	@Test
 	public void aWorldHopKeepsTheSessionRunning()
 	{
-		// HOPPING and LOADING keep the same character and the same career totals.
-		// Clearing on those would restart the rate every hop.
 		xp(Skill.FIREMAKING, 0);
 		xp(Skill.FIREMAKING, 30_000);
 		now += 30 * MINUTE;

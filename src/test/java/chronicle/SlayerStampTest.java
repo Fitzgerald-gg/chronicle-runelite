@@ -22,11 +22,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The slayer stamp lands only on kills that count toward the live task, while a
- * task being live at all still marks the session as a slayer's and keeps the task
- * identity the completion line falls back to.
- */
 public class SlayerStampTest
 {
 	private ChronicleEventCapture capture;
@@ -98,8 +93,8 @@ public class SlayerStampTest
 	public void guardOnElvesGoesByItsId()
 	{
 		Mockito.when(slayer.getTask()).thenReturn("Elves");
-		assertTrue(stamp("Guard", 9183).has("slayerTask"));   // Prifddinas
-		assertFalse(stamp("Guard", 3010).has("slayerTask"));  // Varrock
+		assertTrue(stamp("Guard", 9183).has("slayerTask"));
+		assertFalse(stamp("Guard", 3010).has("slayerTask"));
 	}
 
 	@Test
@@ -126,15 +121,15 @@ public class SlayerStampTest
 	@Test
 	public void theFinishingKillIsStampedWithTheTaskJustCompleted() throws Exception
 	{
-		Mockito.when(slayer.getTask()).thenReturn("");   // cleared on the completing tick
+		Mockito.when(slayer.getTask()).thenReturn("");
 		set("lastSlayerCompletionTask", "Nechryael");
 		set("lastSlayerCompletionAtMs", System.currentTimeMillis());
 		JsonObject d = stamp("Nechryael", 11);
 		assertEquals("Nechryael", d.get("slayerTask").getAsString());
-		assertFalse(d.has("slayerTaskRemaining"));   // the counter went with the task
+		assertFalse(d.has("slayerTaskRemaining"));
 		assertFalse(d.has("slayerTaskInitial"));
 		assertFalse(stamp("Man", SlayerTaskBook.UNKNOWN_ID).has("slayerTask"));
-		assertEquals(null, get("lastSlayerTask"));   // not a live task; no identity kept
+		assertEquals(null, get("lastSlayerTask"));
 	}
 
 	@Test

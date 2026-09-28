@@ -24,10 +24,6 @@ import static chronicle.counters.CounterTestKeys.ITEMS_DROPPED_VALUE;
 import static chronicle.counters.CounterTestKeys.RESOURCES_DROPPED_VALUE;
 import static org.junit.Assert.assertEquals;
 
-/**
- * The drop side of ItemStatTracker: itemsDroppedValue counts every bin, while
- * resourcesDroppedValue only takes ids the gathered ledger knows.
- */
 public class ItemStatTrackerTest
 {
 	private static final int YEW_LOGS = 1515;
@@ -70,8 +66,6 @@ public class ItemStatTrackerTest
 		});
 	}
 
-	// fake a "Drop" item-op click. the tracker takes the id off the entry and the
-	// stack size out of the pack slot named by param0.
 	private void drop(int itemId, int qty)
 	{
 		Mockito.when(pack.getItem(SLOT)).thenReturn(new Item(itemId, qty));
@@ -105,7 +99,6 @@ public class ItemStatTrackerTest
 	@Test
 	public void droppingSomethingNeverGatheredCountsOnlyToTheWholeBin()
 	{
-		// a scimitar is kill or shop loot, so the ledger has no gather for it.
 		drop(RUNE_SCIMITAR, 1);
 		assertEquals(15_000, dropped());
 		assertEquals(0, resourcesDropped());
@@ -126,7 +119,6 @@ public class ItemStatTrackerTest
 	@Test
 	public void aTrackerWithNoLedgerStillCountsTheWholeBin()
 	{
-		// with no ledger the plain dropped figure still has to count.
 		Client client = Mockito.mock(Client.class);
 		Mockito.when(client.getItemContainer(InventoryID.INVENTORY)).thenReturn(pack);
 		net.runelite.client.game.ItemManager items =

@@ -12,10 +12,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Rename-follow file semantics: journal and history spine move to the new slug
- * together, anything already under that slug is set aside, same slug does nothing.
- */
 public class JournalRenameTest
 {
 	private File dir;
@@ -36,7 +32,6 @@ public class JournalRenameTest
 		return new String(Files.readAllBytes(new File(dir, name).toPath()), StandardCharsets.UTF_8);
 	}
 
-	// match on prefix; the sidecar carries a timestamp suffix
 	private String onlySidecar(String prefix)
 	{
 		String[] hits = dir.list((d, name) -> name.startsWith(prefix));
@@ -60,7 +55,6 @@ public class JournalRenameTest
 	public void aRecordAlreadyFiledUnderTheNewNameIsSetAsideNotAdopted() throws Exception
 	{
 		write("alpha.json", "{\"mine\":true}");
-		// a freed rsn gets taken, so this could be a stranger's record
 		write("beta.json", "{\"stranger\":true}");
 		assertTrue(LocalStore.migrateJournalFiles(dir, "Alpha", "Beta"));
 		assertEquals("{\"mine\":true}", read("beta.json"));
@@ -83,8 +77,6 @@ public class JournalRenameTest
 	@Test
 	public void aSpineWithoutItsRecordStaysPut() throws Exception
 	{
-		// moving the spine alone would splice this account's days onto whatever
-		// record already sits under the new name
 		write("alpha.history.jsonl", "{\"day\":1}");
 		write("beta.json", "{\"stranger\":true}");
 		assertFalse(LocalStore.migrateJournalFiles(dir, "Alpha", "Beta"));

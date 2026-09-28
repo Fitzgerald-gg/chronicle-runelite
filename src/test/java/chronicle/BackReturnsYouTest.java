@@ -12,16 +12,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-/**
- * Back has to undo the last step, and land where the reader came from.
- *
- * <p>rebuild() chooses what to draw by running down a list of navigation fields
- * and taking the first one that is set. backDetail() clears them. If the two
- * disagree about the order, Back clears something that is still covered by
- * something else: the page redraws unchanged, the press reads as dead, and the
- * second press skips a level. That is invisible to any test that only looks at
- * what a board contains, because both presses "work".
- */
 public class BackReturnsYouTest
 {
 	private static ChroniclePanel panel;
@@ -48,11 +38,6 @@ public class BackReturnsYouTest
 		panel = hold[0];
 	}
 
-	/**
-	 * One panel serves every method here, so a page left standing by the previous
-	 * one is the next one's starting state. That is not hypothetical: it is the
-	 * defect this class exists to catch, wearing a different hat.
-	 */
 	@Before
 	public void clearNavigation() throws Exception
 	{
@@ -115,10 +100,6 @@ public class BackReturnsYouTest
 		});
 	}
 
-	/**
-	 * The clue board's tiers open a loot source. One Back has to come back to the
-	 * clue board, not redraw the source and then throw the reader out to the sheet.
-	 */
 	@Test
 	public void oneBackOffASheetPagesDrillReturnsToThatPage() throws Exception
 	{
@@ -147,10 +128,6 @@ public class BackReturnsYouTest
 		assertNull("a second Back then leaves the page", get("sheetPage"));
 	}
 
-	/**
-	 * The same trap one level down, with no sheet page involved: a skill's own
-	 * loot rows open a source while the skill is still the page underneath.
-	 */
 	@Test
 	public void oneBackOffASkillsDrillReturnsToThatSkill() throws Exception
 	{

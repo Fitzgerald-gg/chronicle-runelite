@@ -17,11 +17,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/** Tuple fields: skill|xp|objId|itemId|qty|target|consumedId|consumedQty. */
 public class SkillDeriverTest
 {
 	private final Map<Integer, String> names = new HashMap<>();
-	// GE price the mocked ItemManager reports; a test moves it mid-run
 	private final Map<Integer, Integer> prices = new HashMap<>();
 	private final Set<Integer> gathered = new HashSet<>();
 	private final SkillDeriver d;
@@ -176,10 +174,8 @@ public class SkillDeriverTest
 		Map<String, Integer> pulled = derive("SAILING|10||32847|1||");
 		assertEquals((Integer) 1, pulled.get("salvagePulled"));
 		assertEquals((Integer) 1, pulled.get("smallSalvagePulled"));
-		// opulent salvage is 200 xp flat, 205 under a keg of horizons lure
 		names.put(32861, "Opulent salvage");
 		assertEquals((Integer) 1, derive("SAILING|205||32861|1||").get("opulentSalvagePulled"));
-		// sorting consumes the salvage; the consumed id names the row
 		names.put(1625, "Uncut opal");
 		Map<String, Integer> sorted = derive("SAILING|95||1625|1||32861");
 		assertEquals((Integer) 1, sorted.get("salvageSorted"));
@@ -195,16 +191,12 @@ public class SkillDeriverTest
 		assertEquals((Integer) 1, marlin.get("temporTantrumTrialsCompleted"));
 		assertEquals((Integer) 1, derive("SAILING|6200|||||").get("jubblyJiveTrialsCompleted"));
 		assertEquals((Integer) 1, derive("SAILING|16050|||||").get("gwenithGlideTrialsCompleted"));
-		// 150 is a lost teak crate or a medium casket as often as a Tempor
-		// Tantrum. Off the ladder.
 		assertNull(derive("SAILING|150|||||"));
-		// courier deliveries pay 385 too; only the coin bag separates them
 		names.put(32950, "Medium port coin bag");
 		Map<String, Integer> port = derive("SAILING|385||32950|1||");
 		assertEquals((Integer) 1, port.get("portTasksCompleted"));
 		assertNull(port.get("barracudaTrialsCompleted"));
 		assertEquals((Integer) 1, derive("SAILING|385|||||").get("temporTantrumTrialsCompleted"));
-		// trawling, sail trimming and cannon fire drop bare xp with no completion behind it
 		assertNull(derive("SAILING|9|||||"));
 	}
 
@@ -232,39 +224,31 @@ public class SkillDeriverTest
 	{
 		names.put(7936, "Pure essence");
 		names.put(561, "Nature rune");
-		// 27 essence, two nature runes apiece: the altar was asked 27 times
 		Map<String, Integer> got = derive("RUNECRAFT|243||561|54||7936|27");
 		assertEquals((Integer) 54, got.get("runesCrafted"));
 		assertEquals((Integer) 54, got.get("natureRunecrafted"));
 		assertEquals((Integer) 27, got.get("essenceCrafted"));
-		// rune essence is the same craft and shares the counter
 		names.put(1436, "Rune essence");
 		names.put(556, "Air rune");
 		assertEquals((Integer) 14, derive("RUNECRAFT|70||556|28||1436|14").get("essenceCrafted"));
-		// blood runes come off fragments, one rune to a fragment
 		names.put(7938, "Dark essence fragments");
 		names.put(565, "Blood rune");
 		assertEquals((Integer) 1, derive("RUNECRAFT|24||565|1||7938|1").get("essenceCrafted"));
-		// a craft whose rune never resolved still counts the essence behind it
 		assertEquals((Integer) 5, derive("RUNECRAFT|25|||||7936|5").get("essenceCrafted"));
-		// a tuple from before the count existed reads as the one item it meant
 		assertEquals((Integer) 1, derive("RUNECRAFT|5||556|1||7936").get("essenceCrafted"));
 	}
 
 	@Test
 	public void theRiftMinigameAndTheDarkAltarAreNotCrafts()
 	{
-		// Guardians of the Rift altars take guardian essence and roll no pet
 		names.put(26879, "Guardian essence");
 		names.put(556, "Air rune");
 		Map<String, Integer> got = derive("RUNECRAFT|50||556|50||26879|25");
 		assertEquals((Integer) 50, got.get("runesCrafted"));
 		assertNull(got.get("essenceCrafted"));
-		// venerating dense essence eats essence and makes no rune at all
 		names.put(13445, "Dense essence block");
 		names.put(13446, "Dark essence block");
 		assertNull(derive("RUNECRAFT|2||13446|1||13445|1"));
-		// nor does a tiara, though the talisman leaves the pack on the way
 		names.put(5525, "Air tiara");
 		names.put(1438, "Air talisman");
 		assertNull(derive("RUNECRAFT|25||5525|1||1438|1"));
@@ -275,13 +259,11 @@ public class SkillDeriverTest
 	{
 		StatStore store = new StatStore();
 		SkillDeriver cd = chatDeriver(store);
-		// three seeds go in, but the patch was planted once
 		cd.applyChat("You plant 3 potato seeds in the allotment.", "");
 		assertEquals(1, store.getStat("seedsPlanted"));
 		assertEquals(1, store.getStat("potatoPlanted"));
 		cd.applyChat("You plant a guam seed in the herb patch.", "");
 		assertEquals(1, store.getStat("guamPlanted"));
-		// saplings and spores name their crop the same way
 		cd.applyChat("You plant an oak sapling in the tree patch.", "");
 		assertEquals(1, store.getStat("oakPlanted"));
 		cd.applyChat("You plant a bittercap mushroom spore in the mushroom patch.", "");
@@ -289,13 +271,11 @@ public class SkillDeriverTest
 		cd.applyChat("You plant a seaweed spore in the seaweed patch.", "");
 		assertEquals(1, store.getStat("seaweedPlanted"));
 		assertEquals(5, store.getStat("seedsPlanted"));
-		// a line that names no seed leaves the aggregate to carry it alone
 		cd.applyChat("You plant the explosive.", "");
 		assertEquals(6, store.getStat("seedsPlanted"));
 		assertEquals(0, store.getStat("explosivePlanted"));
 	}
 
-	// a deriver on a fresh store, for the chat lines that need no item lookup
 	private static SkillDeriver chatDeriver(StatStore store)
 	{
 		return new SkillDeriver(Mockito.mock(ItemManager.class), store);
@@ -311,8 +291,6 @@ public class SkillDeriverTest
 		assertEquals(1, store.getStat("guamLeafSacked"));
 		cd.applyChat("You put the grimy ranarr weed herb into your herb sack.", "");
 		assertEquals(1, store.getStat("ranarrWeedSacked"));
-		// the grimy prefix and the trailing "herb" are both unconfirmed, so a line
-		// without either still names its herb
 		cd.applyChat("You put the Toadflax into your herb sack.", "");
 		assertEquals(1, store.getStat("toadflaxSacked"));
 		assertEquals(3, store.getStat("herbsSacked"));
@@ -338,7 +316,6 @@ public class SkillDeriverTest
 		String line = "You fill the bucket with sap.";
 		cd.applyChat(line, "Bloodwood tree");
 		assertEquals(1, store.getStat("bloodwoodSapBucketsFilled"));
-		// the same line at an evergreen, and with no tree known at all
 		cd.applyChat(line, "Knife -> Evergreen");
 		cd.applyChat(line, "");
 		assertEquals(1, store.getStat("bloodwoodSapBucketsFilled"));
@@ -370,7 +347,6 @@ public class SkillDeriverTest
 		assertEquals(1, store.getStat("greaterGhostlyThrallsSummoned"));
 		assertEquals(1, store.getStat("greaterSkeletalThrallsSummoned"));
 		assertEquals(1, store.getStat("greaterZombifiedThrallsSummoned"));
-		// a thrall the line names no tier for still counts the floor alone
 		cd.applyChat("You resurrect a thrall.", "");
 		assertEquals(10, store.getStat("thrallsSummoned"));
 	}
@@ -385,7 +361,6 @@ public class SkillDeriverTest
 		assertEquals(1, store.getStat("cowhideTanned"));
 		cd.applyChat("The tanner tans your cowhide for you.", "");
 		assertEquals(2, store.getStat("cowhideTanned"));
-		// the batch form names the count and the plural; both land on the same key
 		cd.applyChat("The tanner tans 27 green dragonhides for you.", "");
 		assertEquals(29, store.getStat("hidesTanned"));
 		assertEquals(27, store.getStat("greenDragonhideTanned"));
@@ -402,11 +377,8 @@ public class SkillDeriverTest
 		SkillDeriver cd = chatDeriver(store);
 		cd.applyChat("You put the Guam leaf into the vial of water.", "");
 		assertEquals(1, store.getStat("unfinishedPotionsMade"));
-		// the sack line also starts "You put the"; it is not a potion
 		cd.applyChat("You put the grimy guam leaf herb into your herb sack.", "");
 		assertEquals(1, store.getStat("unfinishedPotionsMade"));
-		// nor is any other "You put the" line the gate forwards (a synthetic one:
-		// the vial is what makes the line a potion, not the opening words)
 		cd.applyChat("You put the coins into the coffer.", "");
 		assertEquals(1, store.getStat("unfinishedPotionsMade"));
 	}
@@ -414,13 +386,10 @@ public class SkillDeriverTest
 	@Test
 	public void absorbsAndFloors()
 	{
-		// lamps and gauntlet internals derive nothing
 		assertNull(derive("RUNECRAFT|500|||||2528"));
 		assertNull(derive("WOODCUTTING|10||23838|1||"));
-		// runecraft veneration (non-rune gain) derives nothing
 		names.put(13446, "Dark essence block");
 		assertNull(derive("RUNECRAFT|2||13446|1||"));
-		// firemaking with a missed consumed falls to the bare-xp ladder
 		assertEquals((Integer) 1, derive("FIREMAKING|303|||||").get("magicLogsBurned"));
 	}
 
@@ -434,7 +403,6 @@ public class SkillDeriverTest
 		assertEquals((Integer) 1, got.get("yewLogsChopped"));
 		assertEquals((Integer) 240, got.get("resourcesGatheredValue"));
 
-		// the price moves and the banked 240 isn't revisited
 		prices.put(1515, 5);
 		assertEquals((Integer) 5,
 			derive("WOODCUTTING|175||1515|1||").get("resourcesGatheredValue"));
@@ -445,7 +413,6 @@ public class SkillDeriverTest
 	{
 		names.put(3150, "Karambwanji");
 		prices.put(3150, 30);
-		// one action can land 4, and the value follows qty
 		Map<String, Integer> got = derive("FISHING|5||3150|4||");
 		assertEquals((Integer) 4, got.get("karambwanjiCaught"));
 		assertEquals((Integer) 120, got.get("resourcesGatheredValue"));
@@ -458,7 +425,6 @@ public class SkillDeriverTest
 		Map<String, Integer> got = derive("MINING|5||434|1||");
 		assertEquals((Integer) 1, got.get("rocksMined"));
 		assertNull(got.get("resourcesGatheredValue"));
-		// an item the GE can't price still goes in the ledger
 		assertTrue(gathered.contains(434));
 	}
 
@@ -470,8 +436,6 @@ public class SkillDeriverTest
 		Map<String, Integer> got = derive("COOKING|210||385|1||");
 		assertEquals((Integer) 1, got.get("foodCooked"));
 		assertEquals((Integer) 1, got.get("sharkCooked"));
-		// the shark was valued when it was caught; valuing it again on the range
-		// counts the one catch twice
 		assertNull(got.get("resourcesGatheredValue"));
 		assertFalse(gathered.contains(385));
 	}
@@ -479,8 +443,6 @@ public class SkillDeriverTest
 	@Test
 	public void aGatherTheResolverCannotNameIsNotValued()
 	{
-		// the xp names the tree, but a nest resolves to no woodcutting token, so
-		// nothing is valued or noted as gathered
 		names.put(11941, "Bird nest");
 		prices.put(11941, 4000);
 		Map<String, Integer> got = derive("WOODCUTTING|175||11941|1||");
@@ -496,11 +458,8 @@ public class SkillDeriverTest
 		SkillDeriver cd = chatDeriver(store);
 		cd.applyChat("You accidentally burn the shark.", "");
 		cd.applyChat("You accidentally burn the moonlight antelope.", "");
-		// a cake is no fish: the rule reads the name off the line, not off a list
 		cd.applyChat("You accidentally burn the cake.", "");
-		// the cooked row is aliased to the singular, so the burnt one sits beside it
 		cd.applyChat("You accidentally burn the shrimps.", "");
-		// the one line that runs on past the food (wiki, verbatim)
 		cd.applyChat("You accidentally burn the karambwanji to ashes.", "");
 		assertEquals(5, store.getStat("foodBurned"));
 		assertEquals(1, store.getStat("sharkBurned"));
@@ -519,18 +478,15 @@ public class SkillDeriverTest
 		names.put(11330, "Leaping salmon");
 		names.put(11332, "Leaping sturgeon");
 		names.put(13339, "Sacred eel");
-		// the xp on each is a members collision, so only the item can name the row
 		assertEquals((Integer) 1, derive("FISHING|50||11328|1||").get("leapingTroutCaught"));
 		assertEquals((Integer) 1, derive("FISHING|70||11330|1||").get("leapingSalmonCaught"));
 		assertEquals((Integer) 1, derive("FISHING|80||11332|1||").get("leapingSturgeonCaught"));
 		Map<String, Integer> eel = derive("FISHING|105||13339|1||");
 		assertEquals((Integer) 1, eel.get("sacredEelCaught"));
 		assertEquals((Integer) 1, eel.get("fishCaught"));
-		// two eels in one tick put the xp off the ladder; the item still names them
 		Map<String, Integer> pair = derive("FISHING|210||13339|2||");
 		assertEquals((Integer) 2, pair.get("sacredEelCaught"));
 		assertEquals((Integer) 2, pair.get("fishCaught"));
-		// minnows still count one to a minnow
 		names.put(21356, "Minnow");
 		Map<String, Integer> minnows = derive("FISHING|26||21356|12||");
 		assertEquals((Integer) 12, minnows.get("minnowCaught"));
@@ -544,14 +500,12 @@ public class SkillDeriverTest
 		Map<String, Integer> byItem = derive("WOODCUTTING|25||1511|1||");
 		assertEquals((Integer) 1, byItem.get("normalLogsChopped"));
 		assertNull(byItem.get("logsLogsChopped"));
-		// a full pack drops the log on the ground, and the xp ladder names the same key
 		assertEquals((Integer) 1, derive("WOODCUTTING|25|||||").get("normalLogsChopped"));
 	}
 
 	@Test
 	public void pickpocketTargetsShedTheirCombatLevel()
 	{
-		// the menu target reads "Guard  (level-21)" once the colour tags are gone
 		Map<String, Integer> got = derive("THIEVING|47||||Guard  (level-21)|");
 		assertEquals((Integer) 1, got.get("pickPockets"));
 		assertEquals((Integer) 1, got.get("guardPickpockets"));
@@ -561,7 +515,6 @@ public class SkillDeriverTest
 		}
 		assertEquals((Integer) 1, derive("THIEVING|84||||Knight of Ardougne (level 46)|")
 			.get("knightOfArdougnePickpockets"));
-		// a level with no name in front of it robs nobody in particular
 		assertEquals(1, derive("THIEVING|47||||(level-21)|").size());
 		assertEquals("Guard", SkillDeriver.npcName("Guard  (level-21)"));
 		assertEquals("Guard", SkillDeriver.npcName("Guard (level 21)"));

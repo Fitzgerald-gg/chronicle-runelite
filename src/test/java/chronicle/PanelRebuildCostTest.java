@@ -7,14 +7,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * What a rebuild costs, and how often one is paid for.
- *
- * <p>The panel is asked to redraw far more often than the record changes: a
- * region load, a world hop and a push can all ask inside one tick, and the
- * sidebar keeps asking while the reader is looking at another plugin entirely.
- * These are the two guards that stop the same board being drawn for nobody.
- */
 public class PanelRebuildCostTest
 {
 	private static Field field(String name) throws Exception
@@ -42,10 +34,6 @@ public class PanelRebuildCostTest
 		return hold[0];
 	}
 
-	/**
-	 * Three asks inside one tick are one board. The queued rebuild has not run
-	 * yet, so it reads everything the later asks would have read.
-	 */
 	@Test
 	public void asksInsideOneTickCoalesce() throws Exception
 	{
@@ -63,7 +51,6 @@ public class PanelRebuildCostTest
 			1, builds.getLong(p) - before);
 	}
 
-	/** A rebuild that ran and then was asked for again is a second board. */
 	@Test
 	public void aLaterAskStillEarnsItsOwnBoard() throws Exception
 	{
@@ -80,17 +67,11 @@ public class PanelRebuildCostTest
 		assertEquals(2, builds.getLong(p) - before);
 	}
 
-	/**
-	 * Nothing is drawn for a panel the reader cannot see, and the moment they
-	 * come back it is drawn once, however many pushes landed meanwhile.
-	 */
 	@Test
 	public void aHiddenPanelIsNotDrawnAndIsOwedOneOnReturn() throws Exception
 	{
 		ChroniclePanel p = panel();
 		Field builds = field("buildsRun");
-		// The client has shown the panel at least once; until it has, isShowing
-		// says nothing and every ask is honoured.
 		field("everShown").setBoolean(p, true);
 		edt();
 		long before = builds.getLong(p);
@@ -105,11 +86,6 @@ public class PanelRebuildCostTest
 		assertTrue("the panel does not know it owes the reader a board",
 			field("staleWhileHidden").getBoolean(p));
 
-		// Coming back: the hierarchy listener cannot fire headless, so the return is
-		// played by hand. Not exactly as it plays: the real listener sets everShown
-		// TRUE, and this sets it false, which is what makes the guard below
-		// short-circuit before it ever asks isShowing(). So this covers the
-		// staleWhileHidden bookkeeping and NOT the visibility test beside it.
 		field("staleWhileHidden").setBoolean(p, false);
 		field("everShown").setBoolean(p, false);
 		p.update();
@@ -118,15 +94,6 @@ public class PanelRebuildCostTest
 			1, builds.getLong(p) - before);
 	}
 
-	/**
-	 * TRAP: the guard above is only worth what the paths through it honour, and
-	 * the sitting's own three second ticker used to go straight to rebuild().
-	 *
-	 * <p>So a reader on another plugin entirely had this board laid out and
-	 * painted for them twenty times a minute, forever, and the guard that was
-	 * written to stop exactly that never saw the calls. Fired by hand here, since
-	 * waiting three seconds for it in a test is three seconds.
-	 */
 	@Test
 	public void theSittingsOwnTickerIsNotDrawnForAHiddenPanel() throws Exception
 	{
@@ -156,7 +123,6 @@ public class PanelRebuildCostTest
 			field("staleWhileHidden").getBoolean(p));
 	}
 
-	/** The per-build memo is dropped at the top of each build, not kept. */
 	@Test
 	public void theMemoDoesNotOutliveTheBuild() throws Exception
 	{

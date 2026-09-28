@@ -18,11 +18,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-/**
- * The live task card is the open segment on disk, and opens it. Everything a
- * reader mid-task came for already sat on that segment's page; the card was
- * inert and the only way in was the Tasks list.
- */
 public class CurrentTaskCardTest
 {
 	@BeforeClass
@@ -86,9 +81,7 @@ public class CurrentTaskCardTest
 				l.mousePressed(new MouseEvent(card[0], MouseEvent.MOUSE_PRESSED, 0L, 0, 1, 1, 1, false));
 			}
 		});
-		// the journey is read and the page opened on the next pass of the queue
 		SwingUtilities.invokeAndWait(() -> { });
-		// the fixture's open task is the first in its journey
 		assertEquals(0, field(hold[0], "detailTask"));
 		assertEquals("SLAYER", String.valueOf(field(hold[0], "view")));
 	}

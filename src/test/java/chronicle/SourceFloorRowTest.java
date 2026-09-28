@@ -22,11 +22,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * One page per boss: a source's page carries what its kills left on the floor,
- * and opens the twin page from there. The floor sat only under the other
- * lens, reached by going back and finding the same name in a different list.
- */
 public class SourceFloorRowTest
 {
 	private static ChroniclePanel panel;

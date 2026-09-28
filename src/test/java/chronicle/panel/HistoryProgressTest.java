@@ -22,11 +22,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The History tab's period model: the summary keeps its fixed order and shows
- * only what moved, and everything else files into the Stats tab's families and
- * sections with a period total on each.
- */
 public class HistoryProgressTest
 {
 	private static Map<String, Long> map(Object... kv)
@@ -51,14 +46,12 @@ public class HistoryProgressTest
 		return f.get(null);
 	}
 
-	// whether the summary consumes a counter key, read off the model's own set
 	@SuppressWarnings("unchecked")
 	private static boolean summaryKey(String key) throws Exception
 	{
 		return ((Set<String>) table("SUMMARY_KEYS")).contains(key);
 	}
 
-	// which group a summary key files under, or null when no row draws it
 	@SuppressWarnings("unchecked")
 	private static String groupOfKey(String key) throws Exception
 	{
@@ -131,8 +124,6 @@ public class HistoryProgressTest
 		return sectionNames(p.sections());
 	}
 
-	// every summary key moved, listed backwards to prove the order is the
-	// model's, not the input's
 	private static Map<String, Long> everything()
 	{
 		return map(
@@ -161,7 +152,6 @@ public class HistoryProgressTest
 			"Spent at shops", "Earned at shops", "Coins from alchemy", "Consumed value",
 			"Gathered", "Value dropped"),
 			labels(p.summary()));
-		// gp rows carry the flag, counts do not
 		assertTrue(row(p, "Loot value").gp());
 		assertTrue(row(p, "Consumed value").gp());
 		assertTrue(row(p, "Spent at shops").gp());
@@ -170,7 +160,6 @@ public class HistoryProgressTest
 		assertFalse(row(p, "Levels gained").gp());
 		assertFalse(row(p, "Distance run").gp());
 
-		// a figure that did not move is no row; a zero is not a row either
 		HistoryProgress few = of(map("deaths", 2, "damageDealt", 0, "kills", 4));
 		assertEquals(Arrays.asList("Kills", "Deaths"), labels(few.summary()));
 	}
@@ -178,8 +167,6 @@ public class HistoryProgressTest
 	@Test
 	public void everySummaryLabelIsTheRegistrys()
 	{
-		// one table names a key for both tabs: the summary never words a key
-		// itself
 		HistoryProgress p = of(everything());
 		assertEquals(27, p.summary().size());
 		for (HistoryProgress.Row r : p.summary())
@@ -191,18 +178,12 @@ public class HistoryProgressTest
 	@Test
 	public void theFeedsFiguresLineUpAfterDeathsAndNeverFile() throws Exception
 	{
-		// the five keys the History tab counts off the feed alone: summary keys
-		// every one, so a journal carrying a counter by that name never files it
-		// as a section
 		String[] feed = {"petsObtained", "questsCompleted", "diariesCompleted",
 			"combatAchievements", "levelsGained"};
 		for (String key : feed)
 		{
 			assertTrue(key, summaryKey(key));
 		}
-		// handed in as retroactive figures over a spine that never carried them,
-		// they make their own lines, right after Deaths and before the log slots,
-		// in the order they were named and at the figure each was given
 		HistoryProgress p = HistoryProgress.of(map("deaths", 3, "clogSlotsObtained", 9),
 			StatRegistry::isGp,
 			map("levelsGained", 6, "combatAchievements", 4, "diariesCompleted", 1,
@@ -216,13 +197,10 @@ public class HistoryProgressTest
 		assertEquals(6, row(p, "Levels gained").value());
 		assertTrue(p.sections().isEmpty());
 
-		// a zero for one of them is no line, and a zero for deaths takes the
-		// spine's line away too: the feed said nothing happened
 		HistoryProgress zero = HistoryProgress.of(map("deaths", 3, "kills", 2),
 			StatRegistry::isGp, map("deaths", 0, "petsObtained", 0, "questsCompleted", 1), true);
 		assertEquals(Arrays.asList("Kills", "Quests completed"), labels(zero.summary()));
 
-		// as counters they are summary lines all the same, never sections
 		HistoryProgress counted = of(map("petsObtained", 1, "levelsGained", 2, "hitsMissed", 3));
 		assertEquals(Arrays.asList("Pets", "Levels gained"), labels(counted.summary()));
 		assertEquals(Collections.singletonList("Combat"), sectionNames(counted));
@@ -242,16 +220,13 @@ public class HistoryProgressTest
 		assertTrue(kept.gp());
 		assertEquals(0, kept.gpNote());
 
-		// nothing left behind: the floor row is absent and all of it was kept
 		HistoryProgress none = of(map("lootValue", 1000));
 		assertNull(row(none, "Left on the floor"));
 		assertEquals(1000, row(none, "Loot kept").value());
 
-		// a count without a value carries no gp note
 		HistoryProgress bare = of(map("lootValue", 40, "lootLeftCount", 2));
 		assertEquals(0, row(bare, "Left on the floor").gpNote());
 
-		// more left than received: nothing was kept
 		HistoryProgress upside = of(map("lootValue", 100, "lootLeftCount", 1, "lootLeftValue", 150));
 		assertNull(row(upside, "Loot kept"));
 	}
@@ -259,8 +234,6 @@ public class HistoryProgressTest
 	@Test
 	public void dropsTakenIsReceivedLessTheKillsThatLeftLoot() throws Exception
 	{
-		// one unit both ways: the loot events less the kills that left a stack,
-		// never the items on the floor
 		HistoryProgress p = of(map("dropsReceived", 10, "lootLeftKills", 3, "lootLeftCount", 40));
 		assertEquals(Arrays.asList("Drops received", "Drops taken", "Left on the floor"),
 			labels(p.summary()));
@@ -271,30 +244,23 @@ public class HistoryProgressTest
 		assertEquals(0, taken.gpNote());
 		assertTrue(p.sections().isEmpty());
 
-		// it sits right after Drops received, before the gp lines
 		HistoryProgress full = of(map("lootValue", 500, "kills", 4, "dropsReceived", 10,
 			"lootLeftKills", 3));
 		assertEquals(Arrays.asList("Drops received", "Drops taken", "Loot value", "Loot kept",
 			"Kills"), labels(full.summary()));
 
-		// nothing left behind: every drop was taken
 		assertEquals(10, row(of(map("dropsReceived", 10)), "Drops taken").value());
 
-		// more kills left something than the period received: floored, and still
-		// drawn, since the period did receive
 		HistoryProgress floor = of(map("dropsReceived", 2, "lootLeftKills", 5));
 		assertEquals(Arrays.asList("Drops received", "Drops taken"), labels(floor.summary()));
 		assertEquals(0, row(floor, "Drops taken").value());
 
-		// nothing received: no line, and the kills figure is a summary key that
-		// never files as a section of its own
 		HistoryProgress none = of(map("lootLeftKills", 5));
 		assertTrue(none.summary().isEmpty());
 		assertTrue(none.sections().isEmpty());
 		assertTrue(summaryKey("lootLeftKills"));
 		assertFalse(summaryKey("dropsTaken"));
 
-		// a retroactive figure for the kills replaces the spine's delta
 		HistoryProgress retro = HistoryProgress.of(map("dropsReceived", 10, "lootLeftKills", 3),
 			StatRegistry::isGp, map("lootLeftKills", 1), true);
 		assertEquals(9, row(retro, "Drops taken").value());
@@ -303,10 +269,6 @@ public class HistoryProgressTest
 	@Test
 	public void theImportedUntakenPairIsNotTheFloor() throws Exception
 	{
-		// untakenLootCount and untakenLootValue are a lifetime figure carried in
-		// from an older record, not this build's ledger: they never make the
-		// floor line and never come off what was kept. The registry files them
-		// where the Stats tab does.
 		HistoryProgress p = of(map("lootValue", 1000, "untakenLootCount", 3, "untakenLootValue", 250));
 		assertNull(row(p, "Left on the floor"));
 		assertEquals(1000, row(p, "Loot kept").value());
@@ -332,8 +294,6 @@ public class HistoryProgressTest
 	{
 		HistoryProgress p = of(map("hitsBlocked", 5, "damageDealtRanged", 30,
 			"damageDealtMelee", 60, "damageDealt", 100));
-		// the split sits right after Damage dealt with the registry's "· by"
-		// labels, never as orphaned rows under Combat
 		assertEquals(Arrays.asList("Damage dealt", "· by melee", "· by ranged"), labels(p.summary()));
 		assertEquals(60, row(p, "· by melee").value());
 		assertEquals(Collections.singletonList("Combat"), sectionNames(p));
@@ -352,11 +312,9 @@ public class HistoryProgressTest
 		assertEquals(Collections.singletonList("Gathered"), labels(p.summary()));
 		assertTrue(p.sections().isEmpty());
 
-		// nothing gathered: the dropped figure has no row to ride and shows nowhere
 		HistoryProgress none = of(map("resourcesDroppedValue", 300));
 		assertTrue(none.summary().isEmpty());
 		assertTrue(none.sections().isEmpty());
-		// gathered without a drop: no note
 		assertEquals(0, row(of(map("resourcesGatheredValue", 1000)), "Gathered").gpNote());
 	}
 
@@ -382,7 +340,6 @@ public class HistoryProgressTest
 			assertTrue(k, summaryKey(k));
 		}
 
-		// the family still lists what the summary leaves it
 		c.put("damageTaken", 300L);
 		HistoryProgress with = of(c);
 		assertEquals(Collections.singletonList("Combat"), sectionNames(with));
@@ -393,9 +350,6 @@ public class HistoryProgressTest
 	@Test
 	public void teleportsAreASectionNotASummaryLine() throws Exception
 	{
-		// one place for one figure: the Teleports fold carries the period's
-		// total, its means under it and the rest as "Other means", as on the
-		// Stats tab. A summary line would read a second number for the same word.
 		HistoryProgress p = of(map("teleportsTotal", 10, "teleportsViaJewellery", 6,
 			"teleportsVarrock", 4));
 		assertNull(row(p, "Teleports"));
@@ -419,10 +373,8 @@ public class HistoryProgressTest
 		assertEquals(6, wc.rows().get(0).value());
 		assertEquals(1, wc.ghost());
 		assertEquals("Other", wc.ghostLabel());
-		// the floor is the head, never a row
 		assertFalse(labels(wc.rows()).contains("Logs chopped"));
 
-		// rows that account for the whole floor leave no ghost
 		HistoryProgress even = of(map("logsChopped", 9, "oakLogsChopped", 3, "willowLogsChopped", 6));
 		assertEquals(0, section(even, "Woodcutting").ghost());
 	}
@@ -430,9 +382,6 @@ public class HistoryProgressTest
 	@Test
 	public void theHeadIsNeverLessThanTheRowsUnderIt()
 	{
-		// a named row outside the floor (herbiboars are not creatures trapped)
-		// lifts the head past the floor, as the Stats tab heads it: rows plus the
-		// ghost, or the floor, whichever is more
 		HistoryProgress p = of(map("creaturesTrapped", 100, "redChinchompaTrapped", 90,
 			"herbiboarsHarvested", 50));
 		HistoryProgress.Section hunter = section(p, "Hunter");
@@ -440,7 +389,6 @@ public class HistoryProgressTest
 		assertEquals(10, hunter.ghost());
 		assertEquals(150, hunter.total());
 
-		// failed pickpockets are typed rows the successes' floor never counted
 		HistoryProgress th = of(map("pickPockets", 10, "guardPickpockets", 8,
 			"guardFailedPickpockets", 5));
 		assertEquals(13, section(th, "Thieving").total());
@@ -450,15 +398,12 @@ public class HistoryProgressTest
 	@Test
 	public void aSectionHoldingMoreThanOneVerbNamesEachRowsVerb()
 	{
-		// cooked and burnt share a name; the Stats tab nests them by verb, and a
-		// breakdown that repeats "Shark" with two numbers is not one
 		HistoryProgress p = of(map("foodCooked", 13, "sharkCooked", 10, "foodBurned", 3,
 			"sharkBurned", 3, "fishCaught", 20, "sharkCaught", 20));
 		HistoryProgress.Section cook = section(p, "Cooking");
 		assertEquals(Arrays.asList("Shark cooked", "Shark burned"), labels(cook.rows()));
 		assertEquals(16, cook.total());
 		assertEquals(3, cook.ghost());
-		// a single-verb section keeps the bare row label
 		assertEquals(Collections.singletonList("Shark"), labels(section(p, "Fishing").rows()));
 
 		HistoryProgress pr = of(map("abyssalAshesSacrificed", 5, "abyssalHeadsReanimated", 2,
@@ -491,23 +436,21 @@ public class HistoryProgressTest
 	public void sectionsFollowTheStatsTabOrder()
 	{
 		Map<String, Long> c = map(
-			"examines", 2,                 // Ledger: Odds & ends
-			"teleportsVarrock", 4,         // Ledger: Destinations, its own section here
-			"teleportsTotal", 10,          // Ledger: Teleports, the floor
-			"teleportsViaJewellery", 6,    // Ledger: Teleports
-			"dartsFletched", 500,          // Skilling: Fletching, the bigger craft, listed second
-			"logsChopped", 20, "oakLogsChopped", 20,   // Skilling: Woodcutting
-			"damageTaken", 30,             // Combat, sectionless
-			"vialsShattered", 1,           // Living, sectionless
-			"sharkEaten", 7, "foodEaten", 7);   // Living: Food
+			"examines", 2,
+			"teleportsVarrock", 4,
+			"teleportsTotal", 10,
+			"teleportsViaJewellery", 6,
+			"dartsFletched", 500,
+			"logsChopped", 20, "oakLogsChopped", 20,
+			"damageTaken", 30,
+			"vialsShattered", 1,
+			"sharkEaten", 7, "foodEaten", 7);
 		HistoryProgress p = of(c);
 		assertEquals(Arrays.asList("Living", "Food", "Combat", "Fletching", "Woodcutting",
 			"Teleports", "Destinations", "Odds & ends"), sectionNames(p));
-		// a family's sectionless rows carry the family's name and file under it
 		assertEquals("Living", section(p, "Living").family());
 		assertEquals("Ledger & Roads", section(p, "Destinations").family());
 		assertEquals(Collections.singletonList("Varrock"), labels(section(p, "Destinations").rows()));
-		// teleports head with the floor and reconcile the means to it
 		assertEquals(10, section(p, "Teleports").total());
 		assertEquals(4, section(p, "Teleports").ghost());
 	}
@@ -515,9 +458,6 @@ public class HistoryProgressTest
 	@Test
 	public void aFlatKeyThatHeadsAFoldInItsFamilyFilesOnceAsTheFloor()
 	{
-		// potionDoses is Living's "Doses drunk" and the Potions floor, foodEaten
-		// its "Meals eaten" and the Food floor: each heads its fold and is never
-		// a row beside it, so one figure shows once
 		HistoryProgress p = of(map("potionDoses", 225, "prayerDoses", 140, "foodEaten", 20,
 			"sharkEaten", 16, "vialsShattered", 3));
 		assertEquals(Arrays.asList("Living", "Food", "Potions"), sectionNames(p));
@@ -537,8 +477,6 @@ public class HistoryProgressTest
 			assertFalse(s.name(), labels(s.rows()).contains("Meals eaten"));
 		}
 
-		// the floor alone, with no typed row under it: the fold heads with it
-		// and opens to the floor's own name, as Prayer opens to its verbs
 		HistoryProgress bare = of(map("potionDoses", 225));
 		assertEquals(Collections.singletonList("Potions"), sectionNames(bare));
 		assertEquals(225, section(bare, "Potions").total());
@@ -550,14 +488,14 @@ public class HistoryProgressTest
 	public void theHeadCarriesAFigureOnlyWhereTheRowsAddUp()
 	{
 		HistoryProgress p = of(map(
-			"vialsShattered", 3, "hitpointsRegenerated", 500,   // Living's flat list: mixed units
-			"damageTaken", 300, "hitsMissed", 40,                // Combat's flat list: mixed
-			"examines", 2, "cabbagesPicked", 9,                  // Odds & ends: mixed
-			"untakenLootValue", 1000,                            // The purse: gp
-			"tilesRan", 800,                                     // On foot: tiles
-			"dartsFletched", 40, "arrowsFletched", 10,           // Fletching: one craft's actions
-			"logsChopped", 10, "oakLogsChopped", 3,              // Woodcutting: a floor
-			"teleportsVarrock", 4));                             // Destinations
+			"vialsShattered", 3, "hitpointsRegenerated", 500,
+			"damageTaken", 300, "hitsMissed", 40,
+			"examines", 2, "cabbagesPicked", 9,
+			"untakenLootValue", 1000,
+			"tilesRan", 800,
+			"dartsFletched", 40, "arrowsFletched", 10,
+			"logsChopped", 10, "oakLogsChopped", 3,
+			"teleportsVarrock", 4));
 		assertFalse(section(p, "Living").summed());
 		assertFalse(section(p, "Combat").summed());
 		assertFalse(section(p, "Odds & ends").summed());
@@ -569,14 +507,10 @@ public class HistoryProgressTest
 		assertTrue(section(p, "Woodcutting").summed());
 		assertTrue(section(p, "Destinations").summed());
 
-		// a flat list whose rows are all gp does add up, in gp (the Living split
-		// pair is hidden now, carried by the Food and Potions fold heads, so the
-		// purse stands in)
 		HistoryProgress gp = of(map("untakenLootValue", 700));
 		assertTrue(section(gp, "The purse").summed());
 		assertTrue(section(gp, "The purse").gp());
 		assertEquals(700, section(gp, "The purse").total());
-		// and one gp row beside a count is mixed again
 		HistoryProgress mixed = of(map("consumedValue", 700, "vialsShattered", 3));
 		assertFalse(section(mixed, "Living").summed());
 		assertFalse(section(mixed, "Living").gp());
@@ -589,21 +523,16 @@ public class HistoryProgressTest
 		Map<String, Long> journal = map("slayerTasksCompleted", 2, "clogSlotsObtained", 0,
 			"logsChopped", 50);
 		HistoryProgress p = HistoryProgress.of(spine, StatRegistry::isGp, journal, true);
-		// the journal's figure stands in for the spine's, a zero included; a key
-		// the summary does not read is ignored, and never files as a section
 		assertEquals(Arrays.asList("Kills", "Slayer tasks completed"), labels(p.summary()));
 		assertEquals(2, row(p, "Slayer tasks completed").value());
 		assertNull(row(p, "Collection log slots"));
 		assertTrue(p.sections().isEmpty());
-		// a figure the spine never carried still makes its line
 		HistoryProgress fresh = HistoryProgress.of(map("kills", 3), StatRegistry::isGp,
 			map("slayerTasksCompleted", 4), true);
 		assertEquals(4, row(fresh, "Slayer tasks completed").value());
-		// no journal figures: the spine's deltas as they were
 		HistoryProgress plain = HistoryProgress.of(spine, StatRegistry::isGp, null, true);
 		assertEquals(6, row(plain, "Slayer tasks completed").value());
 		assertEquals(9, row(plain, "Collection log slots").value());
-		// and the caller's map is left alone
 		assertEquals(Long.valueOf(6), spine.get("slayerTasksCompleted"));
 	}
 
@@ -621,7 +550,6 @@ public class HistoryProgressTest
 	public void everySummaryKeyFilesUnderExactlyOneGroup() throws Exception
 	{
 		HistoryProgress p = of(everything());
-		// nothing the summary draws is out of reach, and nothing is drawn twice
 		List<String> filed = new ArrayList<>();
 		for (HistoryProgress.Group g : p.groups())
 		{
@@ -639,7 +567,6 @@ public class HistoryProgressTest
 		Collections.sort(filed);
 		Collections.sort(summary);
 		assertEquals(summary, filed);
-		// and each names the group it files under
 		for (HistoryProgress.Group g : p.groups())
 		{
 			for (HistoryProgress.Row r : g.rows())
@@ -653,7 +580,7 @@ public class HistoryProgressTest
 	public void theGroupsReadInTheirFixedOrderAndHoldTheirOwn()
 	{
 		Map<String, Long> all = everything();
-		all.put("fishCaught", 50L);   // the one group the summary keys cannot fill
+		all.put("fishCaught", 50L);
 		HistoryProgress p = of(all);
 		assertEquals(Arrays.asList(HistoryProgress.GROUPS), names(p));
 		assertEquals(Collections.singletonList("Levels gained"),
@@ -693,8 +620,6 @@ public class HistoryProgressTest
 			"foodEaten", 20, "sharkEaten", 16, "vialsShattered", 3,
 			"untakenLootValue", 900_000, "examines", 30,
 			"teleportsTotal", 60, "teleportsVarrock", 18, "tilesRan", 40_000));
-		// every section the model files is inside one group, and the group is
-		// the one the model names for it
 		int filed = 0;
 		for (HistoryProgress.Group g : p.groups())
 		{
@@ -704,8 +629,6 @@ public class HistoryProgressTest
 				filed++;
 			}
 		}
-		// Combat's and Living's flat lists are rows of their group rather than
-		// sections, so two of the model's sections file as rows instead
 		assertEquals(p.sections().size() - 2, filed);
 		assertEquals(Collections.singletonList("Thralls"),
 			sectionNames(p.group("Combat").sections()));
@@ -725,8 +648,6 @@ public class HistoryProgressTest
 		HistoryProgress p = of(map(
 			"damageDealt", 60_000, "damageTaken", 40_000, "hitsMissed", 600,
 			"consumedValue", 90_000, "vialsShattered", 3, "foodEaten", 20));
-		// the flat rows follow the group's own figures, biggest first, and no
-		// section repeats the family's name
 		assertEquals(Arrays.asList("Damage dealt", "Damage taken", "Hits missed"),
 			labels(p.group("Combat").rows()));
 		assertTrue(p.group("Combat").sections().isEmpty());
@@ -734,8 +655,6 @@ public class HistoryProgressTest
 			labels(p.group("Upkeep").rows()));
 		assertEquals(Collections.singletonList("Food"),
 			sectionNames(p.group("Upkeep").sections()));
-		// while the model's own sections are unchanged: the flat list is still
-		// a section there, for the Stats tab's sake
 		assertTrue(sectionNames(p.sections()).contains("Combat"));
 		assertTrue(sectionNames(p.sections()).contains("Living"));
 	}

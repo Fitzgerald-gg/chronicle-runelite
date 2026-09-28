@@ -36,14 +36,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A loot page under a period lists what the period paid, not everything the
- * source has ever paid. The dated roll kept a day's items as one heap beside its
- * sources' totals, so a week could say what Mad Angel paid and not what it paid
- * it in, and the page listed the lifetime under the week's heading. Each day now
- * keeps its items per source, and the days written before that are split where
- * the record proves whose each item was.
- */
 public class PeriodLootTest
 {
 	private static final String RSN = "Tester";
@@ -98,12 +90,6 @@ public class PeriodLootTest
 		return o;
 	}
 
-	/**
-	 * Three days written before the roll kept items per source: one source
-	 * alone (D1), two sources whose items only one of them has ever dropped
-	 * (D2), and two sources on an item both have dropped (D3), which no record
-	 * can split.
-	 */
 	private File oldJournal() throws Exception
 	{
 		JsonObject drops = new JsonObject();
@@ -216,7 +202,6 @@ public class PeriodLootTest
 		return d;
 	}
 
-	/** A drop is filed under its source in the day as well as in the heap. */
 	@Test
 	public void aDropIsFiledUnderItsSourceInTheDay() throws Exception
 	{
@@ -230,16 +215,10 @@ public class PeriodLootTest
 		assertEquals(7, qty(day, "Herbiboar", "Coins"));
 		assertEquals(2, qty(day, "Herbiboar", "Grimy guam leaf"));
 		assertTrue("a drop this build filed reads as unfiled", s.unfiledSources(today, today).isEmpty());
-		// and the sitting keeps the same
 		Map<String, List<LocalStore.BagItem>> sitting = s.itemsBySource(null, null);
 		assertEquals(day.get("Herbiboar").size(), sitting.get("Herbiboar").size());
 	}
 
-	/**
-	 * The days written before: a day with one source is its own, and on a day
-	 * with two an item only one of them has ever dropped is that one's; an item
-	 * both have dropped leaves its day whole.
-	 */
 	@Test
 	public void theDaysBeforeAreSplitWhereTheRecordProvesWhose() throws Exception
 	{
@@ -253,11 +232,6 @@ public class PeriodLootTest
 			qty(d3, "Mad Angel", "Tuna") + qty(d3, "Herbiboar", "Tuna"));
 	}
 
-	/**
-	 * An item two of the day's sources have both dropped is nobody's, even where
-	 * handing it to one would come to every total: a guess that happens to add up
-	 * is still a guess.
-	 */
 	@Test
 	public void aGuessThatAddsUpIsStillNotWritten() throws Exception
 	{
@@ -290,7 +264,6 @@ public class PeriodLootTest
 		assertEquals(d1.toString(), 0, qty(d1, "Mad Angel", "Tuna") + qty(d1, "Herbiboar", "Tuna"));
 	}
 
-	/** A day whose sources' totals the split would not come to is left whole. */
 	@Test
 	public void aSplitThatDoesNotComeToTheTotalsIsNotWritten() throws Exception
 	{
@@ -304,10 +277,6 @@ public class PeriodLootTest
 		assertEquals(0, qty(store(d).itemsBySource(D1, D1), "Herbiboar", "Grimy guam leaf"));
 	}
 
-	/**
-	 * Today, written by an older build and split on load, then recorded into:
-	 * the drop lands once in the source's rows, not twice through a shared copy.
-	 */
 	@Test
 	public void aSplitTodayTakesTheNextDropOnce() throws Exception
 	{
@@ -341,7 +310,6 @@ public class PeriodLootTest
 		return d;
 	}
 
-	/** A day's earlier sitting is the day's, not this sitting's. */
 	@Test
 	public void theSittingIsNotTheDay() throws Exception
 	{
@@ -356,10 +324,6 @@ public class PeriodLootTest
 		assertEquals(12, qty(s.itemsBySource(LocalDate.now(), LocalDate.now()), "Herbiboar", "Grimy guam leaf"));
 	}
 
-	/**
-	 * A one-source day an older build added to after it was filed: what the
-	 * heap holds beyond the source's rows is its own, and is filed on load.
-	 */
 	@Test
 	public void aOneSourceDayAddedToSinceIsFiledAgain() throws Exception
 	{
@@ -372,10 +336,6 @@ public class PeriodLootTest
 		assertEquals(3, qty(s.itemsBySource(D1, D1), "Herbiboar", "Grimy guam leaf"));
 	}
 
-	/**
-	 * The day this build arrived: one source filed by it, another only in the
-	 * heap from before. What is left is still provably whose, and is filed.
-	 */
 	@Test
 	public void aDayHalfFiledIsFinished() throws Exception
 	{
@@ -406,11 +366,6 @@ public class PeriodLootTest
 		assertEquals(1, qty(d1, "Herbiboar", "Tuna"));
 	}
 
-	/**
-	 * Ownership reads a bag's ids as well as its names: an item renamed since
-	 * sits under its new name in one bag and its old one in another, and both
-	 * sources could have dropped it that day.
-	 */
 	@Test
 	public void aRenamedItemIsNobodysByItsOldName() throws Exception
 	{
@@ -438,10 +393,6 @@ public class PeriodLootTest
 		assertEquals(d1.toString(), 0, qty(d1, "O", "Old name") + qty(d1, "T", "Old name"));
 	}
 
-	/**
-	 * A drop worth nothing that an older build added to a source this build had
-	 * already filed is still that source's, on a day it had to itself.
-	 */
 	@Test
 	public void aWorthlessDropAddedLaterIsFiled() throws Exception
 	{
@@ -458,10 +409,6 @@ public class PeriodLootTest
 			"Herbiboar", "Bones"));
 	}
 
-	/**
-	 * Drops an older build kept whole stay unfiled when this build files one more
-	 * for the same source that day: its drop count, not its rows, says so.
-	 */
 	@Test
 	public void unfiledDropsOutliveTheNextOne() throws Exception
 	{
@@ -481,11 +428,6 @@ public class PeriodLootTest
 		assertTrue(s.unfiledSources(LocalDate.now(), LocalDate.now()).contains("Crystalline rat"));
 	}
 
-	/**
-	 * With two sources owed, a worthless item is left whole even where one bag
-	 * holds it: no total can catch a bag that misleads, and an older merge of
-	 * two same-named ids can make one mislead.
-	 */
 	@Test
 	public void aWorthlessItemBetweenTwoOwedIsLeftWhole() throws Exception
 	{
@@ -511,7 +453,6 @@ public class PeriodLootTest
 		assertEquals(d1.toString(), 0, qty(d1, "Mad Angel", "Clue scroll (hard)") + qty(d1, "Mad Angel", "Coins"));
 	}
 
-	/** With one source owed, the rest is its own, whatever the bags hold. */
 	@Test
 	public void theOneOwedSourceTakesTheRest() throws Exception
 	{
@@ -532,7 +473,6 @@ public class PeriodLootTest
 		assertEquals(1, qty(d1, "Herbiboar", "Clue scroll (hard)"));
 	}
 
-	/** An item renamed between two drops of one day is one item under the day's name. */
 	@Test
 	public void aRenameInsideADayIsOneName() throws Exception
 	{
@@ -556,7 +496,6 @@ public class PeriodLootTest
 		assertEquals(1, qty(today, "Herbiboar", "New name"));
 	}
 
-	/** Monsters named apart only by case are kept apart, as the head keeps them. */
 	@Test
 	public void namesApartOnlyByCaseStayApart() throws Exception
 	{
@@ -574,7 +513,6 @@ public class PeriodLootTest
 		assertEquals(500, qty(both, "Spiritual Mage", "Coins"));
 	}
 
-	/** The split is made once: loading it again changes nothing. */
 	@Test
 	public void theSplitIsMadeOnce() throws Exception
 	{
@@ -588,10 +526,6 @@ public class PeriodLootTest
 			StandardCharsets.UTF_8), JsonObject.class).get("loot_days").toString();
 		assertEquals(once, twice);
 	}
-
-	// ------------------------------------------------------------------
-	// the pages
-	// ------------------------------------------------------------------
 
 	private ChroniclePanel panel(LocalDate from, LocalDate to) throws Exception
 	{
@@ -655,11 +589,6 @@ public class PeriodLootTest
 		return at >= 0 && at + 1 < said.size() ? said.get(at + 1) : null;
 	}
 
-	/**
-	 * The source page lists what the period paid: Mad Angel's Coins from D2, not
-	 * the Hallowfell of its lifetime, and what fell on the day kept whole (D3's
-	 * shared Tuna) as Other, so the list still comes to the Worth above it.
-	 */
 	@Test
 	public void theSourcePageListsWhatThePeriodPaid() throws Exception
 	{
@@ -671,7 +600,6 @@ public class PeriodLootTest
 			String.join(" ", said).contains("everything this source has ever paid"));
 	}
 
-	/** A period the source paid nothing in says so, not the lifetime. */
 	@Test
 	public void aPeriodItPaidNothingInSaysSo() throws Exception
 	{
@@ -680,7 +608,6 @@ public class PeriodLootTest
 		assertFalse(said.toString(), said.contains("Hallowfell"));
 	}
 
-	/** A period reaching back before the roll says the day it is read from. */
 	@Test
 	public void aPeriodBeforeTheRollSaysWhereItStarts() throws Exception
 	{
@@ -690,10 +617,6 @@ public class PeriodLootTest
 		assertFalse(inside.toString(), String.join(" ", inside).contains("Loot since "));
 	}
 
-	/**
-	 * Drops kept whole and worth nothing still say they were there: Other, not
-	 * "Nothing from" under a head that counts them.
-	 */
 	@Test
 	public void worthlessDropsKeptWholeAreStillOther() throws Exception
 	{
@@ -719,7 +642,6 @@ public class PeriodLootTest
 		assertFalse(said.toString(), String.join(" ", said).contains("Nothing from"));
 	}
 
-	/** An item's Other carries its worth, so its rows come to the head's. */
 	@Test
 	public void anItemsOtherCarriesItsWorth() throws Exception
 	{
@@ -727,7 +649,6 @@ public class PeriodLootTest
 		assertTrue(tuna.toString(), after(tuna, "Other").startsWith("\u00d72 \u00b7 200"));
 	}
 
-	/** A copied picture says the loot is dated for part of the period, not the day. */
 	@Test
 	public void aPictureCarriesNoTrackingDate() throws Exception
 	{
@@ -738,7 +659,6 @@ public class PeriodLootTest
 		assertTrue(said, said.contains("Loot is dated for only part of"));
 	}
 
-	/** The sitting's item page lists what each source dropped in the sitting. */
 	@Test
 	public void theSittingsItemPageIsTheSittings() throws Exception
 	{
@@ -751,7 +671,6 @@ public class PeriodLootTest
 		bag.add("199", bagItem("Grimy guam leaf", 10, 1000));
 		File d = journal(obj("Herbiboar", src(bag)), obj(LocalDate.now().toString(), today));
 		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.journalStub(d.getPath(), RSN);
-		// the store that names what it records as the game does
 		stub.store = store(d);
 		stub.store.record("LOOT", loot("Herbiboar", 199, 2), RSN);
 		final ChroniclePanel[] hold = new ChroniclePanel[1];
@@ -774,16 +693,11 @@ public class PeriodLootTest
 		return page(hold[0], "buildSourceDetail", name);
 	}
 
-	/**
-	 * Days past the four hundred keep only their totals, so a period reaching
-	 * back to them is read from the first day still kept by source, not the
-	 * first day the roll holds at all.
-	 */
 	@Test
 	public void aPeriodPastTheKeptDetailSaysWhereItStarts() throws Exception
 	{
 		JsonObject days = new JsonObject();
-		days.add(D1.minusDays(500).toString(), total(4, 4_000));   // pruned: totals only
+		days.add(D1.minusDays(500).toString(), total(4, 4_000));
 		JsonObject kept = total(1, 300);
 		kept.add("sources", obj("Mad Angel", total(1, 300)));
 		kept.add("items", obj("995", item("Coins", 300, 300)));
@@ -796,7 +710,6 @@ public class PeriodLootTest
 			java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.UK)).replace("Sep ", "Sept ")));
 	}
 
-	/** The page for one of two monsters named apart only by case is that one's. */
 	@Test
 	public void thePageForOneSpellingIsThatSpellings() throws Exception
 	{
@@ -821,13 +734,11 @@ public class PeriodLootTest
 		assertTrue(said.toString(), said.contains("Coins ×500"));
 		assertFalse(said.toString(), said.contains("Coins ×300") || said.contains("Coins ×800"));
 		assertNull(said.toString(), after(said, "Other"));
-		// and the spelling the bigger one would shadow, looked up without case
 		List<String> shadowed = sourcePage(d, D1, D2, "Spiritual mage");
 		assertTrue(shadowed.toString(), shadowed.contains("Coins ×300"));
 		assertEquals(shadowed.toString(), "300 gp", after(shadowed, "Worth").split(" · ")[0]);
 	}
 
-	/** A period only the other spelling paid in is nothing for this one. */
 	@Test
 	public void aTwinsPeriodIsNotThisOnes() throws Exception
 	{
@@ -846,7 +757,6 @@ public class PeriodLootTest
 		assertFalse(said.toString(), said.contains("Coins ×300"));
 	}
 
-	/** A picture of a period the roll does not reach at all says none of it is dated. */
 	@Test
 	public void aPictureOfAnUndatedPeriodSaysNoneOfIt() throws Exception
 	{
@@ -856,7 +766,6 @@ public class PeriodLootTest
 		assertTrue(said, said.contains("Loot is dated for none of"));
 	}
 
-	/** A picture inside the roll names its period, which the strip no longer does. */
 	@Test
 	public void aPictureNamesItsPeriod() throws Exception
 	{
@@ -868,7 +777,6 @@ public class PeriodLootTest
 		assertFalse(String.join(" ", page(p, "buildSourceDetail", "Mad Angel")).contains("The figures above"));
 	}
 
-	/** An item page's rows are of the item the head counts, capitals and all. */
 	@Test
 	public void anItemsRowsAreOfTheHeadsSpelling() throws Exception
 	{
@@ -893,7 +801,6 @@ public class PeriodLootTest
 		assertFalse(said.toString(), said.contains("Mad Angel"));
 	}
 
-	/** Lifetime is the ledger, as it was: every item, no Other. */
 	@Test
 	public void theLifetimePageIsTheLedger() throws Exception
 	{
@@ -902,7 +809,6 @@ public class PeriodLootTest
 		assertNull(said.toString(), after(said, "Other"));
 	}
 
-	/** The item page's sources are the period's, and what no source kept is Other. */
 	@Test
 	public void theItemPageListsThePeriodsSources() throws Exception
 	{

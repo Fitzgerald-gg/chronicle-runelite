@@ -37,31 +37,15 @@ import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import org.junit.Test;
 
-/**
- * Walks the panel over a REAL journal and reports what it finds wrong.
- *
- * <p>The unit tests prove the logic somebody thought to test. Two bugs a player
- * found within an hour of use were of kinds none of them looked for: a board
- * that came back empty on a day the record plainly held, and a door that
- * opened a different monster's page. This looks for those kinds everywhere, on
- * the journal the panel will actually be read against.
- *
- * <p>Off by default. {@code -Dchronicle.audit=<dir>} writes the report there;
- * {@code -Dchronicle.auditJournal=<dir>} and {@code -Dchronicle.auditRsn=<name>}
- * choose the journal (this machine's own by default).
- */
 public class AuditCrawlTest
 {
 	private static final int DOOR_BUDGET = 30000;
 	private static final int DOORS_PER_STATE = 250;
 
-	// the Mage Training Arena's Infinity robes are items, not a division by zero
 	private static final Pattern NULL = Pattern.compile(
 		"\\bnull\\b|NaN|Infinity(?! (hat|top|bottoms|boots|gloves))");
 	private static final Pattern NEGATIVE = Pattern.compile("(?:^|[\\s(+·])-\\d");
-	// an item's own name carries its dose, "Weapon poison(++)"
 	private static final Pattern SIGN_JUNK = Pattern.compile("(?<!\\()\\+-|\\+ -|-\\+|(?<![(+])\\+\\+(?!\\))");
-	// the registry's own sub-row labels open on a dot, "· by melee"
 	private static final Pattern DOT_JUNK = Pattern.compile("· ·|··|^·(?! by )|·$");
 	private static final Pattern RAW_NUMBER = Pattern.compile("(?<![\\d,.])\\d{5,}(?![\\d,.])");
 	private static final Pattern PLURAL = Pattern.compile(
@@ -82,9 +66,6 @@ public class AuditCrawlTest
 	private final Set<String> seenFinding = new LinkedHashSet<>();
 	private int presses;
 	private boolean beforeBaseline;
-	// boss cells with kills whose page holds no loot: most are kills from before
-	// the loot was recorded, which only a reader can tell from loot filed under
-	// another name, so they are listed for review rather than reported
 	private final Set<String> review = new LinkedHashSet<>();
 
 	@Test
@@ -120,15 +101,11 @@ public class AuditCrawlTest
 			stub = PanelPreviewTest.journalStub(dir, rsn);
 			if (sitting)
 			{
-				// a sitting in progress, the length of the owner's last one
 				stub.sessionStartMs = System.currentTimeMillis() - 20 * 60_000L;
 				stub.sessionElapsed = 20;
 			}
 			if (pass == 2)
 			{
-				// Today with no baseline of its own, which is how the panel reads
-				// every hour of play before logout; a journal audited after logout
-				// already has the line, and hid the blank-today bug for that reason.
 				stub.history.remove(LocalDate.now());
 				beforeBaseline = true;
 			}
@@ -163,11 +140,6 @@ public class AuditCrawlTest
 			+ " findings=" + findings.size() + " " + byKind + " review=" + review.size());
 	}
 
-	// ------------------------------------------------------------------
-	// the walk
-	// ------------------------------------------------------------------
-
-	/** One board: the tab and sub-tab its pill opens, and the lens fields set on it. */
 	private static final class Board
 	{
 		final String name;
@@ -256,7 +228,6 @@ public class AuditCrawlTest
 		return p;
 	}
 
-	/** Periods whose every door is pressed, two clicks deep. */
 	private static boolean pressHere(String g, LocalDate c)
 	{
 		LocalDate t = LocalDate.now();
@@ -367,10 +338,6 @@ public class AuditCrawlTest
 		f("histTo").set(panel, null);
 	}
 
-	/**
-	 * Build the state standing now, audit it, and return its key; null when
-	 * it has been audited already.
-	 */
 	private String visit(String how, String g, LocalDate c) throws Exception
 	{
 		String key = stateKey();
@@ -413,7 +380,6 @@ public class AuditCrawlTest
 		flag(st, DOT_JUNK, s, "dot-junk");
 		flag(st, PLURAL, s, "plural");
 		flag(st, MID_CAPITAL, s, "mid-capital");
-		// the bundled task and diary text is the wiki's own, symbols and all
 		if (!"tip".equals(kind))
 		{
 			flag(st, SIGN_JUNK, s, "sign-junk");
@@ -437,7 +403,6 @@ public class AuditCrawlTest
 		}
 	}
 
-	/** Press every door the state offers, one at a time, from the state itself. */
 	private void pressDoors(String key, int depth) throws Exception
 	{
 		Map<String, Object> home = snapshot();
@@ -461,18 +426,15 @@ public class AuditCrawlTest
 			if (label.startsWith("copy") || label.equals("copied") || label.equals("cannot copy")
 				|| "Choose the period".equals(tipOf(door)))
 			{
-				continue;   // the clipboard and the popup menu, which a headless run cannot hold
+				continue;
 			}
 			String before = stateKey();
-			// the figure the door carried, for the pages it opens to agree with
 			String carried = figureOf(door);
 			String boss = bossOf(door);
 			presses++;
 			Throwable thrown = press(door);
 			if (thrown != null)
 			{
-				// a popup menu asks where its invoker sits on the screen, and a
-				// headless run has no screen: the menu's own business, not a bug
 				if (!(thrown instanceof java.awt.HeadlessException)
 					&& !(thrown instanceof java.awt.IllegalComponentStateException))
 				{
@@ -483,12 +445,10 @@ public class AuditCrawlTest
 			String after = stateKey();
 			if (after.equals(before) && selected(label))
 			{
-				continue;   // the pill already chosen, pressed again
+				continue;
 			}
 			if (after.equals(before))
 			{
-				// a fold toggles openFolds, a "Show more" drillShown: both are state,
-				// so an unchanged state is a door that did nothing
 				finding("dead-door", st, "\"" + label + "\"" + (tipOf(door) != null
 					? " (hover: " + plain(tipOf(door)).replaceAll("\\s+", " ").trim() + ")" : ""));
 				continue;
@@ -513,7 +473,6 @@ public class AuditCrawlTest
 		restore(home);
 	}
 
-	/** The roster boss a sheet cell stands for, read off its hover's title; null for any other door. */
 	private String bossOf(Component door) throws Exception
 	{
 		String tip = tipOf(door);
@@ -542,20 +501,13 @@ public class AuditCrawlTest
 		return rosterKinds;
 	}
 
-	/**
-	 * A boss cell opens its own fight's page: the page named for it, a
-	 * container named after it in brackets, or a name the table says it pays
-	 * out through. Anything else is another monster's loot under this one's
-	 * cell, which is how all three Dagannoth kings opened the ordinary
-	 * dagannoth.
-	 */
 	@SuppressWarnings("unchecked")
 	private void landsOn(JsonObject from, String boss, String carried, JsonObject landed) throws Exception
 	{
 		String dest = (String) f("detailSource").get(panel);
 		if (dest == null)
 		{
-			return;   // the cell opened something other than a source page
+			return;
 		}
 		Field po = ChroniclePanel.class.getDeclaredField("PAYS_OUT");
 		po.setAccessible(true);
@@ -575,7 +527,6 @@ public class AuditCrawlTest
 		}
 	}
 
-	/** Whether a label names the sub-tab or lens the panel is already on. */
 	private boolean selected(String label) throws Exception
 	{
 		for (String n : new String[]{"journalLens", "slayerLens", "statsFamily", "clogTab"})
@@ -590,10 +541,6 @@ public class AuditCrawlTest
 		return label.equals(subs.get(f("tab").get(panel)));
 	}
 
-	/**
-	 * A boss cell carries a kill count and opens a page that states one; the two
-	 * must agree at Lifetime, where both read the whole record.
-	 */
 	private void agree(JsonObject from, String label, String carried, JsonObject landed)
 	{
 		if (!from.get("period").getAsString().startsWith("Lifetime")
@@ -609,10 +556,6 @@ public class AuditCrawlTest
 				+ " but its page says Kills " + kills + " (" + landed.get("where").getAsString() + ")");
 		}
 	}
-
-	// ------------------------------------------------------------------
-	// checks across the whole walk
-	// ------------------------------------------------------------------
 
 	private void crossChecks() throws Exception
 	{
@@ -632,7 +575,6 @@ public class AuditCrawlTest
 				finding("bail-while-data", st, bail + "  <-- but " + why);
 			}
 		}
-		// the Recap and the sheet's own period card read the same period two ways
 		Map<String, JsonObject> recap = new LinkedHashMap<>();
 		Map<String, JsonObject> sheet = new LinkedHashMap<>();
 		for (JsonObject st : states.values())
@@ -673,11 +615,6 @@ public class AuditCrawlTest
 		}
 	}
 
-	/**
-	 * What moved inside the window this state read, where the board said
-	 * nothing did: the overall xp, or any kill count present at both ends.
-	 * Null when nothing moved, which is the board telling the truth.
-	 */
 	private String moved(JsonObject st, boolean xp) throws Exception
 	{
 		String[] pc = st.get("period").getAsString().split("@");
@@ -695,8 +632,6 @@ public class AuditCrawlTest
 		TreeMap<LocalDate, HistoryLog.Baseline> spine = stub.history;
 		Map.Entry<LocalDate, HistoryLog.Baseline> open = HistoryLog.windowStart(spine, start, end);
 		Map.Entry<LocalDate, HistoryLog.Baseline> shut = spine.floorEntry(end);
-		// only the eve counts as an opening: a record days cold is the board's
-		// own honest refusal, not a board that should have drawn
 		if (open == null || shut == null || open.getKey().isBefore(start.minusDays(1)))
 		{
 			return null;
@@ -716,8 +651,6 @@ public class AuditCrawlTest
 				? "overall xp moved " + x0 + " -> " + x1 + " between " + open.getKey() + " and " + shut.getKey()
 				: null;
 		}
-		// Herbiboar and the implings keep kill counts and are no boss: only the
-		// roster's own names count against "nothing on the boss sheet"
 		Set<String> roster = new LinkedHashSet<>();
 		Method r = ChroniclePanel.class.getDeclaredMethod("bossRoster", com.google.gson.Gson.class);
 		r.setAccessible(true);
@@ -736,10 +669,6 @@ public class AuditCrawlTest
 		}
 		return null;
 	}
-
-	// ------------------------------------------------------------------
-	// the panel, read
-	// ------------------------------------------------------------------
 
 	private List<Component> doors()
 	{
@@ -815,7 +744,6 @@ public class AuditCrawlTest
 		return c instanceof JComponent ? ((JComponent) c).getToolTipText() : null;
 	}
 
-	/** The right-hand figure a row or cell carries, when it has one. */
 	private static String figureOf(Component c)
 	{
 		if (c instanceof JPanel && ((JPanel) c).getLayout() instanceof BorderLayout)
@@ -829,7 +757,6 @@ public class AuditCrawlTest
 		return null;
 	}
 
-	/** The figure beside a label in a recorded state, read off its said list. */
 	private static String beside(JsonObject st, String left)
 	{
 		com.google.gson.JsonArray said = st.getAsJsonArray("said");
@@ -848,7 +775,6 @@ public class AuditCrawlTest
 		return null;
 	}
 
-	/** "Label: figure" inside any hover card of a recorded state. */
 	private static String tipFigure(JsonObject st, String label)
 	{
 		com.google.gson.JsonArray said = st.getAsJsonArray("said");
@@ -912,10 +838,6 @@ public class AuditCrawlTest
 		findings.add(f);
 	}
 
-	// ------------------------------------------------------------------
-	// plumbing
-	// ------------------------------------------------------------------
-
 	private Throwable rebuild() throws Exception
 	{
 		Method m = ChroniclePanel.class.getDeclaredMethod("rebuildNow");
@@ -936,7 +858,6 @@ public class AuditCrawlTest
 				out[0] = t;
 			}
 		});
-		// icons dress on a later pass
 		SwingUtilities.invokeAndWait(() -> { });
 		return out[0];
 	}

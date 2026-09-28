@@ -28,11 +28,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The days written, as a month behind the nameplate's Days written row: a
- * cell for every day, shaded by how long the account sat, a door from each
- * written day to the Journal on it, arrows stepping the month.
- */
 public class CalendarTest
 {
 	@BeforeClass
@@ -67,7 +62,6 @@ public class CalendarTest
 	@Test
 	public void theMonthShadesItsDaysAndOpensThem() throws Exception
 	{
-		// a month wholly in the past: yesterday's, from its first day
 		LocalDate first = LocalDate.now().minusDays(1).withDayOfMonth(1);
 		LocalDate second = first.plusDays(1);
 		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
@@ -110,7 +104,6 @@ public class CalendarTest
 		assertTrue(hovers.toString(), hovers.contains("3h 20m · 1 sitting"));
 		assertTrue(hovers.toString(), hovers.contains("50m · 1 sitting"));
 		assertTrue(said.toString(), said.contains("2 days written · 4h 10m"));
-		// every day of the month is a cell
 		int cells = 0;
 		for (int d = 1; d <= first.lengthOfMonth(); d++)
 		{
@@ -120,7 +113,6 @@ public class CalendarTest
 			}
 		}
 		assertEquals(first.lengthOfMonth(), cells);
-		// the first day opens the Journal on it
 		JPanel cell = null;
 		for (Component c : flat)
 		{
@@ -190,13 +182,11 @@ public class CalendarTest
 		Field sc = ChroniclePanel.class.getDeclaredField("showCalendar");
 		sc.setAccessible(true);
 		assertEquals(true, sc.get(hold[0]));
-		// and it opens on the month the reader is already reading
 		Field cm = ChroniclePanel.class.getDeclaredField("calendarMonth");
 		cm.setAccessible(true);
 		assertEquals(YearMonth.from(LocalDate.now()), cm.get(hold[0]));
 	}
 
-	/** The arrows step the month, and the forward one stops at this one. */
 	@Test
 	public void theArrowsStepTheMonth() throws Exception
 	{
@@ -211,12 +201,10 @@ public class CalendarTest
 		assertEquals(now.minusMonths(1), cm.get(hold[0]));
 		press(hold[0], ">");
 		assertEquals(now, cm.get(hold[0]));
-		// this month is the end of the record: forward is inert, and says so
 		press(hold[0], ">");
 		assertEquals(now, cm.get(hold[0]));
 	}
 
-	/** A day the spine wrote but no sitting closed on still reads as written. */
 	@Test
 	public void aDayOnTheSpineAloneIsWritten() throws Exception
 	{
@@ -262,7 +250,6 @@ public class CalendarTest
 		return flat;
 	}
 
-	/** Press the arrow whose label is {@code glyph}. */
 	private static void press(ChroniclePanel p, String glyph) throws Exception
 	{
 		JLabel arrow = null;

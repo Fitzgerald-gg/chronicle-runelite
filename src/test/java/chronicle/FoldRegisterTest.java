@@ -15,18 +15,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The panel keeps one register of the folds standing open, under the name openFolds.
- * Every fold in the panel keys into it, whatever family it belongs to, and the preview
- * harness reaches it by that name through reflection. A rename that misses the harness
- * does not fail to compile: it fails here instead, which is the point of this file.
- */
 public class FoldRegisterTest
 {
-	// A key of each shape this file drives: a Stats section, a Stats verb, a pets
-	// page and Home's xp. The register carries more shapes than these, the session
-	// strip's "session:" keys and the History view's "history:" keys, and nothing
-	// here toggles those.
 	private static final String STATS_SECTION = "Skilling:Roads";
 	private static final String STATS_VERB = "Skilling:craft:smelted";
 	private static final String PETS_PAGE = "pets:All Pets:Abyssal orphan";
@@ -96,8 +86,6 @@ public class FoldRegisterTest
 		});
 	}
 
-	// The name itself, since a reflective reach at a field that is gone throws at run
-	// time and nothing earlier would have said a word about it.
 	@Test
 	public void theRegisterIsReachableUnderItsName() throws Exception
 	{
@@ -109,8 +97,6 @@ public class FoldRegisterTest
 		assertTrue(register(panel()).isEmpty());
 	}
 
-	// Everything foldable starts folded, opens on the first toggle and shuts on the
-	// next, whichever family the key belongs to.
 	@Test
 	public void everyKindOfFoldOpensAndShuts() throws Exception
 	{
@@ -127,8 +113,6 @@ public class FoldRegisterTest
 		}
 	}
 
-	// Folds of different families stand open side by side; one is not the other's off
-	// switch.
 	@Test
 	public void severalFoldsStandOpenAtOnce() throws Exception
 	{
@@ -142,8 +126,6 @@ public class FoldRegisterTest
 		assertTrue(open(p, HOME_XP));
 	}
 
-	// The home ticker throws the whole panel away several times a minute. A reader's
-	// fold has to outlive that, which is why the register is a field.
 	@Test
 	public void anOpenFoldSurvivesARebuild() throws Exception
 	{
@@ -154,8 +136,6 @@ public class FoldRegisterTest
 		assertTrue("the rebuild shut the fold", open(p, STATS_VERB));
 	}
 
-	// A fold opened over one account's numbers means nothing over the next one's, so
-	// the register is dropped whole on a switch.
 	@Test
 	public void theRegisterClearsOnAnAccountSwitch() throws Exception
 	{
@@ -172,7 +152,6 @@ public class FoldRegisterTest
 		assertFalse(open(p, HOME_XP));
 	}
 
-	// Home's own fold is a key in this register and not a boolean beside it.
 	@Test
 	public void homesXpFoldIsAKeyInTheSameRegister() throws Exception
 	{

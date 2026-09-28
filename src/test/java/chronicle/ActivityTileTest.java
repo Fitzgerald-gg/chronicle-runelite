@@ -18,15 +18,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The activity tiles: what they wear, and where they go.
- *
- * <p>Their emblems used to be worked out the way a boss tile's is, by asking
- * the ledger for the dearest thing that source ever dropped. For a boss that is
- * a fair likeness; for an activity it is nonsense, and for the four with no
- * drop source behind them at all it fell through to one generic tab icon, so
- * Collections, Quests, Diaries and Combat were four identical tiles.
- */
 public class ActivityTileTest
 {
 	private static ChroniclePanel panel;
@@ -60,7 +51,6 @@ public class ActivityTileTest
 		return (Integer) m.invoke(null, label);
 	}
 
-	/** Every tile has one, and no two share. */
 	@Test
 	public void everyActivityWearsItsOwnEmblem() throws Exception
 	{
@@ -77,10 +67,6 @@ public class ActivityTileTest
 		assertEquals("every activity is accounted for", roster.length, seen.size());
 	}
 
-	/**
-	 * The four that are hiscores rows take the hiscores' own art, so it follows
-	 * the client rather than a number written down here.
-	 */
 	@Test
 	public void theHiscoresOnesTakeTheHiscoresOwnArt() throws Exception
 	{
@@ -95,11 +81,6 @@ public class ActivityTileTest
 			sprite("Collections"));
 	}
 
-	/**
-	 * The Rift tile wears the hiscores' Rifts closed and says rifts closed. The
-	 * log keeps the page's first line, rifts searched, as its count, and the
-	 * tile read that: 5,218 beside a page saying 2,073 were closed.
-	 */
 	@Test
 	public void theRiftTileSaysRiftsClosedNotRiftsSearched() throws Exception
 	{
@@ -176,12 +157,6 @@ public class ActivityTileTest
 		return f.get(panel);
 	}
 
-	/**
-	 * The combat achievements are reached from the COMBAT LEVEL, which is what a
-	 * reader means when they click the word Combat on a sheet of levels. There
-	 * was an activity tile doing the job instead, sitting among the clue scrolls
-	 * and the rifts as though it were one of them.
-	 */
 	@Test
 	public void combatIsNotOneOfTheActivities() throws Exception
 	{
@@ -194,10 +169,6 @@ public class ActivityTileTest
 		}
 	}
 
-	/**
-	 * Clicked, not merely wired. A listener that is present and a click that
-	 * arrives are different questions, and the second is the one being asked.
-	 */
 	@Test
 	public void clickingTheCombatLevelOpensTheCombatAchievements() throws Exception
 	{
@@ -206,8 +177,6 @@ public class ActivityTileTest
 		{
 			try
 			{
-				// takes the period's gains now, so it can dim itself when the
-				// period moved none of the seven skills behind a combat level
 				Method m = ChroniclePanel.class.getDeclaredMethod("combatLevelTile",
 					java.util.Map.class, HistoryLog.Levels.class);
 				m.setAccessible(true);

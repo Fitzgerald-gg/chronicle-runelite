@@ -21,11 +21,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Fixed lookup tables bundled under /chronicle/ and read once at class init. Not the
- * client's Gson: static callers have no injector to hand, and the Hub forbids a fresh
- * Gson instance. A missing or unreadable file reads as an empty object.
- */
 public final class Tables
 {
 	private Tables()
@@ -61,7 +56,6 @@ public final class Tables
 		return new HashSet<>(Arrays.asList(strings(o.get(key))));
 	}
 
-	// in file order, which a first-match table relies on
 	public static Map<String, String> map(JsonObject o, String key)
 	{
 		Map<String, String> out = new LinkedHashMap<>();

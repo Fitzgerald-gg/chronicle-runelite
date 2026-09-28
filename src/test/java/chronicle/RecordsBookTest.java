@@ -27,10 +27,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The records book behind the Total level cell: the account's bests, each
- * with its date, what it beat on hover. Every line already happened.
- */
 public class RecordsBookTest
 {
 	private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK);
@@ -84,8 +80,8 @@ public class RecordsBookTest
 		s.feed.add(session(today.minusDays(4), 552));
 		s.feed.add(session(today.minusDays(1), 30));
 		s.history.put(today.minusDays(3), line(1_000_000L, 500_000L, 100));
-		s.history.put(today.minusDays(2), line(2_400_000L, 500_000L, 161));   // +1.4M, 61 kills
-		s.history.put(today.minusDays(1), line(2_500_000L, 600_000L, 170));   // +200k, 9 kills
+		s.history.put(today.minusDays(2), line(2_400_000L, 500_000L, 161));
+		s.history.put(today.minusDays(1), line(2_500_000L, 600_000L, 170));
 		s.dayTotals.put("2026-06-19", new long[]{61, 12_400_000L, 0, 0});
 		s.dayTotals.put("2026-08-03", new long[]{90, 1_000_000L, 0, 0});
 		s.lifetime.put("highestHit", 73L);

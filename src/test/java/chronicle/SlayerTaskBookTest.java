@@ -16,10 +16,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Whether a kill counts toward the live task: the NPC id settles it when the table
- * knows the id, and only an unknown id falls back to the name (root or variant).
- */
 public class SlayerTaskBookTest
 {
 	private static final int NECHRYAEL = 11;
@@ -42,9 +38,7 @@ public class SlayerTaskBookTest
 	@Test
 	public void guardAmbiguityResolvesById()
 	{
-		// a Prifddinas guard's id maps to Elves
 		assertTrue(onTask("Guard", PRIF_GUARD, "Elves"));
-		// a Varrock guard's id is unmapped, and "elve" is not in "guard"
 		assertFalse(onTask("Guard", 3010, "Elves"));
 		assertFalse(onTask("Guard", UNKNOWN_ID, "Elves"));
 	}
@@ -63,7 +57,6 @@ public class SlayerTaskBookTest
 		assertTrue(onTask("Abyssal Sire", UNKNOWN_ID, "The Abyssal Sire"));
 		assertEquals("blue dragon", SlayerTaskBook.root("blue dragons"));
 		assertEquals("abyssal sire", SlayerTaskBook.root("the abyssal sire"));
-		// four letters or fewer keep their s
 		assertEquals("ants", SlayerTaskBook.root("ants"));
 	}
 
@@ -78,7 +71,6 @@ public class SlayerTaskBookTest
 	@Test
 	public void aKnownIdBeatsAMatchingName()
 	{
-		// the name says Nechryael, the id says Dust devils: the id wins
 		assertFalse(onTask("Nechryael", DUST_DEVIL, "Nechryael"));
 	}
 

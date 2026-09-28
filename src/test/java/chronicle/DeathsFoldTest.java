@@ -23,10 +23,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The Deaths row on Trackers opens to who dealt them, ranked, with the last
- * date each did. Deaths stays one row; the killers are behind it.
- */
 public class DeathsFoldTest
 {
 	@BeforeClass
@@ -94,7 +90,6 @@ public class DeathsFoldTest
 		assertTrue(vorkath, vorkath.startsWith("2 · last "));
 		assertTrue(beside(open, "Zulrah").startsWith("1 · last "));
 		assertTrue(beside(open, "Unknown").startsWith("1 · last "));
-		// ranked: the one who did it most first
 		List<String> said = new ArrayList<>();
 		collect(open, said);
 		assertTrue(said.toString(), said.indexOf("Vorkath") < said.indexOf("Zulrah"));

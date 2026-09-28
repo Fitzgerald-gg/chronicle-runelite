@@ -11,15 +11,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
-/**
- * A loose name opens the thing it names, or nothing.
- *
- * <p>The ledger's "Dagannoth" sits inside "Dagannoth Rex", and a containment
- * fallback handed all three kings the ordinary dagannoth's six hundred kills.
- * A general name must never swallow a specific one: an empty page for a fight
- * the journal has no drops from is the honest answer, and a plural, an "ies"
- * and a container the fight pays out through still resolve.
- */
 public class LooseSourceTest
 {
 	private static ChroniclePanel panel;
@@ -68,11 +59,9 @@ public class LooseSourceTest
 	@Test
 	public void aGeneralNameNeverSwallowsASpecificOne() throws Exception
 	{
-		// the reported bug: every king landed on the ordinary dagannoth
 		assertEquals("Dagannoth Rex", resolve("Dagannoth Rex"));
 		assertEquals("Dagannoth Prime", resolve("Dagannoth Prime"));
 		assertEquals("Dagannoth Supreme", resolve("Dagannoth Supreme"));
-		// and the same shape anywhere else on the roster
 		assertEquals("King Black Dragon", resolve("King Black Dragon"));
 		assertEquals("Brutal black dragon", resolve("Brutal black dragon"));
 	}
@@ -89,7 +78,6 @@ public class LooseSourceTest
 	@Test
 	public void aFightOpensWhatPaysItOut() throws Exception
 	{
-		// the dearest of the containers it pays out through
 		assertEquals("Reward pool (Tempoross)", resolve("Tempoross"));
 	}
 
@@ -100,7 +88,6 @@ public class LooseSourceTest
 		assertEquals("", resolve(""));
 	}
 
-	/** And the page it lands on says so rather than showing another fight's loot. */
 	@Test
 	public void theEmptyPageSaysTheJournalHasNoDrops() throws Exception
 	{
@@ -118,7 +105,6 @@ public class LooseSourceTest
 				throw new RuntimeException(e);
 			}
 		});
-		// a note is drawn as one label a line, so read the page as its prose
 		String page = String.join(" ", said);
 		assertEquals(page, true, said.contains("DAGANNOTH REX"));
 		assertEquals(page, true, page.contains("The journal has no drops from this source yet."));

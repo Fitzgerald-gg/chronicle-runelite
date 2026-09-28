@@ -17,13 +17,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 
-/**
- * The journey's head under a bounded window counts closed tasks only, which is
- * the rule the store's on-task readers keep (OpenTaskWindowTest): an open task
- * carries its latest kill's stamp, so any window catching one kill would take
- * the whole run. The head admitted it whole and disagreed with the Drops
- * board beside it.
- */
 public class NarrowedJourneyTest
 {
 	@BeforeClass

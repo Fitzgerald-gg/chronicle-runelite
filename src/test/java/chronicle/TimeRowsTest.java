@@ -22,11 +22,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The minutes the trackers file under a fight or a craft reach the pages
- * that divide them, and nowhere else: a source page says how long was spent
- * there and the kills an hour it came to; a skill page the same for xp.
- */
 public class TimeRowsTest
 {
 	@BeforeClass
@@ -47,13 +42,6 @@ public class TimeRowsTest
 		});
 	}
 
-
-	/**
-	 * And on the whole record it says no time at all: the minutes began the day
-	 * the tracker did, and beside a career's kills they read as the career's
-	 * time. A lifetime of "19m" on a level 93 skill looked broken, because as a
-	 * lifetime's time it is.
-	 */
 	@Test
 	public void aLifetimeSaysNoTime() throws Exception
 	{
@@ -62,7 +50,6 @@ public class TimeRowsTest
 		assertNull(beside(page(stub, "Lifetime"), "Time here"));
 	}
 
-	/** The skill page the same: no lifetime "Time 19m" beside a level 93. */
 	@Test
 	public void aLifetimeSkillPageSaysNoTime() throws Exception
 	{
@@ -88,11 +75,6 @@ public class TimeRowsTest
 		assertNull(beside(out[0], "Time"));
 	}
 
-	/**
-	 * Nor where the spine began with the minutes already on it, as it does for
-	 * a player who installed and imported nothing: the first line carries the
-	 * time keys, but the lifetime's kills are the career's, not the spine's.
-	 */
 	@Test
 	public void aLifetimeFromAnInstallDaySpineSaysNoTime() throws Exception
 	{
@@ -105,7 +87,6 @@ public class TimeRowsTest
 		assertNull(beside(page(stub, "Lifetime"), "Time here"));
 	}
 
-	/** A window whose opening line already carried the minutes can divide. */
 	@Test
 	public void aWindowInsideTheMinutesEraReadsItsRate() throws Exception
 	{
@@ -120,11 +101,6 @@ public class TimeRowsTest
 		assertEquals("1h 0m · 24 kills/h", beside(page(stub, "Month", cursor), "Time here"));
 	}
 
-	/**
-	 * And one that opened before the minutes did says nothing at all: a counter
-	 * absent from the opening line was never recorded rather than zero, so the
-	 * spine drops it, and the record does not guess at what it cannot date.
-	 */
 	@Test
 	public void aWindowStraddlingTheFirstMinuteSaysNothing() throws Exception
 	{

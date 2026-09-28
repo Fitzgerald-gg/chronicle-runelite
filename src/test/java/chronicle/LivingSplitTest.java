@@ -20,11 +20,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The Food and Potions folds carry the period's gp beside their counts, from
- * the split the trackers now write at the bite and the dose. A week's count
- * never sits beside a career's spend.
- */
 public class LivingSplitTest
 {
 	@BeforeClass
@@ -64,8 +59,6 @@ public class LivingSplitTest
 	@Test
 	public void aPeriodsFoldHeadReadsThePeriodsSpend() throws Exception
 	{
-		// A fixed month, not "ten days ago": on the 1st and 2nd of a month that
-		// fell in the month before and the window held one line, not two.
 		LocalDate cursor = LocalDate.of(2026, 6, 15);
 		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
 		s.history.put(cursor.withDayOfMonth(5), line(100, 40_000L, 200, 20_000L));
@@ -75,23 +68,15 @@ public class LivingSplitTest
 		assertEquals(said.toString(), "340 · 41k gp", after(said, "POTIONS"));
 	}
 
-	/**
-	 * And a window that opened before the split was being written gets the
-	 * count alone: a whole window's meals beside part of its spend is one
-	 * figure pretending to account for the other.
-	 */
 	@Test
 	public void aWindowOpeningBeforeTheSplitGetsTheCountAlone() throws Exception
 	{
 		LocalDate cursor = LocalDate.of(2026, 6, 15);
 		PanelPreviewTest.StubPlugin s = new PanelPreviewTest.StubPlugin(null);
-		// the window opens on a line written before the split existed
 		HistoryLog.Baseline before = line(100, 0L, 200, 0L);
 		before.counters.remove("foodConsumedValue");
 		before.counters.remove("potionsConsumedValue");
 		s.history.put(cursor.minusMonths(1).withDayOfMonth(25), before);
-		// and the split begins part way through it, so the spend it can measure
-		// covers part of a count that covers the whole window
 		s.history.put(cursor.withDayOfMonth(5), line(180, 50_000L, 320, 22_000L));
 		s.history.put(cursor.withDayOfMonth(13), line(312, 136_000L, 540, 61_000L));
 		List<String> said = living(s, cursor);
@@ -99,14 +84,6 @@ public class LivingSplitTest
 		assertEquals(said.toString(), "340", after(said, "POTIONS"));
 	}
 
-	/**
-	 * The whole record says one spend. The trackers' own spend began when the
-	 * plugin started writing it; the ledger also prices every meal and dose
-	 * eaten before. The board said "Consumed value 632k" over Food and Potions
-	 * heads adding to 2.16M, so the whole record reads the ledger throughout.
-	 * And meals and doses head their sections, what no item row can claim
-	 * being the heads' own "Other" rather than a second row beside them.
-	 */
 	@Test
 	public void theWholeRecordSaysOneSpend() throws Exception
 	{
@@ -139,11 +116,6 @@ public class LivingSplitTest
 		return s;
 	}
 
-	/**
-	 * The picture and search say the spend the board says. The picture's
-	 * Living block led with the trackers' 638k beside a Recap card of 2.16M,
-	 * and search's row read 638k and opened a board reading 2.16M.
-	 */
 	@Test
 	public void thePictureAndSearchSayTheBoardsSpend() throws Exception
 	{
@@ -187,7 +159,6 @@ public class LivingSplitTest
 		assertEquals(found.toString(), "2.2M gp", after(found, "Consumed value"));
 	}
 
-	/** All trackers files meals and doses under the sections they head everywhere else. */
 	@Test
 	public void allTrackersFilesMealsUnderFood() throws Exception
 	{
@@ -215,7 +186,6 @@ public class LivingSplitTest
 			StatRegistry.rowLabel("sharkEaten"), said.get(meals + 2));
 	}
 
-	/** The Living board for one month, as its labels and figures. */
 	private static List<String> living(PanelPreviewTest.StubPlugin s, LocalDate cursor)
 		throws Exception
 	{

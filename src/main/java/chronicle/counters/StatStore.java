@@ -14,21 +14,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
-/**
- * This session's counter increments, held in memory.
- *
- * <p>Counts from zero at each account boundary; the on-disk journal ({@code LocalStore})
- * holds the lifetime record and folds these increments in on every refresh. The trackers
- * and {@link SkillDeriver} are the only writers of counts; on top of that the plugin
- * clears the whole store at an account boundary or a settings toggle. Nothing touches
- * RuneLite's config, so a busy skilling tick costs no disk I/O.
- *
- * <p>Counters saturate at {@link Integer#MAX_VALUE}; they never wrap negative.
- *
- * <p>Hence the concurrent map and the detached copy out of {@link #snapshotAll()}.
- * Trackers write from the client thread, the journal's refresh reads from a scheduler
- * thread, and a clear arrives on either of those or on the EDT at shutdown.
- */
 @Singleton
 public class StatStore
 {
@@ -39,11 +24,6 @@ public class StatStore
 	{
 	}
 
-	/**
-	 * Bumped on every write. The panel is rebuilt when the record moves and left
-	 * alone when it does not, and this is how "moved" is known without comparing
-	 * two copies of a few hundred counters every tick.
-	 */
 	private volatile long revision;
 
 	public long revision()
@@ -73,7 +53,6 @@ public class StatStore
 		revision++;
 	}
 
-	// overwrite, for the high-water-mark counters like highest hit
 	public void setStat(String key, int value)
 	{
 		totals.put(key, value);

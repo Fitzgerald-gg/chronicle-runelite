@@ -18,15 +18,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * What a hover is FOR.
- *
- * <p>These cards used to carry the level and the gain, which are the two things
- * the cell draws without being hovered: the reader moved the mouse and was told
- * what they could already see. They carry the counters that say how the craft is
- * going instead, and they answer for the period the strip is set to, like every
- * other figure on the sheet.
- */
 public class SkillHoverTest
 {
 	private static ChroniclePanel panel;
@@ -55,7 +46,6 @@ public class SkillHoverTest
 		PanelPreviewTest.awaitHistory(panel);
 	}
 
-	/** Set the period AND drop the per-build memos, the way a rebuild does. */
 	private static void period(String g) throws Exception
 	{
 		Field f = ChroniclePanel.class.getDeclaredField("histGranularity");
@@ -87,7 +77,6 @@ public class SkillHoverTest
 			.replaceAll("<[^>]*>", " ").replaceAll("\\s+", " ").trim();
 	}
 
-	/** The labels on a hover card, in order, without the title. */
 	private static List<String> rows(String craft) throws Exception
 	{
 		Method m = ChroniclePanel.class.getDeclaredMethod("skillTip", String.class);
@@ -103,10 +92,6 @@ public class SkillHoverTest
 		return out;
 	}
 
-	/**
-	 * TRAP: the cell under the pointer draws the level and the gain, so a hover
-	 * carrying either is a hover that repeats what it is over. Neither is on it.
-	 */
 	@Test
 	public void aHoverDoesNotRepeatTheCellItIsOver() throws Exception
 	{
@@ -121,12 +106,6 @@ public class SkillHoverTest
 		}
 	}
 
-	/**
-	 * TRAP: a hover that fell through to "whatever moved" carried typed rows -
-	 * "Guard: 2", "Martin the master gardener: 2" - which are the drill-in's
-	 * business and not an overview's. Every row on a card has to be one of the
-	 * craft's top-level counters: a floor, or a key the table names beside it.
-	 */
 	@Test
 	public void everyRowIsATopLevelCounterOfItsCraft() throws Exception
 	{
@@ -151,12 +130,10 @@ public class SkillHoverTest
 		assertTrue("no craft carried a single row, so this asserts nothing", rowsSeen > 0);
 	}
 
-	/** Prayer, as the owner spelled it: the five, in the table's order, and no typed row. */
 	@Test
 	public void prayerReadsAsTheOwnerSpelledIt() throws Exception
 	{
 		java.io.File dir = new java.io.File(System.getProperty("java.io.tmpdir"), "chronicle-prayer-hover");
-		//noinspection ResultOfMethodCallIgnored
 		dir.mkdirs();
 		try (java.io.FileWriter w = new java.io.FileWriter(new java.io.File(dir, "monk.json")))
 		{
@@ -194,7 +171,6 @@ public class SkillHoverTest
 		}
 	}
 
-	/** It answers for the period, which is the rule everything on the sheet follows. */
 	@Test
 	public void aHoverAnswersForThePeriod() throws Exception
 	{
@@ -206,11 +182,6 @@ public class SkillHoverTest
 			+ "day, so it is not reading the period at all", whole, day);
 	}
 
-	/**
-	 * And the activity tiles beside them say BY HOW MUCH. Going bright said only
-	 * that the period had moved the tile, and a reader had to hold two visits to
-	 * the sheet in their head to work out the difference.
-	 */
 	@Test
 	public void anActivityTileStatesItsMovement() throws Exception
 	{
@@ -229,11 +200,9 @@ public class SkillHoverTest
 				throw new RuntimeException(e);
 			}
 		});
-		// the fixture logged a collection slot two hours ago, so today moved it
 		assertTrue("no tile stated what the day moved it by: " + said,
 			said.contains("+1"));
 
-		// and a lifetime states no movement: everything in it is the movement
 		period("Lifetime");
 		said.clear();
 		SwingUtilities.invokeAndWait(() ->

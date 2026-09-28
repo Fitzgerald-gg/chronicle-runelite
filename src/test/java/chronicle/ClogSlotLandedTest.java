@@ -23,11 +23,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A lit log slot says when it landed. Every slot enters the feed dated, and
- * only the pets' pages were giving the date up; an ordinary slot answered
- * nothing when hovered.
- */
 public class ClogSlotLandedTest
 {
 	@BeforeClass
@@ -65,7 +60,6 @@ public class ClogSlotLandedTest
 		PanelPreviewTest.StubPlugin stub = PanelPreviewTest.fixtureStub();
 		long first = System.currentTimeMillis() - 30L * 24 * 60 * 60_000L;
 		long again = System.currentTimeMillis() - 2L * 24 * 60 * 60_000L;
-		// the same slot twice: the FIRST landing is the date
 		stub.feed.add(0, landed(again, "Abyssal whip"));
 		stub.feed.add(landed(first, "Abyssal whip"));
 		final ChroniclePanel[] hold = new ChroniclePanel[1];
@@ -111,7 +105,6 @@ public class ClogSlotLandedTest
 		String day = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK)
 			.format(Instant.ofEpochMilli(first).atZone(ZoneId.systemDefault()));
 		assertTrue(hover, hover.contains("Landed") && hover.contains(day));
-		// a slot the feed never dated says nothing rather than something wrong
 		if (other != null)
 		{
 			assertNull(other.getToolTipText());

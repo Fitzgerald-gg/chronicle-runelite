@@ -17,17 +17,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
-/**
- * Every Tempoross unique is handed over by a search of the reward pool, and a subdue
- * buys several searches. The rate block is keyed to the searches the ledger counted,
- * not to the subdues the collection log counted, or every one of these rows reads
- * kinder than the truth.
- */
 public class TemporossRewardPoolTest
 {
 	private static final String POOL = "Reward pool (Tempoross)";
 
-	// the eight, with the wiki's denominators: 40/160, 8/160, 149/8000, then the rest
 	private static final String[] UNIQUES = {
 		"Spirit flakes", "Casket", "Soaked page", "Fish barrel", "Tackle box",
 		"Big harpoonfish", "Tome of water (empty)", "Dragon harpoon",
@@ -52,8 +45,6 @@ public class TemporossRewardPoolTest
 		return null;
 	}
 
-	// the shape of the owner's own record: 46 subdues in the log, 114 searches and
-	// 25 caskets in the ledger, no bare Tempoross source anywhere.
 	private static JsonObject clog(String... obtained)
 	{
 		JsonObject clog = new JsonObject();
@@ -77,8 +68,6 @@ public class TemporossRewardPoolTest
 		return out;
 	}
 
-	// 114 searches, not 46 subdues: 1 - (1 - 1/8000)^114 = 1.4%, where the subdue
-	// count printed 0.6%. Every row on the block carries the same correction.
 	@Test
 	public void uniquesArePricedOnSearchesNotSubdues()
 	{
@@ -99,8 +88,6 @@ public class TemporossRewardPoolTest
 		}
 	}
 
-	// The casket is one of the things a search hands over. Counting the caskets, or
-	// the subdues, would price these rows off a number that is not the roll.
 	@Test
 	public void neitherSubduesNorCasketsPriceTheBlock()
 	{
@@ -113,22 +100,16 @@ public class TemporossRewardPoolTest
 		}
 	}
 
-	// The rate block must name the ledger source the searches are counted under, or
-	// it resolves to no kill count at all and the whole block goes dark.
 	@Test
 	public void blockIsKeyedToTheLedgerSourceAndNotTheBoss()
 	{
-		// nothing but the log's subdue count: the block has no count to read
 		JsonObject clog = clog();
 		assertTrue("subdues alone must not price the block",
 			rows(clog, new ArrayList<>()).isEmpty());
-		// the ledger's searches bring it to life
 		assertTrue("the ledger source must price the block",
 			!rows(clog, ledger()).isEmpty());
 	}
 
-	// The log files these items under the boss, not under the pool. A record captured
-	// page by page, with no whole-log set behind it, must still read them as owned.
 	@Test
 	public void obtainedIsReadOffTheBossPage()
 	{
@@ -149,7 +130,6 @@ public class TemporossRewardPoolTest
 		}
 	}
 
-	// The whole-log set does the same, under the log's own spelling of the tome.
 	@Test
 	public void obtainedIsReadOffTheWholeLogSet()
 	{
@@ -164,7 +144,6 @@ public class TemporossRewardPoolTest
 		}
 	}
 
-	// The book itself: all eight sit under the pool, none under the boss.
 	@Test
 	public void theBookKeysTheBlockToThePool()
 	{
@@ -193,8 +172,6 @@ public class TemporossRewardPoolTest
 		assertEquals(8000, pool.get("Dragon harpoon").getAsInt());
 	}
 
-	// And the owner's own record, when this machine has one: the rows sit on a card
-	// that exists, and none of them is priced on the 46.
 	@Test
 	public void theRealJournalPricesThePoolCard()
 	{

@@ -18,11 +18,6 @@ import org.junit.Test;
 import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 
-/**
- * Every tick of a sitting is filed under exactly one activity: the monster
- * being fought, else the skill of the last xp drop, else idle. A hundred
- * ticks is a minute, and a minute is a counter.
- */
 public class TimeStatTrackerTest
 {
 	private StatStore store;
@@ -64,7 +59,6 @@ public class TimeStatTrackerTest
 		t.onStatChanged(new StatChanged(skill, total, 1, 1));
 	}
 
-	/** A hit I dealt, which is the one thing that starts a fight. */
 	private void hit(String name)
 	{
 		Hitsplat splat = Mockito.mock(Hitsplat.class);
@@ -78,7 +72,6 @@ public class TimeStatTrackerTest
 	private void fight(String name)
 	{
 		hit(name);
-		// built before the stubbing, or npc()'s own when() nests inside this one
 		NPC on = npc(name);
 		Mockito.when(me.getInteracting()).thenReturn(on);
 	}
@@ -95,7 +88,6 @@ public class TimeStatTrackerTest
 		ticks(250);
 		assertEquals(2, store.getStat("timeVorkath"));
 		assertEquals(0, store.getStat(StatKeys.TIME_IDLE));
-		// the walk back to the boss stays with the boss, then it goes idle
 		noFight();
 		ticks(TimeStatTracker.FIGHT_GRACE);
 		assertEquals(3, store.getStat("timeVorkath"));
@@ -107,7 +99,6 @@ public class TimeStatTrackerTest
 	@Test
 	public void aHitOwnsThemToo()
 	{
-		// a fight is a run of hits, each holding the tick for the grace after it
 		for (int i = 0; i < 3; i++)
 		{
 			hit("Abyssal demon");
@@ -117,11 +108,6 @@ public class TimeStatTrackerTest
 		assertEquals(0, store.getStat(StatKeys.TIME_IDLE));
 	}
 
-	/**
-	 * And standing beside one is not. A fishing spot, a banker, a pickpocket
-	 * target and an impling are all NPCs, and letting an interaction claim the
-	 * tick filed an hour of fishing under the shoal rather than under Fishing.
-	 */
 	@Test
 	public void interactingAloneStartsNothing()
 	{
@@ -134,18 +120,16 @@ public class TimeStatTrackerTest
 		assertEquals(2, store.getStat("timeFishing"));
 	}
 
-	/** A fight's own xp does not make it a craft. */
 	@Test
 	public void combatXpDoesNotSeedTheSkillBranch()
 	{
 		xp(Skill.ATTACK, 1_000_000);
 		fight("Vorkath");
 		ticks(10);
-		xp(Skill.ATTACK, 1_000_400);   // lands mid-fight
+		xp(Skill.ATTACK, 1_000_400);
 		noFight();
 		ticks(300);
 		assertEquals(0, store.getStat("timeAttack"));
-		// the fight keeps its grace, and what follows is idle
 		assertEquals(0, store.getStat("timeVorkath"));
 		assertEquals(2, store.getStat(StatKeys.TIME_IDLE));
 	}
@@ -153,24 +137,18 @@ public class TimeStatTrackerTest
 	@Test
 	public void aSkillOwnsThemAfterItsFirstDrop()
 	{
-		xp(Skill.FISHING, 1_000_000);   // the career total: not a drop
+		xp(Skill.FISHING, 1_000_000);
 		ticks(100);
 		assertEquals(0, store.getStat("timeFishing"));
 		assertEquals(1, store.getStat(StatKeys.TIME_IDLE));
-		xp(Skill.FISHING, 1_000_090);   // a drop
+		xp(Skill.FISHING, 1_000_090);
 		ticks(TimeStatTracker.SKILL_GRACE);
 		assertEquals(3, store.getStat("timeFishing"));
-		// past the grace it is idle again
 		ticks(100);
 		assertEquals(3, store.getStat("timeFishing"));
 		assertEquals(2, store.getStat(StatKeys.TIME_IDLE));
 	}
 
-	/**
-	 * A craft done on the side does not take the minutes of the one it is done
-	 * beside: herbiboar pays a few thousand hunter xp a harvest, darts a few
-	 * dozen fletching xp every few seconds, and the hunt is what the time was.
-	 */
 	@Test
 	public void theSkillEarningMostOwnsTheTickNotTheLastToDrop()
 	{
@@ -189,7 +167,6 @@ public class TimeStatTrackerTest
 				ticks(10);
 			}
 		}
-		// 1,200 ticks: twelve minutes, every one of them the hunt's
 		assertEquals(12, store.getStat("timeHunter"));
 		assertEquals(0, store.getStat("timeFletching"));
 	}
@@ -224,14 +201,11 @@ public class TimeStatTrackerTest
 		noFight();
 		ticks(20);
 		assertEquals(0, store.getStat("timeVorkath"));
-		// and the next sitting starts from nothing: 90 ticks carried over would
-		// have credited a minute after only ten of the new one
 		fight("Vorkath");
 		ticks(10);
 		assertEquals(0, store.getStat("timeVorkath"));
 		ticks(90);
 		assertEquals(1, store.getStat("timeVorkath"));
-		// the xp baseline too, or the first drop back reads as a career total
 		xp(Skill.FISHING, 2_000_000);
 		noFight();
 		ticks(TimeStatTracker.FIGHT_GRACE + 100);

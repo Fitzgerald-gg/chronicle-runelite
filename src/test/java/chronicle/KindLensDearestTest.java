@@ -18,11 +18,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-/**
- * The kind lens head names the one item that made the most. Ranked kinds bury
- * it inside whichever kind holds it, and a single unique files under
- * "Everything else" below a bulk kind like Runes.
- */
 public class KindLensDearestTest
 {
 	@BeforeClass

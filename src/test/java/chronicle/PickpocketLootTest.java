@@ -29,11 +29,6 @@ import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * The game posts NPC loot for a successful pickpocket as well as the chat line. That
- * loot is not a kill: on the line's tick it emits nothing and arms no untaken
- * tracking. The PICKPOCKET entry itself comes from the Loot Tracker.
- */
 public class PickpocketLootTest
 {
 	private static final int MAN = 3106;
@@ -81,7 +76,7 @@ public class PickpocketLootTest
 		Mockito.when(comp.getName()).thenReturn("Man");
 		Mockito.when(comp.getId()).thenReturn(MAN);
 		List<ItemStack> items = new ArrayList<>();
-		items.add(new ItemStack(995, 3));   // coins
+		items.add(new ItemStack(995, 3));
 		return new ServerNpcLoot(comp, items);
 	}
 

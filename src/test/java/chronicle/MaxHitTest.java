@@ -14,12 +14,6 @@ import org.junit.Test;
 import org.mockito.Mockito;
 import static org.junit.Assert.assertEquals;
 
-/**
- * A max hit is the biggest thing an account does, and it wears a hitsplat of its
- * own. The dealt side matched {@link HitsplatID#DAMAGE_ME} alone, so every max hit
- * fell to the switch's default and "Highest hit" could not, by construction, ever
- * hold one. Nothing failed; the figure was quietly the highest NON-max hit.
- */
 public class MaxHitTest
 {
 	private static final int[] MAX_SPLATS = {
@@ -27,11 +21,10 @@ public class MaxHitTest
 		HitsplatID.DAMAGE_MAX_ME_ORANGE, HitsplatID.DAMAGE_MAX_ME_YELLOW,
 		HitsplatID.DAMAGE_MAX_ME_WHITE};
 
-	/** A tracker whose local player is null, so every splat lands on somebody else. */
 	private static CombatStatTracker tracker(StatStore store)
 	{
 		Client client = Mockito.mock(Client.class);
-		Mockito.when(client.getLocalPlayer()).thenReturn(null);   // the splat is never on us
+		Mockito.when(client.getLocalPlayer()).thenReturn(null);
 		Mockito.when(client.getTickCount()).thenReturn(1);
 		return new CombatStatTracker(store, client);
 	}
@@ -79,10 +72,6 @@ public class MaxHitTest
 		assertEquals(42, store.getStat(StatKeys.HIGHEST_HIT));
 	}
 
-	/**
-	 * And it joins the total, which it also never used to. Damage dealt was short
-	 * by every max hit an account had ever landed.
-	 */
 	@Test
 	public void aMaxHitJoinsTheRunningTotal()
 	{
@@ -95,11 +84,6 @@ public class MaxHitTest
 			101, store.getStat(StatKeys.DAMAGE_DEALT));
 	}
 
-	/**
-	 * Damage TAKEN stays on the plain splat. It is a different decision with its
-	 * own reason, recorded beside it, and widening the dealt side must not quietly
-	 * take it along.
-	 */
 	@Test
 	public void damageTakenIsUnchanged()
 	{
@@ -107,12 +91,11 @@ public class MaxHitTest
 		Client client = Mockito.mock(Client.class);
 		Mockito.when(client.getLocalPlayer()).thenReturn(null);
 		CombatStatTracker t = new CombatStatTracker(store, client);
-		// a splat on us, of the max family
 		Hitsplat splat = Mockito.mock(Hitsplat.class);
 		Mockito.when(splat.getHitsplatType()).thenReturn(HitsplatID.DAMAGE_MAX_ME);
 		Mockito.when(splat.getAmount()).thenReturn(40);
 		HitsplatApplied e = new HitsplatApplied();
-		e.setActor(null);            // null actor is the local player here
+		e.setActor(null);
 		e.setHitsplat(splat);
 		t.onHitsplatApplied(e);
 		assertEquals("the taken total is still DAMAGE_ME only",

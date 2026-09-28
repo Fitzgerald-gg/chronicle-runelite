@@ -17,23 +17,8 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A collection log page the GAME has and this release's list does not.
- *
- * <p>Jagex adds a page and a plugin update takes as long as it takes. Until
- * this, the reader's own capture of that page sat on their disk and appeared
- * nowhere on screen: the board draws the bundled taxonomy and nothing else, so
- * a page outside it did not exist as far as the panel was concerned.
- *
- * <p>It cannot be filed under a tab, because the scrape records a page's title
- * and not which tab it sat under, so it is shown once under Other, where the
- * game itself puts what does not fit, and labelled as unknown rather than
- * dressed up as a page with a slot list.
- */
 public class NewPagesSelfHealTest
 {
-	// by_cat holds a page the bundled taxonomy has never heard of, with two
-	// items held on it, exactly as a scrape of a new page would leave it.
 	private static final String JOURNAL =
 		"{\"schema\":1,\"rsn\":\"Somebody\",\"drops\":{},"
 		+ "\"collection_log\":{\"finished\":3,\"available\":1717,"
@@ -45,7 +30,6 @@ public class NewPagesSelfHealTest
 	private static List<String> logRows(String tab) throws Exception
 	{
 		File dir = new File(System.getProperty("java.io.tmpdir"), "chronicle-newpages");
-		//noinspection ResultOfMethodCallIgnored
 		dir.mkdirs();
 		try (FileWriter w = new FileWriter(new File(dir, "somebody.json")))
 		{
@@ -117,10 +101,6 @@ public class NewPagesSelfHealTest
 			has(said, "NEW SINCE THIS RELEASE"));
 	}
 
-	/**
-	 * Once, not five times. It has no tab of its own, so repeating it under every
-	 * tab would turn one unknown page into five.
-	 */
 	@Test
 	public void itIsNotRepeatedUnderEveryTab() throws Exception
 	{
@@ -131,12 +111,10 @@ public class NewPagesSelfHealTest
 		}
 	}
 
-	/** And a journal with nothing strange in it grows no such section. */
 	@Test
 	public void anOrdinaryJournalGrowsNoSuchSection() throws Exception
 	{
 		File dir = new File(System.getProperty("java.io.tmpdir"), "chronicle-newpages-plain");
-		//noinspection ResultOfMethodCallIgnored
 		dir.mkdirs();
 		try (FileWriter w = new FileWriter(new File(dir, "somebody.json")))
 		{

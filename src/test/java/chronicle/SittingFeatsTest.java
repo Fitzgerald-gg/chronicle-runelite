@@ -19,14 +19,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-/**
- * Now, the board named for the sitting, says when it began and how long it
- * has run, and what it produced that a player would tell a friend.
- *
- * <p>The duration was reachable only on the Journal's live line or by hovering
- * a Hiscores tile under the Session period; a level gained this sitting was
- * not on Now at all, and the reader went to the Journal for it.
- */
 public class SittingFeatsTest
 {
 	@BeforeClass
@@ -78,7 +70,6 @@ public class SittingFeatsTest
 		return e;
 	}
 
-	/** The EAST label of the row whose CENTER label reads {@code left}. */
 	private static String beside(Component c, String left)
 	{
 		List<Component> flat = new ArrayList<>();
@@ -142,17 +133,13 @@ public class SittingFeatsTest
 		long now = System.currentTimeMillis();
 		stub.sessionStartMs = now - 60 * 60_000L;
 		stub.sessionElapsed = 60;
-		// The fixture's own feed has a log slot kept on today, which between
-		// midnight and two in the morning falls inside this sitting.
 		stub.feed.clear();
 		JsonObject hunter = entry(now - 30 * 60_000L, "LEVEL", "skill", "hunter");
 		hunter.getAsJsonObject("data").addProperty("level", "90");
 		JsonObject fletch = entry(now - 20 * 60_000L, "LEVEL", "skill", "fletching");
 		fletch.getAsJsonObject("data").addProperty("level", "87");
-		// the same skill again: the row names the level it reached, once
 		JsonObject hunter2 = entry(now - 10 * 60_000L, "LEVEL", "skill", "hunter");
 		hunter2.getAsJsonObject("data").addProperty("level", "91");
-		// before the sitting began: not this sitting's
 		JsonObject old = entry(now - 3 * 60 * 60_000L, "LEVEL", "skill", "magic");
 		old.getAsJsonObject("data").addProperty("level", "80");
 		stub.feed.add(0, hunter2);

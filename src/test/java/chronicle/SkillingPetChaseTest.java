@@ -20,12 +20,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Dryness for the skilling pets whose attempts the journal can honestly count.
- * The unit is the activity's own: a log received, an ore, a completed lap, a
- * successful theft, an essence, a patch. Rolls are priced 1 / (base - level * 25)
- * off the level held now, which is not the level each attempt was made at.
- */
 public class SkillingPetChaseTest
 {
 	private static final List<String> PETS = Arrays.asList(
@@ -54,7 +48,6 @@ public class SkillingPetChaseTest
 		clog.add("kcs", kcs);
 	}
 
-	// a drop ledger source and its count, which is a kill count like any other
 	private void ledger(String source, int n)
 	{
 		ledger.add(new LocalStore.SourceRow(source, n, n, 0L, null, 0L, 0L, java.util.Collections.emptySet(), 0, 0));
@@ -67,7 +60,6 @@ public class SkillingPetChaseTest
 		return out.get(pet.toLowerCase(java.util.Locale.ROOT));
 	}
 
-	// The Beaver fixture, used by several rows below: 22,501 logs off three trees.
 	private void woodcutting()
 	{
 		level("woodcutting", 92);
@@ -76,7 +68,6 @@ public class SkillingPetChaseTest
 		count("magicLogsChopped", 3_112);
 	}
 
-	// Three species, three bases, one roll each. 1 - (1-1/80758)^8204 * (1-1/96373)^1112.
 	@Test
 	public void eachChinchompaRollsAgainstItsOwnSpecies()
 	{
@@ -87,14 +78,11 @@ public class SkillingPetChaseTest
 		assertEquals(10.7, c.percentileDry, 0.05);
 		assertEquals(9_316, c.kc);
 		assertEquals(2, c.sources.size());
-		// heaviest first, and the level term has come off the base
 		assertEquals("Black chinchompas", c.sources.get(0).boss);
 		assertEquals(82_758 - 25 * 80, c.sources.get(0).rate);
 		assertEquals(98_373 - 25 * 80, c.sources.get(1).rate);
 	}
 
-	// Herbi is flat 1/6,500. The wiki states no Hunter-level term, so none is applied
-	// and the same harvests read the same at 1 as at 99.
 	@Test
 	public void herbiIsFlatAndTheHunterLevelDoesNotMoveIt()
 	{
@@ -106,12 +94,9 @@ public class SkillingPetChaseTest
 		assertEquals(11.7, low.percentileDry, 0.05);
 		assertEquals(low.percentileDry, high.percentileDry, 0.0001);
 		assertEquals(6_500, low.sources.get(0).rate);
-		// nothing was read off a level, so the page has no caveat to print for it
 		assertEquals(0, low.level);
 	}
 
-	// A skilling pet with no level to read gets no figure at all: the rate is a
-	// function of the level, and a guessed level is a guessed percentage.
 	@Test
 	public void aLevelScaledPetWithoutALevelSaysNothing()
 	{
@@ -121,9 +106,6 @@ public class SkillingPetChaseTest
 		assertNotNull(chase("Herbi"));
 	}
 
-	// Bloodwood is rolled per Chop swing, not per log received, and hollow trees and
-	// sulliusceps hand over no log at all. None of them may reach the denominator.
-	// logsChopped is the untyped floor over the three rows and would double them.
 	@Test
 	public void theTreesThatCannotBeCountedAreNotCounted()
 	{
@@ -139,9 +121,6 @@ public class SkillingPetChaseTest
 		assertEquals(3, with.sources.size());
 	}
 
-	// The wiki's own cannot-drop list, plus the two counters that measure items
-	// handed over rather than rocks broken. 6,204 coal, 2,113 iron, 1,204 amethyst
-	// and 402 runite is the whole of it.
 	@Test
 	public void theRocksThatDropNothingAreNotCounted()
 	{
@@ -164,8 +143,6 @@ public class SkillingPetChaseTest
 		assertEquals(9_923, with.kc);
 	}
 
-	// A failed pickpocket rolls nothing, and its key is spelled like a successful one.
-	// The dearer marks keep their own rate rather than falling into the common tier.
 	@Test
 	public void failedPickpocketsRollNothingAndTheDearMarksKeepTheirRate()
 	{
@@ -191,10 +168,6 @@ public class SkillingPetChaseTest
 		assertEquals(99_175 - 25 * 78, elf);
 	}
 
-	// The roll is per completed lap. agilityObstacles counts obstacles, the two
-	// chat-driven aggregates count the same laps a second time, the Colossal Wyrm
-	// courses have no published rate, and a Sepulchre run bumps one counter per floor
-	// cleared where it rolls once.
 	@Test
 	public void theSquirrelRollsPerLapNotPerObstacle()
 	{
@@ -214,9 +187,6 @@ public class SkillingPetChaseTest
 		assertEquals(3_719, with.kc);
 	}
 
-	// Blood and soul runes are one to an essence and have altars of their own, so
-	// they come out of the essence total and are priced separately. The remainder is
-	// every other altar. 16,008 + 12,004 + 2,100 is the 30,112 that were crafted.
 	@Test
 	public void bloodAndSoulComeOutOfTheEssenceTotal()
 	{
@@ -224,7 +194,7 @@ public class SkillingPetChaseTest
 		count("essenceCrafted", 30_112);
 		count("bloodRunecrafted", 12_004);
 		count("soulRunecrafted", 2_100);
-		count("natureRunecrafted", 88_000);   // runes, not essence: not an attempt
+		count("natureRunecrafted", 88_000);
 		GrindBook.PetChase c = chase("Rift guardian");
 		assertEquals(2.6, c.percentileDry, 0.05);
 		assertEquals(30_112, c.kc);
@@ -240,10 +210,6 @@ public class SkillingPetChaseTest
 		assertEquals(804_984 - 25 * 91, by.get("Blood altar")[1]);
 	}
 
-	// Hespori is in both rate books. The boss table's 5,375 is this same formula
-	// frozen at Farming 65, so the two agree there by construction; above it the
-	// live figure moves and the frozen one cannot. Either way Hespori is one source,
-	// never two.
 	@Test
 	public void hesporiIsOneSourceAndAgreesWithTheBossTable()
 	{
@@ -261,7 +227,6 @@ public class SkillingPetChaseTest
 		assertTrue(at99.percentileDry > at65.percentileDry);
 	}
 
-	// The patches join the same chase, and Hespori still appears once.
 	@Test
 	public void patchesAndHesporiAreOneChase()
 	{
@@ -272,9 +237,9 @@ public class SkillingPetChaseTest
 		count("torstolPlanted", 120);
 		count("oakPlanted", 88);
 		count("yewPlanted", 44);
-		count("hesporiPlanted", 61);        // the same event as the kill count
-		count("ranarrHarvested", 9_400);    // items out of a patch, not patches
-		count("farmingActions", 20_000);    // the untyped floor
+		count("hesporiPlanted", 61);
+		count("ranarrHarvested", 9_400);
+		count("farmingActions", 20_000);
 		GrindBook.PetChase c = chase("Tangleroot");
 		assertEquals(3.9, c.percentileDry, 0.05);
 		assertEquals(1_919, c.kc);
@@ -286,8 +251,6 @@ public class SkillingPetChaseTest
 		assertEquals(1, hespori);
 	}
 
-	// The odds are read at the level held now: the denominator is base - level * 25,
-	// it stops moving at 99, and the same work reads drier at a higher level.
 	@Test
 	public void theOddsAreReadAtTheLevelHeldNow()
 	{
@@ -300,21 +263,15 @@ public class SkillingPetChaseTest
 		GrindBook.PetChase at99 = chase("Beaver");
 		assertEquals(145_013 - 25 * 99, at99.sources.get(0).rate);
 
-		// past 99 the level term stops helping
 		level("woodcutting", 126);
 		assertEquals(at99.sources.get(0).rate, chase("Beaver").sources.get(0).rate);
 		assertEquals(99, chase("Beaver").level);
 
-		// and this is the approximation the page warns about: the very same 22,501
-		// logs read 14.7% off a career spent at level 1 and 15.0% off this one,
-		// because every one of them is priced at the level held now.
 		level("woodcutting", 1);
 		assertEquals(14.7, chase("Beaver").percentileDry, 0.05);
 		assertTrue(at99.percentileDry > chase("Beaver").percentileDry);
 	}
 
-	// One composed line: the craft and its total, not a list of the twenty tree types
-	// underneath it. The sources are still all there for the hover.
 	@Test
 	public void theActivityCarriesTheLineNotItsSources()
 	{
@@ -326,8 +283,6 @@ public class SkillingPetChaseTest
 		assertEquals("Yew trees", c.sources.get(0).boss);
 	}
 
-	// A pet the log already holds is finished business, however much work stands
-	// behind it, and a boss pet is untouched by any of this.
 	@Test
 	public void anOwnedPetHasNoChaseAndTheBossPetsAreUnchanged()
 	{
@@ -344,7 +299,6 @@ public class SkillingPetChaseTest
 		assertNotNull(chase("Smolcano"));
 	}
 
-	// A counter nothing has touched is not a chase: "0 attempts, 0% dry" is noise.
 	@Test
 	public void noAttemptsNoChase()
 	{
@@ -355,10 +309,6 @@ public class SkillingPetChaseTest
 			.containsKey("beaver"));
 	}
 
-	// The heron is rolled per catch, and only on a catch the counter can name. Aerial
-	// fishing, the leaping fish, infernal eels and leechfin mint no typed key at all;
-	// harpoonfish mints one and cannot give the pet; fishCaught is the untyped floor
-	// over the rows that can, and would double every one of them.
 	@Test
 	public void theHeronCountsTheCatchesItCanNameAndNoneItCannot()
 	{
@@ -367,10 +317,10 @@ public class SkillingPetChaseTest
 		count("anglerfishCaught", 12_000);
 		count("minnowCaught", 30_000);
 		GrindBook.PetChase bare = chase("Heron");
-		count("harpoonFishCaught", 9_000);      // cannot give the heron, and says so
-		count("fishCaught", 82_000);            // the untyped floor over the three
-		count("leapingTroutCaught", 4_100);     // no rate this journal can ask for
-		count("seaTurtleCaught", 500);          // a Trawler reward, not a catch here
+		count("harpoonFishCaught", 9_000);
+		count("fishCaught", 82_000);
+		count("leapingTroutCaught", 4_100);
+		count("seaTurtleCaught", 500);
 		count("mantaRayCaught", 400);
 		GrindBook.PetChase with = chase("Heron");
 		assertEquals(49.8, bare.percentileDry, 0.05);
@@ -379,15 +329,12 @@ public class SkillingPetChaseTest
 		assertEquals(3, with.sources.size());
 		assertEquals("Fishing", with.activity);
 		assertEquals("catches", with.unit);
-		// the level term has come off each base, heaviest source first
 		assertEquals("Sharks", with.sources.get(0).boss);
 		assertEquals(82_243 - 25 * 92, with.sources.get(0).rate);
 		assertEquals("Minnows", with.sources.get(1).boss);
 		assertEquals(977_778 - 25 * 92, with.sources.get(1).rate);
 	}
 
-	// The Trawler is the one fishing row the level does not touch, and the wiki calls
-	// it the one exception. It joins the same chase as the fish that do scale.
 	@Test
 	public void theTrawlerIsTheOneFishingRowTheLevelDoesNotTouch()
 	{
@@ -402,7 +349,6 @@ public class SkillingPetChaseTest
 		assertEquals(5_000, high.sources.get(0).rate);
 		assertEquals(410, high.kc);
 
-		// and the fish beside it do move with the level, in the same chase
 		level("fishing", 92);
 		count("sharkCaught", 40_000);
 		count("anglerfishCaught", 12_000);
@@ -413,11 +359,6 @@ public class SkillingPetChaseTest
 		assertEquals(82_410, both.kc);
 	}
 
-	// Soup is flat: no Sailing level enters any of it. Salvage is counted per wreck,
-	// because the rate differs by wreck; sorting is one rate however the salvage was
-	// pulled, so the total sorted is the row and the per-wreck sorted keys would
-	// double it. salvagePulled is the untyped floor, and a Barracuda trial is priced
-	// anywhere from 1/16,000 to 1/3,000 by a trial and a fish the counter never names.
 	@Test
 	public void soupCountsTheSalvageItCanTierAndNothingItCannot()
 	{
@@ -426,16 +367,15 @@ public class SkillingPetChaseTest
 		count("salvageSorted", 3_000);
 		count("portTasksCompleted", 800);
 		GrindBook.PetChase bare = chase("Soup");
-		count("salvagePulled", 10_000);         // the untyped floor over the wrecks
-		count("opulentSalvageSorted", 900);     // already inside salvageSorted
-		count("barracudaTrialsCompleted", 220); // no rate without the trial and fish
+		count("salvagePulled", 10_000);
+		count("opulentSalvageSorted", 900);
+		count("barracudaTrialsCompleted", 220);
 		level("sailing", 99);
 		GrindBook.PetChase with = chase("Soup");
 		assertEquals(13.9, bare.percentileDry, 0.05);
 		assertEquals(bare.percentileDry, with.percentileDry, 0.0001);
 		assertEquals(9_000, with.kc);
 		assertEquals(4, with.sources.size());
-		// flat: the bases are printed as the wiki prints them, no level term taken off
 		Map<String, long[]> by = new HashMap<>();
 		for (GrindBook.PetSource s : with.sources)
 		{
@@ -448,7 +388,6 @@ public class SkillingPetChaseTest
 		assertEquals(0, with.level);
 	}
 
-	// Hespori -> Tangleroot as the bundled boss rate book prints it.
 	private static long bundledHesporiRate() throws RuntimeException
 	{
 		try (InputStream in = GrindBook.class

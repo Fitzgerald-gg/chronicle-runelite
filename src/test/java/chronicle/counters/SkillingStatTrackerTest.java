@@ -33,11 +33,6 @@ import org.mockito.Mockito;
 
 import static org.junit.Assert.assertEquals;
 
-/**
- * The tick that carries a craft to the deriver. What left the pack is half the
- * story; how much of it left is the other half, and an altar eats a whole pack
- * of essence on one click.
- */
 public class SkillingStatTrackerTest
 {
 	private static final int PURE_ESSENCE = 7936;
@@ -82,7 +77,6 @@ public class SkillingStatTrackerTest
 		tracker.onItemContainerChanged(new ItemContainerChanged(InventoryID.INVENTORY.getId(), pack));
 	}
 
-	// the drop is a career total, so the tracker needs a reading to measure from
 	private void xp(int delta)
 	{
 		tracker.onStatChanged(new StatChanged(Skill.RUNECRAFT, career, 1, 1));
@@ -95,7 +89,6 @@ public class SkillingStatTrackerTest
 	{
 		holds(new Item(PURE_ESSENCE, 27));
 		xp(243);
-		// 27 essence in, 54 nature runes out
 		holds(new Item(NATURE_RUNE, 54));
 		tracker.onGameTick(new GameTick());
 
@@ -119,7 +112,6 @@ public class SkillingStatTrackerTest
 	@Test
 	public void aCraftWithNothingSeenLeavingThePackCountsNoEssence()
 	{
-		// no inventory reading at all: the tuple's consumed fields go out empty
 		xp(243);
 		tracker.onGameTick(new GameTick());
 
@@ -144,7 +136,6 @@ public class SkillingStatTrackerTest
 	@Test
 	public void theChatGateLetsEachCountedLineThrough()
 	{
-		// the deriver only sees what the prefix list lets past
 		chat("You put the grimy guam leaf herb into your herb sack.");
 		assertEquals(1, store.getStat("herbsSacked"));
 		assertEquals(1, store.getStat("guamLeafSacked"));
@@ -160,7 +151,6 @@ public class SkillingStatTrackerTest
 		assertEquals(1, store.getStat("greaterSkeletalThrallsSummoned"));
 		chat("The glowing fish scatter, shedding their magical scales.");
 		assertEquals(1, store.getStat("spiritPoolsHarpooned"));
-		// a channel the game never says these on stays shut
 		tracker.onChatMessage(new ChatMessage(null, ChatMessageType.PUBLICCHAT, "someone",
 			"You resurrect a greater skeletal thrall.", null, 0));
 		assertEquals(1, store.getStat("thrallsSummoned"));
@@ -170,14 +160,12 @@ public class SkillingStatTrackerTest
 	public void sapIsCreditedToTheTreeTheLastObjectClickNamed()
 	{
 		String line = "You fill the bucket with sap.";
-		// no tree clicked yet: the line could be an evergreen's
 		chat(line);
 		assertEquals(0, store.getStat("bloodwoodSapBucketsFilled"));
 
 		click(MenuAction.GAME_OBJECT_FIRST_OPTION, "Chop", "<col=ffff>Bloodwood tree");
 		chat(line);
 		assertEquals(1, store.getStat("bloodwoodSapBucketsFilled"));
-		// a tap is one click for many buckets: the memory outlives the target TTL
 		for (int i = 0; i < 20; i++)
 		{
 			tracker.onGameTick(new GameTick());
@@ -185,8 +173,6 @@ public class SkillingStatTrackerTest
 		chat(line);
 		assertEquals(2, store.getStat("bloodwoodSapBucketsFilled"));
 
-		// the knife on an evergreen is an item used on an object, and it names
-		// the evergreen: the next bucket is not bloodwood's
 		click(MenuAction.WIDGET_TARGET_ON_GAME_OBJECT, "Use",
 			"<col=ff9040>Knife</col><col=ffffff> -> <col=ffff>Evergreen");
 		chat(line);
@@ -195,12 +181,10 @@ public class SkillingStatTrackerTest
 		click(MenuAction.GAME_OBJECT_FIRST_OPTION, "Chop", "Engorged bloodwood tree");
 		chat(line);
 		assertEquals(3, store.getStat("bloodwoodSapBucketsFilled"));
-		// an NPC click is not a change of tree
 		click(MenuAction.NPC_FIRST_OPTION, "Pickpocket", "Guard");
 		chat(line);
 		assertEquals(4, store.getStat("bloodwoodSapBucketsFilled"));
 
-		// a logout forgets the tree with everything else click-local
 		GameStateChanged out = new GameStateChanged();
 		out.setGameState(GameState.LOGIN_SCREEN);
 		tracker.onGameStateChanged(out);

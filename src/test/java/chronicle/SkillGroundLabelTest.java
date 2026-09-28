@@ -17,24 +17,8 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * A block that answers a different question from the one above it has to say so.
- *
- * <p>The skill drill opens on a period: a level, its experience, and what the
- * period GAINED. Under that sat a group headed "WHAT IT PAID", listing the
- * loot sources that are this skill's own ground - and those figures are the
- * ledger's running per-source totals, which no period touches. The block was
- * byte for byte identical under Lifetime, under a week and under a sitting,
- * directly beneath a row that was none of those things.
- *
- * <p>It cannot be narrowed. The dated roll keeps one entry a day so it cannot
- * answer a sitting, and the sitting's own tally keeps no per-source split. So
- * the heading says what the figures are instead of implying what they are not.
- */
 public class SkillGroundLabelTest
 {
-	// Fishing Trawler is one of the collection log pages that IS a single
-	// skill's ground, so it is what the drill for Fishing lists.
 	private static final String JOURNAL =
 		"{\"schema\":1,\"rsn\":\"Angler\",\"drops\":{"
 		+ "\"Fishing Trawler\":{\"kc\":40,\"loots\":40,\"value\":1200000,"
@@ -46,7 +30,6 @@ public class SkillGroundLabelTest
 	private static ChroniclePanel panel() throws Exception
 	{
 		File dir = new File(System.getProperty("java.io.tmpdir"), "chronicle-skill-ground");
-		//noinspection ResultOfMethodCallIgnored
 		dir.mkdirs();
 		try (FileWriter w = new FileWriter(new File(dir, "angler.json")))
 		{
@@ -107,13 +90,6 @@ public class SkillGroundLabelTest
 		for (String period : ChroniclePanel.PERIODS)
 		{
 			List<String> said = drill(p, period);
-			// This journal carries no history spine, so the periods measured
-			// between two of its lines cannot draw at all and say so - in one
-			// sentence before the read lands and another after. Both are the
-			// no-period note, and it is that note this looks for: this journal
-			// has no experience either, so "no Experience row" would skip the
-			// lifetime as well and leave nothing asserted. The count below keeps
-			// the skip from quietly swallowing the whole test.
 			boolean noPeriod = false;
 			for (String line : said)
 			{
@@ -139,12 +115,6 @@ public class SkillGroundLabelTest
 			covered >= 2);
 	}
 
-	/**
-	 * TRAP: the point is not the wording, it is that the figure never moves. If
-	 * a later change makes this block answer the period, the heading has to stop
-	 * saying "ever" - so this fails either way round and cannot be satisfied by
-	 * editing one of the two alone.
-	 */
 	@Test
 	public void andTheFigureReallyIsTheSameAtEveryPeriod() throws Exception
 	{

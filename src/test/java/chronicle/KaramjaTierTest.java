@@ -12,17 +12,6 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Karamja is the one region the game will not answer for directly.
- *
- * <p>Every other diary tier has a completion varbit. Karamja's easy, medium and
- * hard have only a count of tasks done, so a tier is finished when that count
- * reaches the number of tasks the tier holds - a number the plugin has to
- * supply. It was supplied twice: once as a literal in the sync and once as the
- * bundled table's own contents. Regenerating the table moved one and not the
- * other, so adding a Karamja easy task would have left the tier reading
- * finished at ten of eleven.
- */
 public class KaramjaTierTest
 {
 	private static final AchievementSync SYNC =
@@ -60,7 +49,6 @@ public class KaramjaTierTest
 		}
 	}
 
-	/** The figures it replaced, so a regeneration that moves them is visible. */
 	@Test
 	public void theTableStillSaysWhatTheHardcodedFiguresSaid() throws Exception
 	{
@@ -69,11 +57,6 @@ public class KaramjaTierTest
 		assertEquals(10, tierSize("hard", -1));
 	}
 
-	/**
-	 * TRAP: a missing or unreadable bundle. Falling through to zero would report
-	 * every Karamja tier finished on an account that has done none of them, which
-	 * is worse than the stale literal this replaced.
-	 */
 	@Test
 	public void anUnreadableBundleKeepsTheOldBehaviourRatherThanClaimingCompletion()
 		throws Exception
@@ -83,7 +66,7 @@ public class KaramjaTierTest
 		Object saved = f.get(SYNC);
 		try
 		{
-			f.set(SYNC, new JsonObject());   // present but empty: no "diaries" key
+			f.set(SYNC, new JsonObject());
 			assertEquals("the fallback is the figure that was hardcoded, and a tier "
 				+ "size of zero would call every tier finished", 10, tierSize("easy", 10));
 		}
