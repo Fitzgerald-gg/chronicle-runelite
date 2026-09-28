@@ -28,21 +28,18 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
+@RequiredArgsConstructor
 class HistoryLog
 {
 	static final String SPINE_SUFFIX = ".history.jsonl";
 
 	private final Gson gson;
-
-	HistoryLog(Gson gson)
-	{
-		this.gson = gson;
-	}
-
 	private final Map<String, String> lastAppendedDate = new ConcurrentHashMap<>();
 
 	synchronized Adjust append(File dir, String rsn, Map<String, Long> skills,
@@ -169,12 +166,11 @@ class HistoryLog
 
 		void add(Adjust other)
 		{
-			if (other == null)
+			if (other != null)
 			{
-				return;
+				other.kcs.forEach((k, v) -> kcs.merge(k, v, Long::sum));
+				other.counters.forEach((k, v) -> counters.merge(k, v, Long::sum));
 			}
-			other.kcs.forEach((k, v) -> kcs.merge(k, v, Long::sum));
-			other.counters.forEach((k, v) -> counters.merge(k, v, Long::sum));
 			kcs.values().removeIf(v -> v == 0);
 			counters.values().removeIf(v -> v == 0);
 		}
@@ -213,10 +209,7 @@ class HistoryLog
 	private static JsonObject tree(Map<String, Long> m)
 	{
 		JsonObject o = new JsonObject();
-		if (m != null)
-		{
-			m.forEach(o::addProperty);
-		}
+		(m == null ? Map.<String, Long>of() : m).forEach(o::addProperty);
 		return o;
 	}
 
@@ -230,10 +223,7 @@ class HistoryLog
 		long sum = 0;
 		for (var e : skills.entrySet())
 		{
-			if (!"overall".equals(e.getKey()) && e.getValue() != null)
-			{
-				sum += e.getValue();
-			}
+			sum += "overall".equals(e.getKey()) || e.getValue() == null ? 0 : e.getValue();
 		}
 		return sum == overall;
 	}
@@ -271,12 +261,8 @@ class HistoryLog
 			return null;
 		}
 		Map.Entry<LocalDate, Baseline> before = spine.floorEntry(start.minusDays(1));
-		if (before != null)
-		{
-			return before;
-		}
 		Map.Entry<LocalDate, Baseline> first = spine.firstEntry();
-		return first.getKey().isAfter(end) ? null : first;
+		return before != null ? before : first.getKey().isAfter(end) ? null : first;
 	}
 
 	static Baseline earliest(TreeMap<LocalDate, Baseline> spine, LocalDate upTo)
@@ -288,13 +274,12 @@ class HistoryLog
 		}
 		for (Baseline b : spine.headMap(upTo, true).values())
 		{
-			if (b == null)
+			if (b != null)
 			{
-				continue;
+				b.skills.forEach(out.skills::putIfAbsent);
+				b.counters.forEach(out.counters::putIfAbsent);
+				b.kcs.forEach(out.kcs::putIfAbsent);
 			}
-			b.skills.forEach(out.skills::putIfAbsent);
-			b.counters.forEach(out.counters::putIfAbsent);
-			b.kcs.forEach(out.kcs::putIfAbsent);
 		}
 		return out;
 	}
@@ -308,11 +293,7 @@ class HistoryLog
 		for (var e : spine.entrySet())
 		{
 			Baseline b = e.getValue();
-			if (b == null)
-			{
-				continue;
-			}
-			if (key == null ? !b.counters.isEmpty() : b.counters.containsKey(key))
+			if (b != null && (key == null ? !b.counters.isEmpty() : b.counters.containsKey(key)))
 			{
 				return e.getKey();
 			}
@@ -330,33 +311,16 @@ class HistoryLog
 		Map<String, Long> end, boolean startComplete)
 	{
 		Map<String, Long> out = new LinkedHashMap<>();
-		if (end == null)
+		for (var e : end == null ? Map.<String, Long>of().entrySet() : end.entrySet())
 		{
-			return out;
-		}
-		for (var e : end.entrySet())
-		{
-			if (e.getValue() == null)
-			{
-				continue;
-			}
 			Long base = start != null ? start.get(e.getKey()) : null;
-			if (base == null && startComplete)
-			{
-				base = 0L;
-			}
-			if (base == null && earliest != null)
-			{
-				base = earliest.get(e.getKey());
-			}
 			if (base == null)
 			{
-				continue;
+				base = startComplete ? Long.valueOf(0) : earliest != null ? earliest.get(e.getKey()) : null;
 			}
-			long d = e.getValue() - base;
-			if (d > 0)
+			if (e.getValue() != null && base != null && e.getValue() > base)
 			{
-				out.put(e.getKey(), d);
+				out.put(e.getKey(), e.getValue() - base);
 			}
 		}
 		return out;
@@ -384,29 +348,19 @@ class HistoryLog
 		for (String key : skills)
 		{
 			Long xp = state.skills.get(key);
-			int level = xp != null ? PaceBook.levelAt(xp) : state.complete ? 1 : 0;
-			if (HITPOINTS.equals(key) && level > 0)
-			{
-				level = Math.max(HITPOINTS_FLOOR, level);
-			}
+			int level = floor(key, xp != null ? PaceBook.levelAt(xp) : state.complete ? 1 : 0);
 			out.of.put(key, level);
-			int past = xp != null ? PaceBook.virtualLevelAt(xp) : level;
-			if (HITPOINTS.equals(key) && past > 0)
-			{
-				past = Math.max(HITPOINTS_FLOOR, past);
-			}
-			out.virtual.put(key, past);
+			out.virtual.put(key, floor(key, xp != null ? PaceBook.virtualLevelAt(xp) : level));
 			out.total += level;
-			if (level > 0)
-			{
-				out.drawn++;
-			}
-			if (level >= 99)
-			{
-				out.nines++;
-			}
+			out.drawn += level > 0 ? 1 : 0;
+			out.nines += level >= 99 ? 1 : 0;
 		}
 		return out;
+	}
+
+	private static int floor(String skill, int level)
+	{
+		return HITPOINTS.equals(skill) && level > 0 ? Math.max(HITPOINTS_FLOOR, level) : level;
 	}
 
 	private Adjust dropTrailingDate(File f, String date)
@@ -417,31 +371,24 @@ class HistoryLog
 			return carried;
 		}
 		String needle = "\"date\":\"" + date + "\"";
-		boolean found = false;
+		JsonObject[] first = new JsonObject[1];
 		try (RandomAccessFile raf = new RandomAccessFile(f, "rw"))
 		{
-			long keep = raf.length();
-			while (keep > 0)
+			long keep = fromEnd(raf, line ->
 			{
-				long start = lineStart(raf, keep);
-				raf.seek(start);
-				byte[] buf = new byte[(int) (keep - start)];
-				raf.readFully(buf);
-				String line = new String(buf, StandardCharsets.UTF_8).trim();
 				if (!line.isEmpty() && !line.contains(needle))
 				{
-					break;
+					return false;
 				}
-				if (!line.isEmpty() && !found)
+				if (!line.isEmpty() && first[0] == null)
 				{
-					JsonObject o = parseLine(line, needle);
-					if (o != null)
-					{
-						carried.add(Adjust.from(o.get("adj")));
-						found = true;
-					}
+					first[0] = parseLine(line, needle);
 				}
-				keep = start;
+				return true;
+			});
+			if (first[0] != null)
+			{
+				carried.add(Adjust.from(first[0].get("adj")));
 			}
 			if (keep < raf.length())
 			{
@@ -474,17 +421,29 @@ class HistoryLog
 		return null;
 	}
 
-	private static long lineStart(RandomAccessFile raf, long end) throws IOException
+	private static long fromEnd(RandomAccessFile raf, Predicate<String> more) throws IOException
 	{
-		long i = end - 1;
-		while (i > 0)
+		long end = raf.length();
+		while (end > 0)
 		{
-			raf.seek(i - 1);
-			if (raf.read() == '\n')
+			long start = end - 1;
+			while (start > 0)
 			{
-				return i;
+				raf.seek(start - 1);
+				if (raf.read() == '\n')
+				{
+					break;
+				}
+				start--;
 			}
-			i--;
+			raf.seek(start);
+			byte[] buf = new byte[(int) (end - start)];
+			raf.readFully(buf);
+			if (!more.test(new String(buf, StandardCharsets.UTF_8).trim()))
+			{
+				return end;
+			}
+			end = start;
 		}
 		return 0;
 	}
@@ -496,40 +455,42 @@ class HistoryLog
 		{
 			return null;
 		}
+		Integer[] kv = new Integer[1];
 		try (RandomAccessFile raf = new RandomAccessFile(f, "r"))
 		{
-			long end = raf.length();
-			while (end > 0)
+			fromEnd(raf, line ->
 			{
-				long start = lineStart(raf, end);
-				raf.seek(start);
-				byte[] buf = new byte[(int) (end - start)];
-				raf.readFully(buf);
-				end = start;
-				String line = new String(buf, StandardCharsets.UTF_8).trim();
-				if (line.isEmpty())
-				{
-					continue;
-				}
 				try
 				{
-					JsonObject o = gson.fromJson(line, JsonObject.class);
+					JsonObject o = line.isEmpty() ? null : gson.fromJson(line, JsonObject.class);
 					if (o != null && o.has("date"))
 					{
-						return o.has("kv") ? o.get("kv").getAsInt() : 0;
+						kv[0] = o.has("kv") ? o.get("kv").getAsInt() : 0;
+						return false;
 					}
 				}
 				catch (RuntimeException torn)
 				{
 				}
-			}
+				return true;
+			});
 		}
 		catch (IOException e)
 		{
 			log.debug("history tail unreadable", e);
 		}
-		return null;
+		return kv[0];
 	}
+
+	private static List<String> lines(File f) throws IOException
+	{
+		try (BufferedReader r = new BufferedReader(new InputStreamReader(
+			new FileInputStream(f), StandardCharsets.UTF_8)))
+		{
+			return r.lines().collect(Collectors.toList());
+		}
+	}
+
 	synchronized int compact(File dir, String rsn)
 	{
 		if (rsn == null || rsn.isEmpty())
@@ -546,11 +507,9 @@ class HistoryLog
 		int unreadable = 0;
 		String previous = null;
 		boolean ordered = true;
-		try (BufferedReader r = new BufferedReader(new InputStreamReader(
-			new FileInputStream(f), StandardCharsets.UTF_8)))
+		try
 		{
-			String line;
-			while ((line = r.readLine()) != null)
+			for (String line : lines(f))
 			{
 				if (line.trim().isEmpty())
 				{
@@ -563,10 +522,7 @@ class HistoryLog
 					continue;
 				}
 				seen++;
-				if (previous != null && date.compareTo(previous) < 0)
-				{
-					ordered = false;
-				}
+				ordered &= previous == null || date.compareTo(previous) >= 0;
 				previous = date;
 				keep.put(date, line);
 			}
@@ -587,30 +543,24 @@ class HistoryLog
 			return 0;
 		}
 		File tmp = new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX + ".compact");
-		try (FileOutputStream out = new FileOutputStream(tmp);
-			Writer w = new OutputStreamWriter(out, StandardCharsets.UTF_8))
-		{
-			for (String line : keep.values())
-			{
-				w.write(line);
-				w.write('\n');
-			}
-			w.flush();
-			out.getFD().sync();
-		}
-		catch (Exception e)
-		{
-			log.debug("history compaction write failed", e);
-			return 0;
-		}
 		try
 		{
-			Files.move(tmp.toPath(), f.toPath(),
-				StandardCopyOption.REPLACE_EXISTING);
+			try (FileOutputStream out = new FileOutputStream(tmp);
+				Writer w = new OutputStreamWriter(out, StandardCharsets.UTF_8))
+			{
+				for (String line : keep.values())
+				{
+					w.write(line);
+					w.write('\n');
+				}
+				w.flush();
+				out.getFD().sync();
+			}
+			Files.move(tmp.toPath(), f.toPath(), StandardCopyOption.REPLACE_EXISTING);
 		}
 		catch (Exception e)
 		{
-			log.debug("history compaction rename failed", e);
+			log.debug("history compaction failed", e);
 			return 0;
 		}
 		log.debug("history spine: dropped {} repeated day lines, {} dates in order",
@@ -639,11 +589,9 @@ class HistoryLog
 		{
 			return out;
 		}
-		try (BufferedReader r = new BufferedReader(
-			new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8)))
+		try
 		{
-			String line;
-			while ((line = r.readLine()) != null)
+			for (String line : lines(f))
 			{
 				try
 				{
@@ -722,31 +670,25 @@ class HistoryLog
 			.map(LocalDate::toString)
 			.collect(Collectors.toSet());
 		int added = 0;
-		try (BufferedReader r = new BufferedReader(new InputStreamReader(
-			new FileInputStream(source), StandardCharsets.UTF_8)))
+		try
 		{
-			File out = new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX);
+			List<String> incoming = lines(source);
 			if (!dir.isDirectory() && !dir.mkdirs())
 			{
 				return 0;
 			}
-			try (Writer w = new OutputStreamWriter(new FileOutputStream(out, true), StandardCharsets.UTF_8))
+			try (Writer w = new OutputStreamWriter(new FileOutputStream(
+				new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX), true), StandardCharsets.UTF_8))
 			{
-				String line;
-				while ((line = r.readLine()) != null)
+				for (String line : incoming)
 				{
-					if (line.trim().isEmpty())
+					String date = line.trim().isEmpty() ? null : dateOf(line);
+					if (date != null && have.add(date))
 					{
-						continue;
+						w.write(line);
+						w.write('\n');
+						added++;
 					}
-					String date = dateOf(line);
-					if (date == null || !have.add(date))
-					{
-						continue;
-					}
-					w.write(line);
-					w.write('\n');
-					added++;
 				}
 			}
 		}
@@ -761,20 +703,24 @@ class HistoryLog
 		return added;
 	}
 
+	private String lastDate(String rsn)
+	{
+		return rsn == null ? null : lastAppendedDate.get(LocalStore.slug(rsn));
+	}
+
+	private static String today()
+	{
+		return LocalDate.now(ZoneId.systemDefault()).toString();
+	}
+
 	boolean dayRolledOver(String rsn)
 	{
-		if (rsn == null || rsn.isEmpty())
-		{
-			return false;
-		}
-		String today = LocalDate.now(ZoneId.systemDefault()).toString();
-		return !today.equals(lastAppendedDate.get(LocalStore.slug(rsn)));
+		return rsn != null && !rsn.isEmpty() && !today().equals(lastDate(rsn));
 	}
 
 	boolean dayTurned(String rsn)
 	{
-		String previous = rsn == null ? null : lastAppendedDate.get(LocalStore.slug(rsn));
-		return previous != null
-			&& previous.compareTo(LocalDate.now(ZoneId.systemDefault()).toString()) < 0;
+		String previous = lastDate(rsn);
+		return previous != null && previous.compareTo(today()) < 0;
 	}
 }
