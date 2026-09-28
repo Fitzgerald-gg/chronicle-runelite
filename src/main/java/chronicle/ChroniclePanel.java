@@ -9785,29 +9785,22 @@ class ChroniclePanel extends PluginPanel
 			plateRow(plate, "Tasks", fmt(tally[2]) + tail(tally[3]), () -> openSlayer("Tasks"));
 		}
 
-		Map<String, long[]> lines = new LinkedHashMap<>();
 		Map<String, String> firstNamed = new LinkedHashMap<>();
 		for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
 		{
-			String type = typeOf(e);
-			if (!insideWindow(safeLong(e.get("ts"))))
-			{
-				continue;
-			}
-			lines.computeIfAbsent(type, k -> new long[1])[0]++;
 			String name = feedName(e);
-			if (name != null)
+			if (name != null && insideWindow(safeLong(e.get("ts"))))
 			{
-				firstNamed.putIfAbsent(type, name);
+				firstNamed.putIfAbsent(typeOf(e), name);
 			}
 		}
-		feedPlateRow(plate, lines, firstNamed, "COLLECTION", "Log slot", "Log slots", "Log");
-		feedPlateRow(plate, lines, firstNamed, "PET", "Pet", "Pets", "Feats");
-		feedPlateRow(plate, lines, firstNamed, "QUEST", "Quest", "Quests", "Feats");
-		feedPlateRow(plate, lines, firstNamed, "DIARY", "Diary", "Diaries", "Feats");
-		feedPlateRow(plate, lines, firstNamed, "COMBAT_ACHIEVEMENT", "Combat achievement",
+		feedPlateRow(plate, firstNamed, "COLLECTION", "Log slot", "Log slots", "Log");
+		feedPlateRow(plate, firstNamed, "PET", "Pet", "Pets", "Feats");
+		feedPlateRow(plate, firstNamed, "QUEST", "Quest", "Quests", "Feats");
+		feedPlateRow(plate, firstNamed, "DIARY", "Diary", "Diaries", "Feats");
+		feedPlateRow(plate, firstNamed, "COMBAT_ACHIEVEMENT", "Combat achievement",
 			"Combat achievements", "Feats");
-		feedPlateRow(plate, lines, firstNamed, "DEATH", "Death", "Deaths", "Deaths");
+		feedPlateRow(plate, firstNamed, "DEATH", "Death", "Deaths", "Deaths");
 
 		if (plate.getComponentCount() == held)
 		{
@@ -9848,23 +9841,23 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private void feedPlateRow(JPanel plate, Map<String, long[]> lines, Map<String, String> named,
+	private void feedPlateRow(JPanel plate, Map<String, String> named,
 		String type, String one, String many, String lens)
 	{
-		long[] n = lines.get(type);
-		if (n == null || n[0] == 0)
+		long n = stirred(type);
+		if (n == 0)
 		{
 			return;
 		}
 		String name = named.get(type);
 		Line right = new Line();
-		right.fixed(fmt(n[0]));
+		right.fixed(fmt(n));
 		if (name != null)
 		{
 			right.fixed(" · ");
 			right.name(name);
 		}
-		plateRow(plate, n[0] == 1 ? one : many, right, () ->
+		plateRow(plate, n == 1 ? one : many, right, () ->
 		{
 			journalLens = lens;
 			applyTab(View.JOURNAL);
@@ -9963,14 +9956,7 @@ class ChroniclePanel extends PluginPanel
 		if (sessionPeriod())
 		{
 			long[] overall = plugin.skillSheet().get("overall");
-			long gained = 0;
-			for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
-			{
-				if ("LEVEL".equals(typeOf(e)) && insideWindow(safeLong(e.get("ts"))))
-				{
-					gained++;
-				}
-			}
+			long gained = stirred("LEVEL");
 			return gained > 0 && overall != null ? new long[]{gained, overall[0]} : null;
 		}
 		Span s = span();
@@ -10516,9 +10502,7 @@ class ChroniclePanel extends PluginPanel
 		List<JsonObject> recent = plugin.feedNewest(2);
 		if (recent.size() == 2)
 		{
-			long a = recent.get(0).has("ts") ? recent.get(0).get("ts").getAsLong() : 0;
-			long b = recent.get(1).has("ts") ? recent.get(1).get("ts").getAsLong() : 0;
-			long days = (a - b) / 86_400_000L;
+			long days = (safeLong(recent.get(0).get("ts")) - safeLong(recent.get(1).get("ts"))) / 86_400_000L;
 			if (days >= 30)
 			{
 				return "resumed after " + days + " days away";
@@ -11285,7 +11269,7 @@ class ChroniclePanel extends PluginPanel
 
 	private static String stamp(JsonObject e)
 	{
-		long ts = e.has("ts") ? e.get("ts").getAsLong() : 0;
+		long ts = safeLong(e.get("ts"));
 		return ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "";
 	}
 
@@ -11349,10 +11333,10 @@ class ChroniclePanel extends PluginPanel
 			}
 			case "SESSION":
 			{
-				long mins = d.has("minutes") ? d.get("minutes").getAsLong() : 0;
-				long xp = d.has("xp") ? d.get("xp").getAsLong() : 0;
-				long drops = d.has("drops") ? d.get("drops").getAsLong() : 0;
-				long dropsGp = d.has("dropsGp") ? d.get("dropsGp").getAsLong() : 0;
+				long mins = safeLong(d.get("minutes"));
+				long xp = safeLong(d.get("xp"));
+				long drops = safeLong(d.get("drops"));
+				long dropsGp = safeLong(d.get("dropsGp"));
 				StringBuilder line = new StringBuilder("Session: ");
 				line.append(hoursMinutes(mins));
 				if (xp > 0)
