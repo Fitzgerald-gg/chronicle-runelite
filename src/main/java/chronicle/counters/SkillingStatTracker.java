@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -42,6 +43,12 @@ public class SkillingStatTracker implements StatTracker
 		Skill.HUNTER, Skill.RUNECRAFT, Skill.FIREMAKING, Skill.THIEVING,
 		Skill.AGILITY, Skill.PRAYER, Skill.FARMING, Skill.CONSTRUCTION,
 		Skill.SAILING);
+	private static final Set<MenuAction> OBJECT_OPS = EnumSet.of(MenuAction.GAME_OBJECT_FIRST_OPTION,
+		MenuAction.GAME_OBJECT_SECOND_OPTION, MenuAction.GAME_OBJECT_THIRD_OPTION,
+		MenuAction.GAME_OBJECT_FOURTH_OPTION, MenuAction.GAME_OBJECT_FIFTH_OPTION);
+	private static final Set<MenuAction> NPC_OPS = EnumSet.of(MenuAction.NPC_FIRST_OPTION,
+		MenuAction.NPC_SECOND_OPTION, MenuAction.NPC_THIRD_OPTION, MenuAction.NPC_FOURTH_OPTION,
+		MenuAction.NPC_FIFTH_OPTION);
 
 	private static final int TTL_TICKS = 6;
 	private final XpSeen xpSeen = new XpSeen();
@@ -83,13 +90,8 @@ public class SkillingStatTracker implements StatTracker
 			lastObjectTarget = used == null ? "" : Text.removeTags(used);
 			return;
 		}
-		boolean object = a == MenuAction.GAME_OBJECT_FIRST_OPTION || a == MenuAction.GAME_OBJECT_SECOND_OPTION
-			|| a == MenuAction.GAME_OBJECT_THIRD_OPTION || a == MenuAction.GAME_OBJECT_FOURTH_OPTION
-			|| a == MenuAction.GAME_OBJECT_FIFTH_OPTION;
-		boolean npc = a == MenuAction.NPC_FIRST_OPTION || a == MenuAction.NPC_SECOND_OPTION
-			|| a == MenuAction.NPC_THIRD_OPTION || a == MenuAction.NPC_FOURTH_OPTION
-			|| a == MenuAction.NPC_FIFTH_OPTION;
-		if (!object && !npc)
+		boolean object = OBJECT_OPS.contains(a);
+		if (!object && !NPC_OPS.contains(a))
 		{
 			return;
 		}
@@ -98,7 +100,7 @@ public class SkillingStatTracker implements StatTracker
 		{
 			return;
 		}
-		String o = opt.toLowerCase(java.util.Locale.ROOT);
+		String o = opt.toLowerCase(Locale.ROOT);
 		if (o.equals("examine") || o.equals("walk here") || o.equals("cancel")
 			|| o.startsWith("talk") || o.equals("attack") || o.startsWith("trade")
 			|| o.startsWith("follow") || o.startsWith("pay") || o.startsWith("collect"))
@@ -157,56 +159,38 @@ public class SkillingStatTracker implements StatTracker
 	{
 		if (!tickDrops.isEmpty())
 		{
-			String gainStr = tickGainedItem > 0 ? Integer.toString(tickGainedItem) : "";
-			String qtyStr = tickGainedItem > 0 ? Integer.toString(tickGainedQty) : "";
-			boolean haveConsumed = consumedTtl > 0 && lastConsumedItem > 0;
-			String consStr = haveConsumed ? Integer.toString(lastConsumedItem) : "";
-			String consQtyStr = haveConsumed ? Integer.toString(lastConsumedQty) : "";
+			boolean gained = tickGainedItem > 0;
+			boolean consumed = consumedTtl > 0 && lastConsumedItem > 0;
 			String target = targetTtl > 0 ? lastTargetName : "";
 			for (Map.Entry<Skill, List<Integer>> e : tickDrops.entrySet())
 			{
 				Skill skill = e.getKey();
 				boolean useObj = (skill == Skill.WOODCUTTING || skill == Skill.MINING)
 					&& objectTtl > 0 && lastObjectId > 0;
-				String objStr = useObj ? Integer.toString(lastObjectId) : "";
 				for (int delta : e.getValue())
 				{
-					String tuple = skill.name() + "|" + delta + "|" + objStr
-						+ "|" + gainStr + "|" + qtyStr + "|" + target + "|" + consStr
-						+ "|" + consQtyStr;
-					deriver.apply(tuple);
+					deriver.apply(skill.name(), delta, useObj ? lastObjectId : 0,
+						gained ? tickGainedItem : 0, gained ? tickGainedQty : 1, target,
+						consumed ? lastConsumedItem : 0, consumed ? lastConsumedQty : 1);
 				}
 			}
 			tickDrops.clear();
 		}
 		tickGainedItem = -1;
 		tickGainedQty = 0;
-		if (objectTtl > 0)
-		{
-			objectTtl--;
-		}
-		if (targetTtl > 0)
-		{
-			targetTtl--;
-		}
-		if (consumedTtl > 0)
-		{
-			consumedTtl--;
-		}
-		if (rakeTtl > 0)
-		{
-			rakeTtl--;
-		}
+		objectTtl = Math.max(0, objectTtl - 1);
+		targetTtl = Math.max(0, targetTtl - 1);
+		consumedTtl = Math.max(0, consumedTtl - 1);
+		rakeTtl = Math.max(0, rakeTtl - 1);
 	}
 
 	@Override
 	public void onChatMessage(ChatMessage event)
 	{
-		if (!StatTracker.gameChat(event))
+		if (StatTracker.gameChat(event))
 		{
-			return;
+			deriver.applyChat(event.getMessage(), lastObjectTarget);
 		}
-		deriver.applyChat(event.getMessage(), lastObjectTarget);
 	}
 
 	@Override

@@ -10,7 +10,9 @@ package chronicle.counters;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -18,10 +20,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.game.ItemManager;
 
@@ -46,24 +50,38 @@ public class SkillDeriver
 	private static final Map<String, String> HUNTER_ITEM_SPECIES = Tables.map(TABLES, "hunterItemSpecies");
 	private static final Map<String, String> BUTTERFLY_TARGETS = Tables.map(TABLES, "butterflyTargets");
 	private static final Set<String> ALTAR_ESSENCE = Tables.set(TABLES, "altarEssence");
+	private static final Map<String, String> OBJECT_SPECIES = Tables.map(TABLES, "objectSpecies");
+	private static final JsonObject XP_LADDERS = Tables.load("osrs_skill_xp.json");
+	private static final Map<String, List<Rule>> ITEM_RULES = rules(Tables.load("osrs_skill_item_rules.json"));
+
+	private static final Pattern FAILED_PICKPOCKET =
+		Pattern.compile("You fail to pick (?:the )?([\\w'. -]+?)'s pocket.*");
+	private static final Pattern BURNED = Pattern.compile(
+		"You accidentally burn (?:the |some |a |an )?([\\w' -]+?)(?: to ashes)?[.!]?\\s*$");
+	private static final Pattern NPC_LEVEL = Pattern.compile(
+		"\\s*\\(?\\s*level[\\s-]*\\d*\\s*\\)?\\s*$", Pattern.CASE_INSENSITIVE);
+	private static final Pattern PLANTED = Pattern.compile(
+		"You plant (?:\\d+ )?(?:a |an |the |some )?([\\w'-]+(?: [\\w'-]+)*?) "
+			+ "(?:seed|seeds|spore|spores|sapling|saplings|seedling|seedlings)\\b");
+	private static final Pattern THRALL_RAISED = Pattern.compile(
+		"You resurrect (?:a |an |the |your )?((?:lesser|superior|greater) "
+			+ "(?:ghostly|skeletal|zombified))", Pattern.CASE_INSENSITIVE);
+	private static final Pattern HIDES_TANNED = Pattern.compile(
+		"The tanner tans (your|\\d+) ([\\w' -]+?)(?: for you)?\\.");
+	private static final Pattern HERB_SACKED = Pattern.compile(
+		"You put the (?:grimy )?([\\w' -]+?)(?: herb)? into your herb sack",
+		Pattern.CASE_INSENSITIVE);
 
 	private final ItemManager itemManager;
 	private final StatStore statStore;
-
 	private volatile GatheredLedger gatheredLedger;
 
-	private Map<String, Map<String, String>> xpTable;
-	private Map<String, List<Rule>> itemRules;
-	private Map<String, String> objTable;
-
+	@AllArgsConstructor
 	private static final class Rule
 	{
-		String match;
-		String value;
-		Set<String> valueSet;
-		Pattern regex;
-		String key;
-		boolean qty;
+		final Predicate<String> hit;
+		final String key;
+		final boolean qty;
 	}
 
 	@Inject
@@ -78,11 +96,11 @@ public class SkillDeriver
 		this.gatheredLedger = ledger;
 	}
 
-	void apply(String tuple)
+	void apply(String skill, int xp, int obj, int item, int qty, String target, int consumed, int consumedQty)
 	{
 		try
 		{
-			List<Map.Entry<String, Integer>> pairs = derive(tuple);
+			List<Map.Entry<String, Integer>> pairs = derive(skill, xp, obj, item, qty, target, consumed, consumedQty);
 			if (pairs != null)
 			{
 				for (Map.Entry<String, Integer> p : pairs)
@@ -96,101 +114,16 @@ public class SkillDeriver
 		}
 		catch (RuntimeException e)
 		{
-			log.debug("local derive failed for {}", tuple, e);
+			log.debug("local derive failed for {} {}", skill, xp, e);
 		}
 	}
-
-	private static final Pattern FAILED_PICKPOCKET =
-		Pattern.compile("You fail to pick (?:the )?([\\w'. -]+?)'s pocket.*");
-
-	private static final Pattern BURNED = Pattern.compile(
-		"You accidentally burn (?:the |some |a |an )?([\\w' -]+?)(?: to ashes)?[.!]?\\s*$");
-
-	private static final Pattern NPC_LEVEL = Pattern.compile(
-		"\\s*\\(?\\s*level[\\s-]*\\d*\\s*\\)?\\s*$", Pattern.CASE_INSENSITIVE);
 
 	static String npcName(String target)
 	{
 		return NPC_LEVEL.matcher(target).replaceFirst("").trim();
 	}
 
-	private static final Pattern PLANTED = Pattern.compile(
-		"You plant (?:\\d+ )?(?:a |an |the |some )?([\\w'-]+(?: [\\w'-]+)*?) "
-			+ "(?:seed|seeds|spore|spores|sapling|saplings|seedling|seedlings)\\b");
-
-	private static final Pattern THRALL_RAISED = Pattern.compile(
-		"You resurrect (?:a |an |the |your )?((?:lesser|superior|greater) "
-			+ "(?:ghostly|skeletal|zombified))", Pattern.CASE_INSENSITIVE);
-
-	private static final Pattern HIDES_TANNED = Pattern.compile(
-		"The tanner tans (your|\\d+) ([\\w' -]+?)(?: for you)?\\.");
-
-	private static final Pattern HERB_SACKED = Pattern.compile(
-		"You put the (?:grimy )?([\\w' -]+?)(?: herb)? into your herb sack",
-		Pattern.CASE_INSENSITIVE);
-
 	void applyChat(String msg, String objectTarget)
-	{
-		if (msg == null || msg.isEmpty())
-		{
-			return;
-		}
-		if (chatLine(msg, objectTarget == null ? "" : objectTarget))
-		{
-			return;
-		}
-		if (msg.contains("You accidentally burn"))
-		{
-			statStore.incrementStat("foodBurned");
-			Matcher burned = BURNED.matcher(msg);
-			if (burned.find())
-			{
-				String food = stripCamel(burned.group(1).toLowerCase(Locale.ROOT),
-					new String[0], "");
-				if (!food.isEmpty())
-				{
-					statStore.incrementStat(food + "Burned");
-				}
-			}
-			return;
-		}
-		if (msg.contains("You plant "))
-		{
-			statStore.incrementStat("seedsPlanted");
-			Matcher planted = PLANTED.matcher(msg);
-			if (planted.find())
-			{
-				String crop = camel(planted.group(1));
-				if (!crop.isEmpty())
-				{
-					statStore.incrementStat(crop + "Planted");
-				}
-			}
-			return;
-		}
-		if (msg.contains("Rooftop lap"))
-		{
-			statStore.incrementStat("rooftopAgilityLaps");
-			return;
-		}
-		if (msg.contains("lap count"))
-		{
-			statStore.incrementStat("normalAgilityLaps");
-			return;
-		}
-		Matcher m = FAILED_PICKPOCKET.matcher(msg);
-		if (m.matches())
-		{
-			statStore.incrementStat("failedPickPockets");
-			String typed = camel(m.group(1));
-			if (!typed.isEmpty())
-			{
-				statStore.incrementStat(typed + "FailedPickpockets");
-			}
-		}
-	}
-
-	private boolean chatLine(String msg, String objectTarget)
 	{
 		if (msg.contains("into your herb sack"))
 		{
@@ -198,33 +131,25 @@ public class SkillDeriver
 			Matcher sacked = HERB_SACKED.matcher(msg);
 			if (sacked.find())
 			{
-				String herb = camel(sacked.group(1));
-				if (!herb.isEmpty())
-				{
-					statStore.incrementStat(herb + "Sacked");
-				}
+				countTyped(camel(sacked.group(1)), "Sacked", 1);
 			}
-			return true;
 		}
-		if (msg.contains("You gently shoo the letvek"))
+		else if (msg.contains("You gently shoo the letvek"))
 		{
 			statStore.incrementStat("letveksShooed");
-			return true;
 		}
-		if (msg.contains("You fill the bucket with sap"))
+		else if (msg.contains("You fill the bucket with sap"))
 		{
 			if (objectTarget.toLowerCase(Locale.ROOT).contains("bloodwood"))
 			{
 				statStore.incrementStat("bloodwoodSapBucketsFilled");
 			}
-			return true;
 		}
-		if (msg.contains("The glowing fish scatter"))
+		else if (msg.contains("The glowing fish scatter"))
 		{
 			statStore.incrementStat("spiritPoolsHarpooned");
-			return true;
 		}
-		if (msg.contains("You resurrect "))
+		else if (msg.contains("You resurrect "))
 		{
 			Matcher raised = THRALL_RAISED.matcher(msg);
 			if (raised.find())
@@ -236,220 +161,183 @@ public class SkillDeriver
 			{
 				statStore.incrementStat("thrallsSummoned");
 			}
-			return true;
 		}
-		if (msg.contains("The tanner tans"))
+		else if (msg.contains("The tanner tans"))
 		{
-			Matcher tanned = HIDES_TANNED.matcher(msg);
-			if (tanned.find())
-			{
-				int n = tanned.group(1).equals("your") ? 1 : intOr(tanned.group(1), 0);
-				if (n > 0)
-				{
-					statStore.incrementStatBy("hidesTanned", n);
-					String hide = tanned.group(2).trim().toLowerCase(Locale.ROOT);
-					if (n > 1 && hide.endsWith("s"))
-					{
-						hide = hide.substring(0, hide.length() - 1);
-					}
-					String typed = camel(hide);
-					if (!typed.isEmpty())
-					{
-						statStore.incrementStatBy(typed + "Tanned", n);
-					}
-				}
-			}
-			return true;
+			tanned(msg);
 		}
-		if (msg.contains("You put the") && msg.contains("vial"))
+		else if (msg.contains("You put the") && msg.contains("vial"))
 		{
 			statStore.incrementStat("unfinishedPotionsMade");
-			return true;
 		}
-		return false;
+		else if (msg.contains("You accidentally burn"))
+		{
+			statStore.incrementStat("foodBurned");
+			Matcher burned = BURNED.matcher(msg);
+			if (burned.find())
+			{
+				countTyped(stripCamel(burned.group(1).toLowerCase(Locale.ROOT), new String[0], ""), "Burned", 1);
+			}
+		}
+		else if (msg.contains("You plant "))
+		{
+			statStore.incrementStat("seedsPlanted");
+			Matcher planted = PLANTED.matcher(msg);
+			if (planted.find())
+			{
+				countTyped(camel(planted.group(1)), "Planted", 1);
+			}
+		}
+		else if (msg.contains("Rooftop lap"))
+		{
+			statStore.incrementStat("rooftopAgilityLaps");
+		}
+		else if (msg.contains("lap count"))
+		{
+			statStore.incrementStat("normalAgilityLaps");
+		}
+		else
+		{
+			Matcher m = FAILED_PICKPOCKET.matcher(msg);
+			if (m.matches())
+			{
+				statStore.incrementStat("failedPickPockets");
+				countTyped(camel(m.group(1)), "FailedPickpockets", 1);
+			}
+		}
+	}
+
+	private void tanned(String msg)
+	{
+		Matcher tanned = HIDES_TANNED.matcher(msg);
+		if (!tanned.find())
+		{
+			return;
+		}
+		int n = tanned.group(1).equals("your") ? 1 : intOr(tanned.group(1), 0);
+		if (n > 0)
+		{
+			statStore.incrementStatBy("hidesTanned", n);
+			String hide = tanned.group(2).trim().toLowerCase(Locale.ROOT);
+			if (n > 1 && hide.endsWith("s"))
+			{
+				hide = hide.substring(0, hide.length() - 1);
+			}
+			countTyped(camel(hide), "Tanned", n);
+		}
+	}
+
+	private void countTyped(String token, String suffix, int n)
+	{
+		if (!token.isEmpty())
+		{
+			statStore.incrementStatBy(token + suffix, n);
+		}
 	}
 
 	List<Map.Entry<String, Integer>> derive(String tuple)
 	{
-		String[] parts = (tuple == null ? "" : tuple).split("\\|", -1);
-		if (parts.length < 4)
+		String[] p = tuple.split("\\|", -1);
+		if (p.length < 4)
 		{
 			return null;
 		}
-		String skill = parts[0];
-		String xpStr = parts[1];
-		String objId = parts[2];
-		String itemId = parts[3];
-		int qty = 1;
-		if (parts.length >= 5 && !parts[4].isEmpty())
-		{
-			qty = Math.max(1, intOr(parts[4], 1));
-		}
-		String target = parts.length >= 6 ? parts[5] : "";
-		String consumedId = parts.length >= 7 ? parts[6] : "";
-		int consumedQty = 1;
-		if (parts.length >= 8 && !parts[7].isEmpty())
-		{
-			consumedQty = Math.max(1, intOr(parts[7], 1));
-		}
+		return derive(p[0], intOr(p[1], 0), intOr(p[2], 0), intOr(p[3], 0),
+			p.length >= 5 ? Math.max(1, intOr(p[4], 1)) : 1, p.length >= 6 ? p[5] : "",
+			p.length >= 7 ? intOr(p[6], 0) : 0, p.length >= 8 ? Math.max(1, intOr(p[7], 1)) : 1);
+	}
 
-		if (consumedId.equals("2528") || consumedId.equals("13148") || consumedId.equals("34057"))
+	private List<Map.Entry<String, Integer>> derive(String skill, int xp, int obj, int item, int qty,
+		String target, int consumed, int consumedQty)
+	{
+		if (consumed == 2528 || consumed == 13148 || consumed == 34057
+			|| gauntlet(item) || gauntlet(consumed) || obj == 35969)
 		{
 			return null;
 		}
-		if (gauntletId(itemId) || gauntletId(consumedId) || "35969".equals(objId))
+		if (skill.equals("COOKING") && (consumed == 1995 || consumed == 1935 || consumed == 1937
+			|| (consumed == 0 && item == 0)) && xp > 0 && xp % 200 == 0 && xp / 200 <= 56)
 		{
-			return null;
+			return pairs("foodCooked", xp / 200, "jugOfWineCooked", xp / 200);
 		}
-
-		if (skill.equals("COOKING") && (consumedId.equals("1995") || consumedId.equals("1935")
-			|| consumedId.equals("1937") || (consumedId.isEmpty() && itemId.isEmpty())))
+		String tl = target.toLowerCase(Locale.ROOT);
+		switch (skill)
 		{
-			int xp = intOr(xpStr, 0);
-			if (xp > 0 && xp % 200 == 0 && xp / 200 <= 56)
-			{
-				int n = xp / 200;
-				return pairs("foodCooked", n, "jugOfWineCooked", n);
-			}
-		}
-
-		if (skill.equals("SMITHING"))
-		{
-			return smithing(name(itemId), qty);
-		}
-
-		if (skill.equals("HUNTER"))
-		{
-			String tl = target.toLowerCase(Locale.ROOT);
-			if (tl.contains("herbiboar"))
-			{
-				return pairs("herbiboarsHarvested", 1);
-			}
-			if ("50".equals(xpStr) && (isTrailTarget(tl)
-				|| itemId.equals("21555") || itemId.equals("21562") || itemId.equals("21566")
-				|| (tl.isEmpty() && itemId.isEmpty())))
-			{
-				return null;
-			}
-			if (tl.isEmpty())
-			{
-				int xp = intOr(xpStr, 0);
-				if (xp >= 1950 && xp <= 2461)
+			case "SMITHING":
+				return smithing(name(item), qty);
+			case "HUNTER":
+				if (tl.contains("herbiboar"))
 				{
-					String gained = name(itemId);
-					if (gained.isEmpty() || gained.startsWith("Grimy "))
-					{
-						return pairs("herbiboarsHarvested", 1);
-					}
+					return pairs("herbiboarsHarvested", 1);
 				}
-			}
+				if (xp == 50 && (isTrailTarget(tl) || item == 21555 || item == 21562 || item == 21566
+					|| (tl.isEmpty() && item == 0)))
+				{
+					return null;
+				}
+				if (tl.isEmpty() && xp >= 1950 && xp <= 2461
+					&& (name(item).isEmpty() || name(item).startsWith("Grimy ")))
+				{
+					return pairs("herbiboarsHarvested", 1);
+				}
+				break;
+			case "HERBLORE":
+				if (item == 0 && (tl.contains("herbiboar") || isTrailTarget(tl)))
+				{
+					return null;
+				}
+				break;
+			default:
+				break;
 		}
-		if (skill.equals("HERBLORE") && itemId.isEmpty())
-		{
-			String tl = target.toLowerCase(Locale.ROOT);
-			if (tl.contains("herbiboar") || isTrailTarget(tl))
-			{
-				return null;
-			}
-		}
-
 		if (PRODUCTION.contains(skill))
 		{
-			return production(skill, xpStr, itemId, qty, target, consumedId);
+			return production(skill, xp, item, qty, target, consumed);
 		}
-
-		if (skill.equals("RUNECRAFT"))
+		switch (skill)
 		{
-			String low = name(itemId).toLowerCase(Locale.ROOT);
-			boolean rune = low.endsWith(" rune") || low.endsWith(" runes");
-			if (!rune && !itemId.isEmpty())
+			case "RUNECRAFT":
+				return runecraft(item, qty, consumed, consumedQty);
+			case "FIREMAKING":
 			{
-				return null;
+				String tok = itemToken("WOODCUTTING", name(consumed));
+				return typed("logsBurned", 1, tok.isEmpty() ? ladder("FIREMAKING", xp) : tok, "LogsBurned");
 			}
-			List<Map.Entry<String, Integer>> out = typed("runesCrafted", qty,
-				rune ? stripCamel(low, new String[]{" runes", " rune"}, "") : "", "Runecrafted");
-			essenceSpent(out, consumedId, consumedQty);
-			return out;
+			case "PRAYER":
+				return prayer(name(consumed), xp);
+			case "THIEVING":
+				return thieving(target, xp, item);
+			case "AGILITY":
+				return typed("agilityObstacles", 1, item == 0 ? ladder("AGILITY", xp) : "", "");
+			case "CONSTRUCTION":
+				return pairs("constructionBuilds", 1);
+			case "SAILING":
+				return sailing(xp, item, consumed);
+			case "FARMING":
+				return typed("farmingActions", 1,
+					item == 0 ? ladder("FARMING", xp) : camelOrEmpty(name(item), "Harvested"), "");
+			default:
+				return gathering(skill, xp, obj, item, qty);
 		}
+	}
 
-		if (skill.equals("FIREMAKING"))
-		{
-			String tok = consumedId.isEmpty() ? "" : itemToken("WOODCUTTING", name(consumedId));
-			if (tok.isEmpty() && !xpStr.isEmpty())
-			{
-				tok = ladder("FIREMAKING", xpStr);
-			}
-			return typed("logsBurned", 1, tok, "LogsBurned");
-		}
-
-		if (skill.equals("PRAYER"))
-		{
-			return prayer(consumedId.isEmpty() ? "" : name(consumedId), xpStr);
-		}
-
-		if (skill.equals("THIEVING"))
-		{
-			return thieving(target, xpStr, itemId);
-		}
-
-		if (skill.equals("AGILITY"))
-		{
-			return typed("agilityObstacles", 1, itemId.isEmpty() ? ladder("AGILITY", xpStr) : "", "");
-		}
-		if (skill.equals("CONSTRUCTION"))
-		{
-			return pairs("constructionBuilds", 1);
-		}
-		if (skill.equals("SAILING"))
-		{
-			return sailing(xpStr, itemId, consumedId);
-		}
-		if (skill.equals("FARMING"))
-		{
-			List<Map.Entry<String, Integer>> out = pairs("farmingActions", 1);
-			if (!itemId.isEmpty())
-			{
-				String nm = name(itemId);
-				if (!nm.isEmpty())
-				{
-					out.add(entry(camel(nm) + "Harvested", 1));
-				}
-			}
-			else
-			{
-				String key = ladder("FARMING", xpStr);
-				if (!key.isEmpty())
-				{
-					out.add(entry(key, 1));
-				}
-			}
-			return out;
-		}
-
+	private List<Map.Entry<String, Integer>> gathering(String skill, int xp, int obj, int item, int qty)
+	{
 		String floor = GATHERING_FLOOR.get(skill);
 		if (floor == null)
 		{
 			return null;
 		}
-		String token = "";
-		int n = 1;
-		int gained = 0;
-		if (!itemId.isEmpty())
+		String token = item == 0 ? "" : itemToken(skill, name(item));
+		int n = token.isEmpty() ? 1 : qty;
+		int gained = token.isEmpty() ? 0 : canonical(item);
+		if (token.isEmpty() && obj != 0)
 		{
-			token = itemToken(skill, name(itemId));
-			if (!token.isEmpty())
-			{
-				n = qty;
-				gained = canonical(itemId);
-			}
+			token = OBJECT_SPECIES.getOrDefault(String.valueOf(obj), "");
 		}
-		if (token.isEmpty() && !objId.isEmpty())
+		if (token.isEmpty())
 		{
-			token = objTable().getOrDefault(objId, "");
-		}
-		if (token.isEmpty() && !xpStr.isEmpty())
-		{
-			token = ladder(skill, xpStr);
+			token = ladder(skill, xp);
 		}
 		List<Map.Entry<String, Integer>> out = typed(floor, n, token, GATHERING_SUFFIX.get(skill));
 		if (gained > 0 && VALUED_GATHERING.contains(skill))
@@ -468,11 +356,27 @@ public class SkillDeriver
 		return out;
 	}
 
-	private int canonical(String itemId)
+	private List<Map.Entry<String, Integer>> runecraft(int item, int qty, int consumed, int consumedQty)
+	{
+		String low = name(item).toLowerCase(Locale.ROOT);
+		boolean rune = low.endsWith(" rune") || low.endsWith(" runes");
+		if (!rune && item != 0)
+		{
+			return null;
+		}
+		List<Map.Entry<String, Integer>> out = typed("runesCrafted", qty,
+			rune ? stripCamel(low, new String[]{" runes", " rune"}, "") : "", "Runecrafted");
+		if (ALTAR_ESSENCE.contains(name(consumed).toLowerCase(Locale.ROOT)))
+		{
+			out.add(entry("essenceCrafted", consumedQty));
+		}
+		return out;
+	}
+
+	private int canonical(int id)
 	{
 		try
 		{
-			int id = Integer.parseInt(itemId);
 			return id > 0 ? itemManager.canonicalize(id) : 0;
 		}
 		catch (RuntimeException e)
@@ -483,34 +387,13 @@ public class SkillDeriver
 
 	private int valueOf(int canonicalId, int qty)
 	{
-		long each;
 		try
 		{
-			each = itemManager.getItemPrice(canonicalId);
+			return StatTracker.worth(itemManager, canonicalId, qty);
 		}
 		catch (RuntimeException e)
 		{
 			return 0;
-		}
-		if (each <= 0)
-		{
-			return 0;
-		}
-		long value = each * Math.max(1, qty);
-		return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
-	}
-
-	private void essenceSpent(List<Map.Entry<String, Integer>> out, String consumedId,
-		int consumedQty)
-	{
-		if (consumedId.isEmpty())
-		{
-			return;
-		}
-		String consumed = name(consumedId).toLowerCase(Locale.ROOT);
-		if (ALTAR_ESSENCE.contains(consumed))
-		{
-			out.add(entry("essenceCrafted", consumedQty));
 		}
 	}
 
@@ -533,17 +416,13 @@ public class SkillDeriver
 		}
 		String first = low.split(" ", 2)[0];
 		String metal = SMITH_ORE_ALIAS.getOrDefault(first, first);
-		if (SMITH_METALS.contains(metal))
-		{
-			return pairs(camel(metal) + "ItemsSmithed", qty);
-		}
-		return pairs("itemsSmithed", qty);
+		return pairs(SMITH_METALS.contains(metal) ? camel(metal) + "ItemsSmithed" : "itemsSmithed", qty);
 	}
 
-	private List<Map.Entry<String, Integer>> production(String skill, String xpStr,
-		String itemId, int qty, String target, String consumedId)
+	private List<Map.Entry<String, Integer>> production(String skill, int xp, int item, int qty,
+		String target, int consumed)
 	{
-		String name = name(itemId);
+		String name = name(item);
 		if (!name.isEmpty())
 		{
 			if (skill.equals("FLETCHING"))
@@ -556,7 +435,7 @@ public class SkillDeriver
 				if (name.equals("Arrow shaft"))
 				{
 					List<Map.Entry<String, Integer>> out = typed("logsFletched", 1,
-						consumedId.isEmpty() ? "" : itemToken("WOODCUTTING", name(consumedId)), "LogsFletched");
+						itemToken("WOODCUTTING", name(consumed)), "LogsFletched");
 					out.add(entry("arrowShaftsFletched", qty));
 					return out;
 				}
@@ -567,97 +446,88 @@ public class SkillDeriver
 			}
 			if (skill.equals("HUNTER"))
 			{
-				String bh = ladder("HUNTER_BIRDHOUSES", xpStr);
-				if (!bh.isEmpty() && (name.equals("Clockwork")
-					|| name.startsWith("Bird nest") || name.equals("Feather")))
+				List<Map.Entry<String, Integer>> caught = hunterItem(name, xp);
+				if (caught != null)
 				{
-					return pairs("birdhousesEmptied", 1, bh, 1);
-				}
-				if (name.equals("Small fishing net") || name.equals("Rope"))
-				{
-					List<Map.Entry<String, Integer>> typed = netTrap(xpStr);
-					return typed != null ? typed : pairs("creaturesTrapped", 1);
-				}
-				if (name.equals("Feather") || name.equals("Raw chompy"))
-				{
-					int xp = intOr(xpStr, 0);
-					if (xp > 0 && xp % 30 == 0 && xp / 30 <= 4)
-					{
-						return pairs("chompyBirdsPlucked", xp / 30);
-					}
-					return pairs("chompyBirdsPlucked", 1);
-				}
-				String sp = HUNTER_ITEM_SPECIES.get(name);
-				if (sp != null)
-				{
-					return pairs("creaturesTrapped", 1, sp, 1);
-				}
-				if (name.equals("Bones") || name.equals("Big bones")
-					|| name.equals("Raw bird meat") || name.equals("Raw beast meat"))
-				{
-					return typed("creaturesTrapped", 1, ladder("HUNTER", xpStr), "");
+					return caught;
 				}
 			}
-			Rule match = matchProduction(skill, name);
-			if (match != null)
+			String n = name.trim();
+			for (Rule r : n.isEmpty() ? Collections.<Rule>emptyList()
+				: ITEM_RULES.getOrDefault(skill, Collections.emptyList()))
 			{
-				return match.key == null ? null
-					: pairs(match.key, match.qty ? qty : 1);
+				if (r.hit.test(n))
+				{
+					return pairs(r.key, r.qty ? qty : 1);
+				}
 			}
 		}
-		if (skill.equals("HUNTER"))
+		return skill.equals("HUNTER") ? hunterTarget(target, xp, item, consumed) : null;
+	}
+
+	private List<Map.Entry<String, Integer>> hunterItem(String name, int xp)
+	{
+		String bh = ladder("HUNTER_BIRDHOUSES", xp);
+		if (!bh.isEmpty() && (name.equals("Clockwork") || name.startsWith("Bird nest") || name.equals("Feather")))
 		{
-			String tl = target.toLowerCase(Locale.ROOT).trim();
-			if (itemId.equals("28893"))
-			{
-				return pairs("creaturesTrapped", 1, "moonlightMothsTrapped", 1);
-			}
-			if (tl.endsWith(" moth"))
-			{
-				return typed("creaturesTrapped", 1, camel(tl.substring(0, tl.length() - 5).trim()),
-					"MothsTrapped");
-			}
-			String bf = BUTTERFLY_TARGETS.get(tl);
-			if (bf != null)
-			{
-				return pairs("creaturesTrapped", 1, bf, 1);
-			}
-			if (tl.contains("impling"))
-			{
-				return pairs("implingsCaught", 1);
-			}
-			if (itemId.isEmpty() && tl.isEmpty())
-			{
-				int xp = intOr(xpStr, 0);
-				if (xp == 84)
-				{
-					return pairs("creaturesTrapped", 1, "moonlightMothsTrapped", 1);
-				}
-				if (xp == 74)
-				{
-					return pairs("creaturesTrapped", 1, "sunlightMothsTrapped", 1);
-				}
-			}
-			if (consumedId.equals("10012"))
-			{
-				return pairs("creaturesTrapped", 1);
-			}
+			return pairs("birdhousesEmptied", 1, bh, 1);
+		}
+		if (name.equals("Small fishing net") || name.equals("Rope"))
+		{
+			List<Map.Entry<String, Integer>> typed = netTrap(xp);
+			return typed != null ? typed : pairs("creaturesTrapped", 1);
+		}
+		if (name.equals("Feather") || name.equals("Raw chompy"))
+		{
+			return pairs("chompyBirdsPlucked", xp > 0 && xp % 30 == 0 && xp / 30 <= 4 ? xp / 30 : 1);
+		}
+		String sp = HUNTER_ITEM_SPECIES.get(name);
+		if (sp != null)
+		{
+			return pairs("creaturesTrapped", 1, sp, 1);
+		}
+		if (name.equals("Bones") || name.equals("Big bones")
+			|| name.equals("Raw bird meat") || name.equals("Raw beast meat"))
+		{
+			return typed("creaturesTrapped", 1, ladder("HUNTER", xp), "");
 		}
 		return null;
 	}
 
-	private List<Map.Entry<String, Integer>> prayer(String consumedName, String xpStr)
+	private static List<Map.Entry<String, Integer>> hunterTarget(String target, int xp, int item, int consumed)
+	{
+		String tl = target.toLowerCase(Locale.ROOT).trim();
+		if (item == 28893 || (item == 0 && tl.isEmpty() && xp == 84))
+		{
+			return pairs("creaturesTrapped", 1, "moonlightMothsTrapped", 1);
+		}
+		if (tl.endsWith(" moth"))
+		{
+			return typed("creaturesTrapped", 1, camel(tl.substring(0, tl.length() - 5).trim()), "MothsTrapped");
+		}
+		String bf = BUTTERFLY_TARGETS.get(tl);
+		if (bf != null)
+		{
+			return pairs("creaturesTrapped", 1, bf, 1);
+		}
+		if (tl.contains("impling"))
+		{
+			return pairs("implingsCaught", 1);
+		}
+		if (item == 0 && tl.isEmpty() && xp == 74)
+		{
+			return pairs("creaturesTrapped", 1, "sunlightMothsTrapped", 1);
+		}
+		return consumed == 10012 ? pairs("creaturesTrapped", 1) : null;
+	}
+
+	private List<Map.Entry<String, Integer>> prayer(String consumedName, int xp)
 	{
 		String low = consumedName.trim().toLowerCase(Locale.ROOT);
-		int xp = intOr(xpStr, 0);
 		if (low.isEmpty())
 		{
 			String tok = ENSOULED_REANIM_XP.get(String.valueOf(xp));
-			if (tok != null)
-			{
-				return pairs("headsReanimated", 1, tok + "HeadsReanimated", 1);
-			}
-			return null;
+			return tok == null ? null : pairs("headsReanimated", 1, tok + "HeadsReanimated", 1);
 		}
 		if (low.endsWith(" rune") || low.endsWith(" runes") || low.equals("bird's egg"))
 		{
@@ -674,14 +544,9 @@ public class SkillDeriver
 			int[] verb = prayerVerb(xp, PRAYER_BASE_XP.get(tok));
 			if (verb[0] == 2)
 			{
-				return tok.isEmpty() ? new ArrayList<>()
-					: pairs(tok + "AshesSacrificed", verb[1]);
+				return tok.isEmpty() ? new ArrayList<>() : pairs(tok + "AshesSacrificed", verb[1]);
 			}
-			if (verb[0] == 1 || xp == 0)
-			{
-				return typed("ashesScattered", 1, tok, "AshesScattered");
-			}
-			return null;
+			return verb[0] == 1 || xp == 0 ? typed("ashesScattered", 1, tok, "AshesScattered") : null;
 		}
 		if (low.endsWith(" bones") || low.equals("bones"))
 		{
@@ -695,11 +560,7 @@ public class SkillDeriver
 			{
 				return pairs("bonesOffered", 1, tok + "BonesOffered", 1);
 			}
-			if (verb[0] == 1 || xp == 0)
-			{
-				return pairs("bonesBuried", 1, tok + "BonesBuried", 1);
-			}
-			return null;
+			return verb[0] == 1 || xp == 0 ? pairs("bonesBuried", 1, tok + "BonesBuried", 1) : null;
 		}
 		return null;
 	}
@@ -711,71 +572,54 @@ public class SkillDeriver
 			return new int[]{0, 0};
 		}
 		double base = Double.parseDouble(baseXp);
-		if (Math.floor(base) <= xp && xp <= Math.ceil(base))
+		if (near(xp, base))
 		{
 			return new int[]{1, 1};
 		}
 		for (int n = 1; n <= 3; n++)
 		{
-			double v = 3 * base * n;
-			if (Math.floor(v) <= xp && xp <= Math.ceil(v))
+			if (near(xp, 3 * base * n))
 			{
 				return new int[]{2, n};
 			}
 		}
-		double v = 3.5 * base;
-		if (Math.floor(v) <= xp && xp <= Math.ceil(v))
-		{
-			return new int[]{3, 1};
-		}
-		return new int[]{0, 0};
+		return near(xp, 3.5 * base) ? new int[]{3, 1} : new int[]{0, 0};
 	}
 
-	private List<Map.Entry<String, Integer>> thieving(String target, String xpStr, String itemId)
+	private static boolean near(int xp, double v)
+	{
+		return Math.floor(v) <= xp && xp <= Math.ceil(v);
+	}
+
+	private List<Map.Entry<String, Integer>> thieving(String target, int xp, int item)
 	{
 		String low = target.trim().toLowerCase(Locale.ROOT);
-		if (low.equals("urn"))
+		if (low.equals("urn") || (low.isEmpty() && (xp == 675 || xp == 825)))
 		{
 			return pairs("pyramidPlunderUrns", 1);
 		}
 		if (low.isEmpty())
 		{
-			if ("675".equals(xpStr) || "825".equals(xpStr))
+			String nm = name(item).toLowerCase(Locale.ROOT);
+			if (nm.endsWith("cannonball"))
 			{
-				return pairs("pyramidPlunderUrns", 1);
+				return pairs("stallsThieved", 1, "cannonballStallsThieved", 1);
 			}
-			if (!itemId.isEmpty())
+			if (nm.endsWith(" ore") || nm.equals("coal"))
 			{
-				String nm = name(itemId).toLowerCase(Locale.ROOT);
-				if (nm.endsWith("cannonball"))
-				{
-					return pairs("stallsThieved", 1, "cannonballStallsThieved", 1);
-				}
-				if (nm.endsWith(" ore") || nm.equals("coal"))
-				{
-					return pairs("stallsThieved", 1, "oreStallsThieved", 1);
-				}
+				return pairs("stallsThieved", 1, "oreStallsThieved", 1);
 			}
 			return null;
 		}
 		if (low.endsWith(" stall") || low.endsWith(" stalls"))
 		{
-			int i = low.lastIndexOf("stall");
-			String base = low.substring(0, i).trim();
-			if (base.isEmpty())
-			{
-				base = "market";
-			}
-			return pairs("stallsThieved", 1, camel(base) + "StallsThieved", 1);
+			String base = low.substring(0, low.lastIndexOf("stall")).trim();
+			return pairs("stallsThieved", 1, camel(base.isEmpty() ? "market" : base) + "StallsThieved", 1);
 		}
 		if (low.contains("chest"))
 		{
 			String base = low.replace("chest", "").trim();
-			if (base.isEmpty())
-			{
-				base = "normal";
-			}
-			return pairs("chestsLooted", 1, camel(base) + "ChestsLooted", 1);
+			return pairs("chestsLooted", 1, camel(base.isEmpty() ? "normal" : base) + "ChestsLooted", 1);
 		}
 		if (low.contains("safe"))
 		{
@@ -784,39 +628,28 @@ public class SkillDeriver
 		return typed("pickPockets", 1, camel(npcName(low)), "Pickpockets");
 	}
 
-	private List<Map.Entry<String, Integer>> sailing(String xpStr, String itemId,
-		String consumedId)
+	private List<Map.Entry<String, Integer>> sailing(int xp, int item, int consumed)
 	{
-		String gained = name(itemId).toLowerCase(Locale.ROOT);
+		String gained = name(item).toLowerCase(Locale.ROOT);
 		if (gained.endsWith(" salvage"))
 		{
-			return typed("salvagePulled", 1, stripCamel(gained, new String[]{" salvage"}, ""),
-				"SalvagePulled");
+			return typed("salvagePulled", 1, stripCamel(gained, new String[]{" salvage"}, ""), "SalvagePulled");
 		}
-		String used = name(consumedId).toLowerCase(Locale.ROOT);
+		String used = name(consumed).toLowerCase(Locale.ROOT);
 		if (used.endsWith(" salvage"))
 		{
-			return typed("salvageSorted", 1, stripCamel(used, new String[]{" salvage"}, ""),
-				"SalvageSorted");
+			return typed("salvageSorted", 1, stripCamel(used, new String[]{" salvage"}, ""), "SalvageSorted");
 		}
 		if (gained.contains("port coin bag") || gained.contains("port reward bag"))
 		{
 			return pairs("portTasksCompleted", 1);
 		}
-		if (itemId.isEmpty() && consumedId.isEmpty())
-		{
-			String key = ladder("SAILING", xpStr);
-			if (!key.isEmpty())
-			{
-				return pairs("barracudaTrialsCompleted", 1, key, 1);
-			}
-		}
-		return null;
+		String key = item == 0 && consumed == 0 ? ladder("SAILING", xp) : "";
+		return key.isEmpty() ? null : pairs("barracudaTrialsCompleted", 1, key, 1);
 	}
 
-	private List<Map.Entry<String, Integer>> netTrap(String xpStr)
+	private static List<Map.Entry<String, Integer>> netTrap(int xp)
 	{
-		double xp = intOr(xpStr, 0);
 		if (xp <= 0)
 		{
 			return null;
@@ -833,7 +666,7 @@ public class SkillDeriver
 		return null;
 	}
 
-	private String itemToken(String skill, String itemName)
+	private static String itemToken(String skill, String itemName)
 	{
 		String low = itemName.trim().toLowerCase(Locale.ROOT);
 		if (low.isEmpty())
@@ -848,8 +681,7 @@ public class SkillDeriver
 				{
 					return "";
 				}
-				n = low.equals("logs") || low.equals("log") ? "normal"
-					: low.replace(" logs", "").replace(" log", "").trim();
+				n = low.equals("logs") ? "" : low.replace(" logs", "").replace(" log", "").trim();
 				if (n.isEmpty())
 				{
 					n = "normal";
@@ -894,8 +726,7 @@ public class SkillDeriver
 			default:
 				n = low.startsWith("cooked ") ? low.substring(7).trim() : low;
 		}
-		String alias = ITEM_ALIASES.get(n);
-		return alias != null ? alias : camel(n);
+		return ITEM_ALIASES.getOrDefault(n, camel(n));
 	}
 
 	private static String fletchLogToken(String name)
@@ -908,76 +739,24 @@ public class SkillDeriver
 			{
 				return "normal";
 			}
-			if (first.equals("crossbow") || low.contains("crossbow"))
-			{
-				return "";
-			}
-			return camel(first);
+			return first.equals("crossbow") || low.contains("crossbow") ? "" : camel(first);
 		}
 		if (low.endsWith(" shield") && (low.contains("wooden") || low.split(" ").length <= 3))
 		{
 			String first = low.split(" ", 2)[0];
-			if (!first.equals("wooden"))
-			{
-				return camel(first);
-			}
-			return "normal";
+			return first.equals("wooden") ? "normal" : camel(first);
 		}
 		return "";
 	}
 
-	private Rule matchProduction(String skill, String itemName)
+	private String name(int id)
 	{
-		String n = itemName.trim();
-		if (n.isEmpty())
-		{
-			return null;
-		}
-		String low = n.toLowerCase(Locale.ROOT);
-		for (Rule r : itemRules().getOrDefault(skill, Collections.emptyList()))
-		{
-			boolean hit = false;
-			switch (r.match == null ? "" : r.match)
-			{
-				case "default":
-					hit = true;
-					break;
-				case "endswith":
-					hit = low.endsWith(r.value.toLowerCase(Locale.ROOT));
-					break;
-				case "contains":
-					hit = low.contains(r.value.toLowerCase(Locale.ROOT));
-					break;
-				case "regex":
-					hit = r.regex != null && r.regex.matcher(n).find();
-					break;
-				case "in_set":
-					hit = r.valueSet != null && r.valueSet.contains(n);
-					break;
-				default:
-					break;
-			}
-			if (hit)
-			{
-				return r;
-			}
-		}
-		return null;
-	}
-
-	private String name(String itemId)
-	{
-		if (itemId == null || itemId.isEmpty())
+		if (id <= 0)
 		{
 			return "";
 		}
 		try
 		{
-			int id = Integer.parseInt(itemId);
-			if (id <= 0)
-			{
-				return "";
-			}
 			String nm = itemManager.getItemComposition(itemManager.canonicalize(id)).getName();
 			return nm == null ? "" : nm;
 		}
@@ -987,23 +766,16 @@ public class SkillDeriver
 		}
 	}
 
-	private String ladder(String skill, String xpStr)
+	private static String ladder(String skill, int xp)
 	{
-		String v = xpTable().getOrDefault(skill, Collections.emptyMap()).get(xpStr);
-		return v == null ? "" : v;
+		JsonObject ladder = XP_LADDERS.getAsJsonObject(skill);
+		JsonElement v = ladder == null ? null : ladder.get(String.valueOf(xp));
+		return v == null ? "" : v.getAsString();
 	}
 
-	private static boolean gauntletId(String v)
+	private static boolean gauntlet(int id)
 	{
-		try
-		{
-			int id = Integer.parseInt(v);
-			return id >= 23824 && id <= 23858;
-		}
-		catch (RuntimeException e)
-		{
-			return false;
-		}
+		return id >= 23824 && id <= 23858;
 	}
 
 	private static boolean isTrailTarget(String tl)
@@ -1014,24 +786,20 @@ public class SkillDeriver
 
 	static String camel(String token)
 	{
-		String[] words = token.trim().toLowerCase(Locale.ROOT).split("[\\s\\-]+");
 		StringBuilder out = new StringBuilder();
-		for (String w : words)
+		for (String w : token.trim().toLowerCase(Locale.ROOT).split("[\\s\\-]+"))
 		{
-			if (w.isEmpty())
+			if (!w.isEmpty())
 			{
-				continue;
-			}
-			if (out.length() == 0)
-			{
-				out.append(w);
-			}
-			else
-			{
-				out.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1));
+				out.append(out.length() == 0 ? w : Character.toUpperCase(w.charAt(0)) + w.substring(1));
 			}
 		}
 		return out.toString();
+	}
+
+	private static String camelOrEmpty(String name, String suffix)
+	{
+		return name.isEmpty() ? "" : camel(name) + suffix;
 	}
 
 	private static String stripCamel(String nameLow, String[] strips, String def)
@@ -1054,8 +822,7 @@ public class SkillDeriver
 		{
 			low = def;
 		}
-		String alias = ITEM_ALIASES.get(low);
-		return alias != null ? alias : camel(low);
+		return ITEM_ALIASES.getOrDefault(low, camel(low));
 	}
 
 	private static List<Map.Entry<String, Integer>> pairs(Object... kv)
@@ -1070,11 +837,10 @@ public class SkillDeriver
 
 	private static Map.Entry<String, Integer> entry(String k, int v)
 	{
-		return new java.util.AbstractMap.SimpleEntry<>(k, v);
+		return new AbstractMap.SimpleEntry<>(k, v);
 	}
 
-	private static List<Map.Entry<String, Integer>> typed(String floor, int n, String tok,
-		String suffix)
+	private static List<Map.Entry<String, Integer>> typed(String floor, int n, String tok, String suffix)
 	{
 		List<Map.Entry<String, Integer>> out = pairs(floor, n);
 		if (!tok.isEmpty())
@@ -1096,111 +862,42 @@ public class SkillDeriver
 		}
 	}
 
-	private synchronized Map<String, Map<String, String>> xpTable()
+	private static Map<String, List<Rule>> rules(JsonObject file)
 	{
-		if (xpTable == null)
+		Map<String, List<Rule>> out = new HashMap<>();
+		for (Map.Entry<String, JsonElement> skill : file.entrySet())
 		{
-			xpTable = new HashMap<>();
-			for (Map.Entry<String, JsonElement> skill : Tables.load("osrs_skill_xp.json").entrySet())
+			if (!skill.getValue().isJsonArray())
 			{
-				if (!skill.getValue().isJsonObject())
-				{
-					continue;
-				}
-				Map<String, String> ladder = new HashMap<>();
-				for (Map.Entry<String, JsonElement> e
-					: skill.getValue().getAsJsonObject().entrySet())
-				{
-					if (e.getValue().isJsonPrimitive()
-						&& e.getValue().getAsJsonPrimitive().isString())
-					{
-						ladder.put(e.getKey(), e.getValue().getAsString());
-					}
-				}
-				xpTable.put(skill.getKey(), ladder);
+				continue;
 			}
+			List<Rule> rules = new ArrayList<>();
+			for (JsonElement el : skill.getValue().getAsJsonArray())
+			{
+				JsonObject r = el.getAsJsonObject();
+				rules.add(new Rule(test(r.get("match").getAsString(), r.get("value")),
+					r.get("key").getAsString(), r.has("qty") && r.get("qty").getAsBoolean()));
+			}
+			out.put(skill.getKey(), rules);
 		}
-		return xpTable;
+		return out;
 	}
 
-	private synchronized Map<String, List<Rule>> itemRules()
+	private static Predicate<String> test(String match, JsonElement value)
 	{
-		if (itemRules == null)
+		switch (match)
 		{
-			itemRules = new HashMap<>();
-			for (Map.Entry<String, JsonElement> skill
-				: Tables.load("osrs_skill_item_rules.json").entrySet())
-			{
-				if (!skill.getValue().isJsonArray())
-				{
-					continue;
-				}
-				List<Rule> rules = new ArrayList<>();
-				for (JsonElement el : skill.getValue().getAsJsonArray())
-				{
-					if (!el.isJsonObject())
-					{
-						continue;
-					}
-					JsonObject ro = el.getAsJsonObject();
-					Rule r = new Rule();
-					r.match = ro.has("match") ? ro.get("match").getAsString() : null;
-					r.key = ro.has("key") && !ro.get("key").isJsonNull()
-						? ro.get("key").getAsString() : null;
-					r.qty = ro.has("qty") && ro.get("qty").getAsBoolean();
-					if (ro.has("value"))
-					{
-						JsonElement v = ro.get("value");
-						if (v.isJsonArray())
-						{
-							r.valueSet = new HashSet<>();
-							for (JsonElement item : v.getAsJsonArray())
-							{
-								r.valueSet.add(item.getAsString());
-							}
-						}
-						else
-						{
-							r.value = v.getAsString();
-							if ("regex".equals(r.match))
-							{
-								try
-								{
-									r.regex = Pattern.compile(r.value);
-								}
-								catch (RuntimeException e)
-								{
-									r.match = "";
-								}
-							}
-						}
-					}
-					if (r.match != null)
-					{
-						rules.add(r);
-					}
-				}
-				itemRules.put(skill.getKey(), rules);
-			}
+			case "in_set":
+				return new HashSet<>(Arrays.asList(Tables.strings(value)))::contains;
+			case "regex":
+				Pattern regex = Pattern.compile(value.getAsString());
+				return n -> regex.matcher(n).find();
+			case "endswith":
+				String end = value.getAsString().toLowerCase(Locale.ROOT);
+				return n -> n.toLowerCase(Locale.ROOT).endsWith(end);
+			default:
+				String part = value.getAsString().toLowerCase(Locale.ROOT);
+				return n -> n.toLowerCase(Locale.ROOT).contains(part);
 		}
-		return itemRules;
-	}
-
-	private synchronized Map<String, String> objTable()
-	{
-		if (objTable == null)
-		{
-			objTable = new HashMap<>();
-			JsonObject o = Tables.load("osrs_object_species.json");
-			if (o.has("objects") && o.get("objects").isJsonObject())
-			{
-				for (Map.Entry<String, JsonElement> e
-					: o.getAsJsonObject("objects").entrySet())
-				{
-					objTable.put(e.getKey(), e.getValue().getAsString());
-				}
-			}
-		}
-		return objTable;
 	}
 }

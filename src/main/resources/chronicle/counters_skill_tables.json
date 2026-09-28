@@ -192,5 +192,8 @@
   "rune essence",
   "daeyalt essence",
   "dark essence fragments"
- ]
+ ],
+ "objectSpecies": {
+  "30985": "volcanicAsh"
+ }
 }

@@ -19,38 +19,10 @@
   "35": "ironOre",
   "40": "silverOre",
   "50": "coal",
-  "65": {
-   "members": [
-    "goldOre",
-    "gemRock"
-   ]
-  },
   "80": "mithrilOre",
   "95": "adamantiteOre",
   "125": "runiteOre",
   "240": "amethyst",
-  "5": {
-   "members": [
-    "basalt",
-    "clay",
-    "daeyaltShard",
-    "pureEssence",
-    "teSalt",
-    "urtSalt"
-   ]
-  },
-  "17": {
-   "members": [
-    "copperOre",
-    "tinOre"
-   ]
-  },
-  "18": {
-   "members": [
-    "copperOre",
-    "tinOre"
-   ]
-  },
   "12": "denseEssenceBlock"
  },
  "FISHING": {
@@ -69,38 +41,7 @@
   "90": "lobster",
   "105": "sacredEel",
   "110": "shark",
-  "130": "darkCrab",
-  "50": {
-   "members": [
-    "trout",
-    "leapingTrout",
-    "karambwan"
-   ]
-  },
-  "70": {
-   "members": [
-    "salmon",
-    "leapingSalmon"
-   ]
-  },
-  "80": {
-   "members": [
-    "tuna",
-    "leapingSturgeon"
-   ]
-  },
-  "100": {
-   "members": [
-    "bass",
-    "swordfish"
-   ]
-  },
-  "120": {
-   "members": [
-    "monkfish",
-    "anglerfish"
-   ]
-  }
+  "130": "darkCrab"
  },
  "COOKING": {
   "70": "trout",
@@ -111,13 +52,6 @@
   "190": "karambwan",
   "210": "shark",
   "230": "anglerfish",
-  "30": {
-   "members": [
-    "shrimp",
-    "anchovies",
-    "lavaEel"
-   ]
-  },
   "40": "sardine",
   "50": "herring",
   "60": "mackerel",
@@ -132,13 +66,7 @@
   "212": "seaTurtle",
   "215": "darkCrab",
   "216": "mantaRay",
-  "217": "mantaRay",
-  "100": {
-   "members": [
-    "tuna",
-    "chompy"
-   ]
-  }
+  "217": "mantaRay"
  },
  "FIREMAKING": {
   "60": "oak",
@@ -158,13 +86,7 @@
   "268": "rosewood",
   "303": "magic",
   "304": "magic",
-  "350": "redwood",
-  "40": {
-   "members": [
-    "normal",
-    "acheyTree"
-   ]
-  }
+  "350": "redwood"
  },
  "AGILITY": {
   "79": "draynorLaps",
