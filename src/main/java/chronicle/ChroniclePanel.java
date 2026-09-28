@@ -763,7 +763,7 @@ class ChroniclePanel extends PluginPanel
 		return tip(tab,
 			"Obtained", fmt(got),
 			"Available", fmt(total),
-			"Share", Math.round(got * 1000.0 / total) / 10.0 + "%");
+			"Share", share(got, total));
 	}
 
 	private static Map<String, Long> pageCounts(JsonObject cl)
@@ -1105,8 +1105,7 @@ class ChroniclePanel extends PluginPanel
 			hover = tip("Collection log",
 				"Obtained", fmt(figure),
 				"Available", logStanding != null ? fmt(logStanding[1]) : "not yet",
-				"Share", logStanding != null
-					? Math.round(logStanding[0] * 1000.0 / logStanding[1]) / 10.0 + "%" : "-");
+				"Share", logStanding != null ? share(logStanding[0], logStanding[1]) : "-");
 		}
 		else if ("Quests".equals(label))
 		{
@@ -2254,31 +2253,16 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel p = column();
 		List<JPanel> axes = new ArrayList<>();
-		axes.add(toggle(dropsLeftBehind ? "Left behind" : "Received", () ->
-		{
-			dropsLeftBehind = !dropsLeftBehind;
-			lootKind = null;
-			rebuildInPlace();
-		}));
+		axes.add(toggle(dropsLeftBehind ? "Left behind" : "Received", relens(() -> dropsLeftBehind = !dropsLeftBehind)));
 		if (!dropsLeftBehind || wholeRecord())
 		{
 			axes.add(toggle(dropsByKind
-				? (dropsLeftBehind ? "By item" : "By kind") : "By source", () ->
-			{
-				dropsByKind = !dropsByKind;
-				lootKind = null;
-				rebuildInPlace();
-			}));
+				? (dropsLeftBehind ? "By item" : "By kind") : "By source", relens(() -> dropsByKind = !dropsByKind)));
 		}
 		final boolean canAskOnTask = !dropsLeftBehind && dropsByKind && everOnTask();
 		if (canAskOnTask)
 		{
-			axes.add(toggle(onTaskOnly ? "On task" : "All", () ->
-			{
-				onTaskOnly = !onTaskOnly;
-				lootKind = null;
-				rebuildInPlace();
-			}));
+			axes.add(toggle(onTaskOnly ? "On task" : "All", relens(() -> onTaskOnly = !onTaskOnly)));
 		}
 		JPanel lens = new JPanel(new GridLayout(1, axes.size(), 3, 3));
 		lens.setBackground(DARK);
@@ -2328,23 +2312,31 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, lifeHead);
 		for (SourceRow r : firstN(sources, dropsShown))
 		{
-			JPanel card = cardPlain();
-			card.add(row(r.name, gps(r.value), accent()));
 			boolean killed = isKillSource(r.name);
-			String sub = (killed ? fmt(standingKills(r)) + " kc"
-				: count(r.loots, "drop"))
+			String sub = (killed ? fmt(standingKills(r)) + " kc" : count(r.loots, "drop"))
 				+ (r.pb != null ? " · PB " + pb(r.pb) : "");
-			card.add(row(sub, r.loots > 0
-				? gp(r.value / Math.max(1, r.loots))
-					+ (killed ? " gp/drop" : " gp each") : ""));
-			link(card, () -> openSource(r.name));
-			spaced(p, card, 4);
+			listCard(p, row(r.name, gps(r.value), accent()), sub,
+				r.loots > 0 ? perOne(r.value, r.loots, killed) : "", () -> openSource(r.name));
 		}
 		more(p, sources.size(), dropsShown, false, n -> dropsShown = n);
 		return p;
 	}
 
 	private boolean dropsByKind;
+
+	private static void listCard(JPanel p, JPanel head, String under, String right, Runnable go)
+	{
+		JPanel card = cardPlain();
+		card.add(head);
+		card.add(row(under, right));
+		link(card, go);
+		spaced(p, card, 4);
+	}
+
+	private static String perOne(long value, long n, boolean killed)
+	{
+		return gp(value / Math.max(1, n)) + (killed ? " gp/drop" : " gp each");
+	}
 
 	private JPanel buildLootByKind(JPanel p)
 	{
@@ -2454,17 +2446,9 @@ class ChroniclePanel extends PluginPanel
 		final int cap = drillShown.getOrDefault(key, ROW_CAP);
 		for (UntakenRow r : firstN(list, cap))
 		{
-			JPanel card = cardPlain();
-			card.add(row(r.name, gps(r.value), ACCENT_RED));
-			card.add(row(byItem ? "\u00d7" + fmt(r.qty) : fmt(r.qty) + " left", r.qty > 0
-				? gp(r.value / Math.max(1, r.qty)) + " gp each" : ""));
-			link(card, () ->
-			{
-				leftBehindItem = byItem ? r.name : null;
-				leftBehindSource = byItem ? null : r.name;
-				rebuild();
-			});
-			spaced(p, card, 4);
+			listCard(p, row(r.name, gps(r.value), ACCENT_RED),
+				byItem ? "\u00d7" + fmt(r.qty) : fmt(r.qty) + " left", r.qty > 0 ? perOne(r.value, r.qty, false) : "",
+				() -> showLeftBehind(byItem ? null : r.name, byItem ? r.name : null));
 		}
 		drillMore(p, key, list.size(), cap);
 		return p;
@@ -2564,9 +2548,21 @@ class ChroniclePanel extends PluginPanel
 		applyTab(View.SLAYER);
 		if (at >= 0)
 		{
-			detailTask = at;
-			rebuild();
+			showTask(at);
 		}
+	}
+
+	private void showTask(int at)
+	{
+		detailTask = at;
+		rebuild();
+	}
+
+	private void showLeftBehind(String source, String item)
+	{
+		leftBehindSource = source;
+		leftBehindItem = item;
+		rebuild();
 	}
 
 	private void openSlayer(String lens)
@@ -2710,6 +2706,16 @@ class ChroniclePanel extends PluginPanel
 		JPanel more = ghostRow(label, "");
 		link(more, reveal);
 		return more;
+	}
+
+	private Runnable relens(Runnable change)
+	{
+		return () ->
+		{
+			change.run();
+			lootKind = null;
+			rebuildInPlace();
+		};
 	}
 
 	private void more(JPanel p, int size, int cap, boolean inset, java.util.function.IntConsumer show)
@@ -2974,11 +2980,7 @@ class ChroniclePanel extends PluginPanel
 		JPanel bestRow = row("Best", gp(best.totalValue) + " gp · "
 			+ day((long) (best.ts * 1000)));
 		final int at = bestAt;
-		link(bestRow, () ->
-		{
-			detailTask = at;
-			rebuild();
-		});
+		link(bestRow, () -> showTask(at));
 		head.add(bestRow);
 	}
 
@@ -3058,12 +3060,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildLeftBehindDetail()
 	{
 		JPanel p = column();
-		p.add(backRow("< Back", "", () ->
-		{
-			leftBehindSource = null;
-			leftBehindItem = null;
-			rebuild();
-		}));
+		p.add(backRow("< Back", "", () -> showLeftBehind(null, null)));
 		p.add(vgap(4));
 
 		if (leftBehindSource != null)
@@ -3092,12 +3089,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				JPanel r = row(named(b.name, b.qty),
 					gps(b.value), ACCENT_RED);
-				link(r, () ->
-				{
-					leftBehindItem = b.name;
-					leftBehindSource = null;
-					rebuild();
-				});
+				link(r, () -> showLeftBehind(null, b.name));
 				p.add(r);
 			}
 			return p;
@@ -3125,12 +3117,7 @@ class ChroniclePanel extends PluginPanel
 		for (UntakenRow r : sources)
 		{
 			JPanel row = row(r.name, "×" + qtyGp(r.qty, r.value), ACCENT_RED);
-			link(row, () ->
-			{
-				leftBehindSource = r.name;
-				leftBehindItem = null;
-				rebuild();
-			});
+			link(row, () -> showLeftBehind(r.name, null));
 			p.add(row);
 		}
 		return p;
@@ -3190,15 +3177,7 @@ class ChroniclePanel extends PluginPanel
 		for (int k = 0; k < Math.min(shown.size(), slayerShown); k++)
 		{
 			SlayerTask t = shown.get(k);
-			JPanel card = cardPlain();
 			final int at = where.get(k);
-			link(card, () ->
-			{
-				detailTask = at;
-				rebuild();
-			});
-			card.add(row(t.task, t.totalValue > 0 ? gps(t.totalValue) : "",
-				accent(), t.inProgress));
 			String kills = t.inProgress && t.assignment > t.kills
 				? fmt(t.kills) + " / " + fmt(t.assignment)
 				: count(t.kills, "kill");
@@ -3206,9 +3185,8 @@ class ChroniclePanel extends PluginPanel
 			{
 				kills += " · " + fmt(t.noLootKills) + " no-drop";
 			}
-			card.add(row(kills, t.ts > 0
-				? day((long) (t.ts * 1000)) : ""));
-			spaced(p, card, 4);
+			listCard(p, row(t.task, t.totalValue > 0 ? gps(t.totalValue) : "", accent(), t.inProgress),
+				kills, t.ts > 0 ? day((long) (t.ts * 1000)) : "", () -> showTask(at));
 		}
 		if (shown.size() > slayerShown)
 		{
@@ -3942,12 +3920,7 @@ class ChroniclePanel extends PluginPanel
 		if (hasTask)
 		{
 			JPanel hold = column();
-			hold.add(toggle(onTaskOnly ? "On task" : "All", () ->
-			{
-				onTaskOnly = !onTaskOnly;
-				lootKind = null;
-				rebuildInPlace();
-			}));
+			hold.add(toggle(onTaskOnly ? "On task" : "All", relens(() -> onTaskOnly = !onTaskOnly)));
 			hold.add(vgap(6));
 			p.add(hold);
 		}
@@ -4226,8 +4199,7 @@ class ChroniclePanel extends PluginPanel
 			long worth = inWindow != null ? inWindow[1] : sr.value;
 			long over = inWindow != null ? inWindow[0] : sr.loots;
 			head.add(row("Worth", gps(worth)
-				+ (over > 0 ? " · " + gp(worth / Math.max(1, over))
-					+ (killed ? " gp/drop" : " gp each") : "")));
+				+ (over > 0 ? " · " + perOne(worth, over, killed) : "")));
 			if (inWindow == null)
 			{
 				addKillSources(head, sr, killed ? shown : -1);
@@ -8537,7 +8509,12 @@ class ChroniclePanel extends PluginPanel
 			histTo = null;
 			histCursor = dayOf(ts);
 		}
-		journalLens = "All";
+		openJournal("All");
+	}
+
+	private void openJournal(String lens)
+	{
+		journalLens = lens;
 		applyTab(View.JOURNAL);
 	}
 
@@ -9695,11 +9672,8 @@ class ChroniclePanel extends PluginPanel
 		int sittings = (int) sat[1];
 		if (sittings > 0)
 		{
-			plateRow(plate, "Played", hoursMinutes(minutes) + " · " + count(sittings, "sitting"), () ->
-			{
-				journalLens = "Sessions";
-				applyTab(View.JOURNAL);
-			});
+			plateRow(plate, "Played", hoursMinutes(minutes) + " · " + count(sittings, "sitting"),
+				() -> openJournal("Sessions"));
 		}
 		if (busiest[0] != null && sittings > 1)
 		{
@@ -9857,11 +9831,7 @@ class ChroniclePanel extends PluginPanel
 			right.fixed(" · ");
 			right.name(name);
 		}
-		plateRow(plate, n == 1 ? one : many, right, () ->
-		{
-			journalLens = lens;
-			applyTab(View.JOURNAL);
-		});
+		plateRow(plate, n == 1 ? one : many, right, () -> openJournal(lens));
 	}
 
 	private long[] periodXp()
@@ -11018,8 +10988,7 @@ class ChroniclePanel extends PluginPanel
 						journeyCache = journey;
 					}
 					applyTab(View.SLAYER);
-					detailTask = at;
-					rebuild();
+					showTask(at);
 				}, matchScore(ql, name), seen[0]));
 			}
 		}
@@ -11845,6 +11814,11 @@ class ChroniclePanel extends PluginPanel
 	private static String named(String name, long qty)
 	{
 		return name + (qty > 1 ? " \u00d7" + fmt(qty) : "");
+	}
+
+	private static String share(long part, long whole)
+	{
+		return Math.round(part * 1000.0 / whole) / 10.0 + "%";
 	}
 
 	private static String climb(long from, long to)
