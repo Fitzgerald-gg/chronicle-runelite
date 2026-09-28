@@ -40,7 +40,7 @@ public class LootSeenTest
 	{
 		ItemManager im = Mockito.mock(ItemManager.class);
 		Mockito.when(im.canonicalize(Mockito.anyInt())).thenAnswer(inv -> inv.getArgument(0));
-		Mockito.when(im.getItemPrice(Mockito.anyInt())).thenReturn(100);
+		Mockito.when(im.getItemPrice(Mockito.anyInt())).thenReturn(100L);
 		Mockito.when(im.getItemComposition(Mockito.anyInt())).thenAnswer(inv ->
 		{
 			ItemComposition comp = Mockito.mock(ItemComposition.class);

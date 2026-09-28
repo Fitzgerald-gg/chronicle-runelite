@@ -36,7 +36,7 @@ public class DatedRecordTest
 	public void mount() throws Exception
 	{
 		ItemManager items = Mockito.mock(ItemManager.class);
-		Mockito.when(items.getItemPrice(Mockito.anyInt())).thenReturn(100);
+		Mockito.when(items.getItemPrice(Mockito.anyInt())).thenReturn(100L);
 		store = new LocalStore(items, new Gson());
 		store.load(dir.getRoot(), "Tester");
 	}

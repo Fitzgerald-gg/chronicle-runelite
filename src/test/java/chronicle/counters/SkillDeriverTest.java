@@ -32,7 +32,7 @@ public class SkillDeriverTest
 		Mockito.when(im.canonicalize(Mockito.anyInt()))
 			.thenAnswer(inv -> inv.getArgument(0));
 		Mockito.when(im.getItemPrice(Mockito.anyInt()))
-			.thenAnswer(inv -> prices.getOrDefault((Integer) inv.getArgument(0), 0));
+			.thenAnswer(inv -> (long) prices.getOrDefault((Integer) inv.getArgument(0), 0));
 		Mockito.when(im.getItemComposition(Mockito.anyInt())).thenAnswer(inv ->
 		{
 			ItemComposition c = Mockito.mock(ItemComposition.class);

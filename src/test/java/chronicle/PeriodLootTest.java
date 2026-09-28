@@ -179,7 +179,7 @@ public class PeriodLootTest
 	{
 		ItemManager im = Mockito.mock(ItemManager.class);
 		Mockito.when(im.canonicalize(Mockito.anyInt())).thenAnswer(i -> i.getArgument(0));
-		Mockito.when(im.getItemPrice(Mockito.anyInt())).thenReturn(10);
+		Mockito.when(im.getItemPrice(Mockito.anyInt())).thenReturn(10L);
 		Mockito.when(im.getItemComposition(Mockito.anyInt())).thenAnswer(i ->
 		{
 			net.runelite.api.ItemComposition c = Mockito.mock(net.runelite.api.ItemComposition.class);
@@ -539,7 +539,7 @@ public class PeriodLootTest
 		String[] name = {"Old name"};
 		ItemManager im = Mockito.mock(ItemManager.class);
 		Mockito.when(im.canonicalize(Mockito.anyInt())).thenAnswer(i -> i.getArgument(0));
-		Mockito.when(im.getItemPrice(Mockito.anyInt())).thenReturn(10);
+		Mockito.when(im.getItemPrice(Mockito.anyInt())).thenReturn(10L);
 		Mockito.when(im.getItemComposition(Mockito.anyInt())).thenAnswer(i ->
 		{
 			net.runelite.api.ItemComposition c = Mockito.mock(net.runelite.api.ItemComposition.class);

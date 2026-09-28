@@ -73,13 +73,13 @@ public class ItemStatTracker implements StatTracker
 			}
 		}
 		final int canonical = itemManager.canonicalize(itemId);
-		final int each = itemManager.getItemPrice(canonical);
+		final long each = itemManager.getItemPrice(canonical);
 		if (each <= 0)
 		{
 			return;
 		}
 		// clamp: StatStore takes an int, and a full stack of anything valuable overflows one
-		final long value = (long) each * qty;
+		final long value = each * qty;
 		final int banked = value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
 		statStore.incrementStatBy("itemsDroppedValue", banked);
 		// the total above counts every bin, bank clear-outs included. this second figure

@@ -50,8 +50,8 @@ public class ItemStatTrackerTest
 		net.runelite.client.game.ItemManager items =
 			Mockito.mock(net.runelite.client.game.ItemManager.class);
 		Mockito.when(items.canonicalize(Mockito.anyInt())).thenAnswer(inv -> inv.getArgument(0));
-		Mockito.when(items.getItemPrice(YEW_LOGS)).thenReturn(240);
-		Mockito.when(items.getItemPrice(RUNE_SCIMITAR)).thenReturn(15_000);
+		Mockito.when(items.getItemPrice(YEW_LOGS)).thenReturn(240L);
+		Mockito.when(items.getItemPrice(RUNE_SCIMITAR)).thenReturn(15_000L);
 
 		gathered = new HashSet<>();
 		tracker = new ItemStatTracker(store, client, items, new GatheredLedger()
@@ -132,7 +132,7 @@ public class ItemStatTrackerTest
 		net.runelite.client.game.ItemManager items =
 			Mockito.mock(net.runelite.client.game.ItemManager.class);
 		Mockito.when(items.canonicalize(Mockito.anyInt())).thenAnswer(inv -> inv.getArgument(0));
-		Mockito.when(items.getItemPrice(YEW_LOGS)).thenReturn(240);
+		Mockito.when(items.getItemPrice(YEW_LOGS)).thenReturn(240L);
 		tracker = new ItemStatTracker(store, client, items, null);
 
 		drop(YEW_LOGS, 5);

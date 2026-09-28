@@ -280,7 +280,8 @@ public class FoodStatTracker implements StatTracker
 				// the floor under the typed <food>Eaten keys, so it shares their wording
 				store.incrementStat("foodEaten");
 				// Priced at the bite off the client's own GE feed, like drops at the kill.
-				int price = itemManager.getItemPrice(itemManager.canonicalize(before.getKey()));
+				int price = (int) Math.min(itemManager.getItemPrice(itemManager.canonicalize(before.getKey())),
+					Integer.MAX_VALUE);
 				if (price > 0)
 				{
 					store.incrementStatBy("consumedValue", price);
@@ -480,7 +481,8 @@ public class FoodStatTracker implements StatTracker
 			// A (4) in the pack is the row itself; a lower dose finds its 4-dose sibling
 			// by catalogue name, which the search then matches exactly.
 			int fourDoseId = dose.doses == 4 ? dose.itemId : fourDoseId(dose.base);
-			int perDose = fourDoseId >= 0 ? itemManager.getItemPrice(fourDoseId) / 4 : 0;
+			int perDose = fourDoseId >= 0
+				? (int) Math.min(itemManager.getItemPrice(fourDoseId) / 4, Integer.MAX_VALUE) : 0;
 			if (perDose > 0)
 			{
 				itemDosePrices.put(dose.base, perDose);
@@ -535,7 +537,7 @@ public class FoodStatTracker implements StatTracker
 				{
 					if (p.getName().equalsIgnoreCase(fourDose))
 					{
-						int dose = p.getPrice() / 4;
+						int dose = (int) Math.min(p.getPrice() / 4, Integer.MAX_VALUE);
 						dosePrices.put(potion, dose);
 						return dose;
 					}

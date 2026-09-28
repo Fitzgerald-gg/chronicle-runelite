@@ -551,7 +551,7 @@ public class SkillDeriver
 	// live GE worth of qty of a canonical id; 0 for anything unpriced
 	private int valueOf(int canonicalId, int qty)
 	{
-		int each;
+		long each;
 		try
 		{
 			each = itemManager.getItemPrice(canonicalId);
@@ -566,7 +566,7 @@ public class SkillDeriver
 		}
 		// clamp the multiply so a big harvest can't overflow int on the way to
 		// StatStore, which saturates the running total.
-		long value = (long) each * Math.max(1, qty);
+		long value = each * Math.max(1, qty);
 		return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
 	}
 

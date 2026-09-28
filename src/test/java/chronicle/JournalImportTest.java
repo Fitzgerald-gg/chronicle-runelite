@@ -32,7 +32,7 @@ public class JournalImportTest
 	{
 		ItemManager im = Mockito.mock(ItemManager.class);
 		Mockito.when(im.canonicalize(Mockito.anyInt())).thenAnswer(inv -> inv.getArgument(0));
-		Mockito.when(im.getItemPrice(Mockito.anyInt())).thenReturn(10);
+		Mockito.when(im.getItemPrice(Mockito.anyInt())).thenReturn(10L);
 		ItemComposition comp = Mockito.mock(ItemComposition.class);
 		Mockito.when(comp.getName()).thenReturn("Rune dagger");
 		Mockito.when(im.getItemComposition(Mockito.anyInt())).thenReturn(comp);
