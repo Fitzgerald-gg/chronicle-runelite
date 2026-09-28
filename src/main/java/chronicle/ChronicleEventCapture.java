@@ -39,7 +39,6 @@ import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
-import net.runelite.api.Tile;
 import net.runelite.api.TileItem;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
@@ -156,6 +155,17 @@ public class ChronicleEventCapture
 	private final List<RecentDeath> recentDeaths = new ArrayList<>();
 	private static final int DROP_WINDOW_TICKS = 2;
 	private final List<RecentDrop> recentDrops = new ArrayList<>();
+	private int petPendingTicks = -1;
+	private String pendingSlayerTask;
+	private String pendingSlayerMonster;
+	private Integer pendingSlayerKills;
+	private int slayerPendingTicks = -1;
+	private String lastSlayerTask;
+	private String lastSlayerCompletionTask;
+	private long lastSlayerCompletionAtMs = -1;
+	private volatile boolean slayerSeenThisSession;
+
+	static final long SLAYER_FINAL_KILL_GRACE_MS = LocalStore.SLAYER_FINAL_KILL_GRACE * 1000L;
 
 	@RequiredArgsConstructor
 	private static final class RecentDrop
@@ -207,17 +217,6 @@ public class ChronicleEventCapture
 				source, killTick, killIndex);
 		}
 	}
-
-	private int petPendingTicks = -1;
-	private String pendingSlayerTask;
-	private String pendingSlayerMonster;
-	private Integer pendingSlayerKills;
-	private int slayerPendingTicks = -1;
-	private String lastSlayerTask;
-	private String lastSlayerCompletionTask;
-	private long lastSlayerCompletionAtMs = -1;
-
-	static final long SLAYER_FINAL_KILL_GRACE_MS = LocalStore.SLAYER_FINAL_KILL_GRACE * 1000L;
 
 	@Inject
 	ChronicleEventCapture(Client client, ClientThread clientThread, ConfigManager configManager,
@@ -380,18 +379,18 @@ public class ChronicleEventCapture
 		}
 	}
 
+	private static boolean armedFor(RecentKill k, GroundLoot g)
+	{
+		int since = g.spawnTick - k.tick;
+		return since >= 0 && since <= (g.group ? 0 : KILL_ARM_TICKS);
+	}
+
 	private RecentKill killFor(GroundLoot g)
 	{
-		int window = g.group ? 0 : KILL_ARM_TICKS;
 		RecentKill best = null;
 		for (RecentKill k : recentKills)
 		{
-			int since = g.spawnTick - k.tick;
-			if (since < 0 || since > window)
-			{
-				continue;
-			}
-			if (best == null || k.tick > best.tick)
+			if (armedFor(k, g) && (best == null || k.tick > best.tick))
 			{
 				best = k;
 			}
@@ -405,13 +404,13 @@ public class ChronicleEventCapture
 		{
 			return null;
 		}
-		int window = g.group ? 0 : KILL_ARM_TICKS;
 		RecentDeath best = null;
 		int bestDistance = 0;
 		for (RecentDeath d : recentDeaths)
 		{
 			int since = g.spawnTick - d.tick;
-			if (since < 0 || since > DEATH_MEMORY_TICKS || !armedInWindow(d.name, g.spawnTick, window))
+			if (since < 0 || since > DEATH_MEMORY_TICKS
+				|| recentKills.stream().noneMatch(k -> armedFor(k, g) && d.name.equals(k.source)))
 			{
 				continue;
 			}
@@ -428,19 +427,6 @@ public class ChronicleEventCapture
 			}
 		}
 		return best;
-	}
-
-	private boolean armedInWindow(String source, int spawnTick, int window)
-	{
-		for (RecentKill k : recentKills)
-		{
-			int since = spawnTick - k.tick;
-			if (since >= 0 && since <= window && source.equals(k.source))
-			{
-				return true;
-			}
-		}
-		return false;
 	}
 
 	private void armKill(String source)
@@ -467,13 +453,7 @@ public class ChronicleEventCapture
 		data.addProperty("npcId", comp.getId());
 		data.addProperty("category", "NPC");
 		data.addProperty("lootSource", "server");
-		Integer kc = recentKc.get(cleanKey(comp.getName()));
-		if (kc != null)
-		{
-			data.addProperty("killCount", kc);
-		}
-		attachKillTime(data);
-		data.add("items", itemsToJson(event.getItems()));
+		addLoot(data, comp.getName(), event.getItems());
 		stampSlayer(data, comp.getName(), comp.getId());
 		emit("LOOT", data);
 		armKill(comp.getName());
@@ -493,13 +473,12 @@ public class ChronicleEventCapture
 			me == null ? null : me.getWorldLocation()));
 	}
 
-	private boolean isOwnDrop(TileItem it, Tile tile, int now)
+	private boolean isOwnDrop(TileItem it, WorldPoint at, int now)
 	{
 		if (recentDrops.isEmpty())
 		{
 			return false;
 		}
-		WorldPoint at = tile == null ? null : tile.getWorldLocation();
 		Player me = client.getLocalPlayer();
 		WorldPoint mine = me == null ? null : me.getWorldLocation();
 		for (int i = 0; i < recentDrops.size(); i++)
@@ -532,28 +511,23 @@ public class ChronicleEventCapture
 		{
 			return;
 		}
-		int now = client.getTickCount();
 		if (groundLoot.containsKey(it))
 		{
 			return;
 		}
-		Tile back = event.getTile();
-		TileItem prior = trackedStack(back == null ? null : back.getWorldLocation(),
-			it.getId(), it.getQuantity());
+		int now = client.getTickCount();
+		WorldPoint at = event.getTile() == null ? null : event.getTile().getWorldLocation();
+		TileItem prior = trackedStack(at, it.getId(), it.getQuantity());
 		if (prior != null)
 		{
 			groundLoot.put(it, groundLoot.remove(prior));
 			unloaded.remove(prior);
 			return;
 		}
-		if (isOwnDrop(it, event.getTile(), now))
+		if (!isOwnDrop(it, at, now))
 		{
-			return;
+			pendingSelf.put(it, new GroundLoot(it.getId(), it.getQuantity(), it.getDespawnTime(), now, group, localName(), at));
 		}
-		Tile tile = event.getTile();
-		pendingSelf.put(it, new GroundLoot(it.getId(), it.getQuantity(),
-			it.getDespawnTime(), now, group, localName(),
-			tile == null ? null : tile.getWorldLocation()));
 	}
 
 	@Subscribe
@@ -566,34 +540,30 @@ public class ChronicleEventCapture
 		{
 			return;
 		}
-		int now = client.getTickCount();
-		boolean left = g.despawnTick > 0 && now >= g.despawnTick - 1;
-		if (left)
+		if (g.despawnTick > 0 && client.getTickCount() >= g.despawnTick - 1)
 		{
 			untakenBatch.add(g);
 		}
 	}
 
-	SlayerView slayerView()
+	private String currentTask()
 	{
-		if (slayerService == null)
-		{
-			return null;
-		}
 		try
 		{
-			String task = slayerService.getTask();
-			if (task == null || task.isEmpty())
-			{
-				return null;
-			}
-			return new SlayerView(task, slayerService.getRemainingAmount(),
-				slayerService.getInitialAmount());
+			String task = slayerService == null ? null : slayerService.getTask();
+			return task == null || task.isEmpty() ? null : task;
 		}
 		catch (RuntimeException ignored)
 		{
 			return null;
 		}
+	}
+
+	SlayerView slayerView()
+	{
+		String task = currentTask();
+		return task == null ? null
+			: new SlayerView(task, slayerService.getRemainingAmount(), slayerService.getInitialAmount());
 	}
 
 	@RequiredArgsConstructor
@@ -610,35 +580,29 @@ public class ChronicleEventCapture
 		{
 			return;
 		}
-		try
+		String task = currentTask();
+		if (task == null)
 		{
-			String task = slayerService.getTask();
-			if (task == null || task.isEmpty())
+			String done = finishingKillTask();
+			if (done != null && SlayerTaskBook.onTask(npcName, npcId, done))
 			{
-				String done = finishingKillTask();
-				if (done != null && SlayerTaskBook.onTask(npcName, npcId, done))
-				{
-					data.addProperty("slayerTask", done);
-				}
-				return;
+				data.addProperty("slayerTask", done);
 			}
-			lastSlayerTask = task;
-			slayerSeenThisSession = true;
-			if (!SlayerTaskBook.onTask(npcName, npcId, task))
-			{
-				return;
-			}
-			data.addProperty("slayerTask", task);
-			data.addProperty("slayerTaskRemaining", slayerService.getRemainingAmount());
-			data.addProperty("slayerTaskInitial", slayerService.getInitialAmount());
-			String loc = slayerService.getTaskLocation();
-			if (loc != null && !loc.isEmpty())
-			{
-				data.addProperty("slayerTaskLocation", loc);
-			}
+			return;
 		}
-		catch (RuntimeException ignored)
+		lastSlayerTask = task;
+		slayerSeenThisSession = true;
+		if (!SlayerTaskBook.onTask(npcName, npcId, task))
 		{
+			return;
+		}
+		data.addProperty("slayerTask", task);
+		data.addProperty("slayerTaskRemaining", slayerService.getRemainingAmount());
+		data.addProperty("slayerTaskInitial", slayerService.getInitialAmount());
+		String loc = slayerService.getTaskLocation();
+		if (loc != null && !loc.isEmpty())
+		{
+			data.addProperty("slayerTaskLocation", loc);
 		}
 	}
 
@@ -656,14 +620,31 @@ public class ChronicleEventCapture
 		return null;
 	}
 
-	private void emitSlayerCompletion(JsonObject data)
+	private void emitSlayerCompletion(String task, Integer count)
 	{
-		lastSlayerCompletionTask = data.get("task").getAsString();
-		lastSlayerCompletionAtMs = System.currentTimeMillis();
-		emit("SLAYER", data);
+		if (task != null)
+		{
+			JsonObject data = new JsonObject();
+			data.addProperty("task", task);
+			data.addProperty("monster", task);
+			if (pendingSlayerKills != null)
+			{
+				data.addProperty("killCount", pendingSlayerKills);
+			}
+			if (count != null)
+			{
+				data.addProperty("count", count);
+			}
+			lastSlayerCompletionTask = task;
+			lastSlayerCompletionAtMs = System.currentTimeMillis();
+			emit("SLAYER", data);
+		}
+		pendingSlayerTask = null;
+		pendingSlayerMonster = null;
+		pendingSlayerKills = null;
+		lastSlayerTask = null;
+		slayerPendingTicks = -1;
 	}
-
-	private volatile boolean slayerSeenThisSession;
 
 	boolean slayerSeenThisSession()
 	{
@@ -673,23 +654,6 @@ public class ChronicleEventCapture
 	void resetSessionFlags()
 	{
 		slayerSeenThisSession = false;
-	}
-
-	private String slayerTaskFromService()
-	{
-		if (slayerService == null)
-		{
-			return null;
-		}
-		try
-		{
-			String t = slayerService.getTask();
-			return (t == null || t.isEmpty()) ? null : t;
-		}
-		catch (RuntimeException ex)
-		{
-			return null;
-		}
 	}
 
 	@Subscribe
@@ -702,29 +666,42 @@ public class ChronicleEventCapture
 		JsonObject data = new JsonObject();
 		data.addProperty("source", event.getName());
 		data.addProperty("category", event.getType() != null ? event.getType().name() : "EVENT");
-		Integer kc = recentKc.get(cleanKey(event.getName()));
+		addLoot(data, event.getName(), event.getItems());
+		emit("LOOT", data);
+	}
+
+	private void addLoot(JsonObject data, String source, Collection<ItemStack> items)
+	{
+		Integer kc = recentKc.get(cleanKey(source));
 		if (kc != null)
 		{
 			data.addProperty("killCount", kc);
 		}
-		attachKillTime(data);
-		data.add("items", itemsToJson(event.getItems()));
-		emit("LOOT", data);
-	}
-
-	private void attachKillTime(JsonObject data)
-	{
-		if (lastKillTimeTick < 0 || client.getTickCount() - lastKillTimeTick > KILL_TIME_PAIR_TICKS)
+		if (lastKillTimeTick >= 0 && client.getTickCount() - lastKillTimeTick <= KILL_TIME_PAIR_TICKS)
 		{
-			return;
+			data.addProperty("killTime", lastKillTimeSec);
+			data.addProperty("personalBest", lastKillPb);
+			if (lastPbTimeSec >= 0)
+			{
+				data.addProperty("personalBestTime", lastPbTimeSec);
+			}
+			lastKillTimeTick = -1;
 		}
-		data.addProperty("killTime", lastKillTimeSec);
-		data.addProperty("personalBest", lastKillPb);
-		if (lastPbTimeSec >= 0)
+		JsonArray arr = new JsonArray();
+		if (items != null)
 		{
-			data.addProperty("personalBestTime", lastPbTimeSec);
+			for (ItemStack is : items)
+			{
+				if (is != null)
+				{
+					JsonObject o = new JsonObject();
+					o.addProperty("id", is.getId());
+					o.addProperty("quantity", is.getQuantity());
+					arr.add(o);
+				}
+			}
 		}
-		lastKillTimeTick = -1;
+		data.add("items", arr);
 	}
 
 	static double parseDuration(String text)
@@ -747,11 +724,10 @@ public class ChronicleEventCapture
 			groupStorageCurrent = null;
 			return;
 		}
-		if (event.getGroupId() != InterfaceID.QUESTSCROLL)
+		if (event.getGroupId() == InterfaceID.QUESTSCROLL)
 		{
-			return;
+			emitQuestFromScroll();
 		}
-		emitQuestFromScroll();
 	}
 
 	@Subscribe
@@ -1003,23 +979,17 @@ public class ChronicleEventCapture
 		Matcher kc = KILL_COUNT.matcher(msg);
 		if (kc.find())
 		{
-			try
+			String subject = Text.removeTags(kc.group("subject")).trim();
+			Integer tally = count(kc.group("tally"));
+			if (tally == null)
 			{
-				String subject = Text.removeTags(kc.group("subject")).trim();
-				int tally = Integer.parseInt(kc.group("tally").replace(",", ""));
-				recentKc.put(cleanKey(subject), tally);
-				String kind = kc.group("kind");
-				if (kind == null || !NOT_A_KILL.contains(kind))
-				{
-					String owner = localName();
-					if (owner != null && localStore.isReadyFor(owner))
-					{
-						localStore.noteKillCount(subject, tally, owner);
-					}
-				}
+				return;
 			}
-			catch (NumberFormatException ignored)
+			recentKc.put(cleanKey(subject), tally);
+			String owner = localName();
+			if (!NOT_A_KILL.contains(String.valueOf(kc.group("kind"))) && owner != null && localStore.isReadyFor(owner))
 			{
+				localStore.noteKillCount(subject, tally, owner);
 			}
 			return;
 		}
@@ -1072,12 +1042,10 @@ public class ChronicleEventCapture
 		{
 			JsonObject data = new JsonObject();
 			data.addProperty("clueType", clue.group("rank").trim().toUpperCase(Locale.ROOT));
-			try
+			Integer tally = count(clue.group("tally"));
+			if (tally != null)
 			{
-				data.addProperty("clueCount", Integer.parseInt(clue.group("tally").replace(",", "")));
-			}
-			catch (NumberFormatException ignored)
-			{
+				data.addProperty("clueCount", tally);
 			}
 			emit("CLUE", data);
 			return;
@@ -1088,48 +1056,15 @@ public class ChronicleEventCapture
 		{
 			pendingSlayerMonster = sk.group("creature").trim();
 			pendingSlayerTask = sk.group("slain").trim() + " " + pendingSlayerMonster;
-			try
-			{
-				pendingSlayerKills = Integer.parseInt(sk.group("slain").replace(",", ""));
-			}
-			catch (NumberFormatException ignored)
-			{
-				pendingSlayerKills = null;
-			}
+			pendingSlayerKills = count(sk.group("slain"));
 			slayerPendingTicks = 0;
 			return;
 		}
 		Matcher sd = SLAYER_TOTAL.matcher(msg);
 		if (sd.find())
 		{
-			String task = pendingSlayerIdentity(true);
-			if (task != null && !task.isEmpty())
-			{
-				JsonObject data = new JsonObject();
-				data.addProperty("task", task);
-				data.addProperty("monster", task);
-				if (pendingSlayerKills != null)
-				{
-					data.addProperty("killCount", pendingSlayerKills);
-				}
-				if (sd.group("qual") == null)
-				{
-					try
-					{
-						data.addProperty("count", Integer.parseInt(sd.group("total").replace(",", "")));
-					}
-					catch (NumberFormatException ignored)
-					{
-					}
-				}
-				emitSlayerCompletion(data);
-			}
-			else
-			{
-				log.debug("slayer streak line but no task identity, dropped: '{}'", msg);
-			}
-			clearPendingSlayer();
-			slayerPendingTicks = -1;
+			String task = pendingSlayerIdentity(currentTask());
+			emitSlayerCompletion(task, sd.group("qual") == null ? count(sd.group("total")) : null);
 			return;
 		}
 
@@ -1151,47 +1086,28 @@ public class ChronicleEventCapture
 		emit("PET", data);
 	}
 
-	private void flushPendingSlayer()
+	private String pendingSlayerIdentity(String serviceTask)
 	{
-		String task = pendingSlayerIdentity(false);
-		if (task != null && !task.isEmpty())
+		for (String task : new String[]{pendingSlayerMonster, serviceTask, lastSlayerTask, pendingSlayerTask})
 		{
-			JsonObject data = new JsonObject();
-			data.addProperty("task", task);
-			data.addProperty("monster", task);
-			if (pendingSlayerKills != null)
+			if (task != null && !task.isEmpty())
 			{
-				data.addProperty("killCount", pendingSlayerKills);
+				return task;
 			}
-			emitSlayerCompletion(data);
 		}
-		clearPendingSlayer();
+		return null;
 	}
 
-	private String pendingSlayerIdentity(boolean askService)
+	private static Integer count(String digits)
 	{
-		String task = pendingSlayerMonster;
-		if ((task == null || task.isEmpty()) && askService)
+		try
 		{
-			task = slayerTaskFromService();
+			return Integer.parseInt(digits.replace(",", ""));
 		}
-		if (task == null || task.isEmpty())
+		catch (NumberFormatException e)
 		{
-			task = lastSlayerTask;
+			return null;
 		}
-		if (task == null || task.isEmpty())
-		{
-			task = pendingSlayerTask;
-		}
-		return task;
-	}
-
-	private void clearPendingSlayer()
-	{
-		pendingSlayerTask = null;
-		pendingSlayerMonster = null;
-		pendingSlayerKills = null;
-		lastSlayerTask = null;
 	}
 
 	@Subscribe
@@ -1208,8 +1124,7 @@ public class ChronicleEventCapture
 
 		if (slayerPendingTicks >= 0 && ++slayerPendingTicks > 4)
 		{
-			flushPendingSlayer();
-			slayerPendingTicks = -1;
+			emitSlayerCompletion(pendingSlayerIdentity(null), null);
 		}
 
 		if (pendingLevels.isEmpty())
@@ -1246,26 +1161,6 @@ public class ChronicleEventCapture
 		}
 	}
 
-	private JsonArray itemsToJson(Collection<ItemStack> items)
-	{
-		JsonArray arr = new JsonArray();
-		if (items != null)
-		{
-			for (ItemStack is : items)
-			{
-				if (is == null)
-				{
-					continue;
-				}
-				JsonObject o = new JsonObject();
-				o.addProperty("id", is.getId());
-				o.addProperty("quantity", is.getQuantity());
-				arr.add(o);
-			}
-		}
-		return arr;
-	}
-
 	private static String cleanKey(String name)
 	{
 		if (name == null)
@@ -1276,6 +1171,11 @@ public class ChronicleEventCapture
 	}
 
 	private String localName()
+	{
+		return playerName(client);
+	}
+
+	static String playerName(Client client)
 	{
 		Player lp = client.getLocalPlayer();
 		String name = lp != null ? lp.getName() : null;
