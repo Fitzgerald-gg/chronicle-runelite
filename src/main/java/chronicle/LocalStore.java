@@ -645,7 +645,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return days == 0 ? new long[4] : new long[]{dayMs(first), dayMs(last), days, held};
 	}
 
-
 	private static long dayMs(String key)
 	{
 		return LocalDate.parse(key, DAY_KEY)
@@ -1129,13 +1128,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			o.addProperty("first_seen", nowSec());
 		}
-		sub(o, "skills");
-		sub(o, "chat_kcs");
-		sub(o, "kc_anchors");
-		sub(o, "collection_log");
-		sub(o, "achievements");
-		sub(o, "drops");
-		sub(o, "trackers");
+		for (String key : new String[]{"skills", "chat_kcs", "kc_anchors", "collection_log", "achievements", "drops", "trackers"})
+		{
+			sub(o, key);
+		}
 		if (!o.has("feed") || !o.get("feed").isJsonArray())
 		{
 			o.add("feed", new JsonArray());
@@ -1738,7 +1734,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-
 	List<BagItem> allLoot()
 	{
 		Map<String, long[]> summed = new LinkedHashMap<>();
@@ -1839,7 +1834,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	{
 		return arr(obj(root, "slayer"), "tasks");
 	}
-
 
 	Map<String, long[]> onTaskItems(long fromMs, long toMs)
 	{
@@ -1953,7 +1947,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			log.warn("superiors table unreadable", e);
 		}
 	}
-
 
 	long[] onTaskTally(long fromMs, long toMs, String onlyTask, boolean includeOpen)
 	{
@@ -2526,7 +2519,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		root.add("feed", rebuilt);
 	}
 
-
 	private static void floorNumber(JsonObject cur, JsonObject inc, String key)
 	{
 		if (present(inc, key))
@@ -2542,7 +2534,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			cur.addProperty(key, v);
 		}
 	}
-
 
 	List<BagItem> untakenItemsOf(String source)
 	{
