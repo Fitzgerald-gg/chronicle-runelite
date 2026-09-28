@@ -1197,8 +1197,7 @@ class ChroniclePanel extends PluginPanel
 		text.add(fig);
 		if (moved > 0)
 		{
-			JLabel by = styled(new JLabel("+" + fmt(moved), JLabel.RIGHT), small(), accent());
-			text.add(by);
+			text.add(styled(new JLabel("+" + fmt(moved), JLabel.RIGHT), small(), accent()));
 		}
 		cell.add(text, BorderLayout.CENTER);
 		return cell;
@@ -1558,8 +1557,7 @@ class ChroniclePanel extends PluginPanel
 
 	private boolean scrollHeld()
 	{
-		JScrollPane pane = scrollPane;
-		return pane != null && pane.getVerticalScrollBar().getValueIsAdjusting();
+		return scrollPane.getVerticalScrollBar().getValueIsAdjusting();
 	}
 
 	private static boolean popupShowing()
@@ -2188,15 +2186,14 @@ class ChroniclePanel extends PluginPanel
 		{
 			if (w.items.isEmpty())
 			{
-				return noted(p, "Nothing taken inside " + periodInSentence() + ".");
+				return noted(p, inside("Nothing taken"));
 			}
 			return kindLens(p, win.label, bagOf(w.items), "win:");
 		}
 		List<String[]> ranked = dropsLeftBehind ? w.leftItems : w.sources;
 		if (ranked.isEmpty())
 		{
-			return noted(p, "Nothing " + (dropsLeftBehind ? "left behind" : "taken")
-				+ " inside " + periodInSentence() + ".");
+			return noted(p, inside("Nothing " + (dropsLeftBehind ? "left behind" : "taken")));
 		}
 		JPanel head = card(dropsLeftBehind ? "Left behind" : "Drops received");
 		if (dropsLeftBehind)
@@ -2352,7 +2349,7 @@ class ChroniclePanel extends PluginPanel
 			List<BagItem> taskBag = onTaskBag();
 			if (taskBag.isEmpty())
 			{
-				return noted(p, "No task closed inside " + periodInSentence() + ".");
+				return noted(p, inside("No task closed"));
 			}
 			return kindLens(p, wholeRecord() ? "On-task loot"
 				: "Tasks closed in " + window().label, taskBag, "ontask:");
@@ -2729,10 +2726,10 @@ class ChroniclePanel extends PluginPanel
 		{
 			p.add(taskPicker());
 			return noted(p, lootTask != null
-				? "No loot logged on " + lootTask + " inside " + periodInSentence() + "."
+				? inside("No loot logged on " + lootTask)
 				: wholeRecord()
 					? "No task loot in the journal yet. It collects as tasks close."
-					: "No task loot inside " + periodInSentence() + ".");
+					: inside("No task loot"));
 		}
 		final long[] sum = tallyOf(bag);
 		final long qty = sum[0];
@@ -2985,7 +2982,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel copyHeaderLater(String title, java.util.function.Consumer<JLabel> copy)
 	{
 		JPanel r = row(title, "copy");
-		JLabel t = styled(part(r, BorderLayout.CENTER), small(), accent());
+		styled(part(r, BorderLayout.CENTER), small(), accent());
 		JLabel take = copyLabel(r, "Copy this board as a picture");
 		if (take != null)
 		{
@@ -3259,7 +3256,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (shown.isEmpty() && !wholeRecord())
 		{
-			p.add(nothingInWindow("tasks closed"));
+			p.add(note(inside("No tasks closed")));
 			return;
 		}
 		long tasksDone = j.completedTasks;
@@ -3626,7 +3623,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel backRow(String label, String right, Runnable go)
 	{
 		JPanel r = row(label, right);
-		JLabel l = styled(part(r, BorderLayout.CENTER), small(), accent());
+		styled(part(r, BorderLayout.CENTER), small(), accent());
 		link(r, go);
 		return r;
 	}
@@ -4127,7 +4124,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel nothing(JPanel p, String what, String since)
 	{
-		return since != null ? p : noted(p, "Nothing " + what + " inside " + periodInSentence() + ".");
+		return since != null ? p : noted(p, inside("Nothing " + what));
 	}
 
 	private static void addOther(JPanel p, String figure, boolean show)
@@ -4158,7 +4155,7 @@ class ChroniclePanel extends PluginPanel
 		List<Object[]> split = plugin.onTaskItemByTask(name, w[0], w[1]);
 		if (split.isEmpty())
 		{
-			return noted(p, "No task paid this inside " + periodInSentence() + ".");
+			return noted(p, inside("No task paid this"));
 		}
 		p.add(group("By task"));
 		final int taskCap = Math.max(itemSourceCap, drillShown.getOrDefault("item:task:" + name, 0));
@@ -4517,7 +4514,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (got.isEmpty())
 		{
-			return noted(p, "Nothing new was logged inside " + periodInSentence() + ".");
+			return noted(p, inside("Nothing new was logged"));
 		}
 		JPanel head = card("Collection log");
 		head.add(row("Slots logged", fmt(got.size()), accent()));
@@ -5459,7 +5456,7 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, head);
 		if (kept == 0)
 		{
-			return noted(p, "Nothing tracked inside " + periodInSentence() + ".");
+			return noted(p, inside("Nothing tracked"));
 		}
 		for (Entry<String, Map<String, List<Entry<String, Long>>>> fam : filed.entrySet())
 		{
@@ -5577,7 +5574,7 @@ class ChroniclePanel extends PluginPanel
 			String unkept = notCounting(false);
 			return noted(p, unkept != null ? unkept : wholeRecord()
 				? "Nothing under " + statsFamily + " yet."
-				: "Nothing under " + statsFamily + " inside " + periodInSentence() + ".");
+				: inside("Nothing under " + statsFamily));
 		}
 
 		List<Entry<String, Long>> destRows = statsFamily.equals("Ledger & Roads")
@@ -5846,7 +5843,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel subHead(String label, String totalStr, String stateKey)
 	{
 		JPanel head = row(label, totalStr);
-		JLabel name = styled(part(head, BorderLayout.CENTER), small(), dim());
+		styled(part(head, BorderLayout.CENTER), small(), dim());
 		head.setBorder(pad(3, 10, 1, 2));
 		link(head, () -> toggleFold(stateKey));
 		return head;
@@ -5930,11 +5927,7 @@ class ChroniclePanel extends PluginPanel
 				{
 					d = get();
 				}
-				catch (InterruptedException e)
-				{
-					return;
-				}
-				catch (java.util.concurrent.ExecutionException e)
+				catch (InterruptedException | java.util.concurrent.ExecutionException e)
 				{
 					return;
 				}
@@ -6656,14 +6649,11 @@ class ChroniclePanel extends PluginPanel
 		JPanel figures = new JPanel();
 		figures.setLayout(new BoxLayout(figures, BoxLayout.X_AXIS));
 		figures.setOpaque(false);
-		JLabel count = styled(new JLabel(fmt(figure)), FontManager.getRunescapeFont(), dim());
-		figures.add(count);
+		figures.add(styled(new JLabel(fmt(figure)), FontManager.getRunescapeFont(), dim()));
 		if (worth > 0)
 		{
 			figures.add(javax.swing.Box.createHorizontalStrut(6));
-			JLabel paid = styled(new JLabel(gp(worth)), FontManager.getRunescapeFont(),
-				accent());
-			figures.add(paid);
+			figures.add(styled(new JLabel(gp(worth)), FontManager.getRunescapeFont(), accent()));
 		}
 		r.add(figures, BorderLayout.EAST);
 
@@ -7243,16 +7233,10 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		long possible = 0;
-		long seen = 0;
 		for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
 		{
-			if (!"COMBAT_ACHIEVEMENT".equals(str(e, "type", "")))
-			{
-				continue;
-			}
-			seen++;
 			JsonObject data = obj(e, "data");
-			if (possible == 0 && data.has("totalPossiblePoints"))
+			if (possible == 0 && "COMBAT_ACHIEVEMENT".equals(typeOf(e)) && data.has("totalPossiblePoints"))
 			{
 				possible = data.get("totalPossiblePoints").getAsLong();
 			}
@@ -7261,7 +7245,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			possible = bundledPoints();
 		}
-		return new long[]{points, possible, tiers, seen};
+		return new long[]{points, possible, tiers};
 	}
 
 	private JPanel buildSheetPage()
@@ -7719,9 +7703,7 @@ class ChroniclePanel extends PluginPanel
 
 		if (gained != null)
 		{
-			JLabel g = styled(new JLabel((wholeRecord() ? "" : "+") + xpShort(gained)), small(),
-				accent());
-			text.add(g);
+			text.add(styled(new JLabel((wholeRecord() ? "" : "+") + xpShort(gained)), small(), accent()));
 		}
 		cell.add(text, BorderLayout.CENTER);
 		return cell;
@@ -7892,7 +7874,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel taskPicker()
 	{
 		JPanel r = row("Task", lootTask == null ? "Every task" : lootTask, accent());
-		JLabel name = styled(part(r, BorderLayout.CENTER), small(), dim());
+		styled(part(r, BorderLayout.CENTER), small(), dim());
 		JLabel pick = part(r, BorderLayout.EAST);
 		pick.setFont(small());
 		pick.setToolTipText("Narrow this board to one task");
@@ -8059,8 +8041,7 @@ class ChroniclePanel extends PluginPanel
 
 	private boolean periodReachesToday()
 	{
-		Window w = window();
-		return w != null && !w.end.isBefore(LocalDate.now());
+		return !window().end.isBefore(LocalDate.now());
 	}
 
 	private Map<String, Long> countersForPeriod()
@@ -8088,6 +8069,11 @@ class ChroniclePanel extends PluginPanel
 		}
 		return peaksNotDeltas(HistoryLog.gained(s.opening.counters,
 			s.earliest.counters, closingNow(s.closing.counters, counters())), s);
+	}
+
+	private String inside(String said)
+	{
+		return said + " inside " + periodInSentence() + ".";
 	}
 
 	private String periodInSentence()
@@ -8133,11 +8119,6 @@ class ChroniclePanel extends PluginPanel
 		}
 		long[] ms = windowMs();
 		return ts >= ms[0] && ts <= ms[1];
-	}
-
-	private JPanel nothingInWindow(String what)
-	{
-		return note("No " + what + " inside " + periodInSentence() + ".");
 	}
 
 	private List<SourceRow> skillGround(String craft)
@@ -8355,7 +8336,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return histTo.isBefore(LocalDate.now());
 		}
-		return !stepForward(histCursor).isAfter(LocalDate.now());
+		return !step(histCursor, 1).isAfter(LocalDate.now());
 	}
 
 	private void stepPeriod(int by)
@@ -8366,15 +8347,10 @@ class ChroniclePanel extends PluginPanel
 			histFrom = by < 0 ? histFrom.minusDays(span) : histFrom.plusDays(span);
 			histTo = by < 0 ? histTo.minusDays(span) : histTo.plusDays(span);
 		}
-		else if (by < 0)
-		{
-			histCursor = stepBack(histCursor);
-		}
 		else
 		{
-			LocalDate next = stepForward(histCursor);
-			histCursor = next.isAfter(LocalDate.now())
-				? LocalDate.now() : next;
+			LocalDate next = step(histCursor, by);
+			histCursor = next.isAfter(LocalDate.now()) ? LocalDate.now() : next;
 		}
 		rebuild();
 	}
@@ -8760,35 +8736,18 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private LocalDate stepBack(LocalDate d)
+	private LocalDate step(LocalDate d, int by)
 	{
 		switch (histGranularity)
 		{
 			case "Day":
-				return d.minusDays(1);
+				return d.plusDays(by);
 			case "Month":
-				return d.withDayOfMonth(1).minusDays(1);
+				return d.withDayOfMonth(1).plusMonths(by + 1).minusDays(1);
 			case "Year":
-				return d.withDayOfYear(1).minusDays(1);
-			case "Week":
+				return d.withDayOfYear(1).plusYears(by + 1).minusDays(1);
 			default:
-				return d.minusDays(7);
-		}
-	}
-
-	private LocalDate stepForward(LocalDate d)
-	{
-		switch (histGranularity)
-		{
-			case "Day":
-				return d.plusDays(1);
-			case "Month":
-				return d.withDayOfMonth(1).plusMonths(2).minusDays(1);
-			case "Year":
-				return d.withDayOfYear(1).plusYears(2).minusDays(1);
-			case "Week":
-			default:
-				return d.plusDays(7);
+				return d.plusDays(7L * by);
 		}
 	}
 
@@ -9452,7 +9411,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			f.bossesNote = notCounting(true) != null
 				? "The record keeps no kill counts this far back."
-				: "No boss was killed inside " + periodInSentence() + ".";
+				: inside("No boss was killed");
 		}
 	}
 
@@ -9630,7 +9589,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (f.loot.isEmpty())
 		{
-			f.lootNote = "Nothing dropped inside " + periodInSentence() + ".";
+			f.lootNote = inside("Nothing dropped");
 		}
 	}
 
@@ -9697,7 +9656,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			f.trackersNote = notCounting(false) != null
 				? "The record keeps no counters this far back."
-				: "Nothing closed inside " + periodInSentence() + ".";
+				: inside("Nothing closed");
 			return;
 		}
 		for (Entry<String, Integer> fam : RECAP_TRACKER_ROWS.entrySet())
@@ -10130,7 +10089,7 @@ class ChroniclePanel extends PluginPanel
 		if (plate.getComponentCount() == held)
 		{
 			plate.add(note(wholeRecord() ? "Nothing on the record yet."
-				: "Nothing inside " + periodInSentence() + "."));
+				: inside("Nothing")));
 		}
 		return plate;
 	}
@@ -10594,8 +10553,7 @@ class ChroniclePanel extends PluginPanel
 		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
 		for (String d : new String[]{"M", "T", "W", "T", "F", "S", "S"})
 		{
-			JLabel l = styled(new JLabel(d, JLabel.CENTER), small(), dim());
-			grid.add(l);
+			grid.add(styled(new JLabel(d, JLabel.CENTER), small(), dim()));
 		}
 		Map<LocalDate, long[]> played = daysPlayed();
 		TreeMap<LocalDate, Baseline> spine = historySpine;
@@ -10725,8 +10683,7 @@ class ChroniclePanel extends PluginPanel
 		feed.sort((a, b) -> dayOf(filedAt(b)).compareTo(dayOf(filedAt(a))));
 		if (feed.isEmpty() && !wholeRecord())
 		{
-			p.add(nothingInWindow("All".equals(journalLens)
-				? "milestones" : low(journalLens)));
+			p.add(note(inside("No " + ("All".equals(journalLens) ? "milestones" : low(journalLens)))));
 			return p;
 		}
 		if (feed.isEmpty())
