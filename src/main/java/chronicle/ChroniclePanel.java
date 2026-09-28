@@ -661,19 +661,8 @@ class ChroniclePanel extends PluginPanel
 
 	private static JsonElement getIgnoreCase(JsonObject o, String key)
 	{
-		JsonElement v = o.get(key);
-		if (v != null)
-		{
-			return v;
-		}
-		for (Entry<String, JsonElement> e : o.entrySet())
-		{
-			if (e.getKey().equalsIgnoreCase(key))
-			{
-				return e.getValue();
-			}
-		}
-		return null;
+		String k = keyOf(o.keySet(), key);
+		return k == null ? null : o.get(k);
 	}
 
 	private long bossKillsInWindow(String name)
@@ -698,18 +687,8 @@ class ChroniclePanel extends PluginPanel
 			movedKcs = HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
 				closingNow(s.closing.kcs, plugin.killCounts()));
 		}
-		Long moved = movedKcs.get(name);
-		if (moved == null)
-		{
-			for (Entry<String, Long> e : movedKcs.entrySet())
-			{
-				if (e.getKey().equalsIgnoreCase(name))
-				{
-					moved = e.getValue();
-					break;
-				}
-			}
-		}
+		String key = keyOf(movedKcs.keySet(), name);
+		Long moved = key == null ? null : movedKcs.get(key);
 		if (moved != null)
 		{
 			return Math.max(0, moved);
@@ -1046,6 +1025,11 @@ class ChroniclePanel extends PluginPanel
 	private static final String[] CLUE_TIERS = {
 		"Beginner", "Easy", "Medium", "Hard", "Elite", "Master"};
 
+	private SourceRow clue(String tier)
+	{
+		return find(sources(), r -> r.name, "Clue Scroll (" + tier + ")", false);
+	}
+
 	private JPanel activitySheet()
 	{
 		JPanel p = column();
@@ -1097,17 +1081,15 @@ class ChroniclePanel extends PluginPanel
 			long[] worth = new long[CLUE_TIERS.length];
 			long all = 0;
 			long allWorth = 0;
-			for (SourceRow r : sources())
+			for (int i = 0; i < CLUE_TIERS.length; i++)
 			{
-				for (int i = 0; i < CLUE_TIERS.length; i++)
+				SourceRow r = clue(CLUE_TIERS[i]);
+				if (r != null)
 				{
-					if (r.name.equalsIgnoreCase("Clue Scroll (" + CLUE_TIERS[i] + ")"))
-					{
-						each[i] = Math.max(r.kc, r.loots);
-						worth[i] = r.value;
-						all += each[i];
-						allWorth += r.value;
-					}
+					each[i] = Math.max(r.kc, r.loots);
+					worth[i] = r.value;
+					all += each[i];
+					allWorth += r.value;
 				}
 			}
 			figure = all;
@@ -1399,14 +1381,7 @@ class ChroniclePanel extends PluginPanel
 
 	private static boolean paysOutThrough(String fight, String source)
 	{
-		for (String name : PAYS_OUT.getOrDefault(fight, Collections.emptyList()))
-		{
-			if (name.equalsIgnoreCase(source))
-			{
-				return true;
-			}
-		}
-		return false;
+		return PAYS_OUT.getOrDefault(fight, Collections.emptyList()).stream().anyMatch(source::equalsIgnoreCase);
 	}
 
 	private Color accent()
@@ -2417,15 +2392,8 @@ class ChroniclePanel extends PluginPanel
 
 	private void dearestRow(JPanel head, List<BagItem> bag)
 	{
-		BagItem top = null;
-		for (BagItem b : bag)
-		{
-			if (top == null || b.value > top.value)
-			{
-				top = b;
-			}
-		}
-		if (top == null || top.value <= 0)
+		BagItem top = most(bag, b -> b.value);
+		if (top == null)
 		{
 			return;
 		}
@@ -3432,14 +3400,9 @@ class ChroniclePanel extends PluginPanel
 
 	private double[] sourceTimesInWindow(String name)
 	{
-		for (Entry<String, double[]> e : lootWindow().times.entrySet())
-		{
-			if (e.getKey().equalsIgnoreCase(name))
-			{
-				return e.getValue();
-			}
-		}
-		return new double[]{0, 0};
+		Map<String, double[]> times = lootWindow().times;
+		String key = keyOf(times.keySet(), name);
+		return key == null ? new double[]{0, 0} : times.get(key);
 	}
 
 	private long[] sourceInWindow(String name)
@@ -3455,16 +3418,38 @@ class ChroniclePanel extends PluginPanel
 
 	private static String[] rowFor(List<String[]> rows, String name, boolean exact)
 	{
-		String[] loose = null;
-		for (String[] r : rows)
+		return find(rows, r -> r[0], name, exact);
+	}
+
+	private static <T> T find(List<T> rows, java.util.function.Function<T, String> named, String name,
+		boolean exact)
+	{
+		T loose = null;
+		for (T r : rows)
 		{
-			if (r[0].equals(name))
+			if (named.apply(r).equals(name))
 			{
 				return r;
 			}
-			loose = loose == null && !exact && r[0].equalsIgnoreCase(name) ? r : loose;
+			loose = loose == null && !exact && named.apply(r).equalsIgnoreCase(name) ? r : loose;
 		}
 		return loose;
+	}
+
+	private static String keyOf(Set<String> keys, String name)
+	{
+		if (keys.contains(name))
+		{
+			return name;
+		}
+		for (String k : keys)
+		{
+			if (k.equalsIgnoreCase(name))
+			{
+				return k;
+			}
+		}
+		return null;
 	}
 
 	void openSourceLoose(String name)
@@ -4096,14 +4081,8 @@ class ChroniclePanel extends PluginPanel
 
 	private String properName(String typed)
 	{
-		for (String key : taskItemsEver().keySet())
-		{
-			if (key.equalsIgnoreCase(typed))
-			{
-				return key;
-			}
-		}
-		return typed;
+		String key = keyOf(taskItemsEver().keySet(), typed);
+		return key == null ? typed : key;
 	}
 
 	private JPanel byTaskRows(JPanel p, String name)
@@ -4291,17 +4270,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildSourceDetail(String name)
 	{
 		JPanel p = column();
-		SourceRow found = null;
-		for (SourceRow r : sources())
-		{
-			if (r.name.equals(name))
-			{
-				found = r;
-				break;
-			}
-			found = found == null && r.name.equalsIgnoreCase(name) ? r : found;
-		}
-		final SourceRow sr = found;
+		final SourceRow sr = find(sources(), r -> r.name, name, false);
 		String[] row = wholeRecord() ? null : rowFor(lootWindow().sources, sr != null ? sr.name : name, sr != null);
 		long[] inWindow = wholeRecord() ? null
 			: row == null ? new long[2] : new long[]{safeParse(row[1]), safeParse(row[2])};
@@ -5016,14 +4985,7 @@ class ChroniclePanel extends PluginPanel
 
 	private static boolean isSkill(String source)
 	{
-		for (Skill sk : Skill.values())
-		{
-			if (sk.name().equalsIgnoreCase(source))
-			{
-				return true;
-			}
-		}
-		return false;
+		return skill(source.toUpperCase(Locale.ROOT)) != null;
 	}
 
 	private Map<String, LocalStore.PetRow> petsByName()
@@ -6663,14 +6625,26 @@ class ChroniclePanel extends PluginPanel
 
 	private Skill skillOf(String name)
 	{
-		String skill = PAGE_SKILL.get(name);
-		if (skill == null)
-		{
-			return null;
-		}
+		return skill(PAGE_SKILL.get(name));
+	}
+
+	private static final Map<String, String> PAGE_SKILL = strMap(KINDS, "pageSkills");
+
+	private static final List<String> SKILL_ORDER_NAMES = strs(KINDS.get("skillOrder"));
+
+	private static final List<Skill> SKILLS = Arrays.asList(Skill.values());
+	private static final List<String> SKILL_KEYS = new ArrayList<>();
+
+	static
+	{
+		SKILLS.forEach(sk -> SKILL_KEYS.add(low(sk.name())));
+	}
+
+	private static Skill skill(String name)
+	{
 		try
 		{
-			return Skill.valueOf(skill);
+			return name == null ? null : Skill.valueOf(name);
 		}
 		catch (IllegalArgumentException e)
 		{
@@ -6678,26 +6652,19 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private static final Map<String, String> PAGE_SKILL = strMap(KINDS, "pageSkills");
-
-	private static final List<String> SKILL_ORDER_NAMES = strs(KINDS.get("skillOrder"));
-
 	private static List<Skill> skillOrder()
 	{
 		List<Skill> out = new ArrayList<>();
 		for (String name : SKILL_ORDER_NAMES)
 		{
-			try
+			if (skill(name) != null)
 			{
-				out.add(Skill.valueOf(name));
-			}
-			catch (IllegalArgumentException dropped)
-			{
+				out.add(skill(name));
 			}
 		}
-		for (Skill sk : Skill.values())
+		for (Skill sk : SKILLS)
 		{
-			if (sk != Skill.OVERALL && !out.contains(sk))
+			if (!out.contains(sk))
 			{
 				out.add(sk);
 			}
@@ -7143,12 +7110,6 @@ class ChroniclePanel extends PluginPanel
 		return new long[]{done, all, whole, d.size()};
 	}
 
-	private long bundledPoints()
-	{
-		bundledCombat = bundle(plugin.gson(), "osrs_combat_achievements.json", bundledCombat);
-		return safeLong(obj(obj(bundledCombat, "_meta"), "totals").get("points"));
-	}
-
 	private long[] combatStanding()
 	{
 		JsonObject c = obj(achievements(), "combat");
@@ -7173,7 +7134,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (possible == 0)
 		{
-			possible = bundledPoints();
+			possible = CA_POINTS;
 		}
 		return new long[]{points, possible, tiers};
 	}
@@ -7204,27 +7165,10 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private static JsonObject bundledDiaries;
-	private static JsonObject bundledCombat;
-
-	private static JsonObject bundle(Gson gson, String name,
-		JsonObject cached)
-	{
-		if (cached != null)
-		{
-			return cached;
-		}
-		try (InputStreamReader r = new InputStreamReader(
-			ChroniclePanel.class.getResourceAsStream("/chronicle/" + name),
-			StandardCharsets.UTF_8))
-		{
-			return gson.fromJson(r, JsonObject.class);
-		}
-		catch (Exception e)
-		{
-			return new JsonObject();
-		}
-	}
+	private static final JsonObject COMBAT_BUNDLE = table("osrs_combat_achievements.json");
+	private static final JsonObject CA_TASKS = obj(COMBAT_BUNDLE, "tasks");
+	private static final long CA_POINTS = safeLong(obj(obj(COMBAT_BUNDLE, "_meta"), "totals").get("points"));
+	private static final JsonObject DIARY_TASKS = obj(table("osrs_achievement_diaries.json"), "diaries");
 
 	private void buildClues(JPanel p)
 	{
@@ -7233,14 +7177,12 @@ class ChroniclePanel extends PluginPanel
 		List<SourceRow> mine = new ArrayList<>();
 		for (String tier : CLUE_TIERS)
 		{
-			for (SourceRow r : sources())
+			SourceRow r = clue(tier);
+			if (r != null)
 			{
-				if (r.name.equalsIgnoreCase("Clue Scroll (" + tier + ")"))
-				{
-					mine.add(r);
-					all += Math.max(r.kc, r.loots);
-					allWorth += r.value;
-				}
+				mine.add(r);
+				all += Math.max(r.kc, r.loots);
+				allWorth += r.value;
 			}
 		}
 		JPanel head = card("Clues");
@@ -7256,15 +7198,7 @@ class ChroniclePanel extends PluginPanel
 		p.add(group("BY TIER"));
 		for (String tier : CLUE_TIERS)
 		{
-			SourceRow r = null;
-			for (SourceRow s : mine)
-			{
-				if (s.name.equalsIgnoreCase("Clue Scroll (" + tier + ")"))
-				{
-					r = s;
-					break;
-				}
-			}
+			SourceRow r = clue(tier);
 			if (r == null)
 			{
 				p.add(row(tier, "-", dim(), true));
@@ -7355,9 +7289,7 @@ class ChroniclePanel extends PluginPanel
 
 	private void buildDiaries(JPanel p)
 	{
-		bundledDiaries = bundle(plugin.gson(), "osrs_achievement_diaries.json", bundledDiaries);
-		JsonObject tasks = bundledDiaries.has("diaries")
-			? bundledDiaries.getAsJsonObject("diaries") : new JsonObject();
+		JsonObject tasks = DIARY_TASKS;
 		JsonObject mine = obj(achievements(), "diaries");
 		boolean known = mine.size() > 0;
 		JPanel head = card("Achievement diaries");
@@ -7436,9 +7368,7 @@ class ChroniclePanel extends PluginPanel
 
 	private void buildCombatAchievements(JPanel p)
 	{
-		bundledCombat = bundle(plugin.gson(), "osrs_combat_achievements.json", bundledCombat);
-		JsonObject all = bundledCombat.has("tasks")
-			? bundledCombat.getAsJsonObject("tasks") : new JsonObject();
+		JsonObject all = CA_TASKS;
 		long[] c = combatStanding();
 		JPanel head = card("Combat achievements");
 		head.add(row("Points", c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]),
@@ -8728,18 +8658,10 @@ class ChroniclePanel extends PluginPanel
 			TreeMap<LocalDate, Baseline> spine = historySpine;
 			if (spine != null && spine.size() > 1)
 			{
-				List<String> keys = new ArrayList<>();
-				for (Skill sk : Skill.values())
-				{
-					if (sk != Skill.OVERALL)
-					{
-						keys.add(low(sk.name()));
-					}
-				}
 				Map<String, Long> prev = null;
 				for (Entry<LocalDate, Baseline> day : spine.entrySet())
 				{
-					Map<String, Long> now = standings(day.getValue(), keys);
+					Map<String, Long> now = standings(day.getValue(), SKILL_KEYS);
 					if (prev != null)
 					{
 						long ts = noon(day.getKey());
@@ -9211,12 +9133,8 @@ class ChroniclePanel extends PluginPanel
 		long startXp = 0;
 		long endXp = 0;
 		boolean startsKnown = true;
-		for (Skill sk : Skill.values())
+		for (Skill sk : SKILLS)
 		{
-			if (sk == Skill.OVERALL)
-			{
-				continue;
-			}
 			String key = low(sk.name());
 			Long end;
 			Long start = null;
@@ -9321,7 +9239,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			Long start = null;
 			Long end = null;
-			String key = closing == null || movedKcs == null ? null : keyIgnoringCase(movedKcs, b.name);
+			String key = closing == null || movedKcs == null ? null : keyOf(movedKcs.keySet(), b.name);
 			if (key != null)
 			{
 				end = closing.get(key);
@@ -9348,22 +9266,6 @@ class ChroniclePanel extends PluginPanel
 				? "The record keeps no kill counts this far back."
 				: inside("No boss was killed");
 		}
-	}
-
-	private static String keyIgnoringCase(Map<String, Long> map, String name)
-	{
-		if (map.containsKey(name))
-		{
-			return name;
-		}
-		for (String k : map.keySet())
-		{
-			if (k.equalsIgnoreCase(name))
-			{
-				return k;
-			}
-		}
-		return null;
 	}
 
 	private void recapMonsters(RecapPicture.Facts f, Span s)
@@ -9550,18 +9452,13 @@ class ChroniclePanel extends PluginPanel
 			String source = "Clue Scroll (" + tier + ")";
 			long n = 0;
 			long v = 0;
-			if (f.whole)
+			SourceRow r = clue(tier);
+			if (f.whole && r != null)
 			{
-				for (SourceRow r : sources())
-				{
-					if (r.name.equalsIgnoreCase(source))
-					{
-						n = Math.max(r.kc, r.loots);
-						v = r.value;
-					}
-				}
+				n = Math.max(r.kc, r.loots);
+				v = r.value;
 			}
-			else
+			else if (!f.whole)
 			{
 				Long rolled = rolledKills(source);
 				n = rolled == null ? 0 : rolled;
@@ -9809,15 +9706,11 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		long bossKills = 0;
-		RecapPicture.BossLine top = null;
 		for (RecapPicture.BossLine b : f.bosses)
 		{
 			bossKills += b.gained;
-			if (top == null || b.gained > top.gained)
-			{
-				top = b;
-			}
 		}
+		RecapPicture.BossLine top = most(f.bosses, b -> b.gained);
 		if (bossKills > 0)
 		{
 			f.tiles.add(new RecapPicture.Tile("Boss kills", (f.whole ? "" : "+") + fmt(bossKills),
@@ -10116,16 +10009,8 @@ class ChroniclePanel extends PluginPanel
 		Map<String, Long> by = new LinkedHashMap<>();
 		if (sessionPeriod())
 		{
-			ExperienceStatTracker.SkillGain top = null;
-			for (ExperienceStatTracker.SkillGain g : plugin.sessionSkillXp())
-			{
-				if (g.xp > 0 && (top == null || g.xp > top.xp))
-				{
-					top = g;
-				}
-			}
-			return top == null ? null : prettify(
-				low(top.skill.name()));
+			ExperienceStatTracker.SkillGain top = most(plugin.sessionSkillXp(), g -> g.xp);
+			return top == null ? null : prettify(low(top.skill.name()));
 		}
 		if (wholeRecord())
 		{
@@ -10152,14 +10037,21 @@ class ChroniclePanel extends PluginPanel
 
 	private static String topOf(Map<String, Long> by)
 	{
-		String top = null;
+		Entry<String, Long> top = most(by.entrySet(), Entry::getValue);
+		return top == null ? null : top.getKey();
+	}
+
+	private static <T> T most(Iterable<T> all, java.util.function.ToLongFunction<T> size)
+	{
+		T top = null;
 		long most = 0;
-		for (Entry<String, Long> e : by.entrySet())
+		for (T t : all)
 		{
-			if (e.getValue() > most)
+			long n = size.applyAsLong(t);
+			if (n > most)
 			{
-				most = e.getValue();
-				top = e.getKey();
+				most = n;
+				top = t;
 			}
 		}
 		return top;
@@ -10190,19 +10082,11 @@ class ChroniclePanel extends PluginPanel
 		{
 			return null;
 		}
-		List<String> keys = new ArrayList<>();
-		for (Skill sk : Skill.values())
-		{
-			if (sk != Skill.OVERALL)
-			{
-				keys.add(low(sk.name()));
-			}
-		}
 		Baseline shut = new Baseline();
 		shut.skills.putAll(closingSkills(s.closing.skills, periodReachesToday()));
 		shut.complete = true;
-		HistoryLog.Levels was = HistoryLog.levels(s.opening, keys);
-		HistoryLog.Levels now = HistoryLog.levels(shut, keys);
+		HistoryLog.Levels was = HistoryLog.levels(s.opening, SKILL_KEYS);
+		HistoryLog.Levels now = HistoryLog.levels(shut, SKILL_KEYS);
 		return now.total > was.total ? new long[]{now.total - was.total, now.total} : null;
 	}
 
@@ -10282,18 +10166,8 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (sessionPeriod())
 		{
-			String top = null;
-			long most = 0;
-			for (String[] s : plugin.sessionLootWindow().sources)
-			{
-				long n = safeParse(s[1]);
-				if (n > most)
-				{
-					most = n;
-					top = s[0];
-				}
-			}
-			return top == null ? null : new String[]{top, fmt(most)};
+			String[] top = most(plugin.sessionLootWindow().sources, r -> safeParse(r[1]));
+			return top == null ? null : new String[]{top[0], fmt(safeParse(top[1]))};
 		}
 		Span s = span();
 		if (s == null)
@@ -11391,8 +11265,7 @@ class ChroniclePanel extends PluginPanel
 		if (ql.length() >= 3)
 		{
 			Set<Integer> done = caDone();
-			bundledCombat = bundle(plugin.gson(), "osrs_combat_achievements.json", bundledCombat);
-			JsonObject cas = bundledCombat.has("tasks") ? bundledCombat.getAsJsonObject("tasks") : new JsonObject();
+			JsonObject cas = CA_TASKS;
 			List<Hit> caHits = new ArrayList<>();
 			for (String id : cas.keySet())
 			{
@@ -11416,9 +11289,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			total += searchGroup(p, "Combat achievements", caHits);
 
-			bundledDiaries = bundle(plugin.gson(), "osrs_achievement_diaries.json", bundledDiaries);
-			JsonObject diaries = bundledDiaries.has("diaries")
-				? bundledDiaries.getAsJsonObject("diaries") : new JsonObject();
+			JsonObject diaries = DIARY_TASKS;
 			List<Hit> diaryHits = new ArrayList<>();
 			for (String region : diaries.keySet())
 			{
@@ -11554,18 +11425,8 @@ class ChroniclePanel extends PluginPanel
 
 	private static String mostOf(JsonObject d)
 	{
-		String top = null;
-		long most = 0;
-		for (Entry<String, JsonElement> e : obj(d, "skills").entrySet())
-		{
-			long xp = safeLong(e.getValue());
-			if (xp > most)
-			{
-				most = xp;
-				top = e.getKey();
-			}
-		}
-		return top == null ? null : prettify(top);
+		Entry<String, JsonElement> top = most(obj(d, "skills").entrySet(), e -> safeLong(e.getValue()));
+		return top == null ? null : prettify(top.getKey());
 	}
 
 	private static String feedLine(JsonObject e)
