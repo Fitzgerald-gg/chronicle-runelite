@@ -44,7 +44,7 @@ public class SkillingStatTracker implements StatTracker
 		Skill.SAILING);
 
 	private static final int TTL_TICKS = 6;
-	private final EnumMap<Skill, Integer> xpCache = new EnumMap<>(Skill.class);
+	private final XpSeen xpSeen = new XpSeen();
 	private final EnumMap<Skill, List<Integer>> tickDrops = new EnumMap<>(Skill.class);
 	private int lastObjectId = -1;
 	private int objectTtl = 0;
@@ -66,21 +66,10 @@ public class SkillingStatTracker implements StatTracker
 	@Override
 	public void onStatChanged(StatChanged event)
 	{
-		Skill skill = event.getSkill();
-		if (!DERIVABLE.contains(skill))
-		{
-			return;
-		}
-		int xp = event.getXp();
-		Integer prev = xpCache.put(skill, xp);
-		if (prev == null)
-		{
-			return;
-		}
-		int delta = xp - prev;
+		int delta = DERIVABLE.contains(event.getSkill()) ? xpSeen.gain(event) : 0;
 		if (delta > 0)
 		{
-			tickDrops.computeIfAbsent(skill, k -> new ArrayList<>()).add(delta);
+			tickDrops.computeIfAbsent(event.getSkill(), k -> new ArrayList<>()).add(delta);
 		}
 	}
 
@@ -143,30 +132,22 @@ public class SkillingStatTracker implements StatTracker
 		}
 		if (invSnapshot != null)
 		{
-			for (Map.Entry<Integer, Integer> e : now.entrySet())
+			StatTracker.rises(invSnapshot, now, (id, d) ->
 			{
-				int d = e.getValue() - invSnapshot.getOrDefault(e.getKey(), 0);
-				if (d > 0)
+				tickGainedItem = id;
+				tickGainedQty = d;
+				if (id == ItemID.WEEDS && rakeTtl > 0)
 				{
-					tickGainedItem = e.getKey();
-					tickGainedQty = d;
-					if (e.getKey() == ItemID.WEEDS && rakeTtl > 0)
-					{
-						statStore.incrementStatBy("patchesRaked", Math.min(d, RAKE_MAX_PER_EVENT));
-						rakeTtl = RAKE_TTL_TICKS;
-					}
+					statStore.incrementStatBy("patchesRaked", Math.min(d, RAKE_MAX_PER_EVENT));
+					rakeTtl = RAKE_TTL_TICKS;
 				}
-			}
-			for (Map.Entry<Integer, Integer> e : invSnapshot.entrySet())
+			});
+			StatTracker.rises(now, invSnapshot, (id, d) ->
 			{
-				int d = e.getValue() - now.getOrDefault(e.getKey(), 0);
-				if (d > 0)
-				{
-					lastConsumedItem = e.getKey();
-					lastConsumedQty = d;
-					consumedTtl = TTL_TICKS;
-				}
-			}
+				lastConsumedItem = id;
+				lastConsumedQty = d;
+				consumedTtl = TTL_TICKS;
+			});
 		}
 		invSnapshot = now;
 	}
@@ -234,7 +215,7 @@ public class SkillingStatTracker implements StatTracker
 		GameState state = event.getGameState();
 		if (state == GameState.LOGIN_SCREEN)
 		{
-			xpCache.clear();
+			xpSeen.clear();
 			invSnapshot = null;
 		}
 		if (state != GameState.LOGGED_IN)

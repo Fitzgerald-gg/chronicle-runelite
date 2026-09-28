@@ -14,34 +14,30 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.LongSupplier;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.GameState;
 import net.runelite.api.Skill;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.StatChanged;
 
+@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 public class ExperienceStatTracker implements StatTracker
 {
 	static final long RATE_FLOOR_MS = 60_000L;
 
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	public static final class SkillGain
 	{
 		public final Skill skill;
 		public final long xp;
 		public final long perHour;
-
-		SkillGain(Skill skill, long xp, long perHour)
-		{
-			this.skill = skill;
-			this.xp = xp;
-			this.perHour = perHour;
-		}
 	}
 
 	private final StatStore store;
 	private final LongSupplier clock;
-
-	private final Map<Skill, Integer> xpSeen = new EnumMap<>(Skill.class);
-
+	private final XpSeen xpSeen = new XpSeen();
 	private final Map<Skill, Long> sessionXp = new EnumMap<>(Skill.class);
 	private long windowStartMs;
 
@@ -50,31 +46,14 @@ public class ExperienceStatTracker implements StatTracker
 		this(store, System::currentTimeMillis);
 	}
 
-	ExperienceStatTracker(StatStore store, LongSupplier clock)
-	{
-		this.store = store;
-		this.clock = clock;
-	}
-
 	@Override
 	public void onStatChanged(StatChanged event)
 	{
-		Skill skill = event.getSkill();
-		if (skill == null)
-		{
-			return;
-		}
-		int xp = event.getXp();
-		Integer prev = xpSeen.put(skill, xp);
-		if (prev == null)
-		{
-			return;
-		}
-		int gained = xp - prev;
+		int gained = xpSeen.gain(event);
 		if (gained > 0)
 		{
 			store.incrementStatBy("totalXpGained", gained);
-			count(skill, gained);
+			count(event.getSkill(), gained);
 		}
 	}
 
@@ -96,8 +75,7 @@ public class ExperienceStatTracker implements StatTracker
 		for (Map.Entry<Skill, Long> e : sessionXp.entrySet())
 		{
 			long xp = e.getValue();
-			out.add(new SkillGain(e.getKey(), xp,
-				rateable ? xp * 3_600_000L / elapsed : -1L));
+			out.add(new SkillGain(e.getKey(), xp, rateable ? xp * 3_600_000L / elapsed : -1L));
 		}
 		out.sort(Comparator.comparingLong((SkillGain g) -> g.xp).reversed()
 			.thenComparingInt(g -> g.skill.ordinal()));

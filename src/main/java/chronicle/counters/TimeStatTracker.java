@@ -5,7 +5,6 @@ package chronicle.counters;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +28,7 @@ public class TimeStatTracker implements StatTracker
 
 	private final StatStore store;
 	private final Client client;
-	private final Map<Skill, Integer> xpSeen = new EnumMap<>(Skill.class);
+	private final XpSeen xpSeen = new XpSeen();
 	private final Map<String, Integer> pending = new HashMap<>();
 	private final Deque<int[]> drops = new ArrayDeque<>();
 	private String lastNpc;
@@ -38,21 +37,11 @@ public class TimeStatTracker implements StatTracker
 	@Override
 	public void onStatChanged(StatChanged event)
 	{
-		Skill skill = event.getSkill();
-		if (skill == null)
+		int gain = xpSeen.gain(event);
+		if (gain > 0 && !fighting())
 		{
-			return;
+			drops.addLast(new int[]{client.getTickCount(), event.getSkill().ordinal(), gain});
 		}
-		Integer prev = xpSeen.put(skill, event.getXp());
-		if (prev == null || event.getXp() <= prev)
-		{
-			return;
-		}
-		if (fighting())
-		{
-			return;
-		}
-		drops.addLast(new int[]{client.getTickCount(), skill.ordinal(), event.getXp() - prev});
 	}
 
 	private Skill leading(int now)
@@ -108,24 +97,13 @@ public class TimeStatTracker implements StatTracker
 		int now = client.getTickCount();
 		Player me = client.getLocalPlayer();
 		Actor with = me == null ? null : me.getInteracting();
-		if (with instanceof NPC && lastNpc != null && lastNpc.equals(with.getName())
-			&& now - lastNpcTick <= FIGHT_GRACE)
+		if (with instanceof NPC && fighting() && lastNpc.equals(with.getName()))
 		{
 			lastNpcTick = now;
 		}
-		String key;
-		if (lastNpc != null && now - lastNpcTick <= FIGHT_GRACE)
-		{
-			key = StatKeys.timeKey(lastNpc);
-		}
-		else if (leading(now) != null)
-		{
-			key = StatKeys.timeKey(leading(now).getName());
-		}
-		else
-		{
-			key = StatKeys.TIME_IDLE;
-		}
+		Skill skill = fighting() ? null : leading(now);
+		String key = fighting() ? StatKeys.timeKey(lastNpc)
+			: skill != null ? StatKeys.timeKey(skill.getName()) : StatKeys.TIME_IDLE;
 		int have = pending.merge(key, 1, Integer::sum);
 		if (have >= TICKS_A_MINUTE)
 		{

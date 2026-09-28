@@ -13,18 +13,17 @@ import lombok.RequiredArgsConstructor;
 import net.runelite.api.Actor;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
-import net.runelite.api.Hitsplat;
 import net.runelite.api.HitsplatID;
+import net.runelite.api.Skill;
 import net.runelite.api.VarPlayer;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
-import net.runelite.api.Skill;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.StatChanged;
 
-import static chronicle.counters.StatKeys.HIGHEST_HIT;
 import static chronicle.counters.StatKeys.DAMAGE_DEALT;
+import static chronicle.counters.StatKeys.HIGHEST_HIT;
 
 @RequiredArgsConstructor
 public class CombatStatTracker implements StatTracker
@@ -39,6 +38,8 @@ public class CombatStatTracker implements StatTracker
 	private final Client client;
 
 	private int prevSpecEnergy = -1;
+	private String lastStyleKey;
+	private int lastStyleTick = -1;
 
 	@Override
 	public void onGameTick(GameTick tick)
@@ -63,12 +64,10 @@ public class CombatStatTracker implements StatTracker
 	@Override
 	public void onHitsplatApplied(HitsplatApplied event)
 	{
-		final Hitsplat splat = event.getHitsplat();
-		final int type = splat.getHitsplatType();
-		final int amount = splat.getAmount();
-		final boolean landedOnSelf = isLocalPlayer(event.getActor());
-
-		if (landedOnSelf)
+		int type = event.getHitsplat().getHitsplatType();
+		int amount = event.getHitsplat().getAmount();
+		boolean onSelf = event.getActor() == client.getLocalPlayer();
+		if (onSelf)
 		{
 			recordDamageToSelf(type, amount);
 		}
@@ -76,22 +75,13 @@ public class CombatStatTracker implements StatTracker
 		{
 			recordDamageDealt(event.getActor(), amount);
 		}
-
-		switch (type)
+		if (type == HitsplatID.DAMAGE_ME && onSelf)
 		{
-			case HitsplatID.DAMAGE_ME:
-				if (landedOnSelf)
-				{
-					store.incrementStatBy("damageTaken", amount);
-				}
-				break;
-
-			case HitsplatID.BLOCK_ME:
-				store.incrementStat(landedOnSelf ? "hitsBlocked" : "hitsMissed");
-				break;
-
-			default:
-				break;
+			store.incrementStatBy("damageTaken", amount);
+		}
+		else if (type == HitsplatID.BLOCK_ME)
+		{
+			store.incrementStat(onSelf ? "hitsBlocked" : "hitsMissed");
 		}
 	}
 
@@ -114,37 +104,19 @@ public class CombatStatTracker implements StatTracker
 	@Override
 	public void onChatMessage(ChatMessage event)
 	{
-		if (!StatTracker.gameChat(event))
-		{
-			return;
-		}
-
-		if (event.getMessage().contains("Oh dear, you are dead!"))
+		if (StatTracker.gameChat(event) && event.getMessage().contains("Oh dear, you are dead!"))
 		{
 			store.incrementStat("deaths");
 		}
 	}
 
-	private String lastStyleKey;
-	private int lastStyleTick = -1;
-
 	@Override
 	public void onStatChanged(StatChanged e)
 	{
-		final Skill sk = e.getSkill();
-		String style = null;
-		if (sk == Skill.ATTACK || sk == Skill.STRENGTH)
-		{
-			style = "damageDealtMelee";
-		}
-		else if (sk == Skill.RANGED)
-		{
-			style = "damageDealtRanged";
-		}
-		else if (sk == Skill.MAGIC)
-		{
-			style = "damageDealtMagic";
-		}
+		Skill sk = e.getSkill();
+		String style = sk == Skill.ATTACK || sk == Skill.STRENGTH ? "damageDealtMelee"
+			: sk == Skill.RANGED ? "damageDealtRanged"
+			: sk == Skill.MAGIC ? "damageDealtMagic" : null;
 		if (style != null)
 		{
 			lastStyleKey = style;
@@ -159,15 +131,9 @@ public class CombatStatTracker implements StatTracker
 		{
 			store.incrementStatBy(lastStyleKey, amount);
 		}
-		if (amount > store.getStat(HIGHEST_HIT) && target != null
-			&& target.getCombatLevel() > 0)
+		if (amount > store.getStat(HIGHEST_HIT) && target != null && target.getCombatLevel() > 0)
 		{
 			store.setStat(HIGHEST_HIT, amount);
 		}
-	}
-
-	private boolean isLocalPlayer(Actor actor)
-	{
-		return actor == client.getLocalPlayer();
 	}
 }
