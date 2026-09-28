@@ -1611,8 +1611,7 @@ class ChroniclePanel extends PluginPanel
 		skilled = null;
 		ledgerNames = null;
 		sourceKinds.clear();
-		facetWaiting.clear();
-		itemWaiting.clear();
+		artWaiting.clear();
 		paintBand(plugin.journalWarning(), plugin.captureWarning(),
 			plugin.captureWarningWhy());
 		if (aboveBoard != null)
@@ -2161,17 +2160,11 @@ class ChroniclePanel extends PluginPanel
 		{
 			return noted(p, inside("Nothing " + (dropsLeftBehind ? "left behind" : "taken")));
 		}
-		JPanel head = card(dropsLeftBehind ? "Left behind" : "Drops received");
+		JPanel head = dropsLeftBehind ? tallyCard("Left behind", "Items", fmt(w.left), ACCENT_RED, w.leftValue)
+			: tallyCard("Drops received", "Drops", fmt(w.loots), accent(), w.value);
 		if (dropsLeftBehind)
 		{
-			head.add(row("Items", fmt(w.left), ACCENT_RED));
-			head.add(worthRow(w.leftValue));
 			head.add(row("Kills that left one", fmt(w.leftKills)));
-		}
-		else
-		{
-			head.add(row("Drops", fmt(w.loots), accent()));
-			head.add(worthRow(w.value));
 		}
 		spaced(p, head);
 		final String key = dropsLeftBehind ? "win:left" : "win:source";
@@ -2340,9 +2333,7 @@ class ChroniclePanel extends PluginPanel
 			everyDrop += r.loots;
 			everyValue += r.value;
 		}
-		JPanel lifeHead = card("Drops received");
-		lifeHead.add(row("Drops", fmt(everyDrop), accent()));
-		lifeHead.add(worthRow(everyValue));
+		JPanel lifeHead = tallyCard("Drops received", "Drops", fmt(everyDrop), accent(), everyValue);
 		lifeHead.add(row("Sources", fmt(sources.size())));
 		spaced(p, lifeHead);
 		for (SourceRow r : firstN(sources, dropsShown))
@@ -2411,8 +2402,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return kindDrill(p, bag, key);
 		}
-		JPanel head = card(title);
-		bagRows(head, bag, sum);
+		JPanel head = bagCard(title, bag, sum);
 		dearestRow(head, bag);
 		spaced(p, head);
 		LinkedHashMap<String, BooleanSupplier> ways =
@@ -2428,9 +2418,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		final List<BagItem> kept = ofKind(bag);
 		final long[] mine = tallyOf(kept);
-		JPanel head = card(lootKind);
-		bagRows(head, kept, mine);
-		spaced(p, head);
+		spaced(p, bagCard(lootKind, kept, mine));
 		p.add(backToKinds(kept.size()));
 		if (kept.isEmpty())
 		{
@@ -2462,9 +2450,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		List<UntakenRow> items = plugin.untakenItems();
 		items.sort(Comparator.comparingLong((UntakenRow r) -> r.value).reversed());
-		JPanel head = card("Left behind");
-		head.add(row("Items", fmt(totalQty), ACCENT_RED));
-		head.add(worthRow(totalVal));
+		JPanel head = tallyCard("Left behind", "Items", fmt(totalQty), ACCENT_RED, totalVal);
 		head.add(row(dropsByKind ? "Distinct items" : "Sources",
 			fmt(dropsByKind ? items.size() : rows.size())));
 		spaced(p, head);
@@ -2693,21 +2679,14 @@ class ChroniclePanel extends PluginPanel
 	private JPanel lootPicture(String title, List<BagItem> bag, long[] sum, boolean kinds)
 	{
 		JPanel page = column();
-		JPanel head = card(title);
-		bagRows(head, bag, sum);
-		spaced(page, head);
+		spaced(page, bagCard(title, bag, sum));
 		if (kinds)
 		{
-			for (Kind k : kindsOf(bag))
-			{
-				page.add(row(k.name, qtyGp(k.qty, k.value), accent()));
-			}
-			return page;
+			addKindRows(page, bag);
 		}
-		for (BagItem b : bag)
+		else
 		{
-			page.add(row(named(b.name, b.qty),
-				b.value > 0 ? gps(b.value) : ""));
+			addBagRows(page, bag);
 		}
 		return page;
 	}
@@ -2721,10 +2700,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			spaced(page, row("Task", lootTask, accent()), 4);
 		}
-		for (Kind k : kindsOf(bag))
-		{
-			page.add(row(k.name, qtyGp(k.qty, k.value), accent()));
-		}
+		addKindRows(page, bag);
 		return page;
 	}
 
@@ -2807,11 +2783,19 @@ class ChroniclePanel extends PluginPanel
 		return slot;
 	}
 
-	private void bagRows(JPanel head, java.util.Collection<?> bag, long[] sum)
+	private JPanel bagCard(String title, List<BagItem> bag, long[] sum)
 	{
-		head.add(row("Items", fmt(sum[0]), accent()));
-		head.add(worthRow(sum[1]));
+		JPanel head = tallyCard(title, "Items", fmt(sum[0]), accent(), sum[1]);
 		head.add(row("Distinct items", fmt(bag.size())));
+		return head;
+	}
+
+	private static JPanel tallyCard(String title, String lead, String figure, Color ink, long worth)
+	{
+		JPanel head = card(title);
+		head.add(row(lead, figure, ink));
+		head.add(worthRow(worth));
+		return head;
 	}
 
 	private JPanel backToKinds(int held)
@@ -2866,9 +2850,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel onTaskHead(long qty, long value, long[] tally)
 	{
-		JPanel head = card("On-task loot");
-		head.add(row("Items", fmt(qty), accent()));
-		head.add(worthRow(value));
+		JPanel head = tallyCard("On-task loot", "Items", fmt(qty), accent(), value);
 		if (tally != null && tally.length > 2)
 		{
 			head.add(row("Tasks", fmt(tally[2])));
@@ -3110,10 +3092,8 @@ class ChroniclePanel extends PluginPanel
 					break;
 				}
 			}
-			JPanel head = card(leftBehindSource.toUpperCase(Locale.ROOT));
-			head.add(row("Left on the floor", count(qty, "item"), ACCENT_RED));
-			head.add(worthRow(val));
-			spaced(p, head);
+			spaced(p, tallyCard(leftBehindSource.toUpperCase(Locale.ROOT), "Left on the floor",
+				count(qty, "item"), ACCENT_RED, val));
 			if (bag.isEmpty())
 			{
 				return noted(p, "The count above is older than the itemised record. "
@@ -3147,10 +3127,8 @@ class ChroniclePanel extends PluginPanel
 				break;
 			}
 		}
-		JPanel head = card(leftBehindItem.toUpperCase(Locale.ROOT));
-		head.add(row("Left behind", "×" + fmt(qty), ACCENT_RED));
-		head.add(worthRow(val));
-		spaced(p, head);
+		spaced(p, tallyCard(leftBehindItem.toUpperCase(Locale.ROOT), "Left behind", "×" + fmt(qty),
+			ACCENT_RED, val));
 		if (sources.isEmpty())
 		{
 			return noted(p, "No source itemised for this yet.");
@@ -3299,7 +3277,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildInfo()
 	{
 		JPanel p = column();
-		spaced(p, backRow(() -> copyPicture(stripChrome(buildInfo()))), 4);
+		spaced(p, backRow(() -> copyPage(this::buildInfo)), 4);
 		Map<String, Long> f = plugin.journalFacts();
 
 		JPanel loot = facts(card("Loot"), f, accent(), "Sources", "sources",
@@ -3835,18 +3813,14 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
-	private int itemSourceCap = 40;
-
 	private boolean drawingCopy;
 
-	private boolean copyItemPage(String name)
+	private boolean copyPage(Supplier<JPanel> page)
 	{
-		int was = itemSourceCap;
+		drawingCopy = true;
 		try
 		{
-			itemSourceCap = COPY_MOST;
-			drawingCopy = true;
-			return copyPicture(stripChrome(buildItemDetail(name)));
+			return copyPicture(stripChrome(page.get()));
 		}
 		catch (Throwable ignored)
 		{
@@ -3855,7 +3829,6 @@ class ChroniclePanel extends PluginPanel
 		finally
 		{
 			drawingCopy = false;
-			itemSourceCap = was;
 		}
 	}
 
@@ -3867,33 +3840,6 @@ class ChroniclePanel extends PluginPanel
 			page.remove(0);
 		}
 		return page;
-	}
-
-	private boolean copySourcePage(String name)
-	{
-		Integer was = drillShown.get(name);
-		try
-		{
-			drillShown.put(name, COPY_MOST);
-			drawingCopy = true;
-			return copyPicture(stripChrome(buildSourceDetail(name)));
-		}
-		catch (Throwable ignored)
-		{
-			return false;
-		}
-		finally
-		{
-			drawingCopy = false;
-			if (was == null)
-			{
-				drillShown.remove(name);
-			}
-			else
-			{
-				drillShown.put(name, was);
-			}
-		}
 	}
 
 	private JPanel buildItemDetail(String name)
@@ -3946,7 +3892,7 @@ class ChroniclePanel extends PluginPanel
 		final long qty = inWindow != null ? inWindow[0] : got;
 		final long value = inWindow != null ? inWindow[1] : worth;
 		final int itemId = found;
-		spaced(p, backRow(() -> copyItemPage(name)), 4);
+		spaced(p, backRow(() -> copyPage(() -> buildItemDetail(name))), 4);
 		JPanel head = card(name);
 		if (itemId > 0)
 		{
@@ -4027,7 +3973,7 @@ class ChroniclePanel extends PluginPanel
 				: noted(p, "The journal hasn't seen this item drop yet.");
 		}
 		p.add(group("From"));
-		final int srcCap = Math.max(itemSourceCap, drillShown.getOrDefault("item:src:" + name, 0));
+		final int srcCap = Math.max(drawingCopy ? COPY_MOST : 40, drillShown.getOrDefault("item:src:" + name, 0));
 		for (Object[] s : firstN(srcs, srcCap))
 		{
 			JPanel r = row((String) s[0], "×" + fmt((long) s[1])
@@ -4094,7 +4040,7 @@ class ChroniclePanel extends PluginPanel
 			return noted(p, inside("No task paid this"));
 		}
 		p.add(group("By task"));
-		final int taskCap = Math.max(itemSourceCap, drillShown.getOrDefault("item:task:" + name, 0));
+		final int taskCap = Math.max(drawingCopy ? COPY_MOST : 40, drillShown.getOrDefault("item:task:" + name, 0));
 		for (Object[] t : firstN(split, taskCap))
 		{
 			p.add(row("Task: " + t[0], "×" + fmt((long) t[1]) + tail((long) t[2])));
@@ -4281,7 +4227,7 @@ class ChroniclePanel extends PluginPanel
 		final long other = inWindow == null ? 0 : inWindow[1] - tallyOf(bag)[1];
 		final boolean unfiled = other > 0 || inWindow != null && !sessionPeriod()
 			&& plugin.unfiledSources(window().start, window().end).contains(own);
-		spaced(p, backRow(() -> copySourcePage(name)), 4);
+		spaced(p, backRow(() -> copyPage(() -> buildSourceDetail(name))), 4);
 		JPanel head = card(name);
 		if (sr != null)
 		{
@@ -4401,7 +4347,7 @@ class ChroniclePanel extends PluginPanel
 				spaced(p, grid, 5);
 			}
 			p.add(group("Loot"));
-			int cap = drillShown.getOrDefault(name, 25);
+			int cap = drawingCopy ? COPY_MOST : drillShown.getOrDefault(name, 25);
 			addBagRows(p, firstN(bag, cap));
 			if (bag.size() > cap)
 			{
@@ -6576,44 +6522,18 @@ class ChroniclePanel extends PluginPanel
 		wearSprite(label, kindSprite(sourceKind(name)), ICON_W, ICON_H);
 	}
 
-	private final Map<Integer, List<JLabel>> itemWaiting = new LinkedHashMap<>();
-	private final Set<AsyncBufferedImage> itemAsked =
-		Collections.newSetFromMap(new java.util.WeakHashMap<>());
-
 	private void mountItem(JLabel label, int itemId)
 	{
-		ImageIcon have = scaledIcons.get("item:" + itemId);
-		if (have != null)
+		wear(label, "item:" + itemId, ICON_W, ICON_H, done ->
 		{
-			label.setIcon(have);
-			return;
-		}
-		AsyncBufferedImage img = plugin.items().getImage(itemId, 1, false);
-		if (img == null)
-		{
-			return;
-		}
-		itemWaiting.computeIfAbsent(itemId, k -> new ArrayList<>()).add(label);
-		if (!itemAsked.add(img))
-		{
-			return;
-		}
-		img.onLoaded(() -> SwingUtilities.invokeLater(() ->
-		{
-			ImageIcon icon = fit(img, ICON_W, ICON_H);
-			scaledIcons.put("item:" + itemId, icon);
-			List<JLabel> waiting = itemWaiting.remove(itemId);
-			if (waiting != null)
+			AsyncBufferedImage img = plugin.items().getImage(itemId, 1, false);
+			if (img != null)
 			{
-				for (JLabel one : waiting)
-				{
-					one.setIcon(icon);
-					one.repaint();
-				}
+				img.onLoaded(() -> done.accept(img));
 			}
-		}));
+			return img != null;
+		});
 	}
-
 	private static int kindSprite(String kind)
 	{
 		if (KIND_ACTIVITY.equals(kind))
@@ -7597,50 +7517,62 @@ class ChroniclePanel extends PluginPanel
 	private String sheetPage;
 	private String measuredSince;
 
-	private final Map<Integer, BufferedImage> facetIcons = new LinkedHashMap<>();
-	private final Set<Integer> facetAsked = new HashSet<>();
-	private final Map<Integer, List<Object[]>> facetWaiting = new LinkedHashMap<>();
+	private final Map<String, BufferedImage> art = new HashMap<>();
+	private final Set<String> artAsked = new HashSet<>();
+	private final Map<String, List<Object[]>> artWaiting = new LinkedHashMap<>();
 
 	private void wearSprite(JLabel label, int spriteId, int w, int h)
 	{
-		BufferedImage have = facetIcons.get(spriteId);
-		if (have != null)
-		{
-			dress(label, "sprite:" + spriteId + "@" + w, have, w, h);
-			return;
-		}
-		facetWaiting.computeIfAbsent(spriteId, k -> new ArrayList<>())
-			.add(new Object[]{label, w, h});
-		try
+		wear(label, "sprite:" + spriteId, w, h, done ->
 		{
 			net.runelite.client.game.SpriteManager sm = plugin.sprites();
-			if (sm == null || !facetAsked.add(spriteId))
+			if (sm != null)
 			{
-				return;
+				sm.getSpriteAsync(spriteId, 0, done);
 			}
-			sm.getSpriteAsync(spriteId, 0, img -> SwingUtilities.invokeLater(() ->
+			return sm != null;
+		});
+	}
+
+	private void wear(JLabel label, String key, int w, int h,
+		java.util.function.Predicate<java.util.function.Consumer<BufferedImage>> fetch)
+	{
+		BufferedImage have = art.get(key);
+		if (have != null)
+		{
+			dress(label, key + "@" + w, have, w, h);
+			return;
+		}
+		artWaiting.computeIfAbsent(key, k -> new ArrayList<>()).add(new Object[]{label, w, h});
+		if (!artAsked.add(key))
+		{
+			return;
+		}
+		try
+		{
+			if (!fetch.test(img -> SwingUtilities.invokeLater(() -> landed(key, img))))
 			{
-				if (img == null)
-				{
-					return;
-				}
-				facetIcons.put(spriteId, img);
-				List<Object[]> waiting = facetWaiting.remove(spriteId);
-				if (waiting != null)
-				{
-					for (Object[] want : waiting)
-					{
-						dress((JLabel) want[0], "sprite:" + spriteId + "@" + want[1],
-							img, (Integer) want[1], (Integer) want[2]);
-					}
-				}
-			}));
+				artAsked.remove(key);
+			}
 		}
 		catch (Throwable ignored)
 		{
 		}
 	}
 
+	private void landed(String key, BufferedImage img)
+	{
+		if (img == null)
+		{
+			return;
+		}
+		art.put(key, img);
+		for (Object[] want : artWaiting.getOrDefault(key, Collections.emptyList()))
+		{
+			dress((JLabel) want[0], key + "@" + want[1], img, (Integer) want[1], (Integer) want[2]);
+		}
+		artWaiting.remove(key);
+	}
 	private final Map<String, ImageIcon> scaledIcons = new LinkedHashMap<>();
 
 	private void dress(JLabel label, String key, BufferedImage img, int w, int h)
@@ -9054,7 +8986,7 @@ class ChroniclePanel extends PluginPanel
 		Set<Integer> want = new LinkedHashSet<>();
 		for (RecapPicture.BossLine b : facts.bosses)
 		{
-			if (b.sprite > 0 && !facetIcons.containsKey(b.sprite))
+			if (b.sprite > 0 && !art.containsKey("sprite:" + b.sprite))
 			{
 				want.add(b.sprite);
 			}
@@ -9070,7 +9002,7 @@ class ChroniclePanel extends PluginPanel
 			boolean all = true;
 			for (int id : want)
 			{
-				all &= facetIcons.containsKey(id);
+				all &= art.containsKey("sprite:" + id);
 			}
 			if (all || System.currentTimeMillis() > deadline)
 			{
@@ -9086,7 +9018,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		try
 		{
-			return RecapPicture.paint(facts, this::skillIcon, facetIcons::get);
+			return RecapPicture.paint(facts, this::skillIcon, id -> art.get("sprite:" + id));
 		}
 		catch (Throwable t)
 		{

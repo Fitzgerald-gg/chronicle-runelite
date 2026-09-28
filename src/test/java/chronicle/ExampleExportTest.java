@@ -98,7 +98,6 @@ public class ExampleExportTest
 		{
 			m.put(n, "PLUMBING: about drawing, not about where the reader is");
 		}
-		m.put("itemSourceCap", "CONSTANT: no click moves it, only a copy, which puts it back");
 		m.put("drawingCopy", "PLUMBING: true only inside a copy, and put back before it returns");
 		return m;
 	}

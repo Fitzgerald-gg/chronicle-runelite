@@ -65,7 +65,7 @@ public class MemoClearedTest
 
 		int at = src.indexOf("private void rebuildNow()");
 		assertTrue("rebuildNow is gone", at > 0);
-		int until = src.indexOf("facetWaiting.clear();", at);
+		int until = src.indexOf("artWaiting.clear();", at);
 		assertTrue("the clearing run no longer ends where this test looks for it",
 			until > at);
 		String head = src.substring(at, until);
