@@ -114,13 +114,13 @@ class ChroniclePanel extends PluginPanel
 		DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK).withZone(ZoneId.systemDefault());
 	private static final DateTimeFormatter MONTH_YEAR =
 		DateTimeFormatter.ofPattern("MMMM yyyy", Locale.UK).withZone(ZoneId.systemDefault());
-	private static final Color DARK = ColorScheme.DARK_GRAY_COLOR;
-	private static final Color DARKER = ColorScheme.DARKER_GRAY_COLOR;
-	private static final Color ACCENT_LIFETIME = ColorScheme.BRAND_ORANGE;
+	static final Color DARK = ColorScheme.DARK_GRAY_COLOR;
+	static final Color DARKER = ColorScheme.DARKER_GRAY_COLOR;
+	static final Color ACCENT_LIFETIME = ColorScheme.BRAND_ORANGE;
 	private static final Color ACCENT_SESSION = new Color(85, 163, 90);
 	private static final Color ACCENT_RED = new Color(196, 84, 74);
 
-	private static final Color TILE_LIT = new Color(198, 198, 198);
+	static final Color TILE_LIT = new Color(198, 198, 198);
 	private static final int ROW_CAP = 30;
 	private static final int PANEL_INSET = 8;
 	private static final int CARD_INSET = 8;
@@ -11522,12 +11522,12 @@ class ChroniclePanel extends PluginPanel
 		return l;
 	}
 
-	private static Font small()
+	static Font small()
 	{
 		return FontManager.getRunescapeSmallFont();
 	}
 
-	private static Color dim()
+	static Color dim()
 	{
 		return ColorScheme.LIGHT_GRAY_COLOR.darker();
 	}
@@ -11860,7 +11860,7 @@ class ChroniclePanel extends PluginPanel
 		c.addMouseListener(clicker(go));
 	}
 
-	private static String fmt(long n)
+	static String fmt(long n)
 	{
 		return String.format(Locale.UK, "%,d", n);
 	}

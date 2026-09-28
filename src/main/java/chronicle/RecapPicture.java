@@ -17,6 +17,8 @@ import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
+import static chronicle.ChroniclePanel.fmt;
+import static chronicle.ChroniclePanel.small;
 
 final class RecapPicture
 {
@@ -36,12 +38,12 @@ final class RecapPicture
 	private static final int NOTE_ROW = 15;
 	private static final int MIN_BODY = 260;
 
-	private static final Color GROUND = ColorScheme.DARK_GRAY_COLOR;
-	private static final Color CARD = ColorScheme.DARKER_GRAY_COLOR;
-	private static final Color TEXT = new Color(198, 198, 198);
+	private static final Color GROUND = ChroniclePanel.DARK;
+	private static final Color CARD = ChroniclePanel.DARKER;
+	private static final Color TEXT = ChroniclePanel.TILE_LIT;
 	private static final Color VALUE = ColorScheme.LIGHT_GRAY_COLOR;
-	private static final Color DIM = ColorScheme.LIGHT_GRAY_COLOR.darker();
-	private static final Color ACCENT = ColorScheme.BRAND_ORANGE;
+	private static final Color DIM = ChroniclePanel.dim();
+	private static final Color ACCENT = ChroniclePanel.ACCENT_LIFETIME;
 
 	private static final String ARROW = " to ";
 
@@ -119,16 +121,17 @@ final class RecapPicture
 	{
 	}
 
-	private interface Piece
+	private interface Draw
 	{
-		int height();
+		void at(Graphics2D g, int x, int y, int w);
+	}
 
-		void draw(Graphics2D g, int x, int y, int w);
-
-		default boolean keepsWithNext()
-		{
-			return false;
-		}
+	@RequiredArgsConstructor
+	private static final class Piece
+	{
+		final int height;
+		final boolean keepsWithNext;
+		final Draw draw;
 	}
 
 	@RequiredArgsConstructor
@@ -143,11 +146,6 @@ final class RecapPicture
 	private static Font regular()
 	{
 		return FontManager.getRunescapeFont();
-	}
-
-	private static Font small()
-	{
-		return FontManager.getRunescapeSmallFont();
 	}
 
 	private static Font big()
@@ -202,28 +200,20 @@ final class RecapPicture
 		List<Piece> out = new ArrayList<>();
 		for (Named n : all)
 		{
-			out.add(new Piece()
+			out.add(new Piece(ROW, false, (g, x, y, w) ->
 			{
-				public int height()
+				int base = y + 15;
+				int right = x + w;
+				if (n.gp != null && !n.gp.isEmpty())
 				{
-					return ROW;
+					right = rightText(g, n.gp, regular(), ACCENT, right, base) - 8;
 				}
-
-				public void draw(Graphics2D g, int x, int y, int w)
+				if (n.figure != null && !n.figure.isEmpty())
 				{
-					int base = y + 15;
-					int right = x + w;
-					if (n.gp != null && !n.gp.isEmpty())
-					{
-						right = rightText(g, n.gp, regular(), ACCENT, right, base) - 8;
-					}
-					if (n.figure != null && !n.figure.isEmpty())
-					{
-						right = rightText(g, n.figure, regular(), VALUE, right, base) - 8;
-					}
-					text(g, cut(n.name, regular(), right - x), regular(), TEXT, x, base);
+					right = rightText(g, n.figure, regular(), VALUE, right, base) - 8;
 				}
-			});
+				text(g, cut(n.name, regular(), right - x), regular(), TEXT, x, base);
+			}));
 		}
 		return out;
 	}
@@ -243,18 +233,7 @@ final class RecapPicture
 		List<Piece> out = new ArrayList<>();
 		for (String l : lines)
 		{
-			out.add(new Piece()
-			{
-				public int height()
-				{
-					return h;
-				}
-
-				public void draw(Graphics2D g, int x, int y, int w)
-				{
-					text(g, l, f, c, x, y + base);
-				}
-			});
+			out.add(new Piece(h, false, (g, x, y, w) -> text(g, l, f, c, x, y + base)));
 		}
 		return out;
 	}
@@ -286,60 +265,34 @@ final class RecapPicture
 
 	private static Piece subhead(String s)
 	{
-		return new Piece()
-		{
-			public int height()
-			{
-				return 20;
-			}
-
-			public boolean keepsWithNext()
-			{
-				return true;
-			}
-
-			public void draw(Graphics2D g, int x, int y, int w)
-			{
-				text(g, s.toUpperCase(java.util.Locale.ROOT), small(), DIM, x, y + 15);
-			}
-		};
+		return new Piece(20, true, (g, x, y, w) -> text(g, s.toUpperCase(java.util.Locale.ROOT), small(), DIM, x, y + 15));
 	}
 
 	private static Piece bossLine(BossLine b, boolean whole, Function<Integer, BufferedImage> sprites)
 	{
-		return new Piece()
+		return new Piece(ICON_ROW, false, (g, x, y, w) ->
 		{
-			public int height()
+			BufferedImage icon = b.sprite > 0 && sprites != null ? sprites.apply(b.sprite) : null;
+			if (icon != null)
 			{
-				return ICON_ROW;
+				drawIcon(g, icon, x, y + 1, 22, 22);
 			}
-
-			public void draw(Graphics2D g, int x, int y, int w)
+			int base = y + 17;
+			int right = x + w;
+			if (whole)
 			{
-				BufferedImage icon = b.sprite > 0 && sprites != null ? sprites.apply(b.sprite) : null;
-				if (icon != null)
-				{
-					drawIcon(g, icon, x, y + 1, 22, 22);
-				}
-				int base = y + 17;
-				int right = x + w;
-				if (whole)
-				{
-					right = rightText(g, fmtN(b.end == null ? b.gained : b.end), regular(), VALUE,
-						right, base) - 8;
-				}
-				else
-				{
-					right = rightText(g, "+" + fmtN(b.gained), regular(), ACCENT, right, base) - 8;
-					if (b.start != null && b.end != null)
-					{
-						right = rightText(g, fmtN(b.start) + ARROW + fmtN(b.end), regular(), DIM,
-							right, base) - 8;
-					}
-				}
-				text(g, cut(b.name, regular(), right - x - 28), regular(), TEXT, x + 28, base);
+				right = rightText(g, fmt(b.end == null ? b.gained : b.end), regular(), VALUE, right, base) - 8;
 			}
-		};
+			else
+			{
+				right = rightText(g, "+" + fmt(b.gained), regular(), ACCENT, right, base) - 8;
+				if (b.start != null && b.end != null)
+				{
+					right = rightText(g, climb(b.start, b.end), regular(), DIM, right, base) - 8;
+				}
+			}
+			text(g, cut(b.name, regular(), right - x - 28), regular(), TEXT, x + 28, base);
+		});
 	}
 
 	private static void drawIcon(Graphics2D g, BufferedImage img, int x, int y, int w, int h)
@@ -352,9 +305,9 @@ final class RecapPicture
 		g.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh, null);
 	}
 
-	static String fmtN(long n)
+	private static String climb(long from, long to)
 	{
-		return String.format(java.util.Locale.UK, "%,d", n);
+		return fmt(from) + ARROW + fmt(to);
 	}
 
 	static BufferedImage paint(Facts f, Function<net.runelite.api.Skill, BufferedImage> skillIcons,
@@ -602,18 +555,18 @@ final class RecapPicture
 			}
 			text(g, s.name, regular(), c, ix + 26, base);
 			boolean rose = ends && s.levelStart != null && s.levelStart < s.levelEnd;
-			String level = rose ? s.levelStart + ARROW + s.levelEnd : String.valueOf(s.levelEnd);
+			String level = rose ? climb(s.levelStart, s.levelEnd) : String.valueOf(s.levelEnd);
 			rightText(g, level, regular(), rose ? Color.WHITE : c, levelR, base);
 			if (ends)
 			{
-				rightText(g, s.xpStart == null ? "-" : fmtN(s.xpStart), regular(), DIM, startR, base);
-				rightText(g, fmtN(s.xpEnd), regular(), moved ? VALUE : DIM, endR, base);
-				rightText(g, moved ? "+" + fmtN(s.gained()) : "-", regular(), moved ? ACCENT : DIM,
+				rightText(g, s.xpStart == null ? "-" : fmt(s.xpStart), regular(), DIM, startR, base);
+				rightText(g, fmt(s.xpEnd), regular(), moved ? VALUE : DIM, endR, base);
+				rightText(g, moved ? "+" + fmt(s.gained()) : "-", regular(), moved ? ACCENT : DIM,
 					gainedR, base);
 			}
 			else
 			{
-				rightText(g, fmtN(s.xpEnd), regular(), VALUE, gainedR, base);
+				rightText(g, fmt(s.xpEnd), regular(), VALUE, gainedR, base);
 			}
 			cy += ROW;
 		}
@@ -626,8 +579,8 @@ final class RecapPicture
 			{
 				Long a = f.totalLevel[0];
 				Long b = f.totalLevel[1];
-				String level = ends && a != null && b != null && a < b ? fmtN(a) + ARROW + fmtN(b)
-					: b == null ? "-" : fmtN(b);
+				String level = ends && a != null && b != null && a < b ? climb(a, b)
+					: b == null ? "-" : fmt(b);
 				rightText(g, level, regular(), Color.WHITE, levelR, base);
 			}
 			if (f.totalXp != null)
@@ -636,14 +589,14 @@ final class RecapPicture
 				Long b = f.totalXp[1];
 				if (ends)
 				{
-					rightText(g, a == null ? "-" : fmtN(a), regular(), DIM, startR, base);
-					rightText(g, b == null ? "-" : fmtN(b), regular(), VALUE, endR, base);
-					rightText(g, a != null && b != null && b > a ? "+" + fmtN(b - a) : "-",
+					rightText(g, a == null ? "-" : fmt(a), regular(), DIM, startR, base);
+					rightText(g, b == null ? "-" : fmt(b), regular(), VALUE, endR, base);
+					rightText(g, a != null && b != null && b > a ? "+" + fmt(b - a) : "-",
 						regular(), ACCENT, gainedR, base);
 				}
 				else if (b != null)
 				{
-					rightText(g, fmtN(b), regular(), VALUE, gainedR, base);
+					rightText(g, fmt(b), regular(), VALUE, gainedR, base);
 				}
 			}
 			cy += ROW;
@@ -654,7 +607,7 @@ final class RecapPicture
 			text(g, "Combat", regular(), ACCENT, ix + 26, base);
 			Long a = f.combat[0];
 			Long b = f.combat[1];
-			String level = ends && a != null && b != null && a < b ? a + ARROW + b
+			String level = ends && a != null && b != null && a < b ? climb(a, b)
 				: b == null ? "-" : String.valueOf(b);
 			rightText(g, level, regular(), Color.WHITE, levelR, base);
 			cy += ROW;
@@ -675,7 +628,7 @@ final class RecapPicture
 		int h = 2 * PAD + (from == 0 ? HEAD : 0);
 		for (int i = from; i < to; i++)
 		{
-			h += b.pieces.get(i).height();
+			h += b.pieces.get(i).height;
 		}
 		return h;
 	}
@@ -716,15 +669,15 @@ final class RecapPicture
 				int room = bottoms[c] - y[c];
 				int j = i;
 				int h = 2 * PAD + (i == 0 ? HEAD : 0);
-				while (j < size && h + b.pieces.get(j).height() <= room)
+				while (j < size && h + b.pieces.get(j).height <= room)
 				{
-					h += b.pieces.get(j).height();
+					h += b.pieces.get(j).height;
 					j++;
 				}
-				while (j < size && j > i + 1 && b.pieces.get(j - 1).keepsWithNext())
+				while (j < size && j > i + 1 && b.pieces.get(j - 1).keepsWithNext)
 				{
 					j--;
-					h -= b.pieces.get(j).height();
+					h -= b.pieces.get(j).height;
 				}
 				boolean last = j == size;
 				boolean fair = (j - i >= (i == 0 ? Math.min(8, size) : 3) || (last && j > i))
@@ -779,8 +732,8 @@ final class RecapPicture
 		for (int i = from; i < to; i++)
 		{
 			Piece p = b.pieces.get(i);
-			p.draw(g, x + PAD, cy, COL - 2 * PAD);
-			cy += p.height();
+			p.draw.at(g, x + PAD, cy, COL - 2 * PAD);
+			cy += p.height;
 		}
 	}
 
