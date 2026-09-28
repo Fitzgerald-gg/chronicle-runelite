@@ -136,6 +136,26 @@ public class AuditCrawlTest
 		{
 			byKind.merge(f.get("kind").getAsString(), 1, Integer::sum);
 		}
+		String dump = System.getProperty("chronicle.auditDump");
+		if (dump != null)
+		{
+			try (java.io.Writer w = new java.io.OutputStreamWriter(new java.util.zip.GZIPOutputStream(
+				new java.io.FileOutputStream(dump)), StandardCharsets.UTF_8))
+			{
+				for (Map.Entry<String, JsonObject> e : new TreeMap<>(states).entrySet())
+				{
+					w.write("## " + e.getKey() + "\n");
+					JsonObject st = e.getValue();
+					if (st.has("said"))
+					{
+						for (com.google.gson.JsonElement t : st.getAsJsonArray("said"))
+						{
+							w.write(t.getAsString() + "\n");
+						}
+					}
+				}
+			}
+		}
 		System.out.println("AUDIT states=" + states.size() + " presses=" + presses
 			+ " findings=" + findings.size() + " " + byKind + " review=" + review.size());
 	}

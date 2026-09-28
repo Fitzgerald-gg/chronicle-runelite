@@ -104,6 +104,7 @@ tasks.named('test') {
 		'chronicle.audit',            // AuditCrawlTest writes its report here
 		'chronicle.auditJournal',     // ... over this journal directory
 		'chronicle.auditRsn',         // ... under this account name
+		'chronicle.auditDump',        // ... and dumps every screen's text here
 	].each { key ->
 		if (System.getProperty(key)) {
 			systemProperty key, System.getProperty(key)
