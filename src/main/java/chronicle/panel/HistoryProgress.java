@@ -21,156 +21,53 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Value;
+import lombok.experimental.Accessors;
 
 public final class HistoryProgress
 {
-	public static final class Row
+	@Value
+	@Accessors(fluent = true)
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
+	public static class Row
 	{
-		private final String key;
-		private final String label;
-		private final long value;
-		private final boolean gp;
-		private final long gpNote;
-		private final String gpNoteWord;
+		String key;
+		String label;
+		long value;
+		boolean gp;
+		long gpNote;
+		String gpNoteWord;
 
 		Row(String key, String label, long value, boolean gp)
 		{
 			this(key, label, value, gp, 0, "");
 		}
-
-		Row(String key, String label, long value, boolean gp, long gpNote, String gpNoteWord)
-		{
-			this.key = key;
-			this.label = label;
-			this.value = value;
-			this.gp = gp;
-			this.gpNote = gpNote;
-			this.gpNoteWord = gpNoteWord;
-		}
-
-		public String key()
-		{
-			return key;
-		}
-
-		public String label()
-		{
-			return label;
-		}
-
-		public long value()
-		{
-			return value;
-		}
-
-		public boolean gp()
-		{
-			return gp;
-		}
-
-		public long gpNote()
-		{
-			return gpNote;
-		}
-
-		public String gpNoteWord()
-		{
-			return gpNoteWord;
-		}
 	}
 
-	public static final class Section
+	@Value
+	@Accessors(fluent = true)
+	public static class Section
 	{
-		private final String name;
-		private final String family;
-		private final long total;
-		private final List<Row> rows;
-		private final long ghost;
-		private final String ghostLabel;
-		private final boolean summed;
-		private final boolean gp;
-
-		Section(String name, String family, long total, List<Row> rows, long ghost, String ghostLabel,
-			boolean summed, boolean gp)
-		{
-			this.name = name;
-			this.family = family;
-			this.total = total;
-			this.rows = Collections.unmodifiableList(rows);
-			this.ghost = ghost;
-			this.ghostLabel = ghostLabel;
-			this.summed = summed;
-			this.gp = gp;
-		}
-
-		public String name()
-		{
-			return name;
-		}
-
-		public String family()
-		{
-			return family;
-		}
-
-		public long total()
-		{
-			return total;
-		}
-
-		public List<Row> rows()
-		{
-			return rows;
-		}
-
-		public long ghost()
-		{
-			return ghost;
-		}
-
-		public String ghostLabel()
-		{
-			return ghostLabel;
-		}
-
-		public boolean summed()
-		{
-			return summed;
-		}
-
-		public boolean gp()
-		{
-			return gp;
-		}
+		String name;
+		String family;
+		long total;
+		List<Row> rows;
+		long ghost;
+		String ghostLabel;
+		boolean summed;
+		boolean gp;
 	}
 
-	public static final class Group
+	@Value
+	@Accessors(fluent = true)
+	public static class Group
 	{
-		private final String name;
-		private final List<Row> rows;
-		private final List<Section> sections;
-
-		Group(String name, List<Row> rows, List<Section> sections)
-		{
-			this.name = name;
-			this.rows = Collections.unmodifiableList(rows);
-			this.sections = Collections.unmodifiableList(sections);
-		}
-
-		public String name()
-		{
-			return name;
-		}
-
-		public List<Row> rows()
-		{
-			return rows;
-		}
-
-		public List<Section> sections()
-		{
-			return sections;
-		}
+		String name;
+		List<Row> rows;
+		List<Section> sections;
 	}
 
 	public static final String[] GROUPS = {
@@ -192,11 +89,23 @@ public final class HistoryProgress
 	private static final Set<String> TRAVEL_SECTIONS =
 		new HashSet<>(Arrays.asList("Teleports", "Destinations", "On foot"));
 
-	private static final Set<String> SUMMARY_KEYS = Tables.set(StatRegistry.TABLES, "historySummaryKeys");
 	private static final String[] SUMMARY_RUN = Tables.strings(StatRegistry.TABLES.get("summaryRun"));
+	private static final Set<String> SUMMARY_KEYS = new HashSet<>(Arrays.asList(SUMMARY_RUN));
 
+	static
+	{
+		Collections.addAll(SUMMARY_KEYS, "dropsReceived", "lootValue", "lootLeftCount", "lootLeftValue",
+			"lootLeftKills", "resourcesGatheredValue", "resourcesDroppedValue", "itemsDroppedValue");
+	}
+
+	@Getter
+	@Accessors(fluent = true)
 	private final List<Row> summary;
+	@Getter
+	@Accessors(fluent = true)
 	private final List<Section> sections;
+	@Getter
+	@Accessors(fluent = true)
 	private final List<Group> groups;
 
 	private HistoryProgress(List<Row> summary, List<Section> sections)
@@ -204,21 +113,6 @@ public final class HistoryProgress
 		this.summary = Collections.unmodifiableList(summary);
 		this.sections = Collections.unmodifiableList(sections);
 		this.groups = Collections.unmodifiableList(grouped(summary, sections));
-	}
-
-	public List<Row> summary()
-	{
-		return summary;
-	}
-
-	public List<Section> sections()
-	{
-		return sections;
-	}
-
-	public List<Group> groups()
-	{
-		return groups;
 	}
 
 	public Group group(String name)
@@ -288,7 +182,8 @@ public final class HistoryProgress
 		{
 			if (!rows.get(g).isEmpty() || !secs.get(g).isEmpty())
 			{
-				out.add(new Group(g, rows.get(g), secs.get(g)));
+				out.add(new Group(g, Collections.unmodifiableList(rows.get(g)),
+					Collections.unmodifiableList(secs.get(g))));
 			}
 		}
 		return out;
@@ -457,16 +352,7 @@ public final class HistoryProgress
 
 	private static long weight(Bucket b)
 	{
-		if (b.floor > 0)
-		{
-			return b.floor;
-		}
-		long sum = 0;
-		for (Map.Entry<String, Long> e : b.rows)
-		{
-			sum += e.getValue();
-		}
-		return sum;
+		return b.floor > 0 ? b.floor : b.rows.stream().mapToLong(Map.Entry::getValue).sum();
 	}
 
 	private static Section section(String family, String sec, Bucket b, Predicate<String> gp)
@@ -506,15 +392,8 @@ public final class HistoryProgress
 		for (Map.Entry<String, Long> e : rows)
 		{
 			String key = e.getKey();
-			String label;
-			if (!StatRegistry.typed(key))
-			{
-				label = StatRegistry.label(key);
-			}
-			else
-			{
-				label = verbed ? StatRegistry.rowLabelWithVerb(key) : StatRegistry.rowLabel(key);
-			}
+			String label = !StatRegistry.typed(key) ? StatRegistry.label(key)
+				: verbed ? StatRegistry.rowLabelWithVerb(key) : StatRegistry.rowLabel(key);
 			lines.add(new Row(key, label, e.getValue(), gp.test(key)));
 		}
 		if (lines.isEmpty() && floor > 0)
@@ -532,13 +411,9 @@ public final class HistoryProgress
 		{
 			return null;
 		}
-		boolean allGp = !lines.isEmpty();
-		for (Row r : lines)
-		{
-			allGp &= r.gp();
-		}
+		boolean allGp = !lines.isEmpty() && lines.stream().allMatch(Row::gp);
 		boolean summed = floor > 0 || allGp || !(sec.isEmpty() || sec.equals("Odds & ends"));
-		return new Section(sec.isEmpty() ? family : sec, family, total, lines, ghost, ghostLabel,
-			summed, allGp);
+		return new Section(sec.isEmpty() ? family : sec, family, total, Collections.unmodifiableList(lines),
+			ghost, ghostLabel, summed, allGp);
 	}
 }

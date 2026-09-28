@@ -146,11 +146,7 @@ public final class StatRegistry
 		{
 			return "Combat";
 		}
-		if (LEDGER.contains(key))
-		{
-			return "Ledger & Roads";
-		}
-		if (isGp(key))
+		if (LEDGER.contains(key) || isGp(key))
 		{
 			return "Ledger & Roads";
 		}
@@ -183,55 +179,31 @@ public final class StatRegistry
 
 	public static String subgroup(String key)
 	{
-		String fam = family(key);
-		if (fam.equals("Skilling"))
+		switch (family(key))
 		{
-			String skill = skillOf(key);
-			return skill != null ? skill : "";
+			case "Skilling":
+				return skillOf(key);
+			case "Combat":
+				return key.equals("thrallsSummoned") || thrallTyped(key) ? "Thralls" : "";
+			case "Living":
+				return LIVING_FLAT.contains(key) ? "" : key.endsWith("Eaten") ? "Food"
+					: key.endsWith("Doses") ? "Potions" : "";
+			default:
+				if (key.startsWith("teleportsVia") || key.equals("teleportsTotal") || key.equals("teleports")
+					|| key.equals("teleportsFairyRing") || key.equals("teleportsSpiritTree"))
+				{
+					return "Teleports";
+				}
+				if (key.startsWith("teleports"))
+				{
+					return "Destinations";
+				}
+				if (key.startsWith("tiles") || key.startsWith("distance"))
+				{
+					return "On foot";
+				}
+				return isGp(key) ? "The purse" : "Odds & ends";
 		}
-		if (fam.equals("Combat"))
-		{
-			return key.equals("thrallsSummoned") || thrallTyped(key) ? "Thralls" : "";
-		}
-		if (fam.equals("Living"))
-		{
-			if (LIVING_FLAT.contains(key))
-			{
-				return "";
-			}
-			if (key.endsWith("Eaten"))
-			{
-				return "Food";
-			}
-			if (key.endsWith("Doses"))
-			{
-				return "Potions";
-			}
-			return "";
-		}
-		if (fam.equals("Ledger & Roads"))
-		{
-			if (key.startsWith("teleportsVia") || key.equals("teleportsTotal")
-				|| key.equals("teleports") || key.equals("teleportsFairyRing")
-				|| key.equals("teleportsSpiritTree"))
-			{
-				return "Teleports";
-			}
-			if (key.startsWith("teleports"))
-			{
-				return "Destinations";
-			}
-			if (key.startsWith("tiles") || key.startsWith("distance"))
-			{
-				return "On foot";
-			}
-			if (isGp(key))
-			{
-				return "The purse";
-			}
-			return "Odds & ends";
-		}
-		return "";
 	}
 
 	public static String headOf(String family, String key)
@@ -248,12 +220,10 @@ public final class StatRegistry
 
 	public static List<String> floorKeys(String subgroup)
 	{
-		for (SkillSpec s : SKILLS)
+		SkillSpec s = spec(subgroup);
+		if (s != null)
 		{
-			if (s.name.equals(subgroup))
-			{
-				return Arrays.asList(s.floors);
-			}
+			return Arrays.asList(s.floors);
 		}
 		switch (subgroup)
 		{
@@ -294,31 +264,16 @@ public final class StatRegistry
 
 	public static String rowLabel(String key)
 	{
-		String skill = skillOf(key);
-		if (skill != null && !KEY_SKILL.containsKey(key))
+		String verb = suffixOf(key);
+		if (verb != null)
 		{
-			String[] hit = matchedSuffix(key);
-			if (hit != null)
-			{
-				return typedName(key, hit[1]);
-			}
+			return typedName(key, verb);
 		}
-		if (family(key).equals("Living") && !LIVING_FLAT.contains(key))
+		if (livingTyped(key))
 		{
-			if (key.endsWith("Eaten"))
-			{
-				return typedName(key, "Eaten");
-			}
-			if (key.endsWith("Doses"))
-			{
-				return typedName(key, "Doses");
-			}
+			return typedName(key, key.endsWith("Eaten") ? "Eaten" : "Doses");
 		}
-		if (thrallTyped(key))
-		{
-			return typedName(key, THRALL_SUFFIX);
-		}
-		return label(key);
+		return thrallTyped(key) ? typedName(key, THRALL_SUFFIX) : label(key);
 	}
 
 	public static String rowLabelWithVerb(String key)
@@ -379,18 +334,17 @@ public final class StatRegistry
 	{
 		String cand = SUFFIX_FLOORS.getOrDefault(suffix,
 			Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1));
+		SkillSpec s = spec(craft);
+		return s != null && Arrays.asList(s.floors).contains(cand) ? cand : null;
+	}
+
+	private static SkillSpec spec(String name)
+	{
 		for (SkillSpec s : SKILLS)
 		{
-			if (!s.name.equals(craft))
+			if (s.name.equals(name))
 			{
-				continue;
-			}
-			for (String f : s.floors)
-			{
-				if (f.equals(cand))
-				{
-					return f;
-				}
+				return s;
 			}
 		}
 		return null;
@@ -398,14 +352,11 @@ public final class StatRegistry
 
 	public static boolean typed(String key)
 	{
-		if (KEY_SKILL.containsKey(key))
-		{
-			return false;
-		}
-		if (skillOf(key) != null || thrallTyped(key))
-		{
-			return true;
-		}
+		return !KEY_SKILL.containsKey(key) && (suffixOf(key) != null || thrallTyped(key) || livingTyped(key));
+	}
+
+	private static boolean livingTyped(String key)
+	{
 		return family(key).equals("Living") && !LIVING_FLAT.contains(key)
 			&& (key.endsWith("Eaten") || key.endsWith("Doses"));
 	}

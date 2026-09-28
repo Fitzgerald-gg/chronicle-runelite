@@ -1,6 +1,6 @@
 {
  "_comment": {
-  "file": "Read by StatRegistry (combat through suffixFloors) and HistoryProgress (groupRows, historySummaryKeys, summaryRun). What each table is for is said where the Java declares it; the notes below are about particular rows.",
+  "file": "Read by StatRegistry (combat through suffixFloors) and HistoryProgress (groupRows, summaryRun). What each table is for is said where the Java declares it; the notes below are about particular rows.",
   "livingFlat": "potionsConsumedValue and foodConsumedValue are the same spend split by what it went on, written at the bite and the dose.",
   "hide": "The Food and Potions fold heads carry foodConsumedValue and potionsConsumedValue beside their counts. bowsFletched predates bowsStrung and still sits in older journals; nothing writes it now, but family() would give it a row if it showed up.",
   "skills": [
@@ -485,36 +485,6 @@
    "coinsEarnedAtShops"
   ]
  },
- "historySummaryKeys": [
-  "dropsReceived",
-  "lootValue",
-  "lootLeftCount",
-  "lootLeftValue",
-  "lootLeftKills",
-  "kills",
-  "slayerTasksCompleted",
-  "slayerKills",
-  "damageDealt",
-  "damageDealtMelee",
-  "damageDealtRanged",
-  "damageDealtMagic",
-  "deaths",
-  "petsObtained",
-  "questsCompleted",
-  "diariesCompleted",
-  "combatAchievements",
-  "levelsGained",
-  "clogSlotsObtained",
-  "distanceRan",
-  "distanceWalked",
-  "coinsSpentAtShops",
-  "coinsEarnedAtShops",
-  "coinsFromAlchemy",
-  "consumedValue",
-  "resourcesGatheredValue",
-  "resourcesDroppedValue",
-  "itemsDroppedValue"
- ],
  "summaryRun": [
   "kills",
   "slayerTasksCompleted",
