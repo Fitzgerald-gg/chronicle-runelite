@@ -59,9 +59,6 @@ import net.runelite.http.api.loottracker.LootRecordType;
 // The Slayer plugin's service supplies the active task for on-task drop tagging.
 // The dependency guarantees it's loaded, and its service bound, before us.
 @PluginDependency(SlayerPlugin.class)
-// Chest, casket and every other non-NPC pickup reaches us only as the core Loot
-// Tracker's LootReceived, and its archive is what a late install inherits from.
-@PluginDependency(LootTrackerPlugin.class)
 public class ChroniclePlugin extends Plugin
 {
 	static final String GROUP = ChronicleConfig.GROUP; // "chronicle"
