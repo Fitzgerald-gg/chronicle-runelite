@@ -1562,8 +1562,7 @@ final class Board
 		List<String> lines = new ArrayList<>();
 		for (Entry<String, JsonElement> ln : found.getAsJsonObject().entrySet())
 		{
-			lines.add(ln.getKey());
-			lines.add(fmt(asLong(ln.getValue())));
+			lines.addAll(List.of(ln.getKey(), fmt(asLong(ln.getValue()))));
 		}
 		return tip(page, lines);
 	}

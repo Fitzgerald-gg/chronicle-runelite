@@ -280,8 +280,7 @@ final class StandingScreen extends Screen
 			long v = now.getOrDefault(key, 0L);
 			if (v > 0 && StatRegistry.isFloor(key))
 			{
-				lines.add(StatRegistry.rowLabel(key));
-				lines.add(fmt(v));
+				lines.addAll(List.of(StatRegistry.rowLabel(key), fmt(v)));
 			}
 			else if (v > 0)
 			{
@@ -295,8 +294,7 @@ final class StandingScreen extends Screen
 			{
 				break;
 			}
-			lines.add(StatRegistry.rowLabel(e.getKey()));
-			lines.add(fmt(e.getValue()));
+			lines.addAll(List.of(StatRegistry.rowLabel(e.getKey()), fmt(e.getValue())));
 		}
 		return tip(craft, lines);
 	}
@@ -361,8 +359,7 @@ final class StandingScreen extends Screen
 					long n = r == null ? 0 : Math.max(r.kc, r.loots);
 					all += n;
 					worth += r == null ? 0 : r.value;
-					lines.add(tier);
-					lines.add(n == 0 ? "0" : fmt(n) + tail(r.value));
+					lines.addAll(List.of(tier, n == 0 ? "0" : fmt(n) + tail(r.value)));
 				}
 				lines.addAll(0, List.of("All", fmt(all) + tail(worth)));
 				figure = all;
@@ -537,48 +534,33 @@ final class StandingScreen extends Screen
 		if (!period.whole())
 		{
 			long inWin = board.bossKillsInWindow(b.name);
-			lines.add(board.window().label);
-			lines.add((inWin < 0 ? "-" : count(inWin, "kill")) + tail(board.sourceInWindow(b.name)[1]));
+			lines.addAll(List.of(board.window().label, (inWin < 0 ? "-" : count(inWin, "kill")) + tail(board.sourceInWindow(b.name)[1])));
 		}
 		long known = board.bossKills(b.name);
-		lines.add("Kills tracked");
-		lines.add(known > 0 ? fmt(known) : src != null ? fmt(src.loots) : "-");
-		board.pageLines(b.name, "pb_lines").forEach(ln ->
-		{
-			lines.add(ln.getKey());
-			lines.add(clock(ln.getValue()));
-		});
+		lines.addAll(List.of("Kills tracked", known > 0 ? fmt(known) : src != null ? fmt(src.loots) : "-"));
+		board.pageLines(b.name, "pb_lines").forEach(ln -> lines.addAll(List.of(ln.getKey(), clock(ln.getValue()))));
 		double[] timed = period.whole() && src != null ? new double[]{src.timed, src.timeSum} : board.sourceTimesInWindow(b.name);
 		if (timed[0] > 0)
 		{
-			lines.add("Average kill");
-			lines.add(pb(timed[1] / timed[0]) + " · " + fmt((long) timed[0]) + " timed");
+			lines.addAll(List.of("Average kill", pb(timed[1] / timed[0]) + " · " + fmt((long) timed[0]) + " timed"));
 		}
 		long here = board.minutesAt(b.name, period.whole() ? board.counters() : board.periodCounters());
 		if (here > 0 && board.minutesCoverPeriod())
 		{
-			lines.add("Time here");
-			lines.add(hoursMinutes(here));
+			lines.addAll(List.of("Time here", hoursMinutes(here)));
 		}
-		board.logLines(b.name).forEach(ln ->
-		{
-			lines.add(ln.getKey());
-			lines.add(fmt(ln.getValue()));
-		});
+		board.logLines(b.name).forEach(ln -> lines.addAll(List.of(ln.getKey(), fmt(ln.getValue()))));
 		if (src != null)
 		{
-			lines.add("Drops");
-			lines.add(paidFigure(src));
+			lines.addAll(List.of("Drops", paidFigure(src)));
 		}
 		for (SourceRow r : paidOut)
 		{
-			lines.add(beforeBracket(r.name));
-			lines.add(paidFigure(r));
+			lines.addAll(List.of(beforeBracket(r.name), paidFigure(r)));
 		}
 		if (src == null && paidOut.isEmpty())
 		{
-			lines.add("Loot");
-			lines.add("none yet");
+			lines.addAll(List.of("Loot", "none yet"));
 		}
 		return tip(b.name, lines);
 	}
