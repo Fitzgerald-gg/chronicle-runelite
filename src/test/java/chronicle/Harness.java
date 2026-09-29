@@ -846,6 +846,21 @@ final class Harness
 		return this;
 	}
 
+	JsonObject spineOn(LocalDate day)
+	{
+		HistoryLog.Baseline b = history().read(DIR, rsn).get(day);
+		if (b == null)
+		{
+			return null;
+		}
+		Gson g = new Gson();
+		JsonObject o = new JsonObject();
+		o.add("skills", g.toJsonTree(b.skills));
+		o.add("counters", g.toJsonTree(b.counters));
+		o.add("kcs", g.toJsonTree(b.kcs));
+		return o;
+	}
+
 	int compact()
 	{
 		return history().compact(DIR, rsn);
