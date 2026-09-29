@@ -113,10 +113,6 @@ public class SkillDeriver
 		}
 	}
 
-	private static String npcName(String target)
-	{
-		return NPC_LEVEL.matcher(target).replaceFirst("").trim();
-	}
 
 	void applyChat(String msg, String objectTarget)
 	{
@@ -620,7 +616,7 @@ public class SkillDeriver
 		{
 			return pairs("safesCracked", 1);
 		}
-		return typed("pickPockets", 1, camel(npcName(low)), "Pickpockets");
+		return typed("pickPockets", 1, camel(NPC_LEVEL.matcher(low).replaceFirst("").trim()), "Pickpockets");
 	}
 
 	private List<Map.Entry<String, Integer>> sailing(int xp, int item, int consumed)

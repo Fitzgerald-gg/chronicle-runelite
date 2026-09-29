@@ -124,7 +124,8 @@ final class DetailScreen extends Screen
 			plugin.items().getImage(itemId, (int) Math.min(Integer.MAX_VALUE, Math.max(1, qty)), qty > 1).addTo(slot);
 			head.add(slot);
 		}
-		String proper = properName(name);
+		String onTaskAs = keyOf(board.taskItemsEver().keySet(), name);
+		String proper = onTaskAs == null ? name : onTaskAs;
 		boolean hasTask = board.taskItemsEver().containsKey(proper);
 		boolean onTask = hasTask && ui.loot.onTaskOnly;
 		if (onTask)
@@ -200,11 +201,6 @@ final class DetailScreen extends Screen
 		}
 	}
 
-	private String properName(String typed)
-	{
-		String key = keyOf(board.taskItemsEver().keySet(), typed);
-		return key == null ? typed : key;
-	}
 
 	private JPanel byTask(JPanel p, String name)
 	{

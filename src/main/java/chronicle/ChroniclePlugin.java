@@ -398,7 +398,8 @@ public class ChroniclePlugin extends Plugin
 		}
 		localName = name;
 		sessionStartMs = System.currentTimeMillis();
-		loadPlaytime();
+		playtimeMinutes = readLong(KEY_PLAYTIME);
+		playtimeAt = readLong(KEY_PLAYTIME_AT);
 		refreshPanel();
 		final String who = name;
 		final String priorName = CloudSync.trim(
@@ -597,11 +598,6 @@ public class ChroniclePlugin extends Plugin
 		}
 	}
 
-	private void loadPlaytime()
-	{
-		playtimeMinutes = readLong(KEY_PLAYTIME);
-		playtimeAt = readLong(KEY_PLAYTIME_AT);
-	}
 
 	private long readLong(String key)
 	{

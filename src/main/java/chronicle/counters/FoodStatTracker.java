@@ -192,7 +192,7 @@ public class FoodStatTracker implements StatTracker
 			store.incrementStatBy("consumedValue", price);
 			store.incrementStatBy("foodConsumedValue", price);
 		}
-		String typed = perFoodKey(itemName(itemId));
+		String typed = consumableKey(baseFoodName(itemName(itemId)), "Eaten");
 		if (!typed.isEmpty())
 		{
 			store.incrementStat(typed);
@@ -398,15 +398,7 @@ public class FoodStatTracker implements StatTracker
 		return null;
 	}
 
-	private static String perFoodKey(String foodName)
-	{
-		return consumableKey(baseFoodName(foodName), "Eaten");
-	}
 
-	private static String perPotionKey(String potionName)
-	{
-		return consumableKey(potionName, "Doses");
-	}
 
 	private static String consumableKey(String name, String suffix)
 	{
@@ -452,7 +444,7 @@ public class FoodStatTracker implements StatTracker
 			{
 				store.incrementStat("potionDoses");
 				String potion = potionName(message);
-				String typed = perPotionKey(potion);
+				String typed = consumableKey(potion, "Doses");
 				if (!typed.isEmpty())
 				{
 					store.incrementStat(typed);

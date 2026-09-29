@@ -38,7 +38,7 @@ public class StatStore
 
 	public void incrementStatBy(String key, int amount)
 	{
-		totals.merge(key, amount, StatStore::saturatingSum);
+		totals.merge(key, amount, (a, b) -> (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, (long) a + b)));
 		revision++;
 	}
 
@@ -53,8 +53,4 @@ public class StatStore
 		return new HashMap<>(totals);
 	}
 
-	private static int saturatingSum(int current, int addend)
-	{
-		return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, (long) current + addend));
-	}
 }

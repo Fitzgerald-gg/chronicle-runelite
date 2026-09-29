@@ -29,7 +29,7 @@ final class KillCounts
 		foldChatCounts(stated, chat, out.keySet());
 		placeByKind(out, stated, false);
 		placeByKind(out, pageKillLines(clog), true);
-		placeByKind(out, ledgerKills(clog, sources), true);
+		placeByKind(out, sourceKills(clog, sources, false), true);
 		placeByKind(out, respelled(anchored, out.keySet()), false);
 		return out;
 	}
@@ -57,11 +57,6 @@ final class KillCounts
 		return out;
 	}
 
-	private static Map<String, Long> ledgerKills(JsonObject clog,
-		List<SourceRow> sources)
-	{
-		return sourceKills(clog, sources, false);
-	}
 
 	private static Map<String, Long> sourceKills(JsonObject clog,
 		List<SourceRow> sources, boolean raiseToPage)

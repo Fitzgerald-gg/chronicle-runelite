@@ -359,11 +359,6 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	private void back()
-	{
-		place = back.poll();
-		rebuild();
-	}
 
 	boolean showing(Page page, String name)
 	{
@@ -922,7 +917,11 @@ class ChroniclePanel extends PluginPanel
 
 	JPanel backRow(BooleanSupplier copy)
 	{
-		JPanel r = Ui.backRow("< Back", copy == null ? "" : "copy", this::back);
+		JPanel r = Ui.backRow("< Back", copy == null ? "" : "copy", () ->
+		{
+			place = back.poll();
+			rebuild();
+		});
 		JLabel take = copy == null ? null : Pictures.copyLabel(r, "Copy this page as a picture");
 		if (take != null)
 		{
