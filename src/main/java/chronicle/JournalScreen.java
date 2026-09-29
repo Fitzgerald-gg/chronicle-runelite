@@ -44,8 +44,18 @@ final class JournalScreen extends Screen
 		LENSES.put("Sessions", List.of("SESSION"));
 	}
 
-	String journalLens = "All";
-	YearMonth calendarMonth = YearMonth.now();
+	private String journalLens = "All";
+	private YearMonth calendarMonth = YearMonth.now();
+
+	void lens(String lens)
+	{
+		journalLens = lens;
+	}
+
+	void month(YearMonth month)
+	{
+		calendarMonth = month;
+	}
 	private int journalShown = PAGE;
 
 	JPanel buildJournal()

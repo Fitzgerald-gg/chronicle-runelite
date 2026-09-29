@@ -43,7 +43,7 @@ final class SearchScreen extends Screen
 	private static final List<String> PAGES = List.of("Quests", "Collection log", "Achievement diaries",
 		"Combat achievements", "Clues", "Records", "Calendar", "Recap", "All trackers", "Kill log", "Left behind");
 
-	Runnable searchFirst;
+	private Runnable searchFirst;
 
 	@RequiredArgsConstructor
 	private static final class Hit
@@ -55,6 +55,14 @@ final class SearchScreen extends Screen
 		final Runnable go;
 		final int score;
 		final long weight;
+	}
+
+	void openFirst()
+	{
+		if (searchFirst != null)
+		{
+			searchFirst.run();
+		}
 	}
 
 	JPanel buildSearch(String q)
@@ -182,7 +190,7 @@ final class SearchScreen extends Screen
 	private List<Hit> tasks(String ql)
 	{
 		List<Hit> tasks = new ArrayList<>();
-		SlayerJourney journey = ui.slayer.journeyCache != null ? ui.slayer.journeyCache : board.historyJourney;
+		SlayerJourney journey = ui.slayer.knownJourney();
 		ui.slayer.fetchJourney(true);
 		if (journey == null)
 		{
@@ -203,10 +211,7 @@ final class SearchScreen extends Screen
 			String name = journey.tasks.get(newest).task;
 			tasks.add(new Hit(name, count(seen.size(), "task"), null, "Opens the newest", () ->
 			{
-				if (ui.slayer.journeyCache == null)
-				{
-					ui.slayer.journeyCache = journey;
-				}
+				ui.slayer.keep(journey);
 				ui.show(ChroniclePanel.View.SLAYER);
 				ui.showTask(newest);
 			}, matchScore(ql, name), seen.size()));

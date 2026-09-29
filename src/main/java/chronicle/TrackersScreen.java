@@ -29,7 +29,12 @@ final class TrackersScreen extends Screen
 	private static final Set<String> FOLDING = Set.of("Food", "Potions", "Teleports", "Destinations", "Thralls");
 	private static final String FOLD_DEATHS = "Combat:deaths";
 
-	String statsFamily = StatRegistry.FAMILIES[0];
+	private String statsFamily = StatRegistry.FAMILIES[0];
+
+	void family(String family)
+	{
+		statsFamily = family;
+	}
 	private Map<String, Long> consumables = Map.of();
 	private long resourcesDropped;
 

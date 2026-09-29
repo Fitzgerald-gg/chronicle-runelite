@@ -980,9 +980,9 @@ final class Harness
 		period.to = null;
 		period.granularity = granularity;
 		period.cursor = cursor;
-		p.loot.dropsLeftBehind = false;
-		p.loot.dropsByKind = false;
-		p.loot.onTaskOnly = false;
+		set(p, "dropsLeftBehind", false);
+		set(p, "dropsByKind", false);
+		set(p, "onTaskOnly", false);
 		p.show(ChroniclePanel.View.NOW);
 		String lens = null;
 		for (String step : path)
@@ -1016,16 +1016,16 @@ final class Harness
 					p.openAllTrackers();
 					break;
 				case "left":
-					p.loot.dropsLeftBehind = true;
+					set(p, "dropsLeftBehind", true);
 					break;
 				case "kinds":
-					p.loot.dropsByKind = true;
+					set(p, "dropsByKind", true);
 					break;
 				case "onTask":
-					p.loot.onTaskOnly = true;
+					set(p, "onTaskOnly", true);
 					break;
 				case "kind":
-					p.loot.lootKind = val;
+					set(p, "lootKind", val);
 					break;
 				case "source":
 					p.openSource(val);
@@ -1040,10 +1040,10 @@ final class Harness
 					p.showTask(Integer.parseInt(val));
 					break;
 				case "clog":
-					p.pages.clogTab = val;
+					set(p, "clogTab", val);
 					break;
 				case "page":
-					p.pages.clogPageSel = val;
+					set(p, "clogPageSel", val);
 					break;
 				case "search":
 					p.searchField.setText(val);
@@ -1051,11 +1051,11 @@ final class Harness
 				default:
 					if ("Journal".equals(lens))
 					{
-						p.journal.journalLens = step;
+						set(p, "journalLens", step);
 					}
 					else if ("Slayer".equals(lens))
 					{
-						p.slayer.slayerLens = step;
+						set(p, "slayerLens", step);
 					}
 					else if ("Standing".equals(lens))
 					{
@@ -1063,7 +1063,7 @@ final class Harness
 					}
 					else
 					{
-						p.trackers.statsFamily = step;
+						set(p, "statsFamily", step);
 					}
 			}
 		}

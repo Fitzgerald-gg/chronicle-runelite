@@ -51,7 +51,10 @@ import javax.swing.ToolTipManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import lombok.AccessLevel;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -136,8 +139,10 @@ class ChroniclePanel extends PluginPanel
 	private final Map<Tab, View> lastView = new EnumMap<>(Tab.class);
 	private final Set<String> openFolds = new HashSet<>();
 	private final Map<String, Integer> shown = new HashMap<>();
-	String measuredSince;
-	boolean drawingCopy;
+	@Setter(AccessLevel.PACKAGE)
+	private String measuredSince;
+	@Getter(AccessLevel.PACKAGE)
+	private boolean drawingCopy;
 
 	private final JPanel north = new JPanel();
 	private final JPanel periodHolder = new JPanel(new BorderLayout());
@@ -403,7 +408,7 @@ class ChroniclePanel extends PluginPanel
 
 	void openCalendar()
 	{
-		journal.calendarMonth = YearMonth.from(period.cursor);
+		journal.month(YearMonth.from(period.cursor));
 		open(Page.CALENDAR, null);
 	}
 
@@ -430,8 +435,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			if (tab.getValue().containsKey(page))
 			{
-				pages.clogTab = tab.getKey();
-				pages.clogPageSel = page;
+				pages.showLogPage(tab.getKey(), page);
 				openSheetPage("log");
 				return true;
 			}
@@ -450,14 +454,14 @@ class ChroniclePanel extends PluginPanel
 	void openSlayer(String lens)
 	{
 		switchTo(View.SLAYER);
-		slayer.slayerLens = lens;
+		slayer.lens(lens);
 		rebuild();
 	}
 
 	void openJournal(String lens)
 	{
 		switchTo(View.JOURNAL);
-		journal.journalLens = lens;
+		journal.lens(lens);
 		rebuild();
 	}
 
@@ -473,23 +477,21 @@ class ChroniclePanel extends PluginPanel
 	void openLedger(String family)
 	{
 		switchTo(View.LEDGER);
-		trackers.statsFamily = family;
+		trackers.family(family);
 		rebuild();
 	}
 
 	void openLootKind(String kind, boolean onTask)
 	{
 		switchTo(View.LOOT);
-		loot.dropsByKind = true;
-		loot.onTaskOnly = onTask;
-		loot.lootKind = kind;
+		loot.showKinds(kind, onTask);
 		rebuild();
 	}
 
 	void openLeftBehind(String item)
 	{
 		switchTo(View.LOOT);
-		loot.dropsLeftBehind = true;
+		loot.showLeftBehind();
 		place = item == null ? null : new Place(Page.LEFT_ITEM, item, -1);
 		rebuild();
 	}
@@ -533,10 +535,7 @@ class ChroniclePanel extends PluginPanel
 			searchDebounce.stop();
 			onSearchChanged();
 		}
-		if (search.searchFirst != null)
-		{
-			search.searchFirst.run();
-		}
+		search.openFirst();
 	}
 
 	void update()

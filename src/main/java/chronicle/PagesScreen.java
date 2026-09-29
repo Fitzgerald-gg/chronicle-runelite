@@ -27,6 +27,12 @@ import static chronicle.Ui.*;
 
 final class PagesScreen extends Screen
 {
+	void showLogPage(String tab, String page)
+	{
+		clogTab = tab;
+		clogPageSel = page;
+	}
+
 	JPanel buildSheetPage(String page)
 	{
 		JPanel p = ui.backPage();
@@ -474,7 +480,7 @@ final class PagesScreen extends Screen
 		return p;
 	}
 
-	String clogTab = "Bosses";
+	private String clogTab = "Bosses";
 
-	String clogPageSel;
+	private String clogPageSel;
 }

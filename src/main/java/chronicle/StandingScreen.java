@@ -90,11 +90,11 @@ final class StandingScreen extends Screen
 		}
 		if (before == null)
 		{
-			ui.measuredSince = "Measured since " + from.getKey().format(FULL_DAY) + ", the earliest baseline on record.";
+			ui.measuredSince("Measured since " + from.getKey().format(FULL_DAY) + ", the earliest baseline on record.");
 		}
 		else if (before.getKey().isBefore(w.start.minusDays(1)))
 		{
-			ui.measuredSince = "Measured since " + before.getKey().format(FULL_DAY) + ", the nearest earlier baseline.";
+			ui.measuredSince("Measured since " + before.getKey().format(FULL_DAY) + ", the nearest earlier baseline.");
 		}
 		Baseline closing = HistoryLog.stateAt(hist, at.getKey());
 		Baseline opening = HistoryLog.stateAt(hist, from.getKey());

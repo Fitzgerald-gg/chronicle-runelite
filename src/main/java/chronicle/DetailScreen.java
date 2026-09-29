@@ -121,7 +121,7 @@ final class DetailScreen extends Screen
 		String onTaskAs = keyOf(board.loot.taskItemsEver().keySet(), name);
 		String proper = onTaskAs == null ? name : onTaskAs;
 		boolean hasTask = board.loot.taskItemsEver().containsKey(proper);
-		boolean onTask = hasTask && ui.loot.onTaskOnly;
+		boolean onTask = hasTask && ui.loot.onTaskOnly();
 		if (onTask)
 		{
 			Interval tw = board.range();
@@ -144,7 +144,7 @@ final class DetailScreen extends Screen
 				head.add(worthRow(value));
 			}
 		}
-		if (inWindow == null && !ui.drawingCopy)
+		if (inWindow == null && !ui.drawingCopy())
 		{
 			addDays(head, name, got);
 		}
@@ -159,7 +159,7 @@ final class DetailScreen extends Screen
 		if (hasTask)
 		{
 			JPanel hold = column();
-			hold.add(toggle(ui.loot.onTaskOnly ? "On task" : "All", ui.loot.relens(() -> ui.loot.onTaskOnly = !ui.loot.onTaskOnly)));
+			hold.add(toggle(ui.loot.onTaskOnly() ? "On task" : "All", ui.loot.relens(() -> ui.loot.flipOnTask())));
 			hold.add(vgap(6));
 			p.add(hold);
 		}
@@ -173,7 +173,7 @@ final class DetailScreen extends Screen
 		}
 		p.add(group("From"));
 		String key = "item:src:" + name;
-		ui.capped(p, key, Math.max(ui.drawingCopy ? COPY_MOST : 40, ui.cap(key, 0)), from,
+		ui.capped(p, key, Math.max(ui.drawingCopy() ? COPY_MOST : 40, ui.cap(key, 0)), from,
 			s -> p.add(link(row(s.name, "×" + fmt(s.qty) + tail(s.value)), () -> ui.openSource(s.name))));
 		addOther(p, "×" + fmt(Math.max(0, other)) + tail(Math.max(0, otherValue)), other > 0 || otherValue > 0);
 		return p;
@@ -205,7 +205,7 @@ final class DetailScreen extends Screen
 		}
 		p.add(group("By task"));
 		String key = "item:task:" + name;
-		ui.capped(p, key, Math.max(ui.drawingCopy ? COPY_MOST : 40, ui.cap(key, 0)), split,
+		ui.capped(p, key, Math.max(ui.drawingCopy() ? COPY_MOST : 40, ui.cap(key, 0)), split,
 			t -> p.add(row("Task: " + t.name, "×" + fmt(t.qty) + tail(t.value))));
 		return p;
 	}
@@ -222,13 +222,13 @@ final class DetailScreen extends Screen
 		{
 			return Board.UNDATED;
 		}
-		return !ui.drawingCopy ? "Loot since " + dayOf(from).format(FULL_DAY)
+		return !ui.drawingCopy() ? "Loot since " + dayOf(from).format(FULL_DAY)
 			: "Loot is dated for " + (dayOf(from).isAfter(w.end) ? "none" : "only part") + " of " + board.periodInSentence() + ".";
 	}
 
 	private String sinceLine(String since)
 	{
-		return since != null || period.whole() || !ui.drawingCopy ? since
+		return since != null || period.whole() || !ui.drawingCopy() ? since
 			: "The figures above are " + board.periodInSentence() + "'s.";
 	}
 
@@ -289,7 +289,7 @@ final class DetailScreen extends Screen
 			spaced(p, grid, 5);
 		}
 		p.add(group("Loot"));
-		int cap = ui.drawingCopy ? COPY_MOST : ui.cap(name, 25);
+		int cap = ui.drawingCopy() ? COPY_MOST : ui.cap(name, 25);
 		ui.loot.addBagRows(p, firstN(bag, cap));
 		if (bag.size() > cap)
 		{
@@ -341,7 +341,7 @@ final class DetailScreen extends Screen
 			boolean rate = killed && shown > 0 && here >= 30;
 			head.add(row("Time here", hoursMinutes(here) + (rate ? " · " + rateText(shown * 60.0 / here) + " kills/h" : "")));
 		}
-		if (sr.firstMs > 0 && !ui.drawingCopy)
+		if (sr.firstMs > 0 && !ui.drawingCopy())
 		{
 			head.add(row("Tracked since", day(sr.firstMs)));
 		}

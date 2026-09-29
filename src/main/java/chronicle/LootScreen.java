@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
 import javax.swing.JPanel;
+import lombok.AccessLevel;
+import lombok.Getter;
 import static chronicle.Pictures.*;
 import static chronicle.Ui.*;
 
@@ -23,16 +25,40 @@ final class LootScreen extends Screen
 {
 	private static final String NOTHING_YET = "Drops appear here as you play: every kill, priced as it lands.";
 
-	boolean dropsLeftBehind;
-	boolean dropsByKind;
-	boolean onTaskOnly;
-	String lootKind;
+	private boolean dropsLeftBehind;
+	private boolean dropsByKind;
+	@Getter(AccessLevel.PACKAGE)
+	private boolean onTaskOnly;
+	@Getter(AccessLevel.PACKAGE)
+	private String lootKind;
 	private int dropsShown = ROW_CAP;
 
 	void reset()
 	{
 		dropsShown = ROW_CAP;
 		lootKind = null;
+	}
+
+	void showKinds(String kind, boolean onTask)
+	{
+		dropsByKind = true;
+		onTaskOnly = onTask;
+		lootKind = kind;
+	}
+
+	void showLeftBehind()
+	{
+		dropsLeftBehind = true;
+	}
+
+	void clearKind()
+	{
+		lootKind = null;
+	}
+
+	void flipOnTask()
+	{
+		onTaskOnly = !onTaskOnly;
 	}
 
 	JPanel buildDrops()

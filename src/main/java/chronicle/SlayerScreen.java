@@ -27,10 +27,10 @@ final class SlayerScreen extends Screen
 {
 	private static final String[] LENSES = {"Tasks", "Monsters", "Drops"};
 
-	String slayerLens = LENSES[0];
+	private String slayerLens = LENSES[0];
 	private int slayerShown = ROW_CAP;
 	private String taskFilter;
-	SlayerJourney journeyCache;
+	private SlayerJourney journeyCache;
 	private boolean journeyFetching;
 
 	void reset()
@@ -43,6 +43,24 @@ final class SlayerScreen extends Screen
 	{
 		journeyCache = null;
 		journeyFetching = false;
+	}
+
+	void lens(String lens)
+	{
+		slayerLens = lens;
+	}
+
+	SlayerJourney knownJourney()
+	{
+		return journeyCache != null ? journeyCache : board.historyJourney;
+	}
+
+	void keep(SlayerJourney journey)
+	{
+		if (journeyCache == null)
+		{
+			journeyCache = journey;
+		}
 	}
 
 	JPanel buildSlayer()
@@ -148,7 +166,7 @@ final class SlayerScreen extends Screen
 	{
 		Interval ms = board.range();
 		List<BagItem> bag = store.slayer.onTaskLoot(ms.from, ms.to, taskFilter, period.whole());
-		if (bag.isEmpty() || ui.loot.lootKind != null)
+		if (bag.isEmpty() || ui.loot.lootKind() != null)
 		{
 			p.add(taskPicker());
 			return !bag.isEmpty() ? ui.loot.kindDrill(p, bag, "task:")
@@ -218,7 +236,7 @@ final class SlayerScreen extends Screen
 	private void pickTask(String task)
 	{
 		taskFilter = task;
-		ui.loot.lootKind = null;
+		ui.loot.clearKind();
 		ui.rebuildInPlace();
 	}
 
