@@ -198,4 +198,23 @@ public class LootTest
 		assertEquals(1, today.get("leftKills").getAsInt());
 		assertTrue(has(h.period("Day", LocalDate.now()).screen("Loot", "left"), "Bones"));
 	}
+
+	@Test
+	public void theLootTrackerIsAdoptedOnceAndNeverAnotherPlayersRecord()
+	{
+		Harness fresh = new Harness()
+			.lootTracker("drops_NPC_Zulrah", "{\"name\":\"Zulrah\",\"kills\":430,\"drops\":[12934,500,526,2]}")
+			.lootTracker("drops_EVENT_Barrows", "{\"name\":\"Barrows\",\"kills\":12,\"drops\":[4151,1]}")
+			.lootTracker("drops_PLAYER_Some Player", "{\"name\":\"Some Player\",\"kills\":3,\"drops\":[995,9]}")
+			.lootTracker("drops_SOMETHINGNEW_Thing", "{\"name\":\"Thing\",\"kills\":3,\"drops\":[995,9]}")
+			.login();
+		JsonObject drops = fresh.journal().getAsJsonObject("drops");
+		assertEquals(430, drops.getAsJsonObject("Zulrah").get("loots").getAsInt());
+		assertTrue(drops.has("Barrows"));
+		assertFalse(drops.has("Some Player"));
+		assertFalse(drops.has("Thing"));
+		assertTrue(fresh.said().stream().anyMatch(s -> s.startsWith("Chronicle: adopted 2 sources")));
+		fresh.logout().login();
+		assertEquals(430, fresh.journal().getAsJsonObject("drops").getAsJsonObject("Zulrah").get("loots").getAsInt());
+	}
 }

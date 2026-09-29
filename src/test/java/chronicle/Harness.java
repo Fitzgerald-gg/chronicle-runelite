@@ -19,15 +19,14 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 import javax.swing.JComponent;
@@ -86,7 +85,6 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.http.api.item.ItemPrice;
 import net.runelite.http.api.loottracker.LootRecordType;
-import org.mockito.Mockito;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -99,18 +97,18 @@ final class Harness
 {
 	static final File DIR = journalDir();
 
-	private final Map<Integer, String> names = new HashMap<>();
-	private final Map<Integer, Integer> prices = new HashMap<>();
-	private final Map<Integer, ItemComposition> comps = new HashMap<>();
-	private final Map<Integer, Integer> varbits = new HashMap<>();
-	private final Map<Integer, Integer> varps = new HashMap<>();
+	private final Map<Integer, String> names = new ConcurrentHashMap<>();
+	private final Map<Integer, Integer> prices = new ConcurrentHashMap<>();
+	private final Map<Integer, ItemComposition> comps = new ConcurrentHashMap<>();
+	private final Map<Integer, Integer> varbits = new ConcurrentHashMap<>();
+	private final Map<Integer, Integer> varps = new ConcurrentHashMap<>();
 	private final Map<Skill, int[]> skills = new EnumMap<>(Skill.class);
-	private final Map<Integer, Widget> widgets = new HashMap<>();
-	private final Map<Integer, ItemContainer> containers = new HashMap<>();
-	private final Map<String, String> profile = new HashMap<>();
-	private final Map<String, String> lootTracker = new HashMap<>();
-	private final Map<Integer, String> quests = new HashMap<>();
-	private final Map<TileItem, WorldPoint> spots = new HashMap<>();
+	private final Map<Integer, Widget> widgets = new ConcurrentHashMap<>();
+	private final Map<Integer, ItemContainer> containers = new ConcurrentHashMap<>();
+	private final Map<String, String> profile = new ConcurrentHashMap<>();
+	private final Map<String, String> lootTracker = new ConcurrentHashMap<>();
+	private final Map<Integer, String> quests = new ConcurrentHashMap<>();
+	private final Map<TileItem, WorldPoint> spots = new ConcurrentHashMap<>();
 	private final Client client = mock(Client.class);
 	private final Player me = mock(Player.class);
 	private final SlayerPluginService slayer = mock(SlayerPluginService.class);
@@ -126,6 +124,9 @@ final class Harness
 	private Actor target;
 	private int anim = -1;
 	private int gfx = -1;
+	private volatile String task;
+	private volatile int remaining;
+	private volatile int initial;
 	private String granularity = "Lifetime";
 	private LocalDate cursor = LocalDate.now();
 
@@ -229,6 +230,10 @@ final class Harness
 		when(me.getGraphic()).thenAnswer(i -> gfx);
 		when(me.getInteracting()).thenAnswer(i -> target);
 		when(me.getCombatLevel()).thenReturn(90);
+		when(me.hasSpotAnim(anyInt())).thenAnswer(i -> i.<Integer>getArgument(0) == gfx);
+		when(slayer.getTask()).thenAnswer(i -> task);
+		when(slayer.getRemainingAmount()).thenAnswer(i -> remaining);
+		when(slayer.getInitialAmount()).thenAnswer(i -> initial);
 		when(client.getLocalPlayer()).thenReturn(me);
 		when(client.getGameState()).thenAnswer(i -> state);
 		when(client.getTickCount()).thenAnswer(i -> tick);
@@ -365,8 +370,6 @@ final class Harness
 		bus.register(plugin);
 	}
 
-	// capture
-
 	Harness login()
 	{
 		state(GameState.LOGGING_IN);
@@ -450,9 +453,9 @@ final class Harness
 
 	Harness task(String task, int remaining, int initial)
 	{
-		when(slayer.getTask()).thenReturn(task);
-		when(slayer.getRemainingAmount()).thenReturn(remaining);
-		when(slayer.getInitialAmount()).thenReturn(initial);
+		this.task = task;
+		this.remaining = remaining;
+		this.initial = initial;
 		return this;
 	}
 
@@ -508,7 +511,6 @@ final class Harness
 	{
 		anim = animation;
 		gfx = graphic;
-		when(me.hasSpotAnim(anyInt())).thenAnswer(i -> i.<Integer>getArgument(0) == gfx);
 		AnimationChanged e = new AnimationChanged();
 		e.setActor(me);
 		return post(e);
@@ -722,11 +724,6 @@ final class Harness
 		return this;
 	}
 
-	Harness profile(String key, String value)
-	{
-		profile.put(key, value);
-		return this;
-	}
 
 	Harness sitting(int minutes)
 	{
@@ -738,8 +735,6 @@ final class Harness
 	{
 		return said;
 	}
-
-	// store
 
 	File file()
 	{
@@ -794,11 +789,6 @@ final class Harness
 		JsonObject j = journal();
 		change.accept(j);
 		write(file(), j.toString());
-		return reload();
-	}
-
-	Harness reload()
-	{
 		store().load(DIR, rsn);
 		call(plugin, "reloadHistory", rsn);
 		return this;
@@ -887,8 +877,6 @@ final class Harness
 	{
 		return (HistoryLog) get(plugin, "historyLog");
 	}
-
-	// panel
 
 	Harness period(String granularity, LocalDate cursor)
 	{
@@ -1078,12 +1066,6 @@ final class Harness
 		return i < 0 || i + 1 >= screen.size() ? null : screen.get(i + 1);
 	}
 
-	static long noon(LocalDate d)
-	{
-		return d.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
-	}
-
-	// reflection
 
 	private interface Job
 	{

@@ -145,4 +145,17 @@ public class SlayerTest
 		assertEquals(2, seg(0).get("kills").getAsInt());
 		assertEquals(4, tasks().size());
 	}
+
+	@Test
+	public void offTaskMonstersFiledUnderAnOpenTaskAreTakenOffOnLoad()
+	{
+		h.edit(j -> j.add("slayer", new com.google.gson.Gson().fromJson("{\"tasks\":[{\"task\":\"Nechryael\","
+			+ "\"kills\":4,\"assignment\":200,\"value\":900,\"open\":true,\"monsters\":{\"Nechryael\":1,"
+			+ "\"Man\":1,\"Baby impling\":1,\"Eclectic impling\":1}},{\"task\":\"Elves\",\"kills\":128,"
+			+ "\"assignment\":128,\"value\":5,\"open\":false,\"monsters\":{\"Guard\":128}}]}", JsonObject.class)));
+		JsonArray t = tasks();
+		assertEquals(1, t.get(0).getAsJsonObject().get("kills").getAsInt());
+		assertEquals("{\"Nechryael\":1}", t.get(0).getAsJsonObject().get("monsters").toString());
+		assertEquals(128, t.get(1).getAsJsonObject().get("kills").getAsInt());
+	}
 }
