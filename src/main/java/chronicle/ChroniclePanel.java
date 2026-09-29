@@ -7549,7 +7549,7 @@ class ChroniclePanel extends PluginPanel
 		RecapPicture.BossLine top = most(f.bosses, b -> b.gained);
 		if (bossKills > 0)
 		{
-			f.tiles.add(new RecapPicture.Tile("Kills.Boss kills", (f.whole ? "" : "+") + fmt(bossKills),
+			f.tiles.add(new RecapPicture.Tile("Boss kills", (f.whole ? "" : "+") + fmt(bossKills),
 				"most " + top.name));
 		}
 		for (RecapPicture.Named n : f.slayer)
