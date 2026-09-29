@@ -31,6 +31,7 @@ import net.runelite.api.widgets.Widget;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.Text;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Singleton
 @Slf4j
@@ -61,8 +62,7 @@ public class ClogCapture
 	private final Map<String, Integer> clogItems = new HashMap<>();
 	private volatile int finished;
 	private volatile int available;
-	@Getter(AccessLevel.PACKAGE)
-	private volatile long revision;
+	private final AtomicLong revision = new AtomicLong();
 	private boolean dirty;
 	private boolean clogRetrieving;
 	private int clogFlushTick = -1;
@@ -71,7 +71,7 @@ public class ClogCapture
 	private void changed()
 	{
 		dirty = true;
-		revision++;
+		revision.incrementAndGet();
 	}
 
 	void primeFromVarps()
@@ -474,15 +474,27 @@ public class ClogCapture
 	Map<String, Object> snapshot()
 	{
 		Map<String, Object> out = new HashMap<>();
-		out.put("by_cat", byCat);
-		out.put("kcs", kcs);
-		out.put("kc_lines", kcLines);
-		out.put("pb_lines", pbLines);
-		out.put("slayer_kcs", slayerKcs);
-		out.put("cat_counts", catCounts);
-		out.put("clog_items", clogItems);
+		out.put("by_cat", nested(byCat));
+		out.put("kcs", new HashMap<>(kcs));
+		out.put("kc_lines", nested(kcLines));
+		out.put("pb_lines", nested(pbLines));
+		out.put("slayer_kcs", new HashMap<>(slayerKcs));
+		out.put("cat_counts", new HashMap<>(catCounts));
+		out.put("clog_items", new HashMap<>(clogItems));
 		out.put("finished", finished);
 		out.put("available", available);
+		return out;
+	}
+
+	long revision()
+	{
+		return revision.get();
+	}
+
+	private static Map<String, Map<String, Integer>> nested(Map<String, Map<String, Integer>> from)
+	{
+		Map<String, Map<String, Integer>> out = new HashMap<>();
+		from.forEach((k, v) -> out.put(k, new HashMap<>(v)));
 		return out;
 	}
 }

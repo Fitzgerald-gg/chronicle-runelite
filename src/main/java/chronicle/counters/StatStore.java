@@ -8,19 +8,19 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.inject.Singleton;
 import lombok.Getter;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Singleton
 public class StatStore
 {
 	private final Map<String, Integer> totals = new ConcurrentHashMap<>();
 
-	@Getter
-	private volatile long revision;
+	private final AtomicLong revision = new AtomicLong();
 
 	public void clear()
 	{
 		totals.clear();
-		revision++;
+		revision.incrementAndGet();
 	}
 
 	public int getStat(String key)
@@ -36,13 +36,13 @@ public class StatStore
 	public void incrementStatBy(String key, int amount)
 	{
 		totals.merge(key, amount, (a, b) -> (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, (long) a + b)));
-		revision++;
+		revision.incrementAndGet();
 	}
 
 	public void setStat(String key, int value)
 	{
 		totals.put(key, value);
-		revision++;
+		revision.incrementAndGet();
 	}
 
 	public Map<String, Integer> snapshotAll()
@@ -50,4 +50,8 @@ public class StatStore
 		return new HashMap<>(totals);
 	}
 
+	public long revision()
+	{
+		return revision.get();
+	}
 }

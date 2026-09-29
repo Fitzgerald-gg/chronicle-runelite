@@ -34,6 +34,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.game.ItemManager;
+import java.util.concurrent.atomic.AtomicLong;
 import static chronicle.JournalFile.*;
 import static chronicle.Json.*;
 import static chronicle.KillCounts.*;
@@ -69,8 +70,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private static final int GATHERED_CAP = 1024;
 	private final Set<Integer> gatheredItems = ConcurrentHashMap.newKeySet();
 
-	@Getter(AccessLevel.PACKAGE)
-	private volatile long revision;
+	private final AtomicLong revision = new AtomicLong();
+	private final Object flushLock = new Object();
 
 	static
 	{
@@ -252,7 +253,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
-		revision++;
+		revision.incrementAndGet();
 		if ("LOOT".equals(type))
 		{
 			recordLoot(data);
@@ -410,7 +411,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
-		revision++;
+		revision.incrementAndGet();
 		synchronized (lock)
 		{
 			if (skills != null)
@@ -528,7 +529,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
-		revision++;
+		revision.incrementAndGet();
 		synchronized (lock)
 		{
 			if (isObject(root, "trackers"))
@@ -551,7 +552,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			root.add("trackers", tr);
 			touch();
 		}
-		revision++;
+		revision.incrementAndGet();
 	}
 
 	Map<String, Long> lifetimeOf(Map<String, Integer> session)
@@ -578,31 +579,34 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	void flush(File dir)
 	{
-		String json;
-		String rsn;
-		synchronized (lock)
+		synchronized (flushLock)
 		{
-			if (root == null || currentRsn == null)
+			String json;
+			String rsn;
+			synchronized (lock)
 			{
-				return;
+				if (root == null || currentRsn == null)
+				{
+					return;
+				}
+				json = gson.toJson(root);
+				rsn = currentRsn;
 			}
-			json = gson.toJson(root);
-			rsn = currentRsn;
-		}
-		try
-		{
-			if (!dir.isDirectory() && !dir.mkdirs())
+			try
 			{
-				log.debug("could not create local dir {}", dir);
+				if (!dir.isDirectory() && !dir.mkdirs())
+				{
+					log.debug("could not create local dir {}", dir);
+				}
+				writeAtomic(jsonPath(dir, rsn), json);
+				journalWarning = null;
 			}
-			writeAtomic(jsonPath(dir, rsn), json);
-			journalWarning = null;
-		}
-		catch (Exception e)
-		{
-			log.warn("local flush failed", e);
-			journalWarning = "Could not write the journal to disk: check free space and "
-				+ "permissions on " + dir.getAbsolutePath() + ".";
+			catch (Exception e)
+			{
+				log.warn("local flush failed", e);
+				journalWarning = "Could not write the journal to disk: check free space and permissions on "
+					+ dir.getAbsolutePath() + ".";
+			}
 		}
 	}
 
@@ -781,7 +785,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
-		revision++;
+		revision.incrementAndGet();
 		synchronized (lock)
 		{
 			JsonObject drops = sub(root, "drops");
@@ -922,7 +926,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
-		revision++;
+		revision.incrementAndGet();
 		synchronized (lock)
 		{
 			bump(sub(root, "consumable_values"), key, gp);
@@ -938,7 +942,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return;
 		}
-		revision++;
+		revision.incrementAndGet();
 		synchronized (lock)
 		{
 			if (root == null || currentRsn == null || !gatheredItems.add(itemId))
@@ -1426,7 +1430,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				return;
 			}
 			Counts before = countsNow();
-			revision++;
+			revision.incrementAndGet();
 			sub(root, "chat_kcs").addProperty(subject, tally);
 			touch();
 			anchorKill(subject, tally, "chat", rsn);
@@ -1508,5 +1512,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			: new File(mountedDir, slug(currentRsn) + HistoryLog.SPINE_SUFFIX);
 		out.put("spineBytes", spine != null && spine.isFile() ? spine.length() : 0L);
 		return out;
+	}
+
+	long revision()
+	{
+		return revision.get();
 	}
 }

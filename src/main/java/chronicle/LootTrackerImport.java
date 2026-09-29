@@ -19,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.http.api.loottracker.LootRecordType;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Singleton
@@ -41,15 +42,14 @@ class LootTrackerImport
 
 	@Inject
 	private LocalStore store;
-	private volatile boolean running;
+	private final AtomicBoolean running = new AtomicBoolean();
 
 	void run(ChroniclePlugin plugin)
 	{
-		if (running || "true".equals(configs.getRSProfileConfiguration(ChronicleConfig.GROUP, DONE)))
+		if ("true".equals(configs.getRSProfileConfiguration(ChronicleConfig.GROUP, DONE)) || !running.compareAndSet(false, true))
 		{
 			return;
 		}
-		running = true;
 		String who = plugin.localName();
 		String profile = configs.getRSProfileKey();
 		executor.submit(() ->
@@ -61,7 +61,7 @@ class LootTrackerImport
 			}
 			catch (RuntimeException e)
 			{
-				running = false;
+				running.set(false);
 				log.debug("loot tracker archive read failed", e);
 				return;
 			}
@@ -153,7 +153,7 @@ class LootTrackerImport
 		}
 		finally
 		{
-			running = false;
+			running.set(false);
 		}
 	}
 }

@@ -59,6 +59,7 @@ import net.runelite.client.plugins.slayer.SlayerPlugin;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @PluginDescriptor(
@@ -135,7 +136,7 @@ public class ChroniclePlugin extends Plugin
 	private HistoryLog historyLog;
 	private volatile String historyCacheRsn;
 	private volatile TreeMap<LocalDate, HistoryLog.Baseline> historyCache;
-	private volatile boolean historyLoading;
+	private final AtomicBoolean historyLoading = new AtomicBoolean();
 	private ChroniclePanel panel;
 	private NavigationButton navButton;
 	private ScheduledFuture<?> pushTask;
@@ -665,9 +666,8 @@ public class ChroniclePlugin extends Plugin
 		{
 			return cached;
 		}
-		if (!historyLoading)
+		if (historyLoading.compareAndSet(false, true))
 		{
-			historyLoading = true;
 			executor.submit(() ->
 			{
 				try
@@ -676,7 +676,7 @@ public class ChroniclePlugin extends Plugin
 				}
 				finally
 				{
-					historyLoading = false;
+					historyLoading.set(false);
 				}
 			});
 		}
