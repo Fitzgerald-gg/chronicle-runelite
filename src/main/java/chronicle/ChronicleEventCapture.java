@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.inject.Inject;
@@ -57,7 +56,6 @@ import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ServerNpcLoot;
 import net.runelite.client.game.ItemStack;
@@ -116,9 +114,7 @@ public class ChronicleEventCapture
 
 	private final Client client;
 	private final ClientThread clientThread;
-	private final ConfigManager configManager;
-	private final ChronicleConfig config;
-	private final ChronicleApiClient api;
+	private final CloudSync cloud;
 	private final LocalStore localStore;
 
 	@com.google.inject.Inject(optional = true)
@@ -217,14 +213,11 @@ public class ChronicleEventCapture
 	}
 
 	@Inject
-	ChronicleEventCapture(Client client, ClientThread clientThread, ConfigManager configManager,
-		ChronicleConfig config, ChronicleApiClient api, LocalStore localStore)
+	ChronicleEventCapture(Client client, ClientThread clientThread, CloudSync cloud, LocalStore localStore)
 	{
 		this.client = client;
 		this.clientThread = clientThread;
-		this.configManager = configManager;
-		this.config = config;
-		this.api = api;
+		this.cloud = cloud;
 		this.localStore = localStore;
 	}
 
@@ -1192,29 +1185,6 @@ public class ChronicleEventCapture
 			return;
 		}
 		localStore.record(type, data, name);
-		if (!config.cloudSync() || config.serverBaseUrl().trim().isEmpty())
-		{
-			return;
-		}
-		String tokenRaw = configManager.getRSProfileConfiguration(
-			ChroniclePlugin.GROUP, ChroniclePlugin.KEY_TOKEN);
-		if (tokenRaw == null || tokenRaw.trim().isEmpty())
-		{
-			return;
-		}
-		final String base = config.serverBaseUrl();
-		final String token = tokenRaw.trim();
-		final JsonObject body = new JsonObject();
-		body.addProperty("playerName", name);
-		long accountHash = client.getAccountHash();
-		if (accountHash != -1L)
-		{
-			body.addProperty("accountHash", String.valueOf(accountHash));
-		}
-		body.addProperty("type", type);
-		body.addProperty("eventId", UUID.randomUUID().toString());
-		body.add("data", data);
-
-		api.postEvent(base, token, body);
+		cloud.event(name, type, data);
 	}
 }

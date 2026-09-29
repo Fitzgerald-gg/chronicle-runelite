@@ -355,7 +355,7 @@ final class Harness
 			b.bind(ClientThread.class).toInstance(thread);
 			b.bind(ConfigManager.class).toInstance(config);
 			b.bind(ChronicleConfig.class).toInstance(mock(ChronicleConfig.class));
-			b.bind(ChronicleApiClient.class).toInstance(mock(ChronicleApiClient.class));
+			b.bind(okhttp3.OkHttpClient.class).toInstance(new okhttp3.OkHttpClient());
 			b.bind(ScheduledExecutorService.class).toInstance(exec);
 			b.bind(ClientToolbar.class).toInstance(mock(ClientToolbar.class));
 			b.bind(PluginManager.class).toInstance(plugins);

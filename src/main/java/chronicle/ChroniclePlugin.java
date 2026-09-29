@@ -12,7 +12,6 @@ import chronicle.counters.ChronicleCounters;
 import chronicle.counters.ExperienceStatTracker.SkillGain;
 import chronicle.counters.StatStore;
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.inject.Provides;
@@ -21,7 +20,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,7 +28,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -47,7 +44,6 @@ import net.runelite.api.Skill;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.gameval.VarClientID;
-import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -67,7 +63,6 @@ import net.runelite.client.plugins.slayer.SlayerPlugin;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
-import net.runelite.http.api.loottracker.LootRecordType;
 
 @Slf4j
 @PluginDescriptor(
@@ -80,7 +75,6 @@ import net.runelite.http.api.loottracker.LootRecordType;
 public class ChroniclePlugin extends Plugin
 {
 	static final String GROUP = ChronicleConfig.GROUP;
-	static final String KEY_TOKEN = "token";
 	static final String KEY_JOURNAL_NAME = "journalName";
 
 	@Inject
@@ -96,7 +90,10 @@ public class ChroniclePlugin extends Plugin
 	private ChronicleConfig config;
 
 	@Inject
-	private ChronicleApiClient api;
+	private CloudSync cloud;
+
+	@Inject
+	private LootTrackerImport lootTracker;
 
 	@Inject
 	private ScheduledExecutorService executor;
@@ -150,20 +147,11 @@ public class ChroniclePlugin extends Plugin
 	private volatile boolean pendingLoginSetup;
 	private volatile boolean wasLoggedIn;
 
-	private volatile String cachedToken;
-	private volatile String cachedName;
-	private volatile Map<String, Integer> cachedSnapshot;
-	private volatile String cachedAccountType;
-
-	private volatile boolean lootImportRunning;
-
-	private static final Set<String> PUSH_EXCLUDE = Set.of("untakenLootValue", "untakenLootCount", "resourcesGatheredValue");
 	private static final String KEY_PLAYTIME = "gamePlaytime";
 	private static final String KEY_PLAYTIME_AT = "gamePlaytimeAt";
 
 	private GrindBook grindBook;
 
-	private volatile String syncedRsn;
 	private volatile String localName;
 	private volatile String captureWarning;
 	private volatile String captureWarningWhy;
@@ -185,6 +173,7 @@ public class ChroniclePlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
+		cloud.attach(this);
 		historyLog = new HistoryLog(gson);
 		grindBook = new GrindBook(gson);
 		panel = new ChroniclePanel(this);
@@ -410,9 +399,9 @@ public class ChroniclePlugin extends Plugin
 		if (name.equals(localName) && localStore.isReadyFor(name))
 		{
 			refreshPanel();
-			if (cloudActive())
+			if (cloud.active())
 			{
-				adoptToken(name);
+				cloud.adopt(name);
 			}
 			return;
 		}
@@ -441,9 +430,9 @@ public class ChroniclePlugin extends Plugin
 			}
 			clientThread.invoke(this::refreshLocal);
 		});
-		if (cloudActive())
+		if (cloud.active())
 		{
-			adoptToken(name);
+			cloud.adopt(name);
 		}
 	}
 
@@ -468,7 +457,7 @@ public class ChroniclePlugin extends Plugin
 		if ("pushNow".equals(key) && "true".equals(e.getNewValue()))
 		{
 			configManager.setConfiguration(GROUP, "pushNow", false);
-			actionPushNow();
+			cloud.pushNow();
 			return;
 		}
 		if ("pushIntervalMinutes".equals(key) || "cloudSync".equals(key)
@@ -477,16 +466,7 @@ public class ChroniclePlugin extends Plugin
 			reschedulePushLoop();
 			if ("serverBaseUrl".equals(key))
 			{
-				clientThread.invoke(() ->
-				{
-					if (trimToNull(config.manualToken()) == null)
-					{
-						configManager.unsetRSProfileConfiguration(GROUP, KEY_TOKEN);
-					}
-					cachedToken = null;
-					cachedName = null;
-					syncedRsn = null;
-				});
+				clientThread.invoke(cloud::forget);
 			}
 			if ("cloudSync".equals(key) || "serverBaseUrl".equals(key))
 			{
@@ -503,7 +483,7 @@ public class ChroniclePlugin extends Plugin
 					counters.reset();
 				});
 			}
-			if (cloudActive() && client.getGameState() == GameState.LOGGED_IN)
+			if (cloud.active() && client.getGameState() == GameState.LOGGED_IN)
 			{
 				pendingLoginSetup = true;
 			}
@@ -511,117 +491,13 @@ public class ChroniclePlugin extends Plugin
 		}
 	}
 
-	private void adoptToken(String name)
-	{
-		String override = trimToNull(config.manualToken());
-		String token = trimToNull(configManager.getRSProfileConfiguration(GROUP, KEY_TOKEN));
-		if (override != null && !override.equals(token))
-		{
-			configManager.setRSProfileConfiguration(GROUP, KEY_TOKEN, override);
-			token = override;
-		}
-		if (token == null)
-		{
-			refreshPanel();
-			return;
-		}
-		syncedRsn = name;
-		cachedToken = token;
-		cachedName = name;
-		refreshPanel();
-		pushCurrent();
-	}
-
 	private void scheduledPush()
 	{
 		clientThread.invoke(this::refreshLocal);
-		if (cloudActive())
+		if (cloud.active())
 		{
-			clientThread.invoke(this::pushCurrent);
+			clientThread.invoke(cloud::push);
 		}
-	}
-
-	private void pushCurrent()
-	{
-		String name = ChronicleEventCapture.playerName(client);
-		if (!cloudActive() || client.getGameState() != GameState.LOGGED_IN || name == null)
-		{
-			return;
-		}
-		api.setAccountHash(client.getAccountHash());
-		String token = trimToNull(configManager.getRSProfileConfiguration(GROUP, KEY_TOKEN));
-		if (token == null)
-		{
-			return;
-		}
-		if (clogCapture.isDirty())
-		{
-			api.pushClog(config.serverBaseUrl(), token, name, clogCapture.snapshot());
-			clogCapture.clearDirty();
-		}
-		final JsonObject achievements = achievementSync.snapshot();
-		if (achievementSync.changedSince(achievements))
-		{
-			api.pushAchievements(config.serverBaseUrl(), token, name, achievements,
-				ok ->
-				{
-					if (ok)
-					{
-						achievementSync.markSynced(achievements);
-					}
-				});
-		}
-		if (!name.equals(localName) || !localStore.isReadyFor(name))
-		{
-			return;
-		}
-		localStore.setTrackers(sessionView(), localName);
-		Map<String, Integer> snapshot = journalAbsolutes(name);
-		if (snapshot.isEmpty())
-		{
-			return;
-		}
-		cachedToken = token;
-		cachedName = name;
-		cachedSnapshot = snapshot;
-		cachedAccountType = accountTypeTag(client.getVarbitValue(VarbitID.IRONMAN));
-		syncedRsn = name;
-
-		log.debug("pushing {} counters for {}", snapshot.size(), name);
-		api.pushStats(config.serverBaseUrl(), token, name, snapshot, cachedAccountType,
-			harvestSkills(), this::refreshPanel);
-	}
-
-	private static String accountTypeTag(int varbit)
-	{
-		switch (varbit)
-		{
-			case 1: return "ironman";
-			case 2: return "uim";
-			case 3: return "hcim";
-			case 4: return "gim";
-			case 5: return "hcgim";
-			case 6: return "ugim";
-			default: return "";
-		}
-	}
-
-	private Map<String, Integer> journalAbsolutes(String rsn)
-	{
-		Map<String, Integer> out = new HashMap<>();
-		if (!localStore.isReadyFor(rsn))
-		{
-			return out;
-		}
-		for (Map.Entry<String, Long> e : localStore.trackersSnapshot().entrySet())
-		{
-			long v = e.getValue() != null ? e.getValue() : 0;
-			if (v > 0 && !PUSH_EXCLUDE.contains(e.getKey()))
-			{
-				out.put(e.getKey(), (int) Math.min(Integer.MAX_VALUE, v));
-			}
-		}
-		return out;
 	}
 
 	private boolean ready()
@@ -638,39 +514,20 @@ public class ChroniclePlugin extends Plugin
 
 	private void onLogout()
 	{
-		if (ready())
+		String who = ready() ? localName : null;
+		if (who != null)
 		{
 			bankSitting();
 			appendHistoryBaseline();
 			recordSessionLine();
-			Map<String, Integer> fresh = journalAbsolutes(localName);
-			if (!fresh.isEmpty())
-			{
-				cachedSnapshot = fresh;
-			}
 		}
+		cloud.logout(who);
 		executor.submit(() -> localStore.flush(localDir()));
 		localStore.endSession();
 		clogCapture.reset();
 		eventCapture.resetSessionFlags();
 		achievementSync.reset();
 		statStore.clear();
-		final String token = cachedToken;
-		final String who = cachedName;
-		final String type = cachedAccountType;
-		final Map<String, Integer> snapshot = cachedSnapshot;
-		cachedToken = null;
-		cachedName = null;
-		cachedSnapshot = null;
-		cachedAccountType = null;
-		syncedRsn = null;
-		if (!cloudActive() || token == null || who == null
-			|| snapshot == null || snapshot.isEmpty())
-		{
-			return;
-		}
-		api.pushStats(config.serverBaseUrl(), token, who, snapshot, type,
-			null, this::refreshPanel);
 	}
 
 	private Map<String, long[]> readSkills()
@@ -688,7 +545,7 @@ public class ChroniclePlugin extends Plugin
 		return out;
 	}
 
-	private JsonObject harvestSkills()
+	JsonObject skillsJson()
 	{
 		JsonObject skills = new JsonObject();
 		for (Map.Entry<String, long[]> e : readSkills().entrySet())
@@ -701,25 +558,14 @@ public class ChroniclePlugin extends Plugin
 		return skills;
 	}
 
-	void actionPushNow()
+	String localName()
 	{
-		if (!cloudActive())
-		{
-			chat("Chronicle: enable cloud sync (and set a server) under Advanced in the "
-				+ "plugin settings first.");
-			return;
-		}
-		clientThread.invoke(this::pushCurrent);
+		return localName;
 	}
 
 	LocalStore store()
 	{
 		return localStore;
-	}
-
-	boolean cloudActive()
-	{
-		return config.cloudSync() && !config.serverBaseUrl().trim().isEmpty();
 	}
 
 	Map<String, Long> lifetimeCounters()
@@ -1082,7 +928,8 @@ public class ChroniclePlugin extends Plugin
 
 	String displayRsn()
 	{
-		return cloudActive() && syncedRsn != null && !syncedRsn.isEmpty() ? syncedRsn : localName;
+		String r = cloud.rsn();
+		return r != null ? r : localName;
 	}
 
 	Map<String, Integer> sessionView()
@@ -1110,7 +957,7 @@ public class ChroniclePlugin extends Plugin
 		if (client.getGameState() == GameState.LOGGED_IN && name != null)
 		{
 			Player lp = client.getLocalPlayer();
-			localStore.setCharacter(name, harvestSkills(), lp.getCombatLevel(),
+			localStore.setCharacter(name, skillsJson(), lp.getCombatLevel(),
 				clogCapture.snapshot(), achievementSync.snapshot());
 		}
 		if (ready())
@@ -1121,155 +968,9 @@ public class ChroniclePlugin extends Plugin
 			{
 				appendHistoryBaseline();
 			}
-			if (!"true".equals(configManager.getRSProfileConfiguration(GROUP, "lootTrackerImported")))
-			{
-				importLootTracker();
-			}
+			lootTracker.run(this);
 		}
 		executor.submit(() -> localStore.flush(localDir()));
-	}
-
-	@lombok.RequiredArgsConstructor
-	private static final class RawSource
-	{
-		final String source;
-		final int kills;
-		final long firstMs;
-		final long lastMs;
-		final List<long[]> items = new ArrayList<>();
-	}
-
-	private void importLootTracker()
-	{
-		if (lootImportRunning)
-		{
-			return;
-		}
-		lootImportRunning = true;
-		final String who = localName;
-		final String profileKey = configManager.getRSProfileKey();
-		executor.submit(() ->
-		{
-			final List<RawSource> parsed;
-			try
-			{
-				parsed = readLootTrackerArchive(profileKey);
-			}
-			catch (RuntimeException e)
-			{
-				lootImportRunning = false;
-				log.debug("loot tracker archive read failed", e);
-				return;
-			}
-			clientThread.invoke(() -> adoptLootTrackerArchive(who, parsed));
-		});
-	}
-
-	private static boolean wantedLootType(String key)
-	{
-		return key != null && Arrays.stream(LootRecordType.values())
-			.anyMatch(t -> t != LootRecordType.PLAYER && key.startsWith("drops_" + t.name() + "_"));
-	}
-
-	private List<RawSource> readLootTrackerArchive(String profileKey)
-	{
-		List<RawSource> out = new ArrayList<>();
-		List<String> keys;
-		try
-		{
-			keys = configManager.getRSProfileConfigurationKeys("loottracker", profileKey, "drops_");
-		}
-		catch (RuntimeException e)
-		{
-			return out;
-		}
-		for (String key : keys == null ? Collections.<String>emptyList() : keys)
-		{
-			String raw = wantedLootType(key) ? configManager.getConfiguration("loottracker", profileKey, key) : null;
-			if (raw == null || raw.isEmpty())
-			{
-				continue;
-			}
-			try
-			{
-				JsonObject o = gson.fromJson(raw, JsonObject.class);
-				String source = o.has("name") ? o.get("name").getAsString() : null;
-				if (source == null || source.isEmpty())
-				{
-					continue;
-				}
-				RawSource src = new RawSource(source,
-					o.has("kills") ? o.get("kills").getAsInt() : 0,
-					o.has("first") ? o.get("first").getAsLong() : 0,
-					o.has("last") ? o.get("last").getAsLong() : 0);
-				if (o.has("drops") && o.get("drops").isJsonArray())
-				{
-					JsonArray arr = o.getAsJsonArray("drops");
-					for (int i = 0; i + 1 < arr.size(); i += 2)
-					{
-						long id = arr.get(i).getAsLong();
-						long qty = arr.get(i + 1).getAsLong();
-						if (id > 0 && qty > 0)
-						{
-							src.items.add(new long[]{id, qty});
-						}
-					}
-				}
-				out.add(src);
-			}
-			catch (RuntimeException e)
-			{
-				log.debug("loot tracker record parse failed: {}", key, e);
-			}
-		}
-		return out;
-	}
-
-	private void adoptLootTrackerArchive(String rsn, List<RawSource> parsed)
-	{
-		try
-		{
-			if (rsn == null || !rsn.equals(localName) || !localStore.isReadyFor(rsn))
-			{
-				return;
-			}
-			List<LocalStore.LootSeed> seeds = new ArrayList<>(parsed.size());
-			long events = 0;
-			for (RawSource src : parsed)
-			{
-				List<LocalStore.BagItem> items = new ArrayList<>(src.items.size());
-				for (long[] drop : src.items)
-				{
-					int canon = localStore.items().canonicalize((int) drop[0]);
-					String name;
-					try
-					{
-						name = localStore.items().getItemComposition(canon).getName();
-					}
-					catch (Exception e)
-					{
-						name = "Item " + canon;
-					}
-					long each = localStore.items().getItemPrice(canon);
-					items.add(new LocalStore.BagItem(canon, name, drop[1], Math.max(0, each) * drop[1]));
-				}
-				seeds.add(new LocalStore.LootSeed(src.source, src.kills, src.firstMs, src.lastMs, items));
-				events += src.kills;
-			}
-			if (!seeds.isEmpty())
-			{
-				localStore.floorLootTracker(seeds, rsn);
-				chat("Chronicle: adopted " + seeds.size() + " sources · "
-					+ String.format(Locale.UK, "%,d", events)
-					+ " loot events from your Loot Tracker.");
-				refreshPanel();
-			}
-			configManager.setRSProfileConfiguration(GROUP, "lootTrackerImported", true);
-		}
-		finally
-		{
-			lootImportRunning = false;
-		}
 	}
 
 	private void appendHistoryBaseline()
@@ -1374,7 +1075,7 @@ public class ChroniclePlugin extends Plugin
 		}
 	}
 
-	private void refreshPanel()
+	void refreshPanel()
 	{
 		ChroniclePanel p = panel;
 		if (p != null)
@@ -1383,7 +1084,7 @@ public class ChroniclePlugin extends Plugin
 		}
 	}
 
-	private void chat(String message)
+	void chat(String message)
 	{
 		clientThread.invoke(() ->
 		{
