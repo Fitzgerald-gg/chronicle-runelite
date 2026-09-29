@@ -77,7 +77,7 @@ final class SlayerTaskBook
 			|| book.variants.getOrDefault(taskKey, Collections.emptyList()).stream().anyMatch(name::contains);
 	}
 
-	static String root(String task)
+	private static String root(String task)
 	{
 		String r = task.trim();
 		if (r.startsWith("the "))

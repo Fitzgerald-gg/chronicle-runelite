@@ -27,7 +27,7 @@ final class LootScreen extends Screen
 	boolean dropsByKind;
 	boolean onTaskOnly;
 	String lootKind;
-	int dropsShown = ROW_CAP;
+	private int dropsShown = ROW_CAP;
 
 	LootScreen(ChroniclePanel ui, Board board)
 	{
@@ -182,7 +182,7 @@ final class LootScreen extends Screen
 		return p;
 	}
 
-	JPanel kindLens(JPanel p, String title, List<BagItem> bag, String key)
+	private JPanel kindLens(JPanel p, String title, List<BagItem> bag, String key)
 	{
 		if (lootKind != null)
 		{

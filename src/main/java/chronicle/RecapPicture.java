@@ -27,7 +27,7 @@ import static chronicle.Ui.small;
 final class RecapPicture
 {
 	static final int WIDTH = 1920;
-	static final int MAX_HEIGHT = 1080;
+	private static final int MAX_HEIGHT = 1080;
 
 	private static final int COLUMNS = 6;
 	private static final int GAP = 16;
@@ -165,7 +165,7 @@ final class RecapPicture
 		return MEASURE.getFontMetrics(f);
 	}
 
-	static String cut(String s, Font f, int w)
+	private static String cut(String s, Font f, int w)
 	{
 		FontMetrics m = fm(f);
 		if (m.stringWidth(s) <= w)

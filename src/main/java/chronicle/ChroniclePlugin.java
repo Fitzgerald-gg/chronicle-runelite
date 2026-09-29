@@ -70,7 +70,7 @@ import net.runelite.client.util.ImageUtil;
 public class ChroniclePlugin extends Plugin
 {
 	static final String GROUP = ChronicleConfig.GROUP;
-	static final String KEY_JOURNAL_NAME = "journalName";
+	private static final String KEY_JOURNAL_NAME = "journalName";
 
 	@Inject
 	private Client client;

@@ -93,15 +93,15 @@ final class Reference
 		return out;
 	}
 
-	static final JsonObject FIGHTS = table("panel_fights.json");
+	private static final JsonObject FIGHTS = table("panel_fights.json");
 
 	static final Map<String, String> LOG_PAGE_FOR = strMap(FIGHTS, "logPage");
 
-	static final Map<String, List<String>> PAYS_OUT = lists(obj(FIGHTS, "paysOut"), false);
+	private static final Map<String, List<String>> PAYS_OUT = lists(obj(FIGHTS, "paysOut"), false);
 
 	static final Map<String, List<String>> FOUGHT_AS = lists(obj(FIGHTS, "foughtAs"), true);
 
-	static Map<String, List<String>> lists(JsonObject o, boolean byKind)
+	private static Map<String, List<String>> lists(JsonObject o, boolean byKind)
 	{
 		Map<String, List<String>> out = new LinkedHashMap<>();
 		o.entrySet().forEach(e -> out.put(byKind ? kindOf(e.getKey()) : e.getKey(), strs(e.getValue())));
@@ -120,7 +120,7 @@ final class Reference
 
 	static final Map<String, String> PAGE_SKILL = strMap(KINDS, "pageSkills");
 
-	static final List<String> SKILL_ORDER_NAMES = strs(KINDS.get("skillOrder"));
+	private static final List<String> SKILL_ORDER_NAMES = strs(KINDS.get("skillOrder"));
 
 	static final List<Skill> SKILLS = Arrays.asList(Skill.values());
 
@@ -236,7 +236,7 @@ final class Reference
 		return shared;
 	}
 
-	static final JsonObject COMBAT_BUNDLE = table("osrs_combat_achievements.json");
+	private static final JsonObject COMBAT_BUNDLE = table("osrs_combat_achievements.json");
 
 	static final JsonObject CA_TASKS = obj(COMBAT_BUNDLE, "tasks");
 

@@ -15,7 +15,7 @@ import static chronicle.Ui.dayOf;
 
 final class Period
 {
-	static final String LIFETIME = "Lifetime";
+	private static final String LIFETIME = "Lifetime";
 	static final String SESSION = "Session";
 	static final String[] NAMES = {LIFETIME, "Year", "Month", "Week", "Day", SESSION};
 

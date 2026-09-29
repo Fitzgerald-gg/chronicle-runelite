@@ -101,7 +101,7 @@ final class OverlayScrollBarUI extends BasicScrollBarUI
 		g2.dispose();
 	}
 
-	void wake()
+	private void wake()
 	{
 		lastMove = System.currentTimeMillis();
 		alpha = 1f;

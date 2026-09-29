@@ -82,9 +82,9 @@ final class Ui
 
 	static final int PANEL_INSET = 8;
 
-	static final int CARD_INSET = 8;
+	private static final int CARD_INSET = 8;
 
-	static final int ROW_INSET = 2;
+	private static final int ROW_INSET = 2;
 
 	static final int ROW_GAP = 8;
 
@@ -546,7 +546,7 @@ final class Ui
 		return g;
 	}
 
-	static final int NOTE_WIDTH = 190;
+	private static final int NOTE_WIDTH = 190;
 
 	static JPanel note(String text)
 	{
@@ -627,9 +627,9 @@ final class Ui
 		return p;
 	}
 
-	static final int HOVER_LIFT = 15;
+	private static final int HOVER_LIFT = 15;
 
-	static Color behind(Component c)
+	private static Color behind(Component c)
 	{
 		for (Component p = c.getParent(); p != null; p = p.getParent())
 		{
@@ -641,7 +641,7 @@ final class Ui
 		return DARKER;
 	}
 
-	static Color hoverOf(Color ground)
+	private static Color hoverOf(Color ground)
 	{
 		if (DARKER.equals(ground))
 		{
@@ -668,7 +668,7 @@ final class Ui
 		return cell;
 	}
 
-	static boolean stillUnder(MouseEvent e)
+	private static boolean stillUnder(MouseEvent e)
 	{
 		boolean over = false;
 		boolean pointerKnown = false;
@@ -683,7 +683,7 @@ final class Ui
 		return stillUnder(over, pointerKnown, e.getComponent().contains(e.getPoint()));
 	}
 
-	static boolean stillUnder(boolean overComponent, boolean pointerKnown,
+	private static boolean stillUnder(boolean overComponent, boolean pointerKnown,
 		boolean eventSaysInside)
 	{
 		if (overComponent)
@@ -697,7 +697,7 @@ final class Ui
 		return eventSaysInside;
 	}
 
-	static Runnable litNow;
+	private static Runnable litNow;
 
 	static void unlight()
 	{
@@ -1001,7 +1001,7 @@ final class Ui
 			- 2 * ROW_INSET - ROW_GAP - fm.stringWidth(share);
 	}
 
-	static final String ELLIPSIS = "…";
+	private static final String ELLIPSIS = "…";
 
 	static final int NAME_FLOOR = 3;
 

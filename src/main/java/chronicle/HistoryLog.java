@@ -587,7 +587,7 @@ class HistoryLog
 		return out;
 	}
 
-	static void settle(TreeMap<LocalDate, Baseline> spine)
+	private static void settle(TreeMap<LocalDate, Baseline> spine)
 	{
 		Map<String, Long> kcs = new HashMap<>();
 		Map<String, Long> counters = new HashMap<>();

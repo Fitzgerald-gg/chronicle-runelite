@@ -31,7 +31,7 @@ final class SlayerLog
 		this.store = store;
 	}
 
-	static JsonObject openSegment(JsonArray tasks, String task)
+	private static JsonObject openSegment(JsonArray tasks, String task)
 	{
 		if (tasks.size() == 0)
 		{
@@ -41,31 +41,31 @@ final class SlayerLog
 		return isOpen(last) && namesTask(last, task) ? last : null;
 	}
 
-	static boolean isOpen(JsonObject seg)
+	private static boolean isOpen(JsonObject seg)
 	{
 		return present(seg, "open") && seg.get("open").getAsBoolean();
 	}
 
-	static boolean namesTask(JsonObject seg, String task)
+	private static boolean namesTask(JsonObject seg, String task)
 	{
 		return present(seg, "task")
 			&& task.equalsIgnoreCase(seg.get("task").getAsString());
 	}
 
-	static Long optLong(JsonObject o, String key)
+	private static Long optLong(JsonObject o, String key)
 	{
 		return o.has(key) && o.get(key).isJsonPrimitive()
 			? Long.valueOf(asLong(o.get(key))) : null;
 	}
 
-	static JsonObject continuingSegment(JsonArray tasks, String task, Long rem)
+	private static JsonObject continuingSegment(JsonArray tasks, String task, Long rem)
 	{
 		JsonObject seg = openSegment(tasks, task);
 		Long lastRem = seg == null ? null : optLong(seg, "last_rem");
 		return rem != null && lastRem != null && rem > lastRem ? null : seg;
 	}
 
-	static JsonObject graceSegment(JsonArray tasks, String task, Long rem, boolean live)
+	private static JsonObject graceSegment(JsonArray tasks, String task, Long rem, boolean live)
 	{
 		long floor = System.currentTimeMillis() / 1000L - SLAYER_FINAL_KILL_GRACE;
 		for (int i = tasks.size() - 1; i >= 0; i--)
@@ -89,7 +89,7 @@ final class SlayerLog
 		return null;
 	}
 
-	static JsonObject resumeSegment(JsonArray tasks, String task, Long rem)
+	private static JsonObject resumeSegment(JsonArray tasks, String task, Long rem)
 	{
 		for (int i = tasks.size() - 1; i >= 0; i--)
 		{
@@ -114,7 +114,7 @@ final class SlayerLog
 		return null;
 	}
 
-	static JsonObject newSegment(JsonArray tasks, String task)
+	private static JsonObject newSegment(JsonArray tasks, String task)
 	{
 		JsonObject seg = new JsonObject();
 		seg.addProperty("task", task);
@@ -129,13 +129,13 @@ final class SlayerLog
 		return seg;
 	}
 
-	static long loggedKills(JsonObject seg)
+	private static long loggedKills(JsonObject seg)
 	{
 		Long logged = optLong(seg, "logged");
 		return logged != null ? logged : Math.max(0, asLong(seg.get("kills")) - asLong(seg.get("noLootKills")));
 	}
 
-	static void setNoLootKills(JsonObject seg, long noLoot)
+	private static void setNoLootKills(JsonObject seg, long noLoot)
 	{
 		if (noLoot > 0)
 		{
@@ -147,11 +147,11 @@ final class SlayerLog
 		}
 	}
 
-	static final int SLAYER_TASK_CAP = 1000;
+	private static final int SLAYER_TASK_CAP = 1000;
 
 	static final long SLAYER_FINAL_KILL_GRACE = 30;
 
-	JsonObject slayerRoot()
+	private JsonObject slayerRoot()
 	{
 		JsonObject sl = sub(store.root, "slayer");
 		if (!sl.has("tasks") || !sl.get("tasks").isJsonArray())
@@ -274,18 +274,18 @@ final class SlayerLog
 		return new ArrayList<>(names);
 	}
 
-	static boolean taskInside(JsonObject t, long fromMs, long toMs)
+	private static boolean taskInside(JsonObject t, long fromMs, long toMs)
 	{
 		long ms = (long) (asDouble(t.get("ts")) * 1000);
 		return !(ms > 0 && (ms < fromMs || ms > toMs));
 	}
 
-	static String taskName(JsonObject t)
+	private static String taskName(JsonObject t)
 	{
 		return str(t, "task", "");
 	}
 
-	List<JsonObject> tasksIn(long fromMs, long toMs, String onlyTask, boolean includeOpen)
+	private List<JsonObject> tasksIn(long fromMs, long toMs, String onlyTask, boolean includeOpen)
 	{
 		List<JsonObject> out = new ArrayList<>();
 		for (JsonObject t : objects(taskArray()))
@@ -299,7 +299,7 @@ final class SlayerLog
 		return out;
 	}
 
-	JsonArray taskArray()
+	private JsonArray taskArray()
 	{
 		return arr(obj(store.root, "slayer"), "tasks");
 	}
@@ -524,7 +524,7 @@ final class SlayerLog
 		return out;
 	}
 
-	JsonObject segmentAt(int index)
+	private JsonObject segmentAt(int index)
 	{
 		synchronized (store.lock)
 		{

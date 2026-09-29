@@ -457,7 +457,7 @@ final class SearchScreen extends Screen
 		}
 	}
 
-	static int matchScore(String ql, String name)
+	private static int matchScore(String ql, String name)
 	{
 		if (name == null || ql.isEmpty())
 		{

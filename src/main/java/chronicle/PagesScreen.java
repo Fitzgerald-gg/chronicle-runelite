@@ -59,7 +59,7 @@ final class PagesScreen extends Screen
 		return p;
 	}
 
-	void buildClues(JPanel p)
+	private void buildClues(JPanel p)
 	{
 		long all = 0;
 		long allWorth = 0;
@@ -105,7 +105,7 @@ final class PagesScreen extends Screen
 		}
 	}
 
-	void buildQuests(JPanel p)
+	private void buildQuests(JPanel p)
 	{
 		JsonObject q = obj(board.achievements(), "quests");
 		if (q.size() == 0)
@@ -132,7 +132,7 @@ final class PagesScreen extends Screen
 		addNames(p, "NOT STARTED", not, false, false);
 	}
 
-	void addNames(JPanel p, String heading, List<String> names, boolean held,
+	private void addNames(JPanel p, String heading, List<String> names, boolean held,
 		boolean openByDefault)
 	{
 		if (names.isEmpty())
@@ -155,7 +155,7 @@ final class PagesScreen extends Screen
 		p.add(vgap(4));
 	}
 
-	void buildDiaries(JPanel p)
+	private void buildDiaries(JPanel p)
 	{
 		JsonObject tasks = DIARY_TASKS;
 		JsonObject mine = obj(board.achievements(), "diaries");
@@ -207,7 +207,7 @@ final class PagesScreen extends Screen
 		}
 	}
 
-	static String taskTip(String title, JsonArray tasks)
+	private static String taskTip(String title, JsonArray tasks)
 	{
 		final int cap = 8;
 		StringBuilder sb = new StringBuilder(TIP_OPEN).append(dimLine(title));
@@ -228,7 +228,7 @@ final class PagesScreen extends Screen
 		return sb.append(TIP_CLOSE).toString();
 	}
 
-	void buildCombatAchievements(JPanel p)
+	private void buildCombatAchievements(JPanel p)
 	{
 		JsonObject all = CA_TASKS;
 		long[] c = board.combatStanding();
@@ -310,7 +310,7 @@ final class PagesScreen extends Screen
 		}
 	}
 
-	static String withoutSource(String name, String source)
+	private static String withoutSource(String name, String source)
 	{
 		if (name == null || source == null || name.length() <= source.length()
 			|| !name.regionMatches(true, 0, source, 0, source.length()))
@@ -321,13 +321,13 @@ final class PagesScreen extends Screen
 		return rest.isEmpty() ? name : rest;
 	}
 
-	static String caSource(String monster)
+	private static String caSource(String monster)
 	{
 		return monster == null || monster.trim().isEmpty()
 			|| "N/A".equalsIgnoreCase(monster.trim()) ? "Anywhere" : monster;
 	}
 
-	JPanel buildLog()
+	private JPanel buildLog()
 	{
 		JPanel p = column();
 		if (!period.whole())
@@ -494,7 +494,7 @@ final class PagesScreen extends Screen
 		return p;
 	}
 
-	static String chaseSources(GrindBook.PetChase chase)
+	private static String chaseSources(GrindBook.PetChase chase)
 	{
 		if (chase.activity != null)
 		{
@@ -503,7 +503,7 @@ final class PagesScreen extends Screen
 		return sourceLine(chase.sources, chase.sources.size(), "").whole();
 	}
 
-	static Line sourceLine(List<GrindBook.PetSource> src, int kept, String mark)
+	private static Line sourceLine(List<GrindBook.PetSource> src, int kept, String mark)
 	{
 		Line l = new Line();
 		for (int i = 0; i < kept; i++)
@@ -522,9 +522,9 @@ final class PagesScreen extends Screen
 		return l;
 	}
 
-	static final String[] DROP_MARKS = {" · +", " +"};
+	private static final String[] DROP_MARKS = {" · +", " +"};
 
-	static String fitChase(GrindBook.PetChase chase, String share)
+	private static String fitChase(GrindBook.PetChase chase, String share)
 	{
 		FontMetrics fm = rowMetrics();
 		int avail = chaseRoom(share, fm);
@@ -563,7 +563,7 @@ final class PagesScreen extends Screen
 		return s != null ? s : l.whole();
 	}
 
-	static String chaseTip(GrindBook.PetChase chase)
+	private static String chaseTip(GrindBook.PetChase chase)
 	{
 		StringBuilder sb = new StringBuilder(pct(chase.percentileDry, "Under ", "Over ") + " of players have " + chase.pet
 			+ " by this point. " + chaseSources(chase));
@@ -579,7 +579,7 @@ final class PagesScreen extends Screen
 		return sb.append(".").toString();
 	}
 
-	static List<JPanel> petDetail(boolean lit, LocalStore.PetRow pet,
+	private static List<JPanel> petDetail(boolean lit, LocalStore.PetRow pet,
 		GrindBook.PetChase chase)
 	{
 		List<JPanel> out = new ArrayList<>();
@@ -612,12 +612,12 @@ final class PagesScreen extends Screen
 		return out;
 	}
 
-	static String holdShare(GrindBook.PetChase chase)
+	private static String holdShare(GrindBook.PetChase chase)
 	{
 		return pct(chase.percentileDry, "<", ">") + " have";
 	}
 
-	JPanel logInWindow(JPanel p)
+	private JPanel logInWindow(JPanel p)
 	{
 		List<JsonObject> got = new ArrayList<>();
 		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))

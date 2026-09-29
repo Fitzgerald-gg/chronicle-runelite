@@ -374,7 +374,7 @@ final class Board
 		return c == null ? Collections.emptyMap() : c;
 	}
 
-	static Map<String, Long> peaksNotDeltas(Map<String, Long> moved, Span s)
+	private static Map<String, Long> peaksNotDeltas(Map<String, Long> moved, Span s)
 	{
 		for (String key : StatRegistry.peakKeys())
 		{
@@ -602,7 +602,7 @@ final class Board
 		return said.contains("kill") || said.contains("completion");
 	}
 
-	static long lookup(JsonObject clog, String map, String key)
+	private static long lookup(JsonObject clog, String map, String key)
 	{
 		JsonElement v = getIgnoreCase(obj(clog, map), key);
 		return v == null ? -1 : asLong(v);
@@ -1389,7 +1389,7 @@ final class Board
 		return now.total > was.total ? new long[]{now.total - was.total, now.total} : null;
 	}
 
-	Map<String, Long> periodSkillGains()
+	private Map<String, Long> periodSkillGains()
 	{
 		Span s = span();
 		if (s == null)

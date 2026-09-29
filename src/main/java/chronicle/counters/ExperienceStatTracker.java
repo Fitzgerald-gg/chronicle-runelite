@@ -20,7 +20,7 @@ import net.runelite.api.events.StatChanged;
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 public class ExperienceStatTracker implements StatTracker
 {
-	static final long RATE_FLOOR_MS = 60_000L;
+	private static final long RATE_FLOOR_MS = 60_000L;
 
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	public static final class SkillGain

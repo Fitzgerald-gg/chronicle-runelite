@@ -244,7 +244,7 @@ public class FoodStatTracker implements StatTracker
 			&& Arrays.stream(actions).anyMatch(a -> a != null && "drink".equalsIgnoreCase(a.trim()));
 	}
 
-	static boolean namesAgree(String potion, String base)
+	private static boolean namesAgree(String potion, String base)
 	{
 		String drunk = consumableKey(potion, "").toLowerCase(Locale.ROOT);
 		String held = consumableKey(base, "").toLowerCase(Locale.ROOT);
@@ -369,7 +369,7 @@ public class FoodStatTracker implements StatTracker
 		return 0;
 	}
 
-	static List<String> fourDoseNames(String potion)
+	private static List<String> fourDoseNames(String potion)
 	{
 		String base = potion.trim();
 		String sibling = base.toLowerCase(Locale.ROOT).endsWith(" potion")
@@ -398,12 +398,12 @@ public class FoodStatTracker implements StatTracker
 		return null;
 	}
 
-	static String perFoodKey(String foodName)
+	private static String perFoodKey(String foodName)
 	{
 		return consumableKey(baseFoodName(foodName), "Eaten");
 	}
 
-	static String perPotionKey(String potionName)
+	private static String perPotionKey(String potionName)
 	{
 		return consumableKey(potionName, "Doses");
 	}
@@ -432,7 +432,7 @@ public class FoodStatTracker implements StatTracker
 		return out;
 	}
 
-	static String baseFoodName(String foodName)
+	private static String baseFoodName(String foodName)
 	{
 		String name = foodName.trim()
 			.replaceFirst("^\\d+\\s*/\\s*\\d+\\s+", "")
@@ -490,7 +490,7 @@ public class FoodStatTracker implements StatTracker
 		return message.substring(from, message.indexOf(".")).trim();
 	}
 
-	static String potionName(String message)
+	private static String potionName(String message)
 	{
 		int the = message.indexOf(" of the ");
 		int your = message.indexOf(" of your ");

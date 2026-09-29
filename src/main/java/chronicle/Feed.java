@@ -153,7 +153,7 @@ final class Feed
 			right.toString(), feedLine(e)};
 	}
 
-	static String mostOf(JsonObject d)
+	private static String mostOf(JsonObject d)
 	{
 		Entry<String, JsonElement> top = most(obj(d, "skills").entrySet(), e -> asLong(e.getValue()));
 		return top == null ? null : prettify(top.getKey());
@@ -188,7 +188,7 @@ final class Feed
 		return Math.max(0, asLong(d.get("minutes")));
 	}
 
-	static String questName(String raw)
+	private static String questName(String raw)
 	{
 		String q = raw == null ? "" : raw.trim();
 		int at = low(q).indexOf("you have completed ");
@@ -233,17 +233,17 @@ final class Feed
 		return rollFrom <= 0 ? sittings : Math.min(sittings, rollFrom);
 	}
 
-	static final long[] TOTAL_LEVELS = {1000, 1500, 2000, 2200, 2277, 2376};
+	private static final long[] TOTAL_LEVELS = {1000, 1500, 2000, 2200, 2277, 2376};
 
-	static final long[] NINETY_NINES = {5, 10, 15, 20};
+	private static final long[] NINETY_NINES = {5, 10, 15, 20};
 
-	static final long[] COMBAT_LEVELS = {100, 126};
+	private static final long[] COMBAT_LEVELS = {100, 126};
 
-	static final long[] SKILL_XP = {10_000_000L, 50_000_000L, 100_000_000L, 200_000_000L};
+	private static final long[] SKILL_XP = {10_000_000L, 50_000_000L, 100_000_000L, 200_000_000L};
 
-	static final long[] OVERALL_XP = {100_000_000L, 250_000_000L, 500_000_000L, 1_000_000_000L};
+	private static final long[] OVERALL_XP = {100_000_000L, 250_000_000L, 500_000_000L, 1_000_000_000L};
 
-	static final long[] LOG_SLOTS = {500, 1000, 1500};
+	private static final long[] LOG_SLOTS = {500, 1000, 1500};
 
 	static Map<String, Long> standings(Baseline b, List<String> keys)
 	{
@@ -298,7 +298,7 @@ final class Feed
 		cross(prev, now, ts, into, "slots", LOG_SLOTS, t -> fmt(t) + " collection log slots");
 	}
 
-	static void cross(Map<String, Long> prev, Map<String, Long> now, long ts,
+	private static void cross(Map<String, Long> prev, Map<String, Long> now, long ts,
 		List<JsonObject> into, String key, long[] at, LongFunction<String> text)
 	{
 		Long before = prev.get(key);
@@ -312,12 +312,12 @@ final class Feed
 		}
 	}
 
-	static String threshold(long xp)
+	private static String threshold(long xp)
 	{
 		return xp % 1_000_000_000L == 0 ? xp / 1_000_000_000L + "B" : xp / 1_000_000L + "M";
 	}
 
-	static JsonObject milestone(long ts, String text)
+	private static JsonObject milestone(long ts, String text)
 	{
 		JsonObject e = new JsonObject();
 		e.addProperty("ts", ts);

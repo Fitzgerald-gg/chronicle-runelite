@@ -113,7 +113,7 @@ public class SkillDeriver
 		}
 	}
 
-	static String npcName(String target)
+	private static String npcName(String target)
 	{
 		return NPC_LEVEL.matcher(target).replaceFirst("").trim();
 	}
@@ -230,7 +230,7 @@ public class SkillDeriver
 		}
 	}
 
-	List<Map.Entry<String, Integer>> derive(String tuple)
+	private List<Map.Entry<String, Integer>> derive(String tuple)
 	{
 		String[] p = tuple.split("\\|", -1);
 		if (p.length < 4)
@@ -744,7 +744,7 @@ public class SkillDeriver
 			|| tl.equals("smelly mushroom") || tl.equals("rock");
 	}
 
-	static String camel(String token)
+	private static String camel(String token)
 	{
 		StringBuilder out = new StringBuilder();
 		for (String w : token.trim().toLowerCase(Locale.ROOT).split("[\\s\\-]+"))

@@ -43,7 +43,7 @@ import static chronicle.SlayerLog.*;
 @Slf4j
 class LocalStore implements chronicle.counters.GatheredLedger
 {
-	static final int SCHEMA = 1;
+	private static final int SCHEMA = 1;
 	private static final int FEED_CAP = 20000;
 	static final Set<String> MAX_KEYS = new HashSet<>(
 		Arrays.asList("highestHit", "highestHitTaken"));
@@ -58,7 +58,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	final Object lock = new Object();
 	final LootDays loot = new LootDays(this);
 	final SlayerLog slayer = new SlayerLog(this);
-	static final String SPINE_ADJ = "spine_adj";
+	private static final String SPINE_ADJ = "spine_adj";
 	private volatile boolean freshAdjust;
 	JsonObject root;
 	private JsonObject trackersBase;
@@ -166,7 +166,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	void addPendingAdjust(HistoryLog.Adjust adj)
+	private void addPendingAdjust(HistoryLog.Adjust adj)
 	{
 		if (adj == null || adj.isEmpty())
 		{
@@ -1351,7 +1351,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	Map<String, Long> spineExtras()
+	private Map<String, Long> spineExtras()
 	{
 		long loots = 0;
 		long value = 0;
@@ -1395,7 +1395,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	void anchorKill(String name, long stated, String src, String rsn)
+	private void anchorKill(String name, long stated, String src, String rsn)
 	{
 		if (name == null || name.isEmpty() || stated <= 0 || !isReadyFor(rsn))
 		{
@@ -1510,7 +1510,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	static int obtainedSlots(JsonObject cl)
+	private static int obtainedSlots(JsonObject cl)
 	{
 		Set<String> names = new HashSet<>();
 		obj(cl, "clog_items").keySet().forEach(k -> names.add(k.toLowerCase(Locale.ROOT)));

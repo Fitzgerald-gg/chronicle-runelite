@@ -38,7 +38,7 @@ final class Pictures
 	{
 	}
 
-	static Transferable transferable(DataFlavor flavor, Supplier<Object> data)
+	private static Transferable transferable(DataFlavor flavor, Supplier<Object> data)
 	{
 		return new Transferable()
 		{
@@ -86,11 +86,11 @@ final class Pictures
 		}
 	}
 
-	static final DataFlavor PNG_BYTES = pngFlavor();
+	private static final DataFlavor PNG_BYTES = pngFlavor();
 
-	static boolean pngNativeMapped;
+	private static boolean pngNativeMapped;
 
-	static DataFlavor pngFlavor()
+	private static DataFlavor pngFlavor()
 	{
 		try
 		{
@@ -102,7 +102,7 @@ final class Pictures
 		}
 	}
 
-	static Transferable pngPayload(Image image)
+	private static Transferable pngPayload(Image image)
 	{
 		if (PNG_BYTES == null || OSType.getOSType() != OSType.MacOS
 			|| !(image instanceof RenderedImage))
@@ -133,7 +133,7 @@ final class Pictures
 		}
 	}
 
-	static synchronized void mapPngNative()
+	private static synchronized void mapPngNative()
 	{
 		if (pngNativeMapped)
 		{
@@ -145,19 +145,19 @@ final class Pictures
 		pngNativeMapped = true;
 	}
 
-	static final int COPY_MAX_HEIGHT = 20000;
+	private static final int COPY_MAX_HEIGHT = 20000;
 
-	static final int COPY_WIDTH = 340;
+	private static final int COPY_WIDTH = 340;
 
-	static final int COPY_ROWS = 60;
+	private static final int COPY_ROWS = 60;
 
-	static final int COPY_COLUMNS = 6;
+	private static final int COPY_COLUMNS = 6;
 
-	static final int COPY_GAP = 10;
+	private static final int COPY_GAP = 10;
 
 	static final int COPY_MOST = COPY_COLUMNS * 200;
 
-	static Image pageImage(JPanel page, int width)
+	private static Image pageImage(JPanel page, int width)
 	{
 		try
 		{
@@ -189,7 +189,7 @@ final class Pictures
 		}
 	}
 
-	static int pastTheEdge(JPanel page, int cut)
+	private static int pastTheEdge(JPanel page, int cut)
 	{
 		int n = 0;
 		for (Component k : page.getComponents())
@@ -202,7 +202,7 @@ final class Pictures
 		return n;
 	}
 
-	static void sayWhatDidNotFit(Graphics2D g, int w, int h, int lost)
+	private static void sayWhatDidNotFit(Graphics2D g, int w, int h, int lost)
 	{
 		int band = 20;
 		g.setColor(DARKER);
@@ -213,7 +213,7 @@ final class Pictures
 		g.drawString(said, 6, h - 6);
 	}
 
-	static void layOut(Component c)
+	private static void layOut(Component c)
 	{
 		c.doLayout();
 		if (c instanceof Container)
@@ -235,24 +235,24 @@ final class Pictures
 		return toClipboard(copyImage(page, tall));
 	}
 
-	static Image copyImage(JPanel page)
+	private static Image copyImage(JPanel page)
 	{
 		return copyImage(page, false);
 	}
 
-	static Image copyImage(JPanel page, boolean tall)
+	private static Image copyImage(JPanel page, boolean tall)
 	{
 		int cols = tall ? 1 : copyColumns(page.getComponentCount());
 		return pageImage(reflowed(page, cols), COPY_WIDTH * cols + COPY_GAP * (cols - 1));
 	}
 
-	static int copyColumns(int rows)
+	private static int copyColumns(int rows)
 	{
 		int held = Math.max(0, Math.min(rows, COPY_MOST));
 		return Math.max(1, Math.min(COPY_COLUMNS, (held + COPY_ROWS - 1) / COPY_ROWS));
 	}
 
-	static JPanel reflowed(JPanel page, int cols)
+	private static JPanel reflowed(JPanel page, int cols)
 	{
 		if (cols <= 1)
 		{

@@ -106,7 +106,7 @@ final class PaceBook
 		return xpForLevel(levelAt(xp) + 1);
 	}
 
-	static long xpForLevel(int level)
+	private static long xpForLevel(int level)
 	{
 		return Experience.getXpForLevel(Math.max(1, Math.min(MAX_LEVEL, level)));
 	}

@@ -135,7 +135,7 @@ final class Merge
 		return best;
 	}
 
-	static final long SEGMENT_MATCH_SECONDS = 60;
+	private static final long SEGMENT_MATCH_SECONDS = 60;
 
 	static void mergeSegmentDetail(JsonObject seg, JsonObject inc, String key)
 	{
@@ -176,7 +176,7 @@ final class Merge
 		return kind + "|" + sec + "|" + feedSubject(e);
 	}
 
-	static String feedSubject(JsonObject e)
+	private static String feedSubject(JsonObject e)
 	{
 		if (!isObject(e, "data"))
 		{
@@ -198,7 +198,7 @@ final class Merge
 		return bare.toString();
 	}
 
-	static void floorNumber(JsonObject cur, JsonObject inc, String key)
+	private static void floorNumber(JsonObject cur, JsonObject inc, String key)
 	{
 		if (present(inc, key))
 		{

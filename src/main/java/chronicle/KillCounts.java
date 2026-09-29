@@ -65,13 +65,13 @@ final class KillCounts
 		return out;
 	}
 
-	static Map<String, Long> ledgerKills(JsonObject clog,
+	private static Map<String, Long> ledgerKills(JsonObject clog,
 		List<SourceRow> sources)
 	{
 		return sourceKills(clog, sources, false);
 	}
 
-	static Map<String, Long> sourceKills(JsonObject clog,
+	private static Map<String, Long> sourceKills(JsonObject clog,
 		List<SourceRow> sources, boolean raiseToPage)
 	{
 		Map<String, Long> paged = clogKillCounts(clog);
@@ -187,7 +187,7 @@ final class KillCounts
 		}
 	}
 
-	static String spokenAs(Map<String, String> byKind, String said)
+	private static String spokenAs(Map<String, String> byKind, String said)
 	{
 		String known = byKind.get(chatKind(said));
 		int space = said.indexOf(' ');
@@ -202,7 +202,7 @@ final class KillCounts
 		return known != null ? known : said;
 	}
 
-	static Map<String, Long> respelled(Map<String, Long> said, Set<String> names)
+	private static Map<String, Long> respelled(Map<String, Long> said, Set<String> names)
 	{
 		Map<String, String> byKind = new HashMap<>();
 		for (String name : names)
@@ -217,7 +217,7 @@ final class KillCounts
 		return out;
 	}
 
-	static void placeByKind(Map<String, Long> out,
+	private static void placeByKind(Map<String, Long> out,
 		Map<String, Long> stated, boolean floor)
 	{
 		if (out == null || stated == null || stated.isEmpty())

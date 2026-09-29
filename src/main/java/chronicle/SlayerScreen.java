@@ -28,10 +28,10 @@ final class SlayerScreen extends Screen
 	private static final String[] LENSES = {"Tasks", "Monsters", "Drops"};
 
 	String slayerLens = LENSES[0];
-	int slayerShown = ROW_CAP;
-	String taskFilter;
+	private int slayerShown = ROW_CAP;
+	private String taskFilter;
 	SlayerJourney journeyCache;
-	boolean journeyFetching;
+	private boolean journeyFetching;
 
 	SlayerScreen(ChroniclePanel ui, Board board)
 	{

@@ -77,11 +77,6 @@ final class ItemKinds
 		}
 	}
 
-	static List<String> kinds()
-	{
-		return Collections.unmodifiableList(KINDS);
-	}
-
 	static synchronized String kindOf(String itemName)
 	{
 		String name = itemName == null ? "" : itemName.trim();

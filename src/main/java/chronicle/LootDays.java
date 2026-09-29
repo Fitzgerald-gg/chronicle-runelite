@@ -27,7 +27,7 @@ final class LootDays
 		this.store = store;
 	}
 
-	JsonObject dayRoll()
+	private JsonObject dayRoll()
 	{
 		JsonObject days = sub(store.root, "loot_days");
 		String today = LocalDate.now().format(DAY_KEY);
@@ -39,7 +39,7 @@ final class LootDays
 		return days.getAsJsonObject(today);
 	}
 
-	static void pruneDetail(JsonObject days)
+	private static void pruneDetail(JsonObject days)
 	{
 		String cut = LocalDate.now().minusDays(DETAIL_DAYS).format(DAY_KEY);
 		for (var d : objects(days))
@@ -53,9 +53,9 @@ final class LootDays
 		}
 	}
 
-	static final int DETAIL_DAYS = 400;
+	private static final int DETAIL_DAYS = 400;
 
-	static final DateTimeFormatter DAY_KEY =
+	private static final DateTimeFormatter DAY_KEY =
 		DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
 	void rollTaken(String source, long value, List<BagItem> priced, Double killTime)
@@ -80,7 +80,7 @@ final class LootDays
 		}
 	}
 
-	static void tally(JsonObject row, String name, long q, long v)
+	private static void tally(JsonObject row, String name, long q, long v)
 	{
 		if (name != null)
 		{
@@ -150,7 +150,7 @@ final class LootDays
 		}
 	}
 
-	List<JsonObject> daysIn(LocalDate from, LocalDate to)
+	private List<JsonObject> daysIn(LocalDate from, LocalDate to)
 	{
 		String lo = from.format(DAY_KEY);
 		String hi = to.format(DAY_KEY);
@@ -221,7 +221,7 @@ final class LootDays
 		return days == 0 ? new long[4] : new long[]{dayMs(first), dayMs(last), days, held};
 	}
 
-	static long dayMs(String key)
+	private static long dayMs(String key)
 	{
 		return LocalDate.parse(key, DAY_KEY)
 			.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
@@ -312,7 +312,7 @@ final class LootDays
 		}
 	}
 
-	static void gather(JsonObject day, String key,
+	private static void gather(JsonObject day, String key,
 		Map<String, long[]> into, boolean named)
 	{
 		for (var e : objects(obj(day, key)))
@@ -323,7 +323,7 @@ final class LootDays
 		}
 	}
 
-	static void gatherTimes(JsonObject day, Map<String, double[]> into)
+	private static void gatherTimes(JsonObject day, Map<String, double[]> into)
 	{
 		for (var e : objects(obj(day, "sources")))
 		{
@@ -359,7 +359,7 @@ final class LootDays
 		return sessionFigure("value");
 	}
 
-	long sessionFigure(String key)
+	private long sessionFigure(String key)
 	{
 		synchronized (store.lock)
 		{

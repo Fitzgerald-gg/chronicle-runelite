@@ -64,10 +64,10 @@ import static chronicle.Ui.*;
 
 class ChroniclePanel extends PluginPanel
 {
-	static final int MOVED_RECORD = 1;
-	static final int MOVED_COUNTERS = 2;
-	static final int MOVED_SKILLS = 4;
-	static final int MOVED_CLOG = 8;
+	private static final int MOVED_RECORD = 1;
+	private static final int MOVED_COUNTERS = 2;
+	private static final int MOVED_SKILLS = 4;
+	private static final int MOVED_CLOG = 8;
 	private static final int MOVED_ANY = MOVED_RECORD | MOVED_COUNTERS | MOVED_SKILLS | MOVED_CLOG;
 	private static final int FOLD_CAP = 6;
 
@@ -358,7 +358,7 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	void back()
+	private void back()
 	{
 		place = back.poll();
 		rebuild();
@@ -441,7 +441,7 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	boolean hasLogPage(String page)
+	private boolean hasLogPage(String page)
 	{
 		return taxonomy(plugin.gson()).values().stream().anyMatch(t -> t.containsKey(page));
 	}

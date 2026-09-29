@@ -469,7 +469,7 @@ public class MovementStatTracker implements StatTracker
 			|| (client.getVarpValue(VarPlayerID.OPTION_RUN) == 1 && client.getEnergy() > 0);
 	}
 
-	static String matchDestinationKey(String label)
+	private static String matchDestinationKey(String label)
 	{
 		if (label == null)
 		{
