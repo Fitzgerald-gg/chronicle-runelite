@@ -19,6 +19,7 @@ import java.awt.event.MouseListener;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -732,13 +733,8 @@ class ChroniclePanel extends PluginPanel
 		strip.setBackground(DARK);
 		JPanel pills = new JPanel(new GridLayout(1, 0, 3, 3));
 		pills.setBackground(DARK);
-		for (View v : View.values())
-		{
-			if (v.tab == view.tab)
-			{
-				pills.add(pill(v.sub, v == view, 4, null, () -> show(v)));
-			}
-		}
+		Arrays.stream(View.values()).filter(v -> v.tab == view.tab)
+			.forEach(v -> pills.add(pill(v.sub, v == view, 4, null, () -> show(v))));
 		strip.add(pills, BorderLayout.NORTH);
 		strip.add(vgap(6), BorderLayout.SOUTH);
 		return strip;

@@ -141,20 +141,8 @@ final class Reference
 	static List<Skill> skillOrder()
 	{
 		List<Skill> out = new ArrayList<>();
-		for (String name : SKILL_ORDER_NAMES)
-		{
-			if (skill(name) != null)
-			{
-				out.add(skill(name));
-			}
-		}
-		for (Skill sk : SKILLS)
-		{
-			if (!out.contains(sk))
-			{
-				out.add(sk);
-			}
-		}
+		SKILL_ORDER_NAMES.stream().filter(name -> skill(name) != null).forEach(name -> out.add(skill(name)));
+		SKILLS.stream().filter(sk -> !out.contains(sk)).forEach(out::add);
 		return out;
 	}
 
@@ -225,13 +213,7 @@ final class Reference
 			}
 		}
 		Set<String> shared = new HashSet<>();
-		for (Entry<String, Integer> e : homes.entrySet())
-		{
-			if (e.getValue() > 1)
-			{
-				shared.add(e.getKey());
-			}
-		}
+		homes.entrySet().stream().filter(e -> e.getValue() > 1).forEach(e -> shared.add(e.getKey()));
 		sharedSlotNames = shared;
 		return shared;
 	}
@@ -316,13 +298,7 @@ final class Reference
 	static List<String> words(String name, String against)
 	{
 		List<String> out = new ArrayList<>();
-		for (String w : name.split("\\s+"))
-		{
-			if (w.length() > 3 && !against.contains(w))
-			{
-				out.add(w);
-			}
-		}
+		Arrays.stream(name.split("\\s+")).filter(w -> w.length() > 3 && !against.contains(w)).forEach(out::add);
 		return out;
 	}
 

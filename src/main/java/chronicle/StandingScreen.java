@@ -7,7 +7,6 @@ import chronicle.Board.SkillStand;
 import chronicle.HistoryLog.Baseline;
 import chronicle.LocalStore.SourceRow;
 import chronicle.Period.Window;
-import chronicle.counters.ExperienceStatTracker.SkillGain;
 import chronicle.counters.StatKeys;
 import chronicle.panel.StatRegistry;
 import com.google.gson.JsonObject;
@@ -136,13 +135,8 @@ final class StandingScreen extends Screen
 		List<Entry<String, Long>> list = new ArrayList<>();
 		if (period.session())
 		{
-			for (SkillGain g : plugin.sessionSkillXp())
-			{
-				if (g.skill != null && g.xp > 0)
-				{
-					list.add(Map.entry(low(g.skill.name()), (long) g.xp));
-				}
-			}
+			plugin.sessionSkillXp().stream().filter(g -> g.skill != null && g.xp > 0)
+				.forEach(g -> list.add(Map.entry(low(g.skill.name()), (long) g.xp)));
 		}
 		else
 		{

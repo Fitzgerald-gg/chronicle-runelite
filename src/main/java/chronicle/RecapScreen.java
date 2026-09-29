@@ -64,13 +64,7 @@ final class RecapScreen extends Screen
 			return;
 		}
 		Set<Integer> want = new LinkedHashSet<>();
-		for (RecapPicture.BossLine b : facts.bosses)
-		{
-			if (b.sprite > 0 && !ui.art.has(b.sprite))
-			{
-				want.add(b.sprite);
-			}
-		}
+		facts.bosses.stream().filter(b -> b.sprite > 0 && !ui.art.has(b.sprite)).forEach(b -> want.add(b.sprite));
 		for (int id : want)
 		{
 			ui.art.wear(new JLabel(), id, 22, 22);
@@ -301,13 +295,7 @@ final class RecapScreen extends Screen
 		}
 		Map<String, Long> loose = Board.loosely(worth);
 		List<Entry<String, Long>> kept = new ArrayList<>();
-		for (Entry<String, Long> e : by.entrySet())
-		{
-			if (e.getValue() > 0 && board.recapMonster(e.getKey()))
-			{
-				kept.add(e);
-			}
-		}
+		by.entrySet().stream().filter(e -> e.getValue() > 0 && board.recapMonster(e.getKey())).forEach(kept::add);
 		kept.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
 		for (Entry<String, Long> e : kept.subList(0, Math.min(10, kept.size())))
 		{
@@ -553,13 +541,8 @@ final class RecapScreen extends Screen
 		if (!f.whole)
 		{
 			List<String> out = new ArrayList<>();
-			for (RecapPicture.SkillLine l : f.skills)
-			{
-				if (l.levelStart != null && l.levelStart < l.levelEnd)
-				{
-					out.add(l.name + " " + l.levelEnd);
-				}
-			}
+			f.skills.stream().filter(l -> l.levelStart != null && l.levelStart < l.levelEnd)
+				.forEach(l -> out.add(l.name + " " + l.levelEnd));
 			if (!out.isEmpty())
 			{
 				f.feats.put("Levels", out);

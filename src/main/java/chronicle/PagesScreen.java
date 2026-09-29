@@ -440,13 +440,7 @@ final class PagesScreen extends Screen
 		Set<String> known = new HashSet<>();
 		tax.values().forEach(pages -> pages.keySet().forEach(n -> known.add(low(n))));
 		List<String> strangers = new ArrayList<>();
-		for (String name : ob.byPage.keySet())
-		{
-			if (!known.contains(name))
-			{
-				strangers.add(name);
-			}
-		}
+		ob.byPage.keySet().stream().filter(name -> !known.contains(name)).forEach(strangers::add);
 		if (strangers.isEmpty())
 		{
 			return;
@@ -493,13 +487,8 @@ final class PagesScreen extends Screen
 	private JPanel logInWindow(JPanel p)
 	{
 		List<JsonObject> got = new ArrayList<>();
-		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))
-		{
-			if ("COLLECTION".equals(typeOf(e)) && board.insideWindow(asLong(e.get("ts"))))
-			{
-				got.add(e);
-			}
-		}
+		store.feedNewest(Board.FEED_SCAN_DEEP).stream().filter(e -> "COLLECTION".equals(typeOf(e)) && board.insideWindow(asLong(e.get("ts"))))
+			.forEach(got::add);
 		if (got.isEmpty())
 		{
 			return noted(p, board.inside("Nothing new was logged"));

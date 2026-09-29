@@ -422,13 +422,7 @@ public class FoodStatTracker implements StatTracker
 	{
 		List<String> out = new ArrayList<>();
 		String cleaned = name.trim().toLowerCase(Locale.ROOT).replace("'", "").replace("’", "");
-		for (String word : cleaned.split("[^a-z0-9]+"))
-		{
-			if (!word.isEmpty())
-			{
-				out.add(word);
-			}
-		}
+		Arrays.stream(cleaned.split("[^a-z0-9]+")).filter(word -> !word.isEmpty()).forEach(out::add);
 		return out;
 	}
 

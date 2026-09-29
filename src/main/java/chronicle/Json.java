@@ -99,13 +99,8 @@ final class Json
 	static List<Map.Entry<String, JsonObject>> objects(JsonObject o)
 	{
 		List<Map.Entry<String, JsonObject>> out = new ArrayList<>();
-		for (Map.Entry<String, JsonElement> e : o.entrySet())
-		{
-			if (e.getValue().isJsonObject())
-			{
-				out.add(Map.entry(e.getKey(), e.getValue().getAsJsonObject()));
-			}
-		}
+		o.entrySet().stream().filter(e -> e.getValue().isJsonObject())
+			.forEach(e -> out.add(Map.entry(e.getKey(), e.getValue().getAsJsonObject())));
 		return out;
 	}
 

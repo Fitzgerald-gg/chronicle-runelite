@@ -76,13 +76,8 @@ final class JournalScreen extends Screen
 			all = plugin.feedWithSitting(Board.JOURNAL_DEEP);
 		}
 		List<JsonObject> feed = new ArrayList<>();
-		for (JsonObject e : board.withMilestones(all))
-		{
-			if ((wanted.isEmpty() || wanted.contains(typeOf(e))) && board.insideWindow(filedAt(e)))
-			{
-				feed.add(e);
-			}
-		}
+		board.withMilestones(all).stream().filter(e -> (wanted.isEmpty() || wanted.contains(typeOf(e))) && board.insideWindow(filedAt(e)))
+			.forEach(feed::add);
 		feed.sort((a, b) -> dayOf(filedAt(b)).compareTo(dayOf(filedAt(a))));
 		if (feed.isEmpty())
 		{

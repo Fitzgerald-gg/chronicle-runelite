@@ -155,13 +155,8 @@ final class LootDays
 		String lo = from.format(DAY_KEY);
 		String hi = to.format(DAY_KEY);
 		List<JsonObject> out = new ArrayList<>();
-		for (var d : objects(obj(store.root, "loot_days")))
-		{
-			if (d.getKey().compareTo(lo) >= 0 && d.getKey().compareTo(hi) <= 0)
-			{
-				out.add(d.getValue());
-			}
-		}
+		objects(obj(store.root, "loot_days")).stream().filter(d -> d.getKey().compareTo(lo) >= 0 && d.getKey().compareTo(hi) <= 0)
+			.forEach(d -> out.add(d.getValue()));
 		return out;
 	}
 
@@ -283,13 +278,8 @@ final class LootDays
 			for (JsonObject d : daysIn(from, to))
 			{
 				JsonObject srcs = obj(d, "sources");
-				for (String source : srcs.keySet())
-				{
-					if (asLong(obj(srcs, source).get("loots")) > asLong(obj(srcs, source).get("filed")))
-					{
-						out.add(source);
-					}
-				}
+				srcs.keySet().stream().filter(source -> asLong(obj(srcs, source).get("loots")) > asLong(obj(srcs, source).get("filed")))
+					.forEach(out::add);
 			}
 		}
 		return out;
