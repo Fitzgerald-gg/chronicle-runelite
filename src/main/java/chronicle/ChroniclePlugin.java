@@ -776,18 +776,16 @@ public class ChroniclePlugin extends Plugin
 		long mins = sessionStartMs > 0 ? Math.max(0, (System.currentTimeMillis() - sessionStartMs) / 60_000) : 0;
 		Map<String, Integer> sess = sessionView();
 		long xp = sess.getOrDefault("totalXpGained", 0);
-		int drops = localStore.loot.sessionLoots();
-		long dropsGp = localStore.loot.sessionLootValue();
-		if (mins < 5 && xp == 0 && drops == 0)
+		LootDays.LootWindow loot = localStore.loot.sessionLootWindow();
+		if (mins < 5 && xp == 0 && loot.loots == 0)
 		{
 			return;
 		}
-		localStore.record("SESSION", sessionData(mins, xp, drops, dropsGp), localName);
+		localStore.record("SESSION", sessionData(mins, xp, loot), localName);
 	}
 
-	private JsonObject sessionData(long mins, long xp, int drops, long dropsGp)
+	private JsonObject sessionData(long mins, long xp, LootDays.LootWindow loot)
 	{
-		long[] left = localStore.loot.sessionUntakenTally();
 		JsonObject data = new JsonObject();
 		data.addProperty("minutes", mins);
 		if (sessionStartMs > 0)
@@ -795,11 +793,11 @@ public class ChroniclePlugin extends Plugin
 			data.addProperty("start", sessionStartMs);
 		}
 		data.addProperty("xp", xp);
-		data.addProperty("drops", drops);
-		data.addProperty("dropsGp", dropsGp);
-		data.addProperty("left", left[0]);
-		data.addProperty("leftGp", left[1]);
-		data.addProperty("leftKills", localStore.loot.sessionUntakenKills());
+		data.addProperty("drops", (int) loot.loots);
+		data.addProperty("dropsGp", loot.value);
+		data.addProperty("left", loot.left);
+		data.addProperty("leftGp", loot.leftValue);
+		data.addProperty("leftKills", (int) loot.leftKills);
 		JsonObject skills = new JsonObject();
 		for (SkillGain g : sessionSkillXp())
 		{
@@ -824,13 +822,13 @@ public class ChroniclePlugin extends Plugin
 		}
 		Map<String, Integer> sess = sessionView();
 		long xp = sess.getOrDefault("totalXpGained", 0);
-		int drops = localStore.loot.sessionLoots();
-		if (mins == 0 && xp == 0 && drops == 0)
+		LootDays.LootWindow loot = localStore.loot.sessionLootWindow();
+		if (mins == 0 && xp == 0 && loot.loots == 0)
 		{
 			return null;
 		}
 		JsonObject line = Json.of("type", "SESSION", "ts", System.currentTimeMillis(), "live", true);
-		line.add("data", sessionData(mins, xp, drops, localStore.loot.sessionLootValue()));
+		line.add("data", sessionData(mins, xp, loot));
 		return line;
 	}
 

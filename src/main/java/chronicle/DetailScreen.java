@@ -68,7 +68,7 @@ final class DetailScreen extends Screen
 		long got = 0;
 		long worth = 0;
 		int itemId = 0;
-		List<Object[]> from = new ArrayList<>();
+		List<Tally> from = new ArrayList<>();
 		for (SourceRow r : board.sources())
 		{
 			for (BagItem b : store.sourceItems(r.name))
@@ -78,36 +78,36 @@ final class DetailScreen extends Screen
 					got += b.qty;
 					worth += b.value;
 					itemId = itemId == 0 && b.itemId > 0 ? b.itemId : itemId;
-					from.add(new Object[]{r.name, b.qty, b.value});
+					from.add(new Tally(r.name, b.qty, b.value));
 				}
 			}
 		}
-		long[] inWindow = period.whole() ? null : Board.rowOf(board.lootWindow().items, name);
+		Tally headRow = period.whole() ? null : Tally.find(board.lootWindow().items, name, false);
+		Tally inWindow = period.whole() ? null : headRow != null ? headRow : new Tally(name);
 		long other = 0;
 		long otherValue = 0;
 		if (inWindow != null)
 		{
 			from.clear();
-			other = inWindow[0];
-			otherValue = inWindow[1];
-			String[] headRow = Board.rowFor(board.lootWindow().items, name, false);
-			String spelled = headRow != null ? headRow[0] : name;
+			other = inWindow.qty;
+			otherValue = inWindow.value;
+			String spelled = inWindow.name;
 			for (Map.Entry<String, List<BagItem>> e : board.periodItems().entrySet())
 			{
 				for (BagItem b : e.getValue())
 				{
 					if (b.name.equals(spelled))
 					{
-						from.add(new Object[]{e.getKey(), b.qty, b.value});
+						from.add(new Tally(e.getKey(), b.qty, b.value));
 						other -= b.qty;
 						otherValue -= b.value;
 					}
 				}
 			}
 		}
-		from.sort((a, b) -> Long.compare((long) b[1], (long) a[1]));
-		long qty = inWindow != null ? inWindow[0] : got;
-		long value = inWindow != null ? inWindow[1] : worth;
+		from.sort((a, b) -> Long.compare(b.qty, a.qty));
+		long qty = inWindow != null ? inWindow.qty : got;
+		long value = inWindow != null ? inWindow.value : worth;
 		spaced(p, ui.backRow(() -> ui.copyPage(() -> buildItemDetail(name))), 4);
 		JPanel head = card(name);
 		if (itemId > 0)
@@ -125,14 +125,14 @@ final class DetailScreen extends Screen
 		if (onTask)
 		{
 			long[] tw = board.windowMs();
-			long[] mine = inWindow == null ? board.taskItemsEver().get(proper)
-				: store.slayer.onTaskItems(tw[0], tw[1]).getOrDefault(proper, new long[2]);
-			head.add(row("Obtained on task", "×" + fmt(mine[0]), ACCENT));
+			Tally mine = inWindow == null ? board.taskItemsEver().get(proper)
+				: store.slayer.onTaskItems(tw[0], tw[1]).getOrDefault(proper, new Tally(proper));
+			head.add(row("Obtained on task", "×" + fmt(mine.qty), ACCENT));
 			if (inWindow == null || lootSince() == null)
 			{
 				head.add(row("All sources", "×" + fmt(qty)));
 			}
-			JPanel priced = worthRow(mine[1]);
+			JPanel priced = worthRow(mine.value);
 			priced.setToolTipText("Priced as the drop landed, or in bulk on the day the history was imported");
 			head.add(priced);
 		}
@@ -174,23 +174,23 @@ final class DetailScreen extends Screen
 		p.add(group("From"));
 		String key = "item:src:" + name;
 		ui.capped(p, key, Math.max(ui.drawingCopy ? COPY_MOST : 40, ui.cap(key, 0)), from,
-			s -> p.add(link(row((String) s[0], "×" + fmt((long) s[1]) + tail((long) s[2])), () -> ui.openSource((String) s[0]))));
+			s -> p.add(link(row(s.name, "×" + fmt(s.qty) + tail(s.value)), () -> ui.openSource(s.name))));
 		addOther(p, "×" + fmt(Math.max(0, other)) + tail(Math.max(0, otherValue)), other > 0 || otherValue > 0);
 		return p;
 	}
 
 	private void addDays(JPanel head, String name, long got)
 	{
-		long[] days = store.loot.itemDays(name);
-		long count = days.length > 3 && days[3] < got ? 0 : days[2];
+		LootDays.ItemDays days = store.loot.itemDays(name);
+		long count = days.held < got ? 0 : days.days;
 		if (count == 1)
 		{
-			head.add(row("Dropped on", dated(days[0])));
+			head.add(row("Dropped on", dated(days.first)));
 		}
 		else if (count > 1)
 		{
-			head.add(row("First dropped", dated(days[0])));
-			head.add(row("Last dropped", dated(days[1])));
+			head.add(row("First dropped", dated(days.first)));
+			head.add(row("Last dropped", dated(days.last)));
 			head.add(row("Days it landed", fmt(count)));
 		}
 	}
@@ -198,7 +198,7 @@ final class DetailScreen extends Screen
 	private JPanel byTask(JPanel p, String name)
 	{
 		long[] w = board.windowMs();
-		List<Object[]> split = store.slayer.onTaskItemByTask(name, w[0], w[1]);
+		List<Tally> split = store.slayer.onTaskItemByTask(name, w[0], w[1]);
 		if (split.isEmpty())
 		{
 			return noted(p, board.inside("No task paid this"));
@@ -206,7 +206,7 @@ final class DetailScreen extends Screen
 		p.add(group("By task"));
 		String key = "item:task:" + name;
 		ui.capped(p, key, Math.max(ui.drawingCopy ? COPY_MOST : 40, ui.cap(key, 0)), split,
-			t -> p.add(row("Task: " + t[0], "×" + fmt((long) t[1]) + tail((long) t[2]))));
+			t -> p.add(row("Task: " + t.name, "×" + fmt(t.qty) + tail(t.value))));
 		return p;
 	}
 
@@ -251,12 +251,12 @@ final class DetailScreen extends Screen
 	{
 		JPanel p = column();
 		SourceRow sr = find(board.sources(), r -> r.name, name, false);
-		String[] row = period.whole() ? null : Board.rowFor(board.lootWindow().sources, sr != null ? sr.name : name, sr != null);
-		long[] inWindow = period.whole() ? null : row == null ? new long[2] : new long[]{safeParse(row[1]), safeParse(row[2])};
-		String own = row != null ? row[0] : sr != null ? sr.name : name;
+		Tally row = period.whole() ? null : Tally.find(board.lootWindow().sources, sr != null ? sr.name : name, sr != null);
+		Tally inWindow = period.whole() ? null : row != null ? row : new Tally(name);
+		String own = row != null ? row.name : sr != null ? sr.name : name;
 		List<BagItem> bag = inWindow == null ? store.sourceItems(own) : new ArrayList<>(board.periodItems().getOrDefault(own, List.of()));
 		bag.sort(Comparator.comparingLong((BagItem b) -> b.value).reversed());
-		long other = inWindow == null ? 0 : inWindow[1] - Board.tallyOf(bag)[1];
+		long other = inWindow == null ? 0 : inWindow.value - Tally.of(bag).value;
 		boolean unfiled = other > 0 || inWindow != null && !period.session()
 			&& store.loot.unfiledSources(board.window().start, board.window().end).contains(own);
 		spaced(p, ui.backRow(() -> ui.copyPage(() -> buildSourceDetail(name))), 4);
@@ -300,13 +300,13 @@ final class DetailScreen extends Screen
 		return p;
 	}
 
-	private void sourceHead(JPanel head, SourceRow sr, String own, long[] inWindow)
+	private void sourceHead(JPanel head, SourceRow sr, String own, Tally inWindow)
 	{
 		boolean killed = board.isKillSource(sr.name);
-		long shown = inWindow != null ? inWindow[0] : killed ? board.standingKills(sr) : sr.loots;
+		long shown = inWindow != null ? inWindow.qty : killed ? board.standingKills(sr) : sr.loots;
 		head.add(row(killed ? "Kills" : "Times looted", fmt(shown), ACCENT));
-		long worth = inWindow != null ? inWindow[1] : sr.value;
-		long over = inWindow != null ? inWindow[0] : sr.loots;
+		long worth = inWindow != null ? inWindow.value : sr.value;
+		long over = inWindow != null ? inWindow.qty : sr.loots;
 		head.add(row("Worth", gps(worth) + (over > 0 ? " · " + perOne(worth, over, killed) : "")));
 		if (inWindow == null)
 		{
@@ -329,11 +329,11 @@ final class DetailScreen extends Screen
 			}
 			head.add(best);
 		}
-		double[] timed = inWindow == null ? new double[]{sr.timed, sr.timeSum}
-			: board.lootWindow().times.getOrDefault(own, new double[2]);
-		if (timed[0] > 0)
+		LootDays.Timing timed = inWindow == null ? LootDays.Timing.of(sr.timed, sr.timeSum)
+			: board.lootWindow().times.getOrDefault(own, new LootDays.Timing());
+		if (timed.kills > 0)
 		{
-			head.add(row("Average kill", pb(timed[1] / timed[0]) + " · " + fmt((long) timed[0]) + " timed"));
+			head.add(row("Average kill", pb(timed.seconds / timed.kills) + " · " + fmt(timed.kills) + " timed"));
 		}
 		long here = board.minutesAt(sr.name, inWindow == null ? board.counters() : board.periodCounters());
 		if (here > 0 && board.minutesCoverPeriod())

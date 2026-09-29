@@ -296,8 +296,8 @@ final class StandingScreen extends Screen
 
 	private String slayerTip()
 	{
-		long[] tally = board.taskTally();
-		return tip("Slayer", "Tasks tracked", fmt(tally[2]), "Kills on task", fmt(tally[0]), "On-task loot", gps(tally[3]));
+		SlayerLog.TaskTally tally = board.taskTally();
+		return tip("Slayer", "Tasks tracked", fmt(tally.tasks), "Kills on task", fmt(tally.kills), "On-task loot", gps(tally.loot));
 	}
 
 	private JPanel combatTile(Map<String, Long> gains, HistoryLog.Levels opened)
@@ -529,15 +529,15 @@ final class StandingScreen extends Screen
 		if (!period.whole())
 		{
 			long inWin = board.bossKillsInWindow(b.name);
-			lines.addAll(List.of(board.window().label, (inWin < 0 ? "-" : count(inWin, "kill")) + tail(board.sourceInWindow(b.name)[1])));
+			lines.addAll(List.of(board.window().label, (inWin < 0 ? "-" : count(inWin, "kill")) + tail(board.sourceInWindow(b.name).value)));
 		}
 		long known = board.bossKills(b.name);
 		lines.addAll(List.of("Kills tracked", known > 0 ? fmt(known) : src != null ? fmt(src.loots) : "-"));
 		board.pageLines(b.name, "pb_lines").forEach(ln -> lines.addAll(List.of(ln.getKey(), clock(ln.getValue()))));
-		double[] timed = period.whole() && src != null ? new double[]{src.timed, src.timeSum} : board.sourceTimesInWindow(b.name);
-		if (timed[0] > 0)
+		LootDays.Timing timed = period.whole() && src != null ? LootDays.Timing.of(src.timed, src.timeSum) : board.timesInWindow(b.name);
+		if (timed.kills > 0)
 		{
-			lines.addAll(List.of("Average kill", pb(timed[1] / timed[0]) + " · " + fmt((long) timed[0]) + " timed"));
+			lines.addAll(List.of("Average kill", pb(timed.seconds / timed.kills) + " · " + fmt(timed.kills) + " timed"));
 		}
 		long here = board.minutesAt(b.name, period.whole() ? board.counters() : board.periodCounters());
 		if (here > 0 && board.minutesCoverPeriod())
@@ -562,6 +562,6 @@ final class StandingScreen extends Screen
 
 	private String paidFigure(SourceRow r)
 	{
-		return qtyGp(Board.tallyOf(store.sourceItems(r.name))[0], r.value);
+		return qtyGp(Tally.of(store.sourceItems(r.name)).qty, r.value);
 	}
 }

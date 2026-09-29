@@ -156,8 +156,8 @@ final class SlayerScreen extends Screen
 				: period.whole() ? "No task loot in the journal yet. It collects as tasks close."
 				: board.inside("No task loot"));
 		}
-		long[] sum = Board.tallyOf(bag);
-		long[] tally = store.slayer.onTaskTally(ms[0], ms[1], taskFilter, period.whole());
+		Tally sum = Tally.of(bag);
+		SlayerLog.TaskTally tally = store.slayer.onTaskTally(ms[0], ms[1], taskFilter, period.whole());
 		spaced(p, onTaskHead(sum, tally));
 		p.add(taskPicker());
 		Map<String, BooleanSupplier> ways = new LinkedHashMap<>();
@@ -169,7 +169,7 @@ final class SlayerScreen extends Screen
 		return p;
 	}
 
-	private JPanel kindsPicture(List<BagItem> bag, long[] sum, long[] tally)
+	private JPanel kindsPicture(List<BagItem> bag, Tally sum, SlayerLog.TaskTally tally)
 	{
 		JPanel page = column();
 		spaced(page, onTaskHead(sum, tally));
@@ -181,17 +181,17 @@ final class SlayerScreen extends Screen
 		return page;
 	}
 
-	private static JPanel onTaskHead(long[] sum, long[] tally)
+	private static JPanel onTaskHead(Tally sum, SlayerLog.TaskTally tally)
 	{
-		JPanel head = tallyCard("On-task loot", "Items", fmt(sum[0]), ACCENT, sum[1]);
-		head.add(row("Tasks", fmt(tally[2])));
-		if (tally[0] > 0)
+		JPanel head = tallyCard("On-task loot", "Items", fmt(sum.qty), ACCENT, sum.value);
+		head.add(row("Tasks", fmt(tally.tasks)));
+		if (tally.kills > 0)
 		{
-			head.add(row("Kills logged", fmt(tally[0])));
+			head.add(row("Kills logged", fmt(tally.kills)));
 		}
-		if (tally[1] > 0)
+		if (tally.superiors > 0)
 		{
-			head.add(row("Superiors", fmt(tally[1])));
+			head.add(row("Superiors", fmt(tally.superiors)));
 		}
 		return head;
 	}

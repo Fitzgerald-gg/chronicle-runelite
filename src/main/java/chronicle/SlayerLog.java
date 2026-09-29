@@ -297,9 +297,9 @@ final class SlayerLog
 		return arr(obj(store.root, "slayer"), "tasks");
 	}
 
-	Map<String, long[]> onTaskItems(long fromMs, long toMs)
+	Map<String, Tally> onTaskItems(long fromMs, long toMs)
 	{
-		Map<String, long[]> out = new LinkedHashMap<>();
+		Map<String, Tally> out = new LinkedHashMap<>();
 		synchronized (store.lock)
 		{
 			tasksIn(fromMs, toMs, null, true).forEach(t -> LocalStore.sumItems(obj(t, "items"), out, null, false));
@@ -320,9 +320,9 @@ final class SlayerLog
 		return out;
 	}
 
-	List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
+	List<Tally> onTaskItemByTask(String itemName, long fromMs, long toMs)
 	{
-		Map<String, long[]> by = new LinkedHashMap<>();
+		Map<String, Tally> by = new LinkedHashMap<>();
 		if (itemName == null)
 		{
 			return new ArrayList<>();
@@ -335,15 +335,12 @@ final class SlayerLog
 				{
 					if (it.getKey().equalsIgnoreCase(itemName))
 					{
-						LootDays.add(by, taskName(t), asLong(it.getValue().get("qty")), asLong(it.getValue().get("value")));
+						Tally.add(by, taskName(t), asLong(it.getValue().get("qty")), asLong(it.getValue().get("value")));
 					}
 				}
 			}
 		}
-		List<Object[]> out = new ArrayList<>();
-		by.forEach((task, t) -> out.add(new Object[]{task, t[0], t[1]}));
-		out.sort((a, b) -> Long.compare((Long) b[2], (Long) a[2]));
-		return out;
+		return Tally.ranked(by);
 	}
 
 	List<Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
@@ -374,7 +371,7 @@ final class SlayerLog
 
 	List<BagItem> onTaskLoot(long fromMs, long toMs, String onlyTask, boolean includeOpen)
 	{
-		Map<String, long[]> summed = new LinkedHashMap<>();
+		Map<String, Tally> summed = new LinkedHashMap<>();
 		Map<String, Integer> ids = new LinkedHashMap<>();
 		synchronized (store.lock)
 		{
@@ -386,27 +383,33 @@ final class SlayerLog
 
 	static final Set<String> SUPERIORS = new HashSet<>();
 
-	long[] onTaskTally(long fromMs, long toMs, String onlyTask, boolean includeOpen)
+	static final class TaskTally
 	{
-		long kills = 0;
-		long superiors = 0;
-		long tasks = 0;
+		long kills;
+		long superiors;
+		long tasks;
+		long loot;
+	}
+
+	TaskTally onTaskTally(long fromMs, long toMs, String onlyTask, boolean includeOpen)
+	{
+		TaskTally out = new TaskTally();
 		synchronized (store.lock)
 		{
 			for (JsonObject t : tasksIn(fromMs, toMs, onlyTask, includeOpen))
 			{
-				tasks++;
-				kills += asLong(t.get("kills"));
+				out.tasks++;
+				out.kills += asLong(t.get("kills"));
 				for (var m : obj(t, "monsters").entrySet())
 				{
 					if (SUPERIORS.contains(m.getKey().toLowerCase(Locale.ROOT)))
 					{
-						superiors += asLong(m.getValue());
+						out.superiors += asLong(m.getValue());
 					}
 				}
 			}
 		}
-		return new long[]{kills, superiors, tasks};
+		return out;
 	}
 
 	SlayerJourney slayerJourney()

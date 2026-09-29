@@ -955,7 +955,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	List<BagItem> allLoot()
 	{
-		Map<String, long[]> summed = new LinkedHashMap<>();
+		Map<String, Tally> summed = new LinkedHashMap<>();
 		Map<String, Integer> ids = new LinkedHashMap<>();
 		synchronized (lock)
 		{
@@ -964,7 +964,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return bagRows(summed, ids, -1);
 	}
 
-	static void sumItems(JsonObject bag, Map<String, long[]> summed, Map<String, Integer> ids, boolean byName)
+	static void sumItems(JsonObject bag, Map<String, Tally> summed, Map<String, Integer> ids, boolean byName)
 	{
 		for (var e : objects(bag))
 		{
@@ -974,7 +974,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				continue;
 			}
-			LootDays.add(summed, key, asLong(v.get("qty")), asLong(v.get("value")));
+			Tally.add(summed, key, asLong(v.get("qty")), asLong(v.get("value")));
 			if (ids != null && !ids.containsKey(key) && v.has("id"))
 			{
 				ids.put(key, (int) asLong(v.get("id")));
@@ -982,13 +982,10 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	static List<BagItem> bagRows(Map<String, long[]> summed, Map<String, Integer> ids, int noId)
+	static List<BagItem> bagRows(Map<String, Tally> summed, Map<String, Integer> ids, int noId)
 	{
 		List<BagItem> out = new ArrayList<>();
-		for (var e : summed.entrySet())
-		{
-			out.add(new BagItem(ids.getOrDefault(e.getKey(), noId), e.getKey(), e.getValue()[0], e.getValue()[1]));
-		}
+		summed.values().forEach(t -> out.add(new BagItem(ids.getOrDefault(t.name, noId), t.name, t.qty, t.value)));
 		out.sort((a, b) -> Long.compare(b.value, a.value));
 		return out;
 	}

@@ -115,7 +115,7 @@ final class LootScreen extends Screen
 		{
 			return w.items.isEmpty() ? noted(p, board.inside("Nothing taken")) : kindLens(p, win.label, bagOf(w.items), "win:");
 		}
-		List<String[]> ranked = dropsLeftBehind ? w.leftItems : w.sources;
+		List<Tally> ranked = dropsLeftBehind ? w.leftItems : w.sources;
 		if (ranked.isEmpty())
 		{
 			return noted(p, board.inside("Nothing " + (dropsLeftBehind ? "left behind" : "taken")));
@@ -128,15 +128,15 @@ final class LootScreen extends Screen
 		}
 		spaced(p, head);
 		String key = dropsLeftBehind ? "win:left" : "win:source";
-		ui.capped(p, key, ui.cap(key, ROW_CAP), ranked, r -> p.add(link(row(r[0], qtyGp(safeParse(r[1]), safeParse(r[2]))),
-			dropsLeftBehind ? () -> ui.openItem(r[0]) : () -> ui.openSourceLoose(r[0]))));
+		ui.capped(p, key, ui.cap(key, ROW_CAP), ranked, r -> p.add(link(row(r.name, qtyGp(r.qty, r.value)),
+			dropsLeftBehind ? () -> ui.openItem(r.name) : () -> ui.openSourceLoose(r.name))));
 		return p;
 	}
 
-	private static List<BagItem> bagOf(List<String[]> rows)
+	private static List<BagItem> bagOf(List<Tally> rows)
 	{
 		List<BagItem> bag = new ArrayList<>();
-		rows.forEach(r -> bag.add(new BagItem(0, r[0], safeParse(r[1]), safeParse(r[2]))));
+		rows.forEach(r -> bag.add(new BagItem(0, r.name, r.qty, r.value)));
 		return bag;
 	}
 
@@ -173,7 +173,7 @@ final class LootScreen extends Screen
 		{
 			return kindDrill(p, bag, key);
 		}
-		long[] sum = Board.tallyOf(bag);
+		Tally sum = Tally.of(bag);
 		JPanel head = bagCard(title, bag, sum);
 		BagItem top = most(bag, b -> b.value);
 		if (top != null)
@@ -200,7 +200,7 @@ final class LootScreen extends Screen
 				kept.add(b);
 			}
 		}
-		long[] sum = Board.tallyOf(kept);
+		Tally sum = Tally.of(kept);
 		spaced(p, bagCard(lootKind, kept, sum));
 		p.add(backRow("< All kinds", count(kept.size(), "item"), relens(() -> { })));
 		if (kept.isEmpty())
@@ -234,7 +234,7 @@ final class LootScreen extends Screen
 		bag.forEach(b -> p.add(link(row(named(b.name, b.qty), b.value > 0 ? gps(b.value) : ""), () -> ui.openItem(b.name))));
 	}
 
-	JPanel lootPicture(String title, List<BagItem> bag, long[] sum, boolean kinds)
+	JPanel lootPicture(String title, List<BagItem> bag, Tally sum, boolean kinds)
 	{
 		JPanel page = column();
 		spaced(page, bagCard(title, bag, sum));
@@ -249,9 +249,9 @@ final class LootScreen extends Screen
 		return page;
 	}
 
-	private static JPanel bagCard(String title, List<BagItem> bag, long[] sum)
+	private static JPanel bagCard(String title, List<BagItem> bag, Tally sum)
 	{
-		JPanel head = tallyCard(title, "Items", fmt(sum[0]), ACCENT, sum[1]);
+		JPanel head = tallyCard(title, "Items", fmt(sum.qty), ACCENT, sum.value);
 		head.add(row("Distinct items", fmt(bag.size())));
 		return head;
 	}

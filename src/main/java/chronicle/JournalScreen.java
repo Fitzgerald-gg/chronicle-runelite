@@ -293,7 +293,7 @@ final class JournalScreen extends Screen
 		}
 		long[][] rich = {{0, 0}, {0, 0}};
 		long[][] busy = {{0, 0}, {0, 0}};
-		for (Entry<String, long[]> d : board.dayTotals().entrySet())
+		for (Entry<String, Tally> d : board.dayTotals().entrySet())
 		{
 			long ts;
 			try
@@ -304,8 +304,8 @@ final class JournalScreen extends Screen
 			{
 				continue;
 			}
-			rank(rich, d.getValue()[1], ts, d.getValue()[0]);
-			rank(busy, d.getValue()[0], ts, d.getValue()[1]);
+			rank(rich, d.getValue().value, ts, d.getValue().qty);
+			rank(busy, d.getValue().qty, ts, d.getValue().value);
 		}
 		if (rich[0][0] > 0)
 		{

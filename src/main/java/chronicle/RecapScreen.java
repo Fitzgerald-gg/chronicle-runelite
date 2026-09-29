@@ -262,10 +262,10 @@ final class RecapScreen extends Screen
 		}
 		else if (f.session)
 		{
-			for (String[] r : store.loot.sessionLootWindow().sources)
+			for (Tally r : store.loot.sessionLootWindow().sources)
 			{
-				by.merge(r[0], safeParse(r[1]), Long::sum);
-				worth.merge(r[0], safeParse(r[2]), Long::sum);
+				by.merge(r.name, r.qty, Long::sum);
+				worth.merge(r.name, r.value, Long::sum);
 			}
 		}
 		else
@@ -337,22 +337,10 @@ final class RecapScreen extends Screen
 			return;
 		}
 		LootDays.LootWindow win = board.lootWindow();
-		for (String[] r : firstN(win.sources, 8))
-		{
-			long v = safeParse(r[2]);
-			if (v > 0)
-			{
-				f.sources.add(new RecapPicture.Named(r[0], null, gps(v)));
-			}
-		}
-		for (String[] r : firstN(win.items, 6))
-		{
-			long v = safeParse(r[2]);
-			if (v > 0)
-			{
-				f.items.add(new RecapPicture.Named(r[0] + " ×" + fmt(safeParse(r[1])), null, gps(v)));
-			}
-		}
+		firstN(win.sources, 8).stream().filter(r -> r.value > 0)
+			.forEach(r -> f.sources.add(new RecapPicture.Named(r.name, null, gps(r.value))));
+		firstN(win.items, 6).stream().filter(r -> r.value > 0)
+			.forEach(r -> f.items.add(new RecapPicture.Named(r.name + " ×" + fmt(r.qty), null, gps(r.value))));
 		if (f.loot.isEmpty())
 		{
 			f.lootNote = board.inside("Nothing dropped");
@@ -361,14 +349,14 @@ final class RecapScreen extends Screen
 
 	private void slayerAndClues(RecapPicture.Facts f)
 	{
-		long[] tally = board.taskTally();
-		long paid = tally[3];
-		if (tally[2] > 0)
+		SlayerLog.TaskTally tally = board.taskTally();
+		long paid = tally.loot;
+		if (tally.tasks > 0)
 		{
-			f.slayer.add(new RecapPicture.Named("Tasks", fmt(tally[2]), null));
-			if (tally[1] > 0)
+			f.slayer.add(new RecapPicture.Named("Tasks", fmt(tally.tasks), null));
+			if (tally.superiors > 0)
 			{
-				f.slayer.add(new RecapPicture.Named("Superiors", fmt(tally[1]), null));
+				f.slayer.add(new RecapPicture.Named("Superiors", fmt(tally.superiors), null));
 			}
 			if (paid > 0)
 			{
@@ -389,7 +377,7 @@ final class RecapScreen extends Screen
 			else if (!f.whole)
 			{
 				n = board.rolled(source);
-				v = board.sourceInWindow(source)[1];
+				v = board.sourceInWindow(source).value;
 			}
 			if (n > 0)
 			{
@@ -675,14 +663,13 @@ final class RecapScreen extends Screen
 		{
 			line(plate, "Drops", qtyGp(loot[0], loot[1]), () -> ui.show(ChroniclePanel.View.LOOT));
 		}
-		String[] dearest = board.periodDearest();
+		Tally dearest = board.periodDearest();
 		if (dearest != null)
 		{
-			final String item = dearest[0];
 			Line said = new Line();
-			said.name(item);
-			said.fixed(" · " + gps(Long.parseLong(dearest[1])));
-			line(plate, "Dearest drop", said, () -> ui.openItem(item));
+			said.name(dearest.name);
+			said.fixed(" · " + gps(dearest.value));
+			line(plate, "Dearest drop", said, () -> ui.openItem(dearest.name));
 		}
 		if (loot[2] > 0)
 		{
@@ -704,19 +691,18 @@ final class RecapScreen extends Screen
 				+ spend("potionsConsumedValue", counters), toLiving);
 		}
 
-		String[] killed = board.periodKilledMost();
+		Tally killed = board.periodKilledMost();
 		if (killed != null)
 		{
-			final String who = killed[0];
 			Line said = new Line();
-			said.name(who);
-			said.fixed(" · " + killed[1]);
-			line(plate, "Killed most", said, () -> ui.openSourceLoose(who));
+			said.name(killed.name);
+			said.fixed(" · " + fmt(killed.qty));
+			line(plate, "Killed most", said, () -> ui.openSourceLoose(killed.name));
 		}
-		long[] tally = board.taskTally();
-		if (tally[2] > 0)
+		SlayerLog.TaskTally tally = board.taskTally();
+		if (tally.tasks > 0)
 		{
-			line(plate, "Tasks", fmt(tally[2]) + tail(tally[3]), () -> ui.openSlayer("Tasks"));
+			line(plate, "Tasks", fmt(tally.tasks) + tail(tally.loot), () -> ui.openSlayer("Tasks"));
 		}
 
 		Map<String, String> firstNamed = new LinkedHashMap<>();

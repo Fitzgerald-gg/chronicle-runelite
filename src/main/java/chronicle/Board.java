@@ -464,7 +464,7 @@ final class Board
 		return memo("achievements", plugin::achievements);
 	}
 
-	Map<String, long[]> dayTotals()
+	Map<String, Tally> dayTotals()
 	{
 		return memo("dayTotals", store.loot::dayTotals);
 	}
@@ -481,30 +481,20 @@ final class Board
 		return period.session() ? store.loot.itemsBySource(null, null) : store.loot.itemsBySource(w.start, w.end);
 	}
 
-	double[] sourceTimesInWindow(String name)
+	LootDays.Timing timesInWindow(String name)
 	{
-		Map<String, double[]> times = lootWindow().times;
+		Map<String, LootDays.Timing> times = lootWindow().times;
 		String key = keyOf(times.keySet(), name);
-		return key == null ? new double[]{0, 0} : times.get(key);
+		return key == null ? new LootDays.Timing() : times.get(key);
 	}
 
-	long[] sourceInWindow(String name)
+	Tally sourceInWindow(String name)
 	{
-		return rowOf(lootWindow().sources, name);
+		Tally t = Tally.find(lootWindow().sources, name, false);
+		return t != null ? t : new Tally(name);
 	}
 
-	static long[] rowOf(List<String[]> rows, String name)
-	{
-		String[] r = rowFor(rows, name, false);
-		return r == null ? new long[]{0, 0} : new long[]{safeParse(r[1]), safeParse(r[2])};
-	}
-
-	static String[] rowFor(List<String[]> rows, String name, boolean exact)
-	{
-		return find(rows, r -> r[0], name, exact);
-	}
-
-	Map<String, long[]> taskItemsEver()
+	Map<String, Tally> taskItemsEver()
 	{
 		return memo("taskItems", () -> store.slayer.onTaskItems(EVER_FROM, EVER_TO));
 	}
@@ -532,11 +522,11 @@ final class Board
 		return false;
 	}
 
-	long[] taskTally()
+	SlayerLog.TaskTally taskTally()
 	{
 		long[] ms = windowMs();
-		long[] tally = Arrays.copyOf(store.slayer.onTaskTally(ms[0], ms[1], null, period.whole()), 4);
-		tally[3] = tallyOf(store.slayer.onTaskLoot(ms[0], ms[1], null, period.whole()))[1];
+		SlayerLog.TaskTally tally = store.slayer.onTaskTally(ms[0], ms[1], null, period.whole());
+		tally.loot = Tally.of(store.slayer.onTaskLoot(ms[0], ms[1], null, period.whole())).value;
 		return tally;
 	}
 
@@ -654,14 +644,7 @@ final class Board
 		Map<String, Long> rolled = memo("rolled", () ->
 		{
 			Map<String, Long> out = new LinkedHashMap<>();
-			for (String[] r : lootWindow().sources)
-			{
-				long n = safeParse(r[1]);
-				if (n > 0)
-				{
-					out.put(kindOf(r[0]), n);
-				}
-			}
+			lootWindow().sources.stream().filter(r -> r.qty > 0).forEach(r -> out.put(kindOf(r.name), r.qty));
 			return out;
 		});
 		return rolled.get(kindOf(name));
@@ -1178,11 +1161,10 @@ final class Board
 				clauses.add("+" + gp((Long) xp[0]) + " xp, most in " + xp[1]);
 			}
 		}
-		long[] loot = crossed && sat1 && sat[6] == sat[1]
-			? new long[]{sat[4], sat[5]} : dayTotals().get(ROLL_DAY.format(day));
-		if (loot != null && loot[0] > 0)
+		Tally loot = crossed && sat1 && sat[6] == sat[1] ? new Tally(null, sat[4], sat[5]) : dayTotals().get(ROLL_DAY.format(day));
+		if (loot != null && loot.qty > 0)
 		{
-			clauses.add(count(loot[0], "drop") + tail(loot[1]));
+			clauses.add(count(loot.qty, "drop") + tail(loot.value));
 		}
 		return clauses.isEmpty() ? null : String.join(" · ", clauses);
 	}
@@ -1401,17 +1383,13 @@ final class Board
 		return out;
 	}
 
-	String[] periodDearest()
+	Tally periodDearest()
 	{
-		if (period.whole())
-		{
-			return null;
-		}
-		LootDays.LootWindow win = lootWindow();
-		return win.items.isEmpty() ? null : new String[]{win.items.get(0)[0], win.items.get(0)[2]};
+		List<Tally> items = period.whole() ? List.of() : lootWindow().items;
+		return items.isEmpty() ? null : items.get(0);
 	}
 
-	String[] periodKilledMost()
+	Tally periodKilledMost()
 	{
 		if (period.whole())
 		{
@@ -1423,12 +1401,11 @@ final class Board
 					top = r;
 				}
 			}
-			return top == null ? null : new String[]{top.name, fmt(standingKills(top))};
+			return top == null ? null : new Tally(top.name, standingKills(top), 0);
 		}
 		if (period.session())
 		{
-			String[] top = most(store.loot.sessionLootWindow().sources, r -> safeParse(r[1]));
-			return top == null ? null : new String[]{top[0], fmt(safeParse(top[1]))};
+			return most(store.loot.sessionLootWindow().sources, r -> r.qty);
 		}
 		Span s = span();
 		if (s == null)
@@ -1438,7 +1415,7 @@ final class Board
 		Map<String, Long> moved = HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
 			closingNow(s.closing.kcs, plugin.killCounts()));
 		String top = topOf(moved);
-		return top == null ? null : new String[]{top, fmt(moved.get(top))};
+		return top == null ? null : new Tally(top, moved.get(top), 0);
 	}
 
 	Map<String, Long> periodWorth(LocalDate from, LocalDate to)
@@ -1450,7 +1427,7 @@ final class Board
 		}
 		else
 		{
-			store.loot.lootBetween(from, to).sources.forEach(r -> out.merge(r[0], safeParse(r[2]), Long::sum));
+			store.loot.lootBetween(from, to).sources.forEach(r -> out.merge(r.name, r.value, Long::sum));
 		}
 		return out;
 	}
@@ -1466,11 +1443,6 @@ final class Board
 		Map<String, Long> out = new LinkedHashMap<>();
 		worth.forEach((k, v) -> out.merge(kindOf(k), v, Long::sum));
 		return out;
-	}
-
-	static long[] tallyOf(List<BagItem> bag)
-	{
-		return new long[]{bag.stream().mapToLong(b -> b.qty).sum(), bag.stream().mapToLong(b -> b.value).sum()};
 	}
 
 	static List<Kind> kindsOf(List<BagItem> bag)

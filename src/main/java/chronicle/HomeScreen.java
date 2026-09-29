@@ -75,20 +75,18 @@ final class HomeScreen extends Screen
 				addPinned(strip, key, v, sess);
 			}
 		}
-		int loots = store.loot.sessionLoots();
-		if (loots > 0)
+		LootDays.LootWindow loot = store.loot.sessionLootWindow();
+		if (loot.loots > 0)
 		{
-			strip.add(row("Drops received", loots + " · " + gps(store.loot.sessionLootValue()), GREEN));
-			int leftKills = store.loot.sessionUntakenKills();
-			if (leftKills > 0)
+			strip.add(row("Drops received", loot.loots + " · " + gps(loot.value), GREEN));
+			if (loot.leftKills > 0)
 			{
-				strip.add(row("Drops taken", fmt(Math.max(0, loots - leftKills)), GREEN));
+				strip.add(row("Drops taken", fmt(Math.max(0, loot.loots - loot.leftKills)), GREEN));
 			}
 		}
-		long[] untaken = store.loot.sessionUntakenTally();
-		if (untaken[0] > 0)
+		if (loot.left > 0)
 		{
-			strip.add(row("Left behind", qtyGp(untaken[0], untaken[1])));
+			strip.add(row("Left behind", qtyGp(loot.left, loot.leftValue)));
 		}
 		addFeats(strip);
 		addMovers(strip, plugin.sessionDisplayCounters(), shown);

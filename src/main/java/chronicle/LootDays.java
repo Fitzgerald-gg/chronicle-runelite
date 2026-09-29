@@ -105,13 +105,13 @@ final class LootDays
 		long left;
 		long leftValue;
 		long leftKills;
-		final List<String[]> items = new ArrayList<>();
-		final List<String[]> sources = new ArrayList<>();
-		final List<String[]> leftItems = new ArrayList<>();
-		final Map<String, double[]> times = new LinkedHashMap<>();
-		private final Map<String, long[]> byItem = new LinkedHashMap<>();
-		private final Map<String, long[]> bySource = new LinkedHashMap<>();
-		private final Map<String, long[]> byLeft = new LinkedHashMap<>();
+		final List<Tally> items = new ArrayList<>();
+		final List<Tally> sources = new ArrayList<>();
+		final List<Tally> leftItems = new ArrayList<>();
+		final Map<String, Timing> times = new LinkedHashMap<>();
+		private final Map<String, Tally> byItem = new LinkedHashMap<>();
+		private final Map<String, Tally> bySource = new LinkedHashMap<>();
+		private final Map<String, Tally> byLeft = new LinkedHashMap<>();
 
 		void add(JsonObject d)
 		{
@@ -128,11 +128,36 @@ final class LootDays
 
 		LootWindow ranked()
 		{
-			rank(byItem, items);
-			rank(bySource, sources);
-			rank(byLeft, leftItems);
+			items.addAll(Tally.ranked(byItem));
+			sources.addAll(Tally.ranked(bySource));
+			leftItems.addAll(Tally.ranked(byLeft));
 			return this;
 		}
+	}
+
+	static final class Timing
+	{
+		long kills;
+		double seconds;
+
+		static Timing of(long kills, double seconds)
+		{
+			Timing t = new Timing();
+			t.kills = kills;
+			t.seconds = seconds;
+			return t;
+		}
+	}
+
+	@RequiredArgsConstructor
+	static final class ItemDays
+	{
+		static final ItemDays NONE = new ItemDays(0, 0, 0, 0);
+
+		final long first;
+		final long last;
+		final int days;
+		final long held;
 	}
 
 	long lootRollFrom()
@@ -163,22 +188,18 @@ final class LootDays
 		return w.ranked();
 	}
 
-	Map<String, long[]> dayTotals()
+	Map<String, Tally> dayTotals()
 	{
-		Map<String, long[]> out = new TreeMap<>();
+		Map<String, Tally> out = new TreeMap<>();
 		synchronized (store.lock)
 		{
-			for (var e : objects(obj(store.root, "loot_days")))
-			{
-				JsonObject d = e.getValue();
-				out.put(e.getKey(), new long[]{asLong(d.get("loots")), asLong(d.get("value")),
-					asLong(d.get("left")), asLong(d.get("leftValue"))});
-			}
+			objects(obj(store.root, "loot_days")).forEach(e ->
+				out.put(e.getKey(), new Tally(e.getKey(), asLong(e.getValue().get("loots")), asLong(e.getValue().get("value")))));
 		}
 		return out;
 	}
 
-	long[] itemDays(String name)
+	ItemDays itemDays(String name)
 	{
 		String first = null;
 		String last = null;
@@ -206,7 +227,7 @@ final class LootDays
 				}
 			}
 		}
-		return days == 0 ? new long[4] : new long[]{dayMs(first), dayMs(last), days, held};
+		return days == 0 ? ItemDays.NONE : new ItemDays(dayMs(first), dayMs(last), days, held);
 	}
 
 	private static long dayMs(String key)
@@ -227,7 +248,7 @@ final class LootDays
 
 	Map<String, List<BagItem>> itemsBySource(LocalDate from, LocalDate to)
 	{
-		Map<String, Map<String, long[]>> by = new LinkedHashMap<>();
+		Map<String, Map<String, Tally>> by = new LinkedHashMap<>();
 		Map<String, Integer> ids = new HashMap<>();
 		synchronized (store.lock)
 		{
@@ -236,13 +257,13 @@ final class LootDays
 				JsonObject srcs = obj(d, "sources");
 				for (String source : srcs.keySet())
 				{
-					Map<String, long[]> into = by.computeIfAbsent(source, k -> new LinkedHashMap<>());
+					Map<String, Tally> into = by.computeIfAbsent(source, k -> new LinkedHashMap<>());
 					JsonObject its = obj(obj(srcs, source), "items");
 					for (String id : its.keySet())
 					{
 						JsonObject e = obj(its, id);
 						String label = str(obj(obj(d, "items"), id), "n", str(e, "n", id));
-						add(into, label, asLong(e.get("q")), asLong(e.get("v")));
+						Tally.add(into, label, asLong(e.get("q")), asLong(e.get("v")));
 						if (LocalStore.idOf(id) != null)
 						{
 							ids.putIfAbsent(label, LocalStore.idOf(id));
@@ -254,13 +275,6 @@ final class LootDays
 		Map<String, List<BagItem>> out = new LinkedHashMap<>();
 		by.forEach((source, items) -> out.put(source, LocalStore.bagRows(items, ids, 0)));
 		return out;
-	}
-
-	static void add(Map<String, long[]> into, String key, long qty, long value)
-	{
-		long[] t = into.computeIfAbsent(key, k -> new long[2]);
-		t[0] += qty;
-		t[1] += value;
 	}
 
 	Set<String> unfiledSources(LocalDate from, LocalDate to)
@@ -295,65 +309,30 @@ final class LootDays
 		}
 	}
 
-	private static void gather(JsonObject day, String key, Map<String, long[]> into, boolean named)
+	private static void gather(JsonObject day, String key, Map<String, Tally> into, boolean named)
 	{
 		for (var e : objects(obj(day, key)))
 		{
 			JsonObject o = e.getValue();
-			add(into, named && o.has("n") ? o.get("n").getAsString() : e.getKey(),
+			Tally.add(into, named && o.has("n") ? o.get("n").getAsString() : e.getKey(),
 				asLong(o.get(named ? "q" : "loots")), asLong(o.get(named ? "v" : "value")));
 		}
 	}
 
-	private static void gatherTimes(JsonObject day, Map<String, double[]> into)
+	private static void gatherTimes(JsonObject day, Map<String, Timing> into)
 	{
 		for (var e : objects(obj(day, "sources")))
 		{
 			long timed = asLong(e.getValue().get("timed"));
 			if (timed > 0)
 			{
-				double[] t = into.computeIfAbsent(e.getKey(), x -> new double[2]);
-				t[0] += timed;
-				t[1] += asDouble(e.getValue().get("timeSum"));
+				Timing t = into.computeIfAbsent(e.getKey(), x -> new Timing());
+				t.kills += timed;
+				t.seconds += asDouble(e.getValue().get("timeSum"));
 			}
 		}
 	}
 
-	static void rank(Map<String, long[]> from, List<String[]> into)
-	{
-		List<Map.Entry<String, long[]>> rows = new ArrayList<>(from.entrySet());
-		rows.sort((a, b) -> Long.compare(b.getValue()[1], a.getValue()[1]));
-		rows.forEach(e ->
-			into.add(new String[]{e.getKey(), String.valueOf(e.getValue()[0]), String.valueOf(e.getValue()[1])}));
-	}
-
 	JsonObject sessionRoll = new JsonObject();
 
-	int sessionLoots()
-	{
-		return (int) sessionFigure("loots");
-	}
-
-	long sessionLootValue()
-	{
-		return sessionFigure("value");
-	}
-
-	private long sessionFigure(String key)
-	{
-		synchronized (store.lock)
-		{
-			return asLong(sessionRoll.get(key));
-		}
-	}
-
-	long[] sessionUntakenTally()
-	{
-		return new long[]{sessionFigure("left"), sessionFigure("leftValue")};
-	}
-
-	int sessionUntakenKills()
-	{
-		return (int) sessionFigure("leftKills");
-	}
 }
