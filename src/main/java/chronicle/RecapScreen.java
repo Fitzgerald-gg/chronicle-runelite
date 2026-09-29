@@ -18,8 +18,8 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Map;
 import java.util.Set;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -211,7 +211,7 @@ final class RecapScreen extends Screen
 
 	private void bosses(RecapPicture.Facts f, Span s)
 	{
-		List<Boss> roster = bossRoster(plugin.gson());
+		List<Boss> roster = bossRoster();
 		Map<String, Long> closing = s == null ? null : board.closingNow(s.closing.kcs, plugin.killCounts());
 		for (Boss b : roster)
 		{

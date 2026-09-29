@@ -418,7 +418,7 @@ class ChroniclePanel extends PluginPanel
 
 	boolean openLogPage(String page)
 	{
-		for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
+		for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy().entrySet())
 		{
 			if (tab.getValue().containsKey(page))
 			{

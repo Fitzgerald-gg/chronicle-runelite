@@ -20,9 +20,7 @@ import lombok.AllArgsConstructor;
 
 public final class StatRegistry
 {
-	public static final String[] FAMILIES = {
-		"Living", "Combat", "Skilling", "Ledger & Roads"
-	};
+	public static final List<String> FAMILIES = List.of("Living", "Combat", "Skilling", "Ledger & Roads");
 
 	static final JsonObject TABLES = Tables.load("stat_registry.json");
 	private static final Set<String> COMBAT = Tables.set(TABLES, "combat");

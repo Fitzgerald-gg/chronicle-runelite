@@ -377,8 +377,7 @@ public class FoodStatTracker implements StatTracker
 
 	private String itemName(int itemId)
 	{
-		ItemComposition definition = client.getItemDefinition(itemId);
-		return definition == null ? "" : definition.getName();
+		return client.getItemDefinition(itemId).getName();
 	}
 
 	private static <T> T take(List<T> waiting, Predicate<T> match)

@@ -3,10 +3,10 @@
  */
 package chronicle;
 
-import chronicle.LootQuery.Kind;
 import chronicle.LocalStore.BagItem;
 import chronicle.LocalStore.SourceRow;
 import chronicle.LocalStore.UntakenRow;
+import chronicle.LootQuery.Kind;
 import chronicle.Period.Window;
 import java.awt.GridLayout;
 import java.util.ArrayList;

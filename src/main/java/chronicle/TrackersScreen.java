@@ -15,8 +15,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Map;
 import java.util.Set;
 import javax.swing.JPanel;
 import static chronicle.Feed.typeOf;
@@ -28,7 +28,7 @@ final class TrackersScreen extends Screen
 	private static final List<String> LEDGER_FAMILIES = List.of("Ledger & Roads", "Living");
 	private static final Set<String> FOLDING = Set.of("Food", "Potions", "Teleports", "Destinations", "Thralls");
 	private static final String FOLD_DEATHS = "Combat:deaths";
-	private String statsFamily = StatRegistry.FAMILIES[0];
+	private String statsFamily = StatRegistry.FAMILIES.get(0);
 	private Map<String, Long> consumables = Map.of();
 	private long resourcesDropped;
 
@@ -46,7 +46,7 @@ final class TrackersScreen extends Screen
 	{
 		if (v == ChroniclePanel.View.TRACKERS)
 		{
-			statsFamily = StatRegistry.FAMILIES[0];
+			statsFamily = StatRegistry.FAMILIES.get(0);
 		}
 		else if (v == ChroniclePanel.View.LEDGER && !LEDGER_FAMILIES.contains(statsFamily))
 		{
@@ -67,7 +67,7 @@ final class TrackersScreen extends Screen
 		JPanel p = column();
 		JPanel pills = new JPanel(new GridLayout(0, 2, 3, 3));
 		pills.setBackground(DARK);
-		for (String fam : ui.view == ChroniclePanel.View.LEDGER ? LEDGER_FAMILIES : List.of(StatRegistry.FAMILIES))
+		for (String fam : ui.view == ChroniclePanel.View.LEDGER ? LEDGER_FAMILIES : StatRegistry.FAMILIES)
 		{
 			pills.add(pill(fam, fam.equals(statsFamily), 7, null, () ->
 			{
@@ -439,16 +439,8 @@ final class TrackersScreen extends Screen
 
 	private void addPace(JPanel p, String skill)
 	{
-		PaceBook.Pace pace;
-		try
-		{
-			pace = plugin.pace(skill);
-		}
-		catch (RuntimeException e)
-		{
-			return;
-		}
-		if (pace != null && pace.hasHorizon())
+		PaceBook.Pace pace = plugin.pace(skill);
+		if (pace.hasHorizon())
 		{
 			String target = pace.targetLevel != null ? String.valueOf(pace.targetLevel) : "200m";
 			p.add(ghostRow(target + " in " + count(pace.daysOfPlay, "day") + " of play", gp((long) pace.xpPerActiveDay) + "/day"));
@@ -457,7 +449,7 @@ final class TrackersScreen extends Screen
 				p.add(ghostRow("measured over " + count(pace.activeDays, "day"), ""));
 			}
 		}
-		else if (pace != null && pace.dormant() && pace.lastActive != null)
+		else if (pace.dormant() && pace.lastActive != null)
 		{
 			p.add(ghostRow("last moved " + pace.lastActive.format(TASK_DAY), ""));
 		}

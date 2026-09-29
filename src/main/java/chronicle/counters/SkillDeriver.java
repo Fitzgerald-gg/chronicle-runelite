@@ -220,18 +220,6 @@ public class SkillDeriver
 		}
 	}
 
-	private List<Map.Entry<String, Integer>> derive(String tuple)
-	{
-		String[] p = tuple.split("\\|", -1);
-		if (p.length < 4)
-		{
-			return null;
-		}
-		return derive(p[0], intOr(p[1], 0), intOr(p[2], 0), intOr(p[3], 0),
-			p.length >= 5 ? Math.max(1, intOr(p[4], 1)) : 1, p.length >= 6 ? p[5] : "",
-			p.length >= 7 ? intOr(p[6], 0) : 0, p.length >= 8 ? Math.max(1, intOr(p[7], 1)) : 1);
-	}
-
 	private List<Map.Entry<String, Integer>> derive(String skill, int xp, int obj, int item, int qty,
 		String target, int consumed, int consumedQty)
 	{

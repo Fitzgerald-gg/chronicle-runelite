@@ -3,21 +3,17 @@
  */
 package chronicle;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
+import chronicle.counters.Tables;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -32,11 +28,11 @@ import static chronicle.Ui.*;
 final class Reference
 {
 	static List<Boss> bossRoster;
-	private static final JsonObject FIGHTS = table("panel_fights.json");
+	private static final JsonObject FIGHTS = Tables.load("panel_fights.json");
 	static final Map<String, String> LOG_PAGE_FOR = strMap(FIGHTS, "logPage");
 	private static final Map<String, List<String>> PAYS_OUT = lists(obj(FIGHTS, "paysOut"), false);
 	static final Map<String, List<String>> FOUGHT_AS = lists(obj(FIGHTS, "foughtAs"), true);
-	static final JsonObject KINDS = table("panel_kinds.json");
+	static final JsonObject KINDS = Tables.load("panel_kinds.json");
 	static final Set<String> PICKPOCKETED = new HashSet<>(strs(KINDS.get("pickpocketed")));
 	static final Set<String> MONSTER_PAGES = new HashSet<>(strs(KINDS.get("monsterPages")));
 	static final List<String> OPENED = strs(KINDS.get("opened"));
@@ -47,10 +43,10 @@ final class Reference
 	static final List<String> SKILL_KEYS = SKILLS.stream().map(sk -> low(sk.name())).collect(Collectors.toList());
 	static Map<String, Map<String, List<String>>> taxonomy;
 	static Set<String> sharedSlotNames;
-	private static final JsonObject COMBAT_BUNDLE = table("osrs_combat_achievements.json");
+	private static final JsonObject COMBAT_BUNDLE = Tables.load("osrs_combat_achievements.json");
 	static final JsonObject CA_TASKS = obj(COMBAT_BUNDLE, "tasks");
 	static final long CA_POINTS = asLong(obj(obj(COMBAT_BUNDLE, "_meta"), "totals").get("points"));
-	static final JsonObject DIARY_TASKS = obj(table("osrs_achievement_diaries.json"), "diaries");
+	static final JsonObject DIARY_TASKS = obj(Tables.load("osrs_achievement_diaries.json"), "diaries");
 
 	static final String[] CLUE_TIERS = {
 		"Beginner", "Easy", "Medium", "Hard", "Elite", "Master"};
@@ -102,7 +98,7 @@ final class Reference
 		final int sprite;
 	}
 
-	static synchronized List<Boss> bossRoster(Gson gson)
+	static synchronized List<Boss> bossRoster()
 	{
 		if (bossRoster != null)
 		{
@@ -128,20 +124,10 @@ final class Reference
 			bossRoster = out;
 			return out;
 		}
-		try (InputStream in = ChroniclePanel.class.getResourceAsStream("osrs_bosses.json"))
+		for (JsonElement e : Tables.array("osrs_bosses.json"))
 		{
-			if (in != null)
-			{
-				JsonArray arr = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), JsonArray.class);
-				for (JsonElement e : arr)
-				{
-					JsonObject o = e.getAsJsonObject();
-					out.add(new Boss(o.get("name").getAsString(), o.has("sprite") ? o.get("sprite").getAsInt() : -1));
-				}
-			}
-		}
-		catch (Exception ex)
-		{
+			JsonObject o = e.getAsJsonObject();
+			out.add(new Boss(o.get("name").getAsString(), o.has("sprite") ? o.get("sprite").getAsInt() : -1));
 		}
 		bossRoster = out;
 		return out;
@@ -174,46 +160,36 @@ final class Reference
 		return out;
 	}
 
-	static synchronized Map<String, Map<String, List<String>>> taxonomy(Gson gson)
+	static synchronized Map<String, Map<String, List<String>>> taxonomy()
 	{
 		if (taxonomy != null)
 		{
 			return taxonomy;
 		}
 		Map<String, Map<String, List<String>>> out = new LinkedHashMap<>();
-		try (InputStream in = ChroniclePanel.class.getResourceAsStream("clog_taxonomy.json"))
+		for (Entry<String, JsonElement> tab : Tables.load("clog_taxonomy.json").entrySet())
 		{
-			if (in != null)
+			Map<String, List<String>> pages = new LinkedHashMap<>();
+			for (Entry<String, JsonElement> pg : tab.getValue().getAsJsonObject().entrySet())
 			{
-				JsonObject rootTax = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), JsonObject.class);
-				for (Entry<String, JsonElement> tab : rootTax.entrySet())
-				{
-					Map<String, List<String>> pages = new LinkedHashMap<>();
-					for (Entry<String, JsonElement> pg : tab.getValue().getAsJsonObject().entrySet())
-					{
-						List<String> slots = new ArrayList<>();
-						pg.getValue().getAsJsonArray().forEach(it -> slots.add(it.getAsString()));
-						pages.put(pg.getKey(), slots);
-					}
-					out.put(tab.getKey(), pages);
-				}
+				List<String> slots = new ArrayList<>();
+				pg.getValue().getAsJsonArray().forEach(it -> slots.add(it.getAsString()));
+				pages.put(pg.getKey(), slots);
 			}
-		}
-		catch (Exception e)
-		{
+			out.put(tab.getKey(), pages);
 		}
 		taxonomy = out;
 		return out;
 	}
 
-	static synchronized Set<String> sharedSlotNames(Gson gson)
+	static synchronized Set<String> sharedSlotNames()
 	{
 		if (sharedSlotNames != null)
 		{
 			return sharedSlotNames;
 		}
 		Map<String, Integer> homes = new LinkedHashMap<>();
-		for (Entry<String, Map<String, List<String>>> tab : taxonomy(gson).entrySet())
+		for (Entry<String, Map<String, List<String>>> tab : taxonomy().entrySet())
 		{
 			for (Entry<String, List<String>> pg : tab.getValue().entrySet())
 			{

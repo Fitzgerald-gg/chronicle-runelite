@@ -225,11 +225,6 @@ final class Pictures
 		return toClipboard(copyImage(page, tall));
 	}
 
-	private static Image copyImage(JPanel page)
-	{
-		return copyImage(page, false);
-	}
-
 	private static Image copyImage(JPanel page, boolean tall)
 	{
 		int cols = tall ? 1 : copyColumns(page.getComponentCount());

@@ -3,10 +3,10 @@
  */
 package chronicle;
 
-import chronicle.LogQuery.Obtained;
 import chronicle.LocalStore.BagItem;
 import chronicle.LocalStore.SourceRow;
 import chronicle.LocalStore.UntakenRow;
+import chronicle.LogQuery.Obtained;
 import chronicle.SlayerLog.SlayerJourney;
 import chronicle.panel.StatRegistry;
 import com.google.gson.JsonElement;
@@ -21,8 +21,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import javax.swing.JPanel;
@@ -149,7 +149,7 @@ final class SearchScreen extends Screen
 		Set<String> kinds = new HashSet<>();
 		Map<String, SourceRow> rows = new HashMap<>();
 		board.sources().forEach(r -> rows.put(r.name, r));
-		for (Boss b : bossRoster(plugin.gson()))
+		for (Boss b : bossRoster())
 		{
 			int sc = matchScore(ql, b.name);
 			if (sc < 0 || !kinds.add(kindOf(b.name)))
@@ -263,13 +263,13 @@ final class SearchScreen extends Screen
 		List<Hit> log = new ArrayList<>();
 		Obtained ob = LogQuery.obtained(board.clogNow());
 		Set<String> seen = new HashSet<>();
-		for (Map<String, List<String>> tab : taxonomy(plugin.gson()).values())
+		for (Map<String, List<String>> tab : taxonomy().values())
 		{
 			for (Entry<String, List<String>> pg : tab.entrySet())
 			{
 				String page = pg.getKey();
 				List<String> slots = pg.getValue();
-				boolean[] lit = LogQuery.lightSlots(slots, ob.byPage.get(low(page)), ob.all, sharedSlotNames(plugin.gson()));
+				boolean[] lit = LogQuery.lightSlots(slots, ob.byPage.get(low(page)), ob.all, sharedSlotNames());
 				int ps = matchScore(ql, page);
 				if (ps >= 0)
 				{
@@ -526,12 +526,12 @@ final class SearchScreen extends Screen
 			names.add(r.name);
 			store.sourceItems(r.name).forEach(b -> names.add(b.name));
 		}
-		for (Map<String, List<String>> tab : taxonomy(plugin.gson()).values())
+		for (Map<String, List<String>> tab : taxonomy().values())
 		{
 			names.addAll(tab.keySet());
 			tab.values().forEach(names::addAll);
 		}
-		bossRoster(plugin.gson()).forEach(b -> names.add(b.name));
+		bossRoster().forEach(b -> names.add(b.name));
 		names.addAll(obj(board.clogNow(), "slayer_kcs").keySet());
 		names.addAll(obj(board.achievements(), "quests").keySet());
 		skillOrder().forEach(sk -> names.add(prettify(low(sk.name()))));

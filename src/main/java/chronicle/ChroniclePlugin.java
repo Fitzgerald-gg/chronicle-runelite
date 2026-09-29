@@ -26,6 +26,7 @@ import java.util.TreeMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
@@ -59,7 +60,6 @@ import net.runelite.client.plugins.slayer.SlayerPlugin;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @PluginDescriptor(
@@ -158,7 +158,7 @@ public class ChroniclePlugin extends Plugin
 	private long lastRollAttempt;
 	private final long[] lastRevision = new long[4];
 	private volatile Map<String, SkillRow> liveSkills = Collections.emptyMap();
-	private volatile long skillRevision;
+	private long skillRevision;
 
 	@Provides
 	ChronicleConfig provideConfig(ConfigManager configManager)

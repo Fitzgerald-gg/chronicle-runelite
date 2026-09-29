@@ -3,8 +3,8 @@
 */
 package chronicle;
 
-import chronicle.LogQuery.Obtained;
 import chronicle.LocalStore.SourceRow;
+import chronicle.LogQuery.Obtained;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.awt.GridLayout;
@@ -14,8 +14,8 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import javax.swing.JPanel;
@@ -313,7 +313,7 @@ final class PagesScreen extends Screen
 			return logInWindow(p);
 		}
 		spaced(p, logHead());
-		Map<String, Map<String, List<String>>> tax = taxonomy(plugin.gson());
+		Map<String, Map<String, List<String>>> tax = taxonomy();
 		JPanel pills = new JPanel(new GridLayout(0, 3, 3, 3));
 		pills.setBackground(DARK);
 		for (String tab : tax.keySet())
@@ -362,7 +362,7 @@ final class PagesScreen extends Screen
 
 	private void logPage(JPanel p, JsonObject cl, Obtained ob, Map<String, Long> kcs, String page, List<String> slots)
 	{
-		boolean[] lit = LogQuery.lightSlots(slots, ob.byPage.get(low(page)), ob.all, sharedSlotNames(plugin.gson()));
+		boolean[] lit = LogQuery.lightSlots(slots, ob.byPage.get(low(page)), ob.all, sharedSlotNames());
 		int got = LogQuery.lit(lit);
 		Long kc = kcs.get(low(page));
 		boolean open = page.equals(clogPageSel);

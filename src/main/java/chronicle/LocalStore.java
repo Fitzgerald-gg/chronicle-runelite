@@ -4,13 +4,12 @@
 package chronicle;
 
 import chronicle.SlayerLog.SlayerJourney;
+import chronicle.counters.Tables;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.io.File;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayDeque;
@@ -26,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.AccessLevel;
@@ -34,7 +34,6 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.game.ItemManager;
-import java.util.concurrent.atomic.AtomicLong;
 import static chronicle.JournalFile.*;
 import static chronicle.Json.*;
 import static chronicle.KillCounts.*;
@@ -75,18 +74,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	static
 	{
-		try (InputStream in = LocalStore.class.getResourceAsStream("/chronicle/store_superiors.json"))
-		{
-			for (JsonElement e : new com.google.gson.JsonParser().parse(
-				new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonArray())
-			{
-				SlayerLog.SUPERIORS.add(e.getAsString());
-			}
-		}
-		catch (Exception e)
-		{
-			log.warn("superiors table unreadable", e);
-		}
+		Tables.array("store_superiors.json").forEach(e -> SlayerLog.SUPERIORS.add(e.getAsString()));
 	}
 
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)

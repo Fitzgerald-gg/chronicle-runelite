@@ -6,9 +6,9 @@ package chronicle.counters;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.inject.Singleton;
 import lombok.Getter;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Singleton
 public class StatStore

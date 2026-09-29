@@ -12,8 +12,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -180,7 +180,7 @@ final class KillQuery
 		String said = low(label);
 		String mine = bare(boss);
 		String best = null;
-		for (Boss b : bossRoster(board.plugin.gson()))
+		for (Boss b : bossRoster())
 		{
 			String name = bare(b.name);
 			if (!name.isEmpty() && said.contains(name) && (best == null || name.length() > best.length()))
@@ -197,7 +197,7 @@ final class KillQuery
 		{
 			return namesOneOf(said, words(mine, bare(page)));
 		}
-		for (Boss other : bossRoster(board.plugin.gson()))
+		for (Boss other : bossRoster())
 		{
 			if (!other.name.equalsIgnoreCase(boss)
 				&& LOG_PAGE_FOR.getOrDefault(other.name, other.name).equalsIgnoreCase(page)
@@ -214,7 +214,7 @@ final class KillQuery
 		Set<String> kinds = board.memo("killKinds", () ->
 		{
 			Set<String> out = new HashSet<>();
-			bossRoster(board.plugin.gson()).forEach(b -> out.add(kindOf(b.name)));
+			bossRoster().forEach(b -> out.add(kindOf(b.name)));
 			obj(board.clogNow(), "slayer_kcs").keySet().forEach(said -> out.add(kindOf(said)));
 			return out;
 		});
@@ -285,7 +285,7 @@ final class KillQuery
 		{
 			return KIND_SKILLING;
 		}
-		for (Entry<String, Map<String, List<String>>> tab : taxonomy(board.plugin.gson()).entrySet())
+		for (Entry<String, Map<String, List<String>>> tab : taxonomy().entrySet())
 		{
 			if (!tab.getValue().containsKey(name))
 			{
@@ -333,7 +333,7 @@ final class KillQuery
 			return false;
 		}
 		String kind = kindOf(name);
-		for (Boss b : bossRoster(board.plugin.gson()))
+		for (Boss b : bossRoster())
 		{
 			if (kindOf(b.name).equals(kind) || namesInBrackets(name, b.name) || paysOutThrough(b.name, name))
 			{

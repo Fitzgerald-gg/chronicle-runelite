@@ -8,7 +8,6 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
-import net.runelite.api.gameval.ItemID;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
 import net.runelite.api.events.AnimationChanged;
@@ -16,6 +15,7 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.StatChanged;
+import net.runelite.api.gameval.ItemID;
 
 @RequiredArgsConstructor
 public class MagicStatTracker implements StatTracker

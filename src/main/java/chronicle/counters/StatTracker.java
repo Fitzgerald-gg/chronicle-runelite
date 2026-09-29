@@ -9,7 +9,6 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
-import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.Skill;
 import net.runelite.api.events.AnimationChanged;
@@ -22,6 +21,7 @@ import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.client.game.ItemManager;
 
 public interface StatTracker

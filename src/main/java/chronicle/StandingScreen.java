@@ -3,10 +3,10 @@
  */
 package chronicle;
 
-import chronicle.SkillQuery.SkillStand;
 import chronicle.HistoryLog.Baseline;
 import chronicle.LocalStore.SourceRow;
 import chronicle.Period.Window;
+import chronicle.SkillQuery.SkillStand;
 import chronicle.counters.StatKeys;
 import chronicle.panel.StatRegistry;
 import com.google.gson.JsonObject;
@@ -22,8 +22,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import javax.swing.ImageIcon;
@@ -467,7 +467,7 @@ final class StandingScreen extends Screen
 	{
 		JPanel p = column();
 		board.rollUsed = false;
-		List<Boss> roster = new ArrayList<>(bossRoster(plugin.gson()));
+		List<Boss> roster = new ArrayList<>(bossRoster());
 		if (roster.isEmpty())
 		{
 			return noted(p, "The boss roster did not load.");

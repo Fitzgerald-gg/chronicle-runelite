@@ -6,9 +6,6 @@ package chronicle;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -170,15 +167,4 @@ final class Json
 		return out;
 	}
 
-	static JsonObject table(String name)
-	{
-		try (InputStreamReader in = new InputStreamReader(Json.class.getResourceAsStream(name), StandardCharsets.UTF_8))
-		{
-			return new JsonParser().parse(in).getAsJsonObject();
-		}
-		catch (Exception ex)
-		{
-			return new JsonObject();
-		}
-	}
 }

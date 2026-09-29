@@ -10,13 +10,12 @@ import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.HitsplatID;
 import net.runelite.api.Skill;
-import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.StatChanged;
-
+import net.runelite.api.gameval.VarPlayerID;
 import static chronicle.counters.StatKeys.DAMAGE_DEALT;
 import static chronicle.counters.StatKeys.HIGHEST_HIT;
 

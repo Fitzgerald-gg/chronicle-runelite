@@ -5,8 +5,11 @@ package chronicle.counters;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
@@ -15,24 +18,44 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public final class Tables
 {
 	private Tables()
 	{
 	}
 
+	public static JsonElement read(String name)
+	{
+		InputStream in = Tables.class.getResourceAsStream("/chronicle/" + name);
+		if (in == null)
+		{
+			log.warn("bundled table {} is missing", name);
+			return JsonNull.INSTANCE;
+		}
+		try (Reader r = new InputStreamReader(in, StandardCharsets.UTF_8))
+		{
+			return new JsonParser().parse(r);
+		}
+		catch (IOException | RuntimeException e)
+		{
+			log.warn("bundled table {} is unreadable", name, e);
+			return JsonNull.INSTANCE;
+		}
+	}
+
 	public static JsonObject load(String name)
 	{
-		try (Reader r = new InputStreamReader(Tables.class.getResourceAsStream("/chronicle/" + name),
-			StandardCharsets.UTF_8))
-		{
-			return new JsonParser().parse(r).getAsJsonObject();
-		}
-		catch (Exception e)
-		{
-			return new JsonObject();
-		}
+		JsonElement e = read(name);
+		return e.isJsonObject() ? e.getAsJsonObject() : new JsonObject();
+	}
+
+	public static JsonArray array(String name)
+	{
+		JsonElement e = read(name);
+		return e.isJsonArray() ? e.getAsJsonArray() : new JsonArray();
 	}
 
 	public static String[] strings(JsonElement a)

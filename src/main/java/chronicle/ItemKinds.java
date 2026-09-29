@@ -3,14 +3,10 @@
  */
 package chronicle;
 
+import chronicle.counters.Tables;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -20,7 +16,9 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 final class ItemKinds
 {
 	private static final List<Rule> RULES = new ArrayList<>();
@@ -29,9 +27,9 @@ final class ItemKinds
 
 	static
 	{
-		try (InputStream in = ItemKinds.class.getResourceAsStream("/chronicle/osrs_item_kinds.json"))
+		JsonObject o = Tables.load("osrs_item_kinds.json");
+		try
 		{
-			JsonObject o = new JsonParser().parse(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
 			o.getAsJsonArray("_kinds").forEach(e -> KINDS.add(e.getAsString()));
 			for (JsonElement e : o.getAsJsonArray("rules"))
 			{
@@ -39,8 +37,9 @@ final class ItemKinds
 				RULES.add(new Rule(r.get("kind").getAsString(), matcher(r.get("match").getAsString(), r.get("value"))));
 			}
 		}
-		catch (Exception ignored)
+		catch (RuntimeException e)
 		{
+			log.warn("item kinds table unreadable", e);
 		}
 	}
 
