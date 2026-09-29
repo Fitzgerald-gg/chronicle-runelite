@@ -1,13 +1,12 @@
 /*
- * Copyright (c) 2026, Chronicle. BSD 2-Clause (see LICENSE).
- */
+* Copyright (c) 2026, Chronicle. BSD 2-Clause (see LICENSE).
+*/
 package chronicle;
 
 import chronicle.Board.Obtained;
 import chronicle.LocalStore.SourceRow;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import java.awt.FontMetrics;
 import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -405,16 +404,11 @@ final class PagesScreen extends Screen
 		JPanel drill = cardPlain();
 		boolean pets = low(page).contains("pet");
 		Map<String, LocalStore.PetRow> known = pets ? board.petsByName() : Collections.emptyMap();
-		Map<String, GrindBook.PetChase> chases = pets ? plugin.petChases(slots) : Collections.emptyMap();
 		List<List<JPanel>> detail = new ArrayList<>();
 		for (int i = 0; i < slots.size(); i++)
 		{
 			String key = low(slots.get(i));
-			detail.add(petDetail(lit[i], known.get(key), chases.get(key)));
-		}
-		if (detail.stream().anyMatch(d -> !d.isEmpty()))
-		{
-			spaced(drill, note("Click pet to see odds. Skilling odds are based on current level."), 3);
+			detail.add(petDetail(known.get(key)));
 		}
 		Map<String, Long> landed = board.landedSlots();
 		for (int i = 0; i < slots.size(); i++)
@@ -471,93 +465,7 @@ final class PagesScreen extends Screen
 			+ " yet, so only what you hold is known.", ""));
 	}
 
-	private static String chaseSources(GrindBook.PetChase chase)
-	{
-		if (chase.activity != null)
-		{
-			return chase.activity + ", " + fmt(chase.kc) + " " + chase.unit;
-		}
-		return sourceLine(chase.sources, chase.sources.size(), "").whole();
-	}
-
-	private static Line sourceLine(List<GrindBook.PetSource> src, int kept, String mark)
-	{
-		Line l = new Line();
-		for (int i = 0; i < kept; i++)
-		{
-			if (i > 0)
-			{
-				l.fixed(" · ");
-			}
-			l.name(src.get(i).boss);
-			l.fixed(", kc " + fmt(src.get(i).kc));
-		}
-		if (kept < src.size())
-		{
-			l.fixed(mark + (src.size() - kept));
-		}
-		return l;
-	}
-
-	private static final String[] DROP_MARKS = {" · +", " +"};
-
-	private static String fitChase(GrindBook.PetChase chase, String share)
-	{
-		FontMetrics fm = rowMetrics();
-		int avail = chaseRoom(share, fm);
-		if (chase.activity != null)
-		{
-			Line l = new Line();
-			l.name(chase.activity);
-			l.fixed(", " + fmt(chase.kc) + " ");
-			l.name(chase.unit);
-			String s = fitLine(l, tailFirst(l, 0), NAME_FLOOR, fm, avail);
-			if (s == null)
-			{
-				s = fitLine(l, tailFirst(l, 0), 1, fm, avail);
-			}
-			return s != null ? s : l.whole();
-		}
-		List<GrindBook.PetSource> src = chase.sources;
-		if (src.isEmpty())
-		{
-			return "";
-		}
-		for (int kept = src.size(); kept >= 1; kept--)
-		{
-			for (String mark : kept < src.size() ? DROP_MARKS : new String[]{""})
-			{
-				Line l = sourceLine(src, kept, mark);
-				String s = fitLine(l, tailFirst(l, 1), NAME_FLOOR, fm, avail);
-				if (s != null)
-				{
-					return s;
-				}
-			}
-		}
-		Line l = sourceLine(src, 1, DROP_MARKS[DROP_MARKS.length - 1]);
-		String s = fitLine(l, l.names, 1, fm, avail);
-		return s != null ? s : l.whole();
-	}
-
-	private static String chaseTip(GrindBook.PetChase chase)
-	{
-		StringBuilder sb = new StringBuilder(pct(chase.percentileDry, "Under ", "Over ") + " of players have " + chase.pet
-			+ " by this point. " + chaseSources(chase));
-		if (chase.activity != null && chase.sources.size() > 1)
-		{
-			sb.append(", mostly ").append(low(chase.sources.get(0).boss));
-		}
-		if (chase.level > 0)
-		{
-			sb.append(". Priced at ").append(chase.level)
-				.append(", the level you hold now, not the level each one was rolled at");
-		}
-		return sb.append(".").toString();
-	}
-
-	private static List<JPanel> petDetail(boolean lit, LocalStore.PetRow pet,
-		GrindBook.PetChase chase)
+	private static List<JPanel> petDetail(LocalStore.PetRow pet)
 	{
 		List<JPanel> out = new ArrayList<>();
 		if (pet != null)
@@ -579,19 +487,7 @@ final class PagesScreen extends Screen
 					? day(pet.ts) : ""));
 			}
 		}
-		else if (!lit && chase != null)
-		{
-			String share = holdShare(chase);
-			JPanel r = ghostRow(fitChase(chase, share), share,
-				chase.percentileDry >= 90 ? RED : null);
-			out.add(tipped(r, chaseTip(chase)));
-		}
 		return out;
-	}
-
-	private static String holdShare(GrindBook.PetChase chase)
-	{
-		return pct(chase.percentileDry, "<", ">") + " have";
 	}
 
 	private JPanel logInWindow(JPanel p)

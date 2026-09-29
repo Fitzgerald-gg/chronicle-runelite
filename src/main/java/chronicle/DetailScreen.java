@@ -19,15 +19,12 @@ import java.util.Locale;
 import java.util.Map;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
 import static chronicle.Json.*;
 import static chronicle.Pictures.COPY_MOST;
 import static chronicle.Ui.*;
 
 final class DetailScreen extends Screen
 {
-	private List<GrindBook.GrindRow> grinds;
-	private boolean grindsFetching;
 
 	DetailScreen(ChroniclePanel ui, Board board)
 	{
@@ -36,8 +33,6 @@ final class DetailScreen extends Screen
 
 	void forget()
 	{
-		grinds = null;
-		grindsFetching = false;
 	}
 
 	JPanel buildLeftBehindDetail(String source, String item)
@@ -366,43 +361,6 @@ final class DetailScreen extends Screen
 		{
 			head.add(row("Tracked since", day(sr.firstMs)));
 		}
-		if (!ui.drawingCopy)
-		{
-			addChase(head, sr.name);
-		}
-	}
-
-	private void addChase(JPanel head, String source)
-	{
-		if (grinds == null && !grindsFetching)
-		{
-			grindsFetching = true;
-			plugin.fetchGrinds(rows -> SwingUtilities.invokeLater(() ->
-			{
-				grindsFetching = false;
-				if (rows != null)
-				{
-					grinds = rows;
-					if (ui.showing(ChroniclePanel.Page.SOURCE, source))
-					{
-						ui.rebuildInPlace();
-					}
-				}
-			}));
-		}
-		for (GrindBook.GrindRow g : grinds == null ? List.<GrindBook.GrindRow>of() : grinds)
-		{
-			if (g.boss.equalsIgnoreCase(source))
-			{
-				head.add(row("Chasing " + g.item, fmt(g.kc) + " / " + fmt(g.rate) + " kc", g.percentileDry >= 90 ? RED : null));
-				return;
-			}
-		}
-	}
-
-	List<GrindBook.GrindRow> grinds()
-	{
-		return grinds;
 	}
 
 	private void addKillSources(JPanel head, SourceRow sr, long headline)

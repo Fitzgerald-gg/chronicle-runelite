@@ -15,7 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -145,8 +144,6 @@ public class ChroniclePlugin extends Plugin
 	private static final String KEY_PLAYTIME = "gamePlaytime";
 	private static final String KEY_PLAYTIME_AT = "gamePlaytimeAt";
 
-	private GrindBook grindBook;
-
 	private volatile String localName;
 	private volatile String captureWarning;
 	private volatile String captureWarningWhy;
@@ -170,7 +167,6 @@ public class ChroniclePlugin extends Plugin
 	{
 		cloud.attach(this);
 		historyLog = new HistoryLog(gson);
-		grindBook = new GrindBook(gson);
 		panel = new ChroniclePanel(this);
 		navButton = NavigationButton.builder()
 			.tooltip("Chronicle")
@@ -788,29 +784,6 @@ public class ChroniclePlugin extends Plugin
 		{
 		}
 		return PaceBook.forSkill(spine, skill.toLowerCase(Locale.ROOT), xp, LocalDate.now());
-	}
-
-	void fetchGrinds(Consumer<List<GrindBook.GrindRow>> onDone)
-	{
-		if (!ready())
-		{
-			onDone.accept(null);
-			return;
-		}
-		final JsonObject clog = localStore.clogSnapshot();
-		final List<LocalStore.SourceRow> sources = localStore.dropSources();
-		executor.submit(() -> onDone.accept(grindBook.grinds(clog, sources)));
-	}
-
-	Map<String, GrindBook.PetChase> petChases(Collection<String> pets)
-	{
-		if (!ready())
-		{
-			return Collections.emptyMap();
-		}
-		return grindBook.petChases(localStore.clogSnapshot(), localStore.dropSources(),
-			localStore.trackersSnapshot(), localStore.skillSheet(),
-			localStore.achievements(), pets);
 	}
 
 	boolean slayerSeenThisSession()

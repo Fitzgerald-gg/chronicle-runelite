@@ -224,11 +224,6 @@ final class Ui
 			: Character.toUpperCase(tier.charAt(0)) + tier.substring(1);
 	}
 
-	static String pct(double p, String under, String over)
-	{
-		return p < 1 ? under + "1%" : p > 99 ? over + "99%" : Math.round(p) + "%";
-	}
-
 	static String bytes(long n)
 	{
 		if (n >= 1024 * 1024)
@@ -861,19 +856,6 @@ final class Ui
 		return r;
 	}
 
-	static JPanel tipped(JPanel r, String tip)
-	{
-		r.setToolTipText(tip);
-		for (Component c : r.getComponents())
-		{
-			if (c instanceof JComponent)
-			{
-				((JComponent) c).setToolTipText(tip);
-			}
-		}
-		return r;
-	}
-
 	static void listCard(JPanel p, JPanel head, String under, String right, Runnable go)
 	{
 		JPanel card = cardPlain();
@@ -1004,13 +986,6 @@ final class Ui
 	private static final String ELLIPSIS = "…";
 
 	static final int NAME_FLOOR = 3;
-
-	static List<Integer> tailFirst(Line l, int from)
-	{
-		List<Integer> order = new ArrayList<>(l.names.subList(from, l.names.size()));
-		Collections.reverse(order);
-		return order;
-	}
 
 	static long noon(LocalDate d)
 	{

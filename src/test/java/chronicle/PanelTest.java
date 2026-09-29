@@ -164,7 +164,7 @@ public class PanelTest
 		assertEquals("51", after(vorkath, "Kills"));
 		assertEquals("1:30 · 2 timed", after(vorkath, "Average kill"));
 		assertTrue(after(vorkath, "Personal best").startsWith("1:20 · set "));
-		shows(vorkath, "Draconic visage", "Dragon bones ×4", "Chasing Dragonbone necklace", "51 / 1,000 kc");
+		shows(vorkath, "Draconic visage", "Dragon bones ×4");
 		List<String> visage = screen("item:Draconic visage");
 		assertEquals("×1", after(visage, "Obtained"));
 		assertEquals(DAY, after(visage, "Dropped on"));

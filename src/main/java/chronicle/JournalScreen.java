@@ -182,13 +182,6 @@ final class JournalScreen extends Screen
 
 	private String frontispieceNote()
 	{
-		for (GrindBook.GrindRow g : ui.detail.grinds() == null ? List.<GrindBook.GrindRow>of() : ui.detail.grinds())
-		{
-			if (g.percentileDry >= 90)
-			{
-				return "still owed a " + low(g.item) + " at " + fmt(g.kc) + " " + low(g.boss);
-			}
-		}
 		List<JsonObject> recent = store.feedNewest(2);
 		long days = recent.size() < 2 ? 0 : (asLong(recent.get(0).get("ts")) - asLong(recent.get(1).get("ts"))) / 86_400_000L;
 		return days >= 30 ? "resumed after " + days + " days away" : null;
