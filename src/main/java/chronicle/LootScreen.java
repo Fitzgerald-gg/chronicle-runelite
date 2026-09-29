@@ -133,13 +133,8 @@ final class LootScreen extends Screen
 		}
 		spaced(p, head);
 		String key = dropsLeftBehind ? "win:left" : "win:source";
-		int cap = ui.cap(key, ROW_CAP);
-		for (String[] r : firstN(ranked, cap))
-		{
-			Runnable open = dropsLeftBehind ? () -> ui.openItem(r[0]) : () -> ui.openSourceLoose(r[0]);
-			p.add(link(row(r[0], qtyGp(safeParse(r[1]), safeParse(r[2]))), open));
-		}
-		ui.drillMore(p, key, ranked.size(), cap);
+		ui.capped(p, key, ui.cap(key, ROW_CAP), ranked, r -> p.add(link(row(r[0], qtyGp(safeParse(r[1]), safeParse(r[2]))),
+			dropsLeftBehind ? () -> ui.openItem(r[0]) : () -> ui.openSourceLoose(r[0]))));
 		return p;
 	}
 
@@ -171,14 +166,9 @@ final class LootScreen extends Screen
 		}
 		List<UntakenRow> list = byItem ? items : rows;
 		String key = byItem ? "left:item" : "left:source";
-		int cap = ui.cap(key, ROW_CAP);
-		for (UntakenRow r : firstN(list, cap))
-		{
-			listCard(p, row(r.name, gps(r.value), RED), byItem ? "×" + fmt(r.qty) : fmt(r.qty) + " left",
-				r.qty > 0 ? perOne(r.value, r.qty, false) : "",
-				() -> ui.showLeftBehind(byItem ? null : r.name, byItem ? r.name : null));
-		}
-		ui.drillMore(p, key, list.size(), cap);
+		ui.capped(p, key, ui.cap(key, ROW_CAP), list, r -> listCard(p, row(r.name, gps(r.value), RED),
+			byItem ? "×" + fmt(r.qty) : fmt(r.qty) + " left", r.qty > 0 ? perOne(r.value, r.qty, false) : "",
+			() -> ui.showLeftBehind(byItem ? null : r.name, byItem ? r.name : null)));
 		return p;
 	}
 
@@ -226,7 +216,7 @@ final class LootScreen extends Screen
 		p.add(copyHeader(kind, () -> copyPicture(lootPicture(kind, kept, sum, false), true)));
 		int cap = ui.cap(key + kind, ROW_CAP);
 		addBagRows(p, firstN(kept, cap));
-		ui.drillMore(p, key + kind, kept.size(), cap);
+		ui.addMore(p, key + kind, kept.size(), cap, false);
 		return p;
 	}
 

@@ -258,7 +258,7 @@ final class HomeScreen extends Screen
 			return;
 		}
 		kids.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
-		int cap = ui.shownCap(fold);
+		int cap = ui.cap(fold, 6);
 		firstN(kids, cap).forEach(k -> strip.add(nested(row(StatRegistry.rowLabel(k.getKey()), fmt(k.getValue())))));
 		ui.addMore(strip, fold, kids.size(), cap, true);
 		long named = kids.stream().mapToLong(Map.Entry::getValue).sum();

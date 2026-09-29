@@ -178,12 +178,8 @@ final class DetailScreen extends Screen
 		}
 		p.add(group("From"));
 		String key = "item:src:" + name;
-		int cap = Math.max(ui.drawingCopy ? COPY_MOST : 40, ui.cap(key, 0));
-		for (Object[] s : firstN(from, cap))
-		{
-			p.add(link(row((String) s[0], "×" + fmt((long) s[1]) + tail((long) s[2])), () -> ui.openSource((String) s[0])));
-		}
-		ui.drillMore(p, key, from.size(), cap);
+		ui.capped(p, key, Math.max(ui.drawingCopy ? COPY_MOST : 40, ui.cap(key, 0)), from,
+			s -> p.add(link(row((String) s[0], "×" + fmt((long) s[1]) + tail((long) s[2])), () -> ui.openSource((String) s[0]))));
 		addOther(p, "×" + fmt(Math.max(0, other)) + tail(Math.max(0, otherValue)), other > 0 || otherValue > 0);
 		return p;
 	}
@@ -220,9 +216,8 @@ final class DetailScreen extends Screen
 		}
 		p.add(group("By task"));
 		String key = "item:task:" + name;
-		int cap = Math.max(ui.drawingCopy ? COPY_MOST : 40, ui.cap(key, 0));
-		firstN(split, cap).forEach(t -> p.add(row("Task: " + t[0], "×" + fmt((long) t[1]) + tail((long) t[2]))));
-		ui.drillMore(p, key, split.size(), cap);
+		ui.capped(p, key, Math.max(ui.drawingCopy ? COPY_MOST : 40, ui.cap(key, 0)), split,
+			t -> p.add(row("Task: " + t[0], "×" + fmt((long) t[1]) + tail((long) t[2]))));
 		return p;
 	}
 
@@ -311,7 +306,7 @@ final class DetailScreen extends Screen
 		{
 			p.add(vgap(3));
 		}
-		ui.drillMore(p, name, bag.size(), cap);
+		ui.addMore(p, name, bag.size(), cap, false);
 		addOther(p, gps(Math.max(0, other)), unfiled);
 		return p;
 	}
@@ -410,9 +405,7 @@ final class DetailScreen extends Screen
 		}
 		p.add(group("Killed on task"));
 		String key = "ontask:src:" + npc;
-		int cap = ui.cap(key, ROW_CAP);
-		firstN(was, cap).forEach(a -> p.add(row("Task: " + a.task, fmt(a.killsHere))));
-		ui.drillMore(p, key, was.size(), cap);
+		ui.capped(p, key, ui.cap(key, ROW_CAP), was, a -> p.add(row("Task: " + a.task, fmt(a.killsHere))));
 		p.add(vgap(6));
 	}
 

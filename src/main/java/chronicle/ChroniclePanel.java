@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 import javax.swing.BoxLayout;
@@ -69,7 +70,6 @@ class ChroniclePanel extends PluginPanel
 	private static final int MOVED_SKILLS = 4;
 	private static final int MOVED_CLOG = 8;
 	private static final int MOVED_ANY = MOVED_RECORD | MOVED_COUNTERS | MOVED_SKILLS | MOVED_CLOG;
-	private static final int FOLD_CAP = 6;
 
 	enum Tab
 	{
@@ -427,7 +427,7 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	void openLogPage(String page)
+	boolean openLogPage(String page)
 	{
 		for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
 		{
@@ -436,23 +436,15 @@ class ChroniclePanel extends PluginPanel
 				pages.clogTab = tab.getKey();
 				pages.clogPageSel = page;
 				openSheetPage("log");
-				return;
+				return true;
 			}
 		}
-	}
-
-	private boolean hasLogPage(String page)
-	{
-		return taxonomy(plugin.gson()).values().stream().anyMatch(t -> t.containsKey(page));
+		return false;
 	}
 
 	void openActivity(String source)
 	{
-		if (board.resolveSourceNamed(source) == null && hasLogPage(source))
-		{
-			openLogPage(source);
-		}
-		else
+		if (board.resolveSourceNamed(source) != null || !openLogPage(source))
 		{
 			openSourceLoose(source);
 		}
@@ -908,11 +900,6 @@ class ChroniclePanel extends PluginPanel
 		return shown.getOrDefault(key, fallback);
 	}
 
-	int shownCap(String key)
-	{
-		return cap(key, FOLD_CAP);
-	}
-
 	void more(JPanel p, int size, int cap, boolean inset, IntConsumer reveal)
 	{
 		if (size > cap)
@@ -926,9 +913,10 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	void drillMore(JPanel p, String key, int size, int cap)
+	<T> void capped(JPanel p, String key, int cap, List<T> all, Consumer<T> each)
 	{
-		more(p, size, cap, false, n -> shown.put(key, n));
+		firstN(all, cap).forEach(each);
+		addMore(p, key, all.size(), cap, false);
 	}
 
 	void addMore(JPanel p, String key, int size, int cap, boolean inset)

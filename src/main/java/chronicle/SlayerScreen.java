@@ -236,9 +236,8 @@ final class SlayerScreen extends Screen
 		}
 		kcs.sort(Map.Entry.<String, Long>comparingByValue().reversed());
 		JPanel card = card("Kill log");
-		int cap = ui.cap("killlog", ROW_CAP);
-		firstN(kcs, cap).forEach(e -> card.add(link(row(e.getKey(), fmt(e.getValue())), () -> ui.openSourceLoose(e.getKey()))));
-		ui.drillMore(card, "killlog", kcs.size(), cap);
+		ui.capped(card, "killlog", ui.cap("killlog", ROW_CAP), kcs,
+			e -> card.add(link(row(e.getKey(), fmt(e.getValue())), () -> ui.openSourceLoose(e.getKey()))));
 		p.add(card);
 		return p;
 	}

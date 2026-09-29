@@ -430,7 +430,7 @@ final class SearchScreen extends Screen
 			}
 			p.add(door(r, h.go));
 		}
-		ui.drillMore(p, key, hits.size(), cap);
+		ui.addMore(p, key, hits.size(), cap, false);
 		return hits.size();
 	}
 
