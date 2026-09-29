@@ -78,10 +78,10 @@ public class ExampleExportTest
 	private static Map<String, String> notState()
 	{
 		Map<String, String> m = new LinkedHashMap<>();
-		for (String n : new String[]{"build", "movedTypes", "aboveBoard", "buildPeriodCounters", "periodCountersAsked", "bandFixes",
+		for (String n : new String[]{"build", "aboveBoard", "buildPeriodCounters", "periodCountersAsked", "bandFixes",
 			"grindsCache", "journeyCache", "consumVals",
 			"resourcesDropped", "historySpine", "historyFeed", "historyJourney",
-			"historyDay", "historyFeedTs", "historyEpoch", "periodFrom", "periodTo", "searchFirst", "milestones", "landedSlots", "records", "daysPlayed", "daySkills", "crossedDays", "dayTotals", "searchFeed", "searchFeedTs", "searchFeedSpine",
+			"historyDay", "historyFeedTs", "historyEpoch", "periodFrom", "periodTo", "searchFirst", "searchFeed", "searchFeedTs", "searchFeedSpine",
 			"taskItemsEver", "periodTip", "measuredSince", "buildAchievements"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");

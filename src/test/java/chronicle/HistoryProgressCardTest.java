@@ -2216,10 +2216,10 @@ public class HistoryProgressCardTest
 	public void aQuestIsNamedNotQuotedFromTheChatBox()
 	{
 		assertEquals("Fallen From Grace",
-			ChroniclePanel.questName("You have completed Fallen From Grace!"));
-		assertEquals("Dragon Slayer II", ChroniclePanel.questName("Dragon Slayer II"));
+			Feed.questName("You have completed Fallen From Grace!"));
+		assertEquals("Dragon Slayer II", Feed.questName("Dragon Slayer II"));
 		assertEquals("Recipe for Disaster",
-			ChroniclePanel.questName("you have completed Recipe for Disaster."));
+			Feed.questName("you have completed Recipe for Disaster."));
 	}
 
 	@Test

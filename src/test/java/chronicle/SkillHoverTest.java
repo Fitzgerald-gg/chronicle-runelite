@@ -57,7 +57,7 @@ public class SkillHoverTest
 		Method fresh = ChroniclePanel.class.getDeclaredMethod("freshBuild");
 		fresh.setAccessible(true);
 		fresh.invoke(panel);
-		for (String memo : new String[]{"buildPeriodCounters", "movedTypes"})
+		for (String memo : new String[]{"buildPeriodCounters"})
 		{
 			Field m = ChroniclePanel.class.getDeclaredField(memo);
 			m.setAccessible(true);

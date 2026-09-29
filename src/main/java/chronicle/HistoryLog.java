@@ -20,9 +20,11 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
@@ -32,6 +34,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Experience;
+import net.runelite.api.Skill;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -333,6 +337,40 @@ class HistoryLog
 		int total;
 		int drawn;
 		int nines;
+	}
+
+	static final List<String> SKILL_KEYS = new ArrayList<>();
+	static final Skill[] COMBAT_SKILLS = {
+		Skill.ATTACK, Skill.STRENGTH,
+		Skill.DEFENCE, Skill.HITPOINTS,
+		Skill.RANGED, Skill.MAGIC,
+		Skill.PRAYER};
+
+	static
+	{
+		for (Skill sk : Skill.values())
+		{
+			SKILL_KEYS.add(sk.name().toLowerCase(Locale.ROOT));
+		}
+	}
+
+	static Integer combat(Levels opened)
+	{
+		if (opened == null || opened.of == null)
+		{
+			return null;
+		}
+		int[] lv = new int[COMBAT_SKILLS.length];
+		for (int i = 0; i < COMBAT_SKILLS.length; i++)
+		{
+			Integer l = opened.of.get(COMBAT_SKILLS[i].name().toLowerCase(Locale.ROOT));
+			if (l == null || l <= 0)
+			{
+				return null;
+			}
+			lv[i] = l;
+		}
+		return Experience.getCombatLevel(lv[0], lv[1], lv[2], lv[3], lv[5], lv[4], lv[6]);
 	}
 
 	private static final String HITPOINTS = "hitpoints";

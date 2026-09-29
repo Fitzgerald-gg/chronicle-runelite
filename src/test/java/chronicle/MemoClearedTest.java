@@ -60,8 +60,19 @@ public class MemoClearedTest
 				}
 			}
 		}
+		int built = 0;
+		for (String owner : new String[]{"Build", "Kills", "Feed", "Sources"})
+		{
+			String held = new String(Files.readAllBytes(Paths.get(
+				"src/main/java/chronicle/" + owner + ".java")), StandardCharsets.UTF_8);
+			Matcher n = Pattern.compile("if \\((\\w+) == null\\)\\s*\\n\\s*\\{").matcher(held);
+			while (n.find())
+			{
+				built++;
+			}
+		}
 		assertTrue("no memo was recognised at all, so this asserts nothing about "
-			+ "any of them", memos.size() >= 8);
+			+ "any of them", memos.size() + built >= 8);
 
 		int at = src.indexOf("private void rebuildNow()");
 		assertTrue("rebuildNow is gone", at > 0);
@@ -69,6 +80,8 @@ public class MemoClearedTest
 		assertTrue("the clearing run no longer ends where this test looks for it",
 			until > at);
 		String head = src.substring(at, until);
+		assertTrue("the build's own memos are not dropped at the top of the build",
+			head.contains("freshBuild();"));
 		Set<String> cleared = new LinkedHashSet<>();
 		Matcher c = Pattern.compile("^\\t\\t(\\w+) = (?:null|false|0);", Pattern.MULTILINE)
 			.matcher(head);

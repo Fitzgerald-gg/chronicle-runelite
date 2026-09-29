@@ -8,18 +8,23 @@
  */
 package chronicle;
 
+import chronicle.HistoryLog.Baseline;
 import chronicle.LocalStore.SourceRow;
 import chronicle.Period.Span;
 import com.google.gson.JsonObject;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.TreeMap;
 import java.util.function.Supplier;
 
 final class Build
 {
 	final ChroniclePlugin plugin;
 	private final Supplier<Period> period;
-	private final Supplier<Span> fold;
+	private final Supplier<TreeMap<LocalDate, Baseline>> spine;
+	private final Runnable askHistory;
 	final Kills kills = new Kills(this);
+	final Feed feed = new Feed(this);
 	private List<SourceRow> sources;
 	private JsonObject clog;
 	private ClogBook book;
@@ -27,11 +32,18 @@ final class Build
 	private Span span;
 	private boolean spanAsked;
 
-	Build(ChroniclePlugin plugin, Supplier<Period> period, Supplier<Span> fold)
+	Build(ChroniclePlugin plugin, Supplier<Period> period,
+		Supplier<TreeMap<LocalDate, Baseline>> spine, Runnable askHistory)
 	{
 		this.plugin = plugin;
 		this.period = period;
-		this.fold = fold;
+		this.spine = spine;
+		this.askHistory = askHistory;
+	}
+
+	TreeMap<LocalDate, Baseline> spine()
+	{
+		return spine.get();
 	}
 
 	Period period()
@@ -85,7 +97,15 @@ final class Build
 		if (!spanAsked)
 		{
 			spanAsked = true;
-			span = fold.get();
+			TreeMap<LocalDate, Baseline> known = spine();
+			if (known == null)
+			{
+				askHistory.run();
+			}
+			else if (!known.isEmpty())
+			{
+				span = period().span(known);
+			}
 		}
 		return span;
 	}
