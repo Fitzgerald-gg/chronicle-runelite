@@ -71,7 +71,6 @@ public interface StatTracker
 		return now;
 	}
 
-	// each item `to` holds more of than `from`
 	static void rises(Map<Integer, Integer> from, Map<Integer, Integer> to, BiConsumer<Integer, Integer> each)
 	{
 		for (Map.Entry<Integer, Integer> e : to.entrySet())
@@ -94,7 +93,6 @@ public interface StatTracker
 	{
 		private final Map<Skill, Integer> seen = new EnumMap<>(Skill.class);
 
-		// a first reading only sets the baseline
 		int gain(StatChanged event)
 		{
 			if (event.getSkill() == null)
