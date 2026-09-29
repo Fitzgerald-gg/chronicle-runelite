@@ -424,7 +424,7 @@ public class SessionPeriodTest
 				spine.put("vorkath", 40L);
 				m.invoke(panel, into, spine, spine, spine, false,
 					java.time.LocalDate.now(), java.time.LocalDate.now(),
-					ChroniclePanel.KIND_BOSS, ChroniclePanel.KIND_MONSTER);
+					Sources.BOSS, Sources.MONSTER);
 				collect(into, said);
 			}
 			catch (Exception e)

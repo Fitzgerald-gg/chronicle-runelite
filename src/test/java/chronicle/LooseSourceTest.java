@@ -51,9 +51,9 @@ public class LooseSourceTest
 
 	private static String resolve(String name) throws Exception
 	{
-		Method m = ChroniclePanel.class.getDeclaredMethod("resolveSource", String.class);
-		m.setAccessible(true);
-		return (String) m.invoke(panel, name);
+		java.lang.reflect.Field f = ChroniclePanel.class.getDeclaredField("build");
+		f.setAccessible(true);
+		return ((Build) f.get(panel)).names().resolve(name);
 	}
 
 	@Test

@@ -204,6 +204,7 @@ class ChroniclePanel extends PluginPanel
 
 	private final ChroniclePlugin plugin;
 	private Build build;
+	private final ItemNames itemNames;
 
 	private final JPanel display = new JPanel(new BorderLayout());
 
@@ -245,6 +246,7 @@ class ChroniclePanel extends PluginPanel
 		super(false);
 		this.plugin = plugin;
 		freshBuild();
+		itemNames = new ItemNames(plugin, n -> build.names().named(n));
 
 		watchForReturn();
 		setLayout(new BorderLayout());
@@ -644,7 +646,7 @@ class ChroniclePanel extends PluginPanel
 
 	private void openActivity(String source)
 	{
-		if (resolveSourceNamed(source) == null && openLogPage(source))
+		if (build.names().named(source) == null && openLogPage(source))
 		{
 			return;
 		}
@@ -1159,9 +1161,6 @@ class ChroniclePanel extends PluginPanel
 		movedTypes = null;
 		buildPeriodCounters = null;
 		periodCountersAsked = false;
-		skilled = null;
-		ledgerNames = null;
-		sourceKinds.clear();
 		artWaiting.clear();
 		paintBand(plugin.journalWarning(), plugin.captureWarning(),
 			plugin.captureWarningWhy());
@@ -2025,7 +2024,7 @@ class ChroniclePanel extends PluginPanel
 		drillShown.clear();
 		histListShown.clear();
 		openFolds.clear();
-		signatureItems.clear();
+		itemNames.forget();
 		scaledIcons.clear();
 		gatherHistory();
 		rebuild();
@@ -2895,50 +2894,8 @@ class ChroniclePanel extends PluginPanel
 
 	void openSourceLoose(String name)
 	{
-		openSource(resolveSource(name));
+		openSource(build.names().resolve(name));
 	}
-
-	private String resolveSource(String name)
-	{
-		String named = resolveSourceNamed(name);
-		if (named != null)
-		{
-			return named;
-		}
-		String kind = kindOf(name);
-		SourceRow best = null;
-		for (SourceRow r : build.sources())
-		{
-			if ((kindOf(r.name).equals(kind) || Kills.namesInBrackets(r.name, name))
-				&& (best == null || r.value > best.value))
-			{
-				best = r;
-			}
-		}
-		return best != null ? best.name : name;
-	}
-
-	private String resolveSourceNamed(String name)
-	{
-		if (ledgerNames == null)
-		{
-			Map<String, String> index = new HashMap<>();
-			for (SourceRow r : build.sources())
-			{
-				index.putIfAbsent(low(r.name), r.name);
-			}
-			ledgerNames = index;
-		}
-		String low = low(name);
-		String hit = ledgerNames.get(low);
-		if (hit == null && low.endsWith("s"))
-		{
-			hit = ledgerNames.get(low.substring(0, low.length() - 1));
-		}
-		return hit;
-	}
-
-	private Map<String, String> ledgerNames;
 
 	private void pushDetail()
 	{
@@ -4220,7 +4177,7 @@ class ChroniclePanel extends PluginPanel
 				line.append(pet.source);
 				if (pet.kc > 0)
 				{
-					line.append(skill(pet.source.toUpperCase(Locale.ROOT)) != null
+					line.append(Sources.skill(pet.source.toUpperCase(Locale.ROOT)) != null
 						? ", " + fmt(pet.kc) + " xp"
 						: ", kc " + fmt(pet.kc));
 				}
@@ -5153,9 +5110,7 @@ class ChroniclePanel extends PluginPanel
 		return "SESSION".equals(typeOf(e)) ? sittingStart(e) : safeLong(e.get("ts"));
 	}
 
-	private static final JsonObject KINDS = table("panel_kinds.json");
-
-	private static final Map<String, String> FEED_SUMMARY_KEYS = strMap(KINDS, "feedSummaryKeys");
+	private static final Map<String, String> FEED_SUMMARY_KEYS = strMap(Sources.KINDS, "feedSummaryKeys");
 
 	private static boolean sittingsCover(List<JsonObject> feed, long fromMs)
 	{
@@ -5225,9 +5180,7 @@ class ChroniclePanel extends PluginPanel
 		LocalDate to, String first, String second)
 	{
 		boolean whole = wholeRecord();
-		skilled = null;
-		ledgerNames = null;
-		sourceKinds.clear();
+		build.forgetNames();
 		Map<String, Long> standing = live ? plugin.killCounts() : nowKc;
 		Map<String, Long> gained;
 		Map<String, Long> worth;
@@ -5255,7 +5208,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				continue;
 			}
-			byKind.computeIfAbsent(sourceKind(name), k -> new ArrayList<>())
+			byKind.computeIfAbsent(build.names().kind(name), k -> new ArrayList<>())
 				.add(new AbstractMap.SimpleEntry<>(name, figure));
 		}
 		Comparator<Entry<String, Long>> byPaid = (a, b) ->
@@ -5331,200 +5284,6 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
-	private static final Set<String> PICKPOCKETED = new HashSet<>(strs(KINDS.get("pickpocketed")));
-
-	private static final String[][] SKILLED = {
-		{"Pickpockets", "THIEVING"}, {"Trapped", "HUNTER"},
-		{"Caught", "HUNTER"}, {"Harvested", "HUNTER"},
-	};
-
-	private Map<String, String> skilledKeys()
-	{
-		if (skilled == null)
-		{
-			Map<String, String> found = new LinkedHashMap<>();
-			for (String key : counters().keySet())
-			{
-				for (String[] verb : SKILLED)
-				{
-					if (key.endsWith(verb[0]) && !key.endsWith("Failed" + verb[0]))
-					{
-						found.putIfAbsent(
-							letters(key.substring(0, key.length() - verb[0].length())), verb[1]);
-						break;
-					}
-				}
-			}
-			skilled = found;
-		}
-		return skilled;
-	}
-
-	private Map<String, String> skilled;
-
-	private static String letters(String s)
-	{
-		StringBuilder out = new StringBuilder();
-		for (char c : s.toCharArray())
-		{
-			if (Character.isLetterOrDigit(c))
-			{
-				out.append(Character.toLowerCase(c));
-			}
-		}
-		int end = out.length();
-		return end > 1 && out.charAt(end - 1) == 's' ? out.substring(0, end - 1) : out.toString();
-	}
-
-	static final String KIND_BOSS = "Bosses";
-	static final String KIND_ACTIVITY = "Activities";
-	static final String KIND_SKILLING = "Skilling";
-	static final String KIND_MONSTER = "Monsters";
-
-	private final Map<String, String> sourceKinds = new LinkedHashMap<>();
-
-	private String sourceKind(String name)
-	{
-		return sourceKinds.computeIfAbsent(name, this::decideKind);
-	}
-
-	private String decideKind(String name)
-	{
-		if (PICKPOCKETED.contains(low(name))
-			|| skilledKeys().containsKey(letters(name)))
-		{
-			return KIND_SKILLING;
-		}
-		for (Entry<String, Map<String, List<String>>> tab : ClogBook.taxonomy(plugin.gson()).entrySet())
-		{
-			if (!tab.getValue().containsKey(name))
-			{
-				continue;
-			}
-			String t = low(tab.getKey());
-			if (t.contains("boss") || t.contains("raid"))
-			{
-				return KIND_BOSS;
-			}
-			if (t.contains("clue") || t.contains("minigame"))
-			{
-				return KIND_ACTIVITY;
-			}
-			return MONSTER_PAGES.contains(name) ? KIND_MONSTER : KIND_SKILLING;
-		}
-		String low = low(name);
-		return containsAny(low, OPENED) ? KIND_ACTIVITY
-			: containsAny(low, GATHERED) ? KIND_SKILLING : KIND_MONSTER;
-	}
-
-	private static final Set<String> MONSTER_PAGES = new HashSet<>(strs(KINDS.get("monsterPages")));
-
-	private static final List<String> OPENED = strs(KINDS.get("opened"));
-	private static final List<String> GATHERED = strs(KINDS.get("gathered"));
-
-	private static boolean containsAny(String low, List<String> words)
-	{
-		for (String w : words)
-		{
-			if (low.contains(w))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private final Map<String, Integer> signatureItems = new LinkedHashMap<>();
-
-	private int signatureItem(String source)
-	{
-		Integer known = signatureItems.get(source);
-		if (known != null)
-		{
-			return known;
-		}
-		String own = resolveSourceNamed(source);
-		List<BagItem> bag = own == null ? new ArrayList<>()
-			: new ArrayList<>(plugin.sourceItems(own));
-		bag.sort((a, b) -> Long.compare(b.value, a.value));
-		int best = 0;
-		for (BagItem b : bag)
-		{
-			best = b.itemId > 0 ? b.itemId : itemNamed(b.name);
-			if (best > 0)
-			{
-				break;
-			}
-		}
-		if (best == 0)
-		{
-			best = pagedItem(source);
-		}
-		if (best > 0 || nameIndex() != null)
-		{
-			signatureItems.put(source, best);
-		}
-		return best;
-	}
-
-	private int pagedItem(String page)
-	{
-		for (Map<String, List<String>> pages : ClogBook.taxonomy(plugin.gson()).values())
-		{
-			List<String> slots = pages.get(page);
-			if (slots == null)
-			{
-				continue;
-			}
-			for (String slot : slots)
-			{
-				int id = itemNamed(slot);
-				if (id > 0)
-				{
-					return id;
-				}
-			}
-			return 0;
-		}
-		return 0;
-	}
-
-	private Map<String, Integer> itemsByName;
-
-	private int itemNamed(String name)
-	{
-		Map<String, Integer> index = nameIndex();
-		if (index == null || name == null || name.isEmpty())
-		{
-			return 0;
-		}
-		Integer id = index.get(low(name));
-		return id == null ? 0 : id;
-	}
-
-	private Map<String, Integer> nameIndex()
-	{
-		if (itemsByName != null)
-		{
-			return itemsByName;
-		}
-		List<ItemPrice> all = plugin.items().search("");
-		if (all == null || all.isEmpty())
-		{
-			return null;
-		}
-		Map<String, Integer> byName = new HashMap<>();
-		for (ItemPrice price : all)
-		{
-			if (price.getName() != null)
-			{
-				byName.putIfAbsent(low(price.getName()), price.getId());
-			}
-		}
-		itemsByName = byName;
-		return itemsByName;
-	}
-
 	private void addKindBand(JPanel p, String kind, List<Entry<String, Long>> rows,
 		Map<String, Long> worth, Map<String, Long> loose, boolean withIcons)
 	{
@@ -5582,13 +5341,13 @@ class ChroniclePanel extends PluginPanel
 
 	private void mountKindIcon(JLabel label, String name)
 	{
-		int item = signatureItem(name);
+		int item = itemNames.signature(name);
 		if (item > 0)
 		{
 			mountItem(label, item);
 			return;
 		}
-		Skill skill = skillOf(name);
+		Skill skill = Sources.skillOf(name);
 		if (skill != null)
 		{
 			BufferedImage img = skillIcon(skill);
@@ -5598,7 +5357,7 @@ class ChroniclePanel extends PluginPanel
 				return;
 			}
 		}
-		wearSprite(label, kindSprite(sourceKind(name)), ICON_W, ICON_H);
+		wearSprite(label, kindSprite(build.names().kind(name)), ICON_W, ICON_H);
 	}
 
 	private void mountItem(JLabel label, int itemId)
@@ -5615,21 +5374,14 @@ class ChroniclePanel extends PluginPanel
 	}
 	private static int kindSprite(String kind)
 	{
-		if (KIND_ACTIVITY.equals(kind))
+		if (Sources.ACTIVITY.equals(kind))
 		{
 			return 1053;
 		}
-		return KIND_SKILLING.equals(kind) ? 775 : 774;
+		return Sources.SKILLING.equals(kind) ? 775 : 774;
 	}
 
-	private Skill skillOf(String name)
-	{
-		return skill(PAGE_SKILL.get(name));
-	}
-
-	private static final Map<String, String> PAGE_SKILL = strMap(KINDS, "pageSkills");
-
-	private static final List<String> SKILL_ORDER_NAMES = strs(KINDS.get("skillOrder"));
+	private static final List<String> SKILL_ORDER_NAMES = strs(Sources.KINDS.get("skillOrder"));
 
 	private static final List<Skill> SKILLS = Arrays.asList(Skill.values());
 	private static final List<String> SKILL_KEYS = new ArrayList<>();
@@ -5639,26 +5391,14 @@ class ChroniclePanel extends PluginPanel
 		SKILLS.forEach(sk -> SKILL_KEYS.add(low(sk.name())));
 	}
 
-	private static Skill skill(String name)
-	{
-		try
-		{
-			return name == null ? null : Skill.valueOf(name);
-		}
-		catch (IllegalArgumentException e)
-		{
-			return null;
-		}
-	}
-
 	private static List<Skill> skillOrder()
 	{
 		List<Skill> out = new ArrayList<>();
 		for (String name : SKILL_ORDER_NAMES)
 		{
-			if (skill(name) != null)
+			if (Sources.skill(name) != null)
 			{
-				out.add(skill(name));
+				out.add(Sources.skill(name));
 			}
 		}
 		for (Skill sk : SKILLS)
@@ -6804,7 +6544,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				continue;
 			}
-			Skill sk = skillOf(r.name);
+			Skill sk = Sources.skillOf(r.name);
 			if (sk != null && sk.name().equalsIgnoreCase(craft) && r.value > 0)
 			{
 				out.add(r);
@@ -7320,12 +7060,12 @@ class ChroniclePanel extends PluginPanel
 			{
 				addLootValues(p, progress);
 				addKinds(p, opening.kcs, earliest.kcs, closing.kcs, live, pStart, pEnd,
-					KIND_BOSS, KIND_MONSTER);
+					Sources.BOSS, Sources.MONSTER);
 			}
 			else if ("Activities".equals(histFacet))
 			{
 				addKinds(p, opening.kcs, earliest.kcs, closing.kcs, live, pStart, pEnd,
-					KIND_ACTIVITY, KIND_SKILLING);
+					Sources.ACTIVITY, Sources.SKILLING);
 			}
 			else if ("Trackers".equals(histFacet))
 			{
@@ -8134,7 +7874,7 @@ class ChroniclePanel extends PluginPanel
 
 	private boolean recapMonster(String name)
 	{
-		if (!KIND_MONSTER.equals(sourceKind(name)))
+		if (!Sources.MONSTER.equals(build.names().kind(name)))
 		{
 			return false;
 		}

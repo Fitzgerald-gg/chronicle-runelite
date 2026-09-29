@@ -1463,10 +1463,9 @@ public class HistoryProgressCardTest
 			priced(13_258, "Angler hat"), priced(13_259, "Angler top"),
 			priced(12_019, "Coal bag")));
 		ChroniclePanel p = panel(s);
-		Method m = ChroniclePanel.class.getDeclaredMethod("signatureItem", String.class);
-		m.setAccessible(true);
-		assertEquals(13_258, m.invoke(p, "Fishing Trawler"));
-		assertEquals(0, m.invoke(p, "Soul Wars"));
+		ItemNames m = (ItemNames) get(p, "itemNames");
+		assertEquals(13_258, m.signature("Fishing Trawler"));
+		assertEquals(0, m.signature("Soul Wars"));
 	}
 
 	@Test
@@ -3694,10 +3693,9 @@ public class HistoryProgressCardTest
 		ChroniclePanel p = panel(s);
 		set(p, "histGranularity", "Lifetime");
 		set(p, "histFacet", "PvM");
-		Method sig = ChroniclePanel.class.getDeclaredMethod("signatureItem", String.class);
-		sig.setAccessible(true);
+		ItemNames sig = (ItemNames) get(p, "itemNames");
 		assertEquals("the dearest row won, not the only one carrying an id",
-			23_957, sig.invoke(p, "Zalcano"));
+			23_957, sig.signature("Zalcano"));
 
 		for (int i = 0; i < 6; i++)
 		{
@@ -3741,10 +3739,9 @@ public class HistoryProgressCardTest
 		s.bags.put("Gnome", Arrays.asList(
 			new LocalStore.BagItem(0, "Chef's hat", 1, 355L)));
 		ChroniclePanel p = panel(s);
-		Method sig = ChroniclePanel.class.getDeclaredMethod("signatureItem", String.class);
-		sig.setAccessible(true);
+		ItemNames sig = (ItemNames) get(p, "itemNames");
 		assertFalse("the restaurant borrowed the gnome's bag",
-			Integer.valueOf(1_061).equals(sig.invoke(p, "Gnome Restaurant")));
+			Integer.valueOf(1_061).equals(sig.signature("Gnome Restaurant")));
 	}
 
 	@Test
@@ -3758,13 +3755,12 @@ public class HistoryProgressCardTest
 		s.bags.put("Zalcano", Arrays.asList(
 			new LocalStore.BagItem(0, "Crystal tool seed", 2, 46_173_662L)));
 		ChroniclePanel p = panel(s);
-		Method sig = ChroniclePanel.class.getDeclaredMethod("signatureItem", String.class);
-		sig.setAccessible(true);
-		assertEquals(0, sig.invoke(p, "Zalcano"));
+		ItemNames sig = (ItemNames) get(p, "itemNames");
+		assertEquals(0, sig.signature("Zalcano"));
 
 		Mockito.when(s.items().search("")).thenReturn(Arrays.asList(
 			priced(23_957, "Crystal tool seed")));
-		assertEquals("the empty answer was kept", 23_957, sig.invoke(p, "Zalcano"));
+		assertEquals("the empty answer was kept", 23_957, sig.signature("Zalcano"));
 	}
 
 	@Test

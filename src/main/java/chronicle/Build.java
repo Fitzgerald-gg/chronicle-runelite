@@ -23,6 +23,7 @@ final class Build
 	private List<SourceRow> sources;
 	private JsonObject clog;
 	private ClogBook book;
+	private Sources names;
 	private Span span;
 	private boolean spanAsked;
 
@@ -63,6 +64,20 @@ final class Build
 			book = new ClogBook(clog(), plugin.gson());
 		}
 		return book;
+	}
+
+	Sources names()
+	{
+		if (names == null)
+		{
+			names = new Sources(this);
+		}
+		return names;
+	}
+
+	void forgetNames()
+	{
+		names = null;
 	}
 
 	Span span()

@@ -79,10 +79,9 @@ public class ExampleExportTest
 	{
 		Map<String, String> m = new LinkedHashMap<>();
 		for (String n : new String[]{"build", "movedTypes", "aboveBoard", "buildPeriodCounters", "periodCountersAsked", "bandFixes",
-			"grindsCache", "journeyCache", "ledgerNames", "consumVals",
+			"grindsCache", "journeyCache", "consumVals",
 			"resourcesDropped", "historySpine", "historyFeed", "historyJourney",
-			"historyDay", "historyFeedTs", "historyEpoch", "skilled",
-			"itemsByName", "periodFrom", "periodTo", "searchFirst", "milestones", "landedSlots", "records", "daysPlayed", "daySkills", "crossedDays", "dayTotals", "searchFeed", "searchFeedTs", "searchFeedSpine",
+			"historyDay", "historyFeedTs", "historyEpoch", "periodFrom", "periodTo", "searchFirst", "milestones", "landedSlots", "records", "daysPlayed", "daySkills", "crossedDays", "dayTotals", "searchFeed", "searchFeedTs", "searchFeedSpine",
 			"taskItemsEver", "periodTip", "measuredSince", "buildAchievements"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
