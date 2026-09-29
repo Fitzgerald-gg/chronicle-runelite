@@ -9,37 +9,60 @@ import chronicle.counters.StatKeys;
 import chronicle.panel.StatRegistry;
 import com.google.gson.JsonObject;
 import java.awt.GridLayout;
-import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import javax.swing.JPanel;
-import static chronicle.Feed.*;
+import static chronicle.Feed.typeOf;
 import static chronicle.Json.*;
-import static chronicle.Pictures.*;
-import static chronicle.Reference.*;
 import static chronicle.Ui.*;
 
 final class TrackersScreen extends Screen
 {
+	private static final List<String> LEDGER_FAMILIES = List.of("Ledger & Roads", "Living");
+	private static final Set<String> FOLDING = Set.of("Food", "Potions", "Teleports", "Destinations", "Thralls");
+	private static final String FOLD_DEATHS = "Combat:deaths";
+
+	String statsFamily = StatRegistry.FAMILIES[0];
+	private Map<String, Long> consumables = Map.of();
+	private long resourcesDropped;
+
 	TrackersScreen(ChroniclePanel ui, Board board)
 	{
 		super(ui, board);
 	}
 
+	void reset(ChroniclePanel.View v)
+	{
+		if (v == ChroniclePanel.View.TRACKERS)
+		{
+			statsFamily = StatRegistry.FAMILIES[0];
+		}
+		else if (v == ChroniclePanel.View.LEDGER && !LEDGER_FAMILIES.contains(statsFamily))
+		{
+			statsFamily = LEDGER_FAMILIES.get(0);
+		}
+	}
+
+	private Map<String, Long> read()
+	{
+		consumables = store.consumableValues();
+		Map<String, Long> counters = board.countersForPeriod();
+		resourcesDropped = counters == null ? 0 : counters.getOrDefault("resourcesDroppedValue", 0L);
+		return counters;
+	}
+
 	JPanel buildStats()
 	{
 		JPanel p = column();
-		consumVals = store.consumableValues();
-		String[] families = ui.view == ChroniclePanel.View.LEDGER ? LEDGER_FAMILIES : StatRegistry.FAMILIES;
 		JPanel pills = new JPanel(new GridLayout(0, 2, 3, 3));
 		pills.setBackground(DARK);
-		for (String fam : families)
+		for (String fam : ui.view == ChroniclePanel.View.LEDGER ? LEDGER_FAMILIES : List.of(StatRegistry.FAMILIES))
 		{
 			pills.add(pill(fam, fam.equals(statsFamily), 7, null, () ->
 			{
@@ -53,259 +76,208 @@ final class TrackersScreen extends Screen
 			p.add(moreRow("every counter in one place", ui::openAllTrackers));
 		}
 		p.add(vgap(4));
-
-		Map<String, Long> counters = board.countersForPeriod();
+		Map<String, Long> counters = read();
 		if (counters == null)
 		{
 			p.add(board.noPeriod());
 			return p;
 		}
-		resourcesDropped = counters.getOrDefault("resourcesDroppedValue", 0L);
-		Map<String, List<Entry<String, Long>>> rowsBySection = new LinkedHashMap<>();
-		Map<String, Long> floorTotals = new LinkedHashMap<>();
-		for (Entry<String, Long> e : counters.entrySet())
+		Map<String, List<Entry<String, Long>>> sections = new LinkedHashMap<>();
+		Map<String, Long> floors = new LinkedHashMap<>();
+		counters.forEach((key, v) ->
 		{
-			if (e.getValue() == 0 || StatRegistry.hidden(e.getKey())
-				|| !StatRegistry.family(e.getKey()).equals(statsFamily))
+			if (v == 0 || StatRegistry.hidden(key) || !StatRegistry.family(key).equals(statsFamily))
 			{
-				continue;
+				return;
 			}
-			String sec = StatRegistry.subgroup(e.getKey());
-			String heads = sec.isEmpty() ? StatRegistry.headOf(statsFamily, e.getKey()) : null;
-			if (StatRegistry.isFloor(e.getKey()) || heads != null)
+			String sec = StatRegistry.subgroup(key);
+			String heads = sec.isEmpty() ? StatRegistry.headOf(statsFamily, key) : null;
+			if (StatRegistry.isFloor(key) || heads != null)
 			{
-				floorTotals.merge(heads != null ? heads : sec, e.getValue(), Long::sum);
-				continue;
+				floors.merge(heads != null ? heads : sec, v, Long::sum);
 			}
-			rowsBySection.computeIfAbsent(sec, k -> new ArrayList<>()).add(e);
-		}
-		if (rowsBySection.isEmpty() && floorTotals.isEmpty())
+			else
+			{
+				sections.computeIfAbsent(sec, k -> new ArrayList<>()).add(Map.entry(key, v));
+			}
+		});
+		if (sections.isEmpty() && floors.isEmpty())
 		{
 			String unkept = board.notCounting(false);
-			return noted(p, unkept != null ? unkept : period.whole()
-				? "Nothing under " + statsFamily + " yet."
+			return noted(p, unkept != null ? unkept : period.whole() ? "Nothing under " + statsFamily + " yet."
 				: board.inside("Nothing under " + statsFamily));
 		}
-
-		List<Entry<String, Long>> destRows = statsFamily.equals("Ledger & Roads")
-			? rowsBySection.remove("Destinations") : null;
-		if (destRows != null && !rowsBySection.containsKey("Teleports")
-			&& !floorTotals.containsKey("Teleports"))
+		List<Entry<String, Long>> destinations = statsFamily.equals("Ledger & Roads") ? sections.remove("Destinations") : null;
+		if (destinations != null && !sections.containsKey("Teleports") && !floors.containsKey("Teleports"))
 		{
-			rowsBySection.put("Destinations", destRows);
-			destRows = null;
+			sections.put("Destinations", destinations);
+			destinations = null;
 		}
-
-		List<String> order = sectionOrder(rowsBySection, floorTotals);
-		for (String sec : order)
+		for (String sec : sectionOrder(sections, floors))
 		{
-			List<Entry<String, Long>> rows =
-				rowsBySection.getOrDefault(sec, new ArrayList<>());
+			List<Entry<String, Long>> rows = new ArrayList<>(sections.getOrDefault(sec, List.of()));
 			rows.sort(StatRegistry::compareRows);
-			long floor = floorTotals.getOrDefault(sec, 0L);
-
 			if (sec.isEmpty())
 			{
 				for (Entry<String, Long> e : rows)
 				{
 					if ("deaths".equals(e.getKey()) && e.getValue() > 0)
 					{
-						addDeathsFold(p, rowValue(e));
-						continue;
+						addDeaths(p, rowValue(e));
 					}
-					p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
-				}
-				continue;
-			}
-
-			if (rows.isEmpty() && floor == 0)
-			{
-				continue;
-			}
-
-			long typedSum = 0;
-			boolean anyTyped = false;
-			long shown = 0;
-			for (Entry<String, Long> e : rows)
-			{
-				shown += e.getValue();
-				if (StatRegistry.typed(e.getKey()))
-				{
-					anyTyped = true;
-					typedSum += e.getValue();
-				}
-			}
-			long ghost = anyTyped && floor - typedSum >= 1 ? floor - typedSum : 0;
-			if (sec.equals("Teleports") && floor - shown >= 1)
-			{
-				ghost = floor - shown;
-			}
-			long total = Math.max(shown + ghost, floor);
-
-			boolean foldable = statsFamily.equals("Skilling")
-				|| sec.equals("Food") || sec.equals("Potions")
-				|| sec.equals("Teleports") || sec.equals("Destinations")
-				|| sec.equals("Thralls");
-			if (!foldable)
-			{
-				p.add(group(sec));
-				statRows(p, rows);
-				continue;
-			}
-
-			String stateKey = statsFamily + ":" + sec;
-			boolean open = ui.foldOpen(stateKey);
-			long secGp = 0;
-			if (period.whole())
-			{
-				for (Entry<String, Long> e : rows)
-				{
-					Long cv = consumVals.get(e.getKey());
-					if (cv != null)
+					else
 					{
-						secGp += cv;
+						p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
 					}
 				}
 			}
-			else if (sec.equals("Food") || sec.equals("Potions"))
+			else if (!rows.isEmpty() || floors.getOrDefault(sec, 0L) != 0)
 			{
-				String gpKey = sec.equals("Food") ? "foodConsumedValue" : "potionsConsumedValue";
-				Span s = board.span();
-				if (period.session() || (s != null && s.opening.counters.containsKey(gpKey)))
-				{
-					secGp = counters.getOrDefault(gpKey, 0L);
-				}
-			}
-			p.add(ui.quietHead(sec, fmt(total) + tail(secGp),
-				stateKey));
-			if (open)
-			{
-				if (statsFamily.equals("Skilling"))
-				{
-					addPaceLine(p, sec);
-				}
-				boolean nested = statsFamily.equals("Skilling")
-					&& addCraftNested(p, sec, rows, counters);
-				if (!nested)
-				{
-					statRows(p, rows);
-					if (rows.isEmpty() && floor > 0)
-					{
-						List<Entry<String, Long>> floors = new ArrayList<>();
-						for (String fk : StatRegistry.floorKeys(sec))
-						{
-							long fv = counters.getOrDefault(fk, 0L);
-							if (fv > 0 && !StatRegistry.hidden(fk))
-							{
-								floors.add(new AbstractMap.SimpleEntry<>(fk, fv));
-							}
-						}
-						floors.sort(StatRegistry::compareRows);
-						for (Entry<String, Long> fe : floors)
-						{
-							p.add(row(StatRegistry.label(fe.getKey()), fmt(fe.getValue())));
-						}
-						if (!floors.isEmpty())
-						{
-							ghost = 0;
-						}
-					}
-					if (ghost > 0)
-					{
-						p.add(ghostRow(sec.equals("Teleports") ? "Other means" : "Other",
-							fmt(ghost)));
-					}
-				}
-				if (sec.equals("Teleports") && destRows != null && !destRows.isEmpty())
-				{
-					addDestinationsFold(p, destRows);
-				}
+				addSection(p, sec, rows, floors.getOrDefault(sec, 0L), counters,
+					sec.equals("Teleports") ? destinations : null);
 			}
 		}
 		return p;
 	}
 
-	JPanel buildAllTrackers()
+	private void addSection(JPanel p, String sec, List<Entry<String, Long>> rows, long floor, Map<String, Long> counters,
+		List<Entry<String, Long>> destinations)
 	{
-		JPanel p = ui.backPage();
-		consumVals = store.consumableValues();
-		Map<String, Long> counters = board.countersForPeriod();
-		if (counters == null)
+		long shown = sumOf(rows);
+		long typed = rows.stream().filter(e -> StatRegistry.typed(e.getKey())).mapToLong(Entry::getValue).sum();
+		boolean anyTyped = rows.stream().anyMatch(e -> StatRegistry.typed(e.getKey()));
+		long ghost = sec.equals("Teleports") && floor - shown >= 1 ? floor - shown
+			: anyTyped && floor - typed >= 1 ? floor - typed : 0;
+		boolean skilling = statsFamily.equals("Skilling");
+		if (!skilling && !FOLDING.contains(sec))
 		{
-			p.add(board.noPeriod());
-			return p;
+			p.add(group(sec));
+			statRows(p, rows);
+			return;
 		}
-		resourcesDropped = counters.getOrDefault("resourcesDroppedValue", 0L);
-		Map<String, Map<String, List<Entry<String, Long>>>> filed = new LinkedHashMap<>();
-		for (String fam : StatRegistry.FAMILIES)
+		String fold = statsFamily + ":" + sec;
+		p.add(ui.quietHead(sec, fmt(Math.max(shown + ghost, floor)) + tail(sectionGp(sec, rows, counters)), fold));
+		if (!ui.foldOpen(fold))
 		{
-			filed.put(fam, new LinkedHashMap<>());
+			return;
 		}
-		int kept = 0;
-		for (Entry<String, Long> e : counters.entrySet())
+		if (skilling)
 		{
-			if (e.getValue() == null || e.getValue() <= 0 || StatRegistry.hidden(e.getKey()))
+			addPace(p, sec);
+		}
+		if (!skilling || !addCraftVerbs(p, sec, rows, counters))
+		{
+			statRows(p, rows);
+			if (rows.isEmpty() && floor > 0)
 			{
-				continue;
-			}
-			Map<String, List<Entry<String, Long>>> fam =
-				filed.computeIfAbsent(StatRegistry.family(e.getKey()), k -> new LinkedHashMap<>());
-			String sec = StatRegistry.subgroup(e.getKey());
-			String heads = sec.isEmpty()
-				? StatRegistry.headOf(StatRegistry.family(e.getKey()), e.getKey()) : null;
-			fam.computeIfAbsent(heads != null ? heads : sec, k -> new ArrayList<>()).add(e);
-			kept++;
-		}
-		JPanel head = card("Trackers");
-		head.add(row("Counters", fmt(kept), ACCENT));
-		head.add(row("Reading", period.whole() ? "Lifetime" : board.window().label));
-		spaced(p, head);
-		if (kept == 0)
-		{
-			return noted(p, board.inside("Nothing tracked"));
-		}
-		for (Entry<String, Map<String, List<Entry<String, Long>>>> fam : filed.entrySet())
-		{
-			if (fam.getValue().isEmpty())
-			{
-				continue;
-			}
-			p.add(group(fam.getKey()));
-			for (Entry<String, List<Entry<String, Long>>> sec : fam.getValue().entrySet())
-			{
-				List<Entry<String, Long>> rows = sec.getValue();
-				rows.sort(StatRegistry::compareRows);
-				if (!sec.getKey().isEmpty())
+				List<Entry<String, Long>> named = new ArrayList<>();
+				for (String fk : StatRegistry.floorKeys(sec))
 				{
-					p.add(ghostRow(sec.getKey(), ""));
+					long fv = counters.getOrDefault(fk, 0L);
+					if (fv > 0 && !StatRegistry.hidden(fk))
+					{
+						named.add(Map.entry(fk, fv));
+					}
 				}
-				statRows(p, rows);
+				named.sort(StatRegistry::compareRows);
+				named.forEach(e -> p.add(row(StatRegistry.label(e.getKey()), fmt(e.getValue()))));
+				ghost = named.isEmpty() ? ghost : 0;
 			}
-			p.add(vgap(4));
+			if (ghost > 0)
+			{
+				p.add(ghostRow(sec.equals("Teleports") ? "Other means" : "Other", fmt(ghost)));
+			}
 		}
-		return p;
+		if (destinations != null && !destinations.isEmpty())
+		{
+			destinations.sort(StatRegistry::compareRows);
+			String destFold = "Ledger & Roads:Destinations";
+			p.add(ui.subHead("Destinations", fmt(sumOf(destinations)), destFold));
+			if (ui.foldOpen(destFold))
+			{
+				destinations.forEach(e -> p.add(row(StatRegistry.label(e.getKey()), value(e))));
+			}
+		}
 	}
 
-	void statRows(JPanel p, List<Entry<String, Long>> rows)
+	private long sectionGp(String sec, List<Entry<String, Long>> rows, Map<String, Long> counters)
 	{
+		if (period.whole())
+		{
+			return rows.stream().mapToLong(e -> consumables.getOrDefault(e.getKey(), 0L)).sum();
+		}
+		if (!sec.equals("Food") && !sec.equals("Potions"))
+		{
+			return 0;
+		}
+		String gpKey = sec.equals("Food") ? "foodConsumedValue" : "potionsConsumedValue";
+		Span s = board.span();
+		return period.session() || s != null && s.opening.counters.containsKey(gpKey) ? counters.getOrDefault(gpKey, 0L) : 0;
+	}
+
+	private List<String> sectionOrder(Map<String, List<Entry<String, Long>>> sections, Map<String, Long> floors)
+	{
+		Set<String> present = new LinkedHashSet<>(sections.keySet());
+		present.addAll(floors.keySet());
+		List<String> order = new ArrayList<>();
+		if (statsFamily.equals("Skilling"))
+		{
+			order.addAll(present);
+			order.sort(Comparator.comparingLong((String s) -> floors.getOrDefault(s, 0L) > 0 ? floors.get(s)
+				: sumOf(sections.getOrDefault(s, List.of()))).reversed());
+			return order;
+		}
+		for (String sec : StatRegistry.fixedSections(statsFamily))
+		{
+			if (present.remove(sec))
+			{
+				order.add(sec);
+			}
+		}
+		order.addAll(present);
+		return order;
+	}
+
+	private boolean addCraftVerbs(JPanel p, String craft, List<Entry<String, Long>> rows, Map<String, Long> counters)
+	{
+		Map<String, List<Entry<String, Long>>> byVerb = new LinkedHashMap<>();
+		List<Entry<String, Long>> leaves = new ArrayList<>();
 		for (Entry<String, Long> e : rows)
 		{
-			p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
+			String suf = StatRegistry.suffixOf(e.getKey());
+			(suf == null ? leaves : byVerb.computeIfAbsent(suf, k -> new ArrayList<>())).add(e);
 		}
-	}
-
-	String rowValue(Entry<String, Long> e)
-	{
-		String base = value(e);
-		if (e.getKey().equals("resourcesGatheredValue") && resourcesDropped > 0)
+		if (byVerb.size() < 2)
 		{
-			return base + " · " + gp(resourcesDropped) + " dropped";
+			return false;
 		}
-		Long cv = period.whole() ? consumVals.get(e.getKey()) : null;
-		return cv != null && cv > 0 ? base + " · " + gps(cv) : base;
+		leaves.forEach(e -> p.add(row(StatRegistry.rowLabel(e.getKey()), value(e))));
+		Map<String, Long> totals = new LinkedHashMap<>();
+		byVerb.forEach((verb, list) ->
+		{
+			String floorKey = StatRegistry.suffixFloor(craft, verb);
+			totals.put(verb, Math.max(floorKey != null ? counters.getOrDefault(floorKey, 0L) : 0L, sumOf(list)));
+		});
+		List<String> verbs = new ArrayList<>(byVerb.keySet());
+		verbs.sort(Comparator.comparingLong((String v) -> totals.get(v)).reversed());
+		for (String verb : verbs)
+		{
+			String fold = "Skilling:" + craft + ":" + verb;
+			p.add(ui.subHead(StatRegistry.suffixLabel(verb), fmt(totals.get(verb)), fold));
+			if (ui.foldOpen(fold))
+			{
+				statRows(p, byVerb.get(verb));
+				long other = totals.get(verb) - sumOf(byVerb.get(verb));
+				if (other >= 1)
+				{
+					p.add(ghostRow("Other", fmt(other)));
+				}
+			}
+		}
+		return true;
 	}
 
-	void addDeathsFold(JPanel p, String figure)
+	private void addDeaths(JPanel p, String figure)
 	{
 		JPanel head = row("Deaths", figure);
 		ui.foldHead(head, FOLD_DEATHS, "Who dealt them");
@@ -318,187 +290,117 @@ final class TrackersScreen extends Screen
 		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))
 		{
 			long ts = asLong(e.get("ts"));
-			if (!"DEATH".equals(typeOf(e)) || !board.insideWindow(ts))
+			if ("DEATH".equals(typeOf(e)) && board.insideWindow(ts))
 			{
-				continue;
+				JsonObject d = obj(e, "data");
+				long[] t = killers.computeIfAbsent(has(d, "killerName") ? d.get("killerName").getAsString() : "Unknown",
+					k -> new long[2]);
+				t[0]++;
+				t[1] = Math.max(t[1], ts);
 			}
-			JsonObject d = obj(e, "data");
-			String who = has(d, "killerName") ? d.get("killerName").getAsString() : "Unknown";
-			long[] t = killers.computeIfAbsent(who, k -> new long[2]);
-			t[0]++;
-			t[1] = Math.max(t[1], ts);
 		}
 		List<Entry<String, long[]>> ranked = new ArrayList<>(killers.entrySet());
 		ranked.sort((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0]));
 		for (Entry<String, long[]> k : ranked)
 		{
-			JPanel r = row(k.getKey(), fmt(k.getValue()[0]) + " · last "
-				+ day(k.getValue()[1]));
-			if (!"Unknown".equals(k.getKey()))
-			{
-				final String who = k.getKey();
-				link(r, () -> ui.openSourceLoose(who));
-			}
-			p.add(r);
+			JPanel r = row(k.getKey(), fmt(k.getValue()[0]) + " · last " + day(k.getValue()[1]));
+			p.add("Unknown".equals(k.getKey()) ? r : link(r, () -> ui.openSourceLoose(k.getKey())));
 		}
 	}
 
-	static final String FOLD_DEATHS = "Combat:deaths";
-
-	List<String> sectionOrder(Map<String, List<Entry<String, Long>>> rowsBySection,
-		Map<String, Long> floorTotals)
+	JPanel buildAllTrackers()
 	{
-		LinkedHashSet<String> present = new LinkedHashSet<>();
-		present.addAll(rowsBySection.keySet());
-		present.addAll(floorTotals.keySet());
-		List<String> order = new ArrayList<>();
-		if (statsFamily.equals("Skilling"))
+		JPanel p = ui.backPage();
+		Map<String, Long> counters = read();
+		if (counters == null)
 		{
-			List<String> crafts = new ArrayList<>(present);
-			crafts.sort(Comparator.comparingLong((String s) ->
+			p.add(board.noPeriod());
+			return p;
+		}
+		Map<String, Map<String, List<Entry<String, Long>>>> filed = new LinkedHashMap<>();
+		for (String fam : StatRegistry.FAMILIES)
+		{
+			filed.put(fam, new LinkedHashMap<>());
+		}
+		int kept = 0;
+		for (Entry<String, Long> e : counters.entrySet())
+		{
+			if (e.getValue() == null || e.getValue() <= 0 || StatRegistry.hidden(e.getKey()))
 			{
-				long floor = floorTotals.getOrDefault(s, 0L);
-				if (floor > 0)
+				continue;
+			}
+			String fam = StatRegistry.family(e.getKey());
+			String sec = StatRegistry.subgroup(e.getKey());
+			String heads = sec.isEmpty() ? StatRegistry.headOf(fam, e.getKey()) : null;
+			filed.computeIfAbsent(fam, k -> new LinkedHashMap<>())
+				.computeIfAbsent(heads != null ? heads : sec, k -> new ArrayList<>()).add(e);
+			kept++;
+		}
+		JPanel head = card("Trackers");
+		head.add(row("Counters", fmt(kept), ACCENT));
+		head.add(row("Reading", period.whole() ? "Lifetime" : board.window().label));
+		spaced(p, head);
+		if (kept == 0)
+		{
+			return noted(p, board.inside("Nothing tracked"));
+		}
+		filed.forEach((fam, sections) ->
+		{
+			if (sections.isEmpty())
+			{
+				return;
+			}
+			p.add(group(fam));
+			sections.forEach((sec, rows) ->
+			{
+				rows.sort(StatRegistry::compareRows);
+				if (!sec.isEmpty())
 				{
-					return floor;
+					p.add(ghostRow(sec, ""));
 				}
-				return sumOf(rowsBySection.getOrDefault(s, new ArrayList<>()));
-			}).reversed());
-			order.addAll(crafts);
-		}
-		else
-		{
-			for (String sec : StatRegistry.fixedSections(statsFamily))
-			{
-				if (present.remove(sec))
-				{
-					order.add(sec);
-				}
-			}
-			order.addAll(present);
-		}
-		return order;
+				statRows(p, rows);
+			});
+			p.add(vgap(4));
+		});
+		return p;
 	}
-
-	boolean addCraftNested(JPanel p, String craft,
-		List<Entry<String, Long>> rows, Map<String, Long> counters)
-	{
-		Map<String, List<Entry<String, Long>>> byVerb = new LinkedHashMap<>();
-		List<Entry<String, Long>> leaves = new ArrayList<>();
-		for (Entry<String, Long> e : rows)
-		{
-			String suf = StatRegistry.suffixOf(e.getKey());
-			if (suf == null)
-			{
-				leaves.add(e);
-			}
-			else
-			{
-				byVerb.computeIfAbsent(suf, k -> new ArrayList<>()).add(e);
-			}
-		}
-		if (byVerb.size() < 2)
-		{
-			return false;
-		}
-		for (Entry<String, Long> e : leaves)
-		{
-			p.add(row(StatRegistry.rowLabel(e.getKey()), value(e)));
-		}
-		List<String> verbs = new ArrayList<>(byVerb.keySet());
-		Map<String, Long> verbTotal = new LinkedHashMap<>();
-		for (String verb : verbs)
-		{
-			String floorKey = StatRegistry.suffixFloor(craft, verb);
-			long floorVal = floorKey != null ? counters.getOrDefault(floorKey, 0L) : 0L;
-			verbTotal.put(verb, Math.max(floorVal, sumOf(byVerb.get(verb))));
-		}
-		verbs.sort(Comparator.comparingLong(
-			(String v) -> verbTotal.getOrDefault(v, 0L)).reversed());
-		for (String verb : verbs)
-		{
-			String stateKey = "Skilling:" + craft + ":" + verb;
-			boolean open = ui.foldOpen(stateKey);
-			p.add(ui.subHead(StatRegistry.suffixLabel(verb),
-				fmt(verbTotal.getOrDefault(verb, 0L)), stateKey));
-			if (open)
-			{
-				statRows(p, byVerb.get(verb));
-				long verbGhost = verbTotal.get(verb) - sumOf(byVerb.get(verb));
-				if (verbGhost >= 1)
-				{
-					p.add(ghostRow("Other", fmt(verbGhost)));
-				}
-			}
-		}
-		return true;
-	}
-
-	void addDestinationsFold(JPanel p, List<Entry<String, Long>> destRows)
-	{
-		destRows.sort(StatRegistry::compareRows);
-		long sum = sumOf(destRows);
-		String stateKey = "Ledger & Roads:Destinations";
-		boolean open = ui.foldOpen(stateKey);
-		p.add(ui.subHead("Destinations", fmt(sum), stateKey));
-		if (open)
-		{
-			for (Entry<String, Long> e : destRows)
-			{
-				p.add(row(StatRegistry.label(e.getKey()), value(e)));
-			}
-		}
-	}
-
-	static String value(Entry<String, Long> e)
-	{
-		return StatRegistry.isGp(e.getKey()) ? gps(e.getValue()) : fmt(e.getValue());
-	}
-
-	Map<String, Long> consumVals = new LinkedHashMap<>();
-
-	long resourcesDropped;
 
 	JPanel buildSkillDetail(String craft)
 	{
 		JPanel p = ui.backPage();
-		consumVals = store.consumableValues();
+		consumables = store.consumableValues();
+		resourcesDropped = 0;
 		String key = low(craft);
-
 		JPanel head = card(craft);
 		Span s = board.span();
 		Long now = board.liveXp(key);
-		if (now == null)
+		if (now == null && s != null)
 		{
-			now = s == null ? null : s.closing.skills.get(key);
+			now = s.closing.skills.get(key);
 		}
-		Long was = period.session()
-			? (now == null ? null : Math.max(0, now - board.sessionXp(key)))
-			: (s == null ? null : s.opening.skills.get(key));
+		Long was = period.session() ? now == null ? null : Math.max(0, now - board.sessionXp(key))
+			: s == null ? null : s.opening.skills.get(key);
+		long gained = !period.whole() && was != null && now != null && now > was ? now - was : 0;
 		if (now != null && now > 0)
 		{
 			head.add(row("Level", String.valueOf(PaceBook.levelAt(now)), ACCENT));
 			head.add(row("Experience", gp(now)));
-			if (!period.whole() && was != null && now > was)
+			if (gained > 0)
 			{
-				head.add(row("Gained", "+" + gp(now - was), ACCENT));
+				head.add(row("Gained", "+" + gp(gained), ACCENT));
 			}
 		}
 		else
 		{
 			head.add(row("Level", "-"));
 		}
-		long minutes = (period.whole() ? board.counters() : board.periodCounters())
-			.getOrDefault(StatKeys.timeKey(craft), 0L);
+		long minutes = (period.whole() ? board.counters() : board.periodCounters()).getOrDefault(StatKeys.timeKey(craft), 0L);
 		if (minutes > 0 && board.minutesCoverPeriod())
 		{
-			long gained = !period.whole() && was != null && now != null && now > was ? now - was : 0;
 			boolean rate = gained > 0 && minutes >= 30;
-			head.add(row("Time", hoursMinutes(minutes)
-				+ (rate ? " · " + gp(Math.round(gained * 60.0 / minutes)) + " xp/h" : "")));
+			head.add(row("Time", hoursMinutes(minutes) + (rate ? " · " + gp(Math.round(gained * 60.0 / minutes)) + " xp/h" : "")));
 		}
 		spaced(p, head);
-
 		Map<String, Long> counters = board.countersForPeriod();
 		if (counters == null)
 		{
@@ -506,84 +408,75 @@ final class TrackersScreen extends Screen
 			return p;
 		}
 		List<Entry<String, Long>> rows = new ArrayList<>();
-		for (Entry<String, Long> e : counters.entrySet())
+		counters.forEach((k, v) ->
 		{
-			if (e.getValue() == null || e.getValue() <= 0
-				|| !"Skilling".equals(StatRegistry.family(e.getKey()))
-				|| !craft.equalsIgnoreCase(StatRegistry.subgroup(e.getKey())))
+			if (v != null && v > 0 && "Skilling".equals(StatRegistry.family(k)) && craft.equalsIgnoreCase(StatRegistry.subgroup(k)))
 			{
-				continue;
+				rows.add(Map.entry(k, v));
 			}
-			rows.add(e);
-		}
+		});
 		List<SourceRow> ground = board.skillGround(craft);
 		if (rows.isEmpty() && ground.isEmpty())
 		{
 			String unkept = board.notCounting(false);
-			return noted(p, unkept != null ? unkept : "Nothing is tracked under " + craft
-				+ (period.whole() ? "." : " in " + board.periodInSentence() + "."));
+			return noted(p, unkept != null ? unkept
+				: "Nothing is tracked under " + craft + (period.whole() ? "." : " in " + board.periodInSentence() + "."));
 		}
 		rows.sort(StatRegistry::compareRows);
-		addPaceLine(p, craft);
+		addPace(p, craft);
 		statRows(p, rows);
 		if (!ground.isEmpty())
 		{
 			p.add(vgap(6));
 			p.add(group("WHAT IT HAS EVER PAID"));
-			for (SourceRow r : ground)
-			{
-				JPanel line = row(r.name, gps(r.value), ACCENT);
-				link(line, () -> ui.openSource(r.name));
-				p.add(line);
-			}
+			ground.forEach(r -> p.add(link(row(r.name, gps(r.value), ACCENT), () -> ui.openSource(r.name))));
 		}
 		return p;
 	}
 
-	void addPaceLine(JPanel p, String section)
+	private void addPace(JPanel p, String skill)
 	{
 		PaceBook.Pace pace;
 		try
 		{
-			pace = plugin.pace(section);
+			pace = plugin.pace(skill);
 		}
 		catch (RuntimeException e)
 		{
 			return;
 		}
-		if (pace == null)
+		if (pace != null && pace.hasHorizon())
 		{
-			return;
-		}
-		if (pace.hasHorizon())
-		{
-			String target = pace.targetLevel != null
-				? String.valueOf(pace.targetLevel) : "200m";
-			p.add(ghostRow(target + " in " + count(pace.daysOfPlay, "day") + " of play",
-				gp((long) pace.xpPerActiveDay) + "/day"));
+			String target = pace.targetLevel != null ? String.valueOf(pace.targetLevel) : "200m";
+			p.add(ghostRow(target + " in " + count(pace.daysOfPlay, "day") + " of play", gp((long) pace.xpPerActiveDay) + "/day"));
 			if (pace.activeDays < 3)
 			{
 				p.add(ghostRow("measured over " + count(pace.activeDays, "day"), ""));
 			}
 		}
-		else if (pace.dormant() && pace.lastActive != null)
+		else if (pace != null && pace.dormant() && pace.lastActive != null)
 		{
 			p.add(ghostRow("last moved " + pace.lastActive.format(TASK_DAY), ""));
 		}
 	}
 
-	String statsFamily = StatRegistry.FAMILIES[0];
-	private static final String[] LEDGER_FAMILIES = {"Ledger & Roads", "Living"};
-
-	void reset(ChroniclePanel.View v)
+	private void statRows(JPanel p, List<Entry<String, Long>> rows)
 	{
-		if (v == ChroniclePanel.View.TRACKERS)
+		rows.forEach(e -> p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e))));
+	}
+
+	private String rowValue(Entry<String, Long> e)
+	{
+		if (e.getKey().equals("resourcesGatheredValue") && resourcesDropped > 0)
 		{
-			statsFamily = StatRegistry.FAMILIES[0];
+			return value(e) + " · " + gp(resourcesDropped) + " dropped";
 		}
-		else if (v == ChroniclePanel.View.LEDGER && !Arrays.asList(LEDGER_FAMILIES).contains(statsFamily))
-		{
-			statsFamily = LEDGER_FAMILIES[0];
-		}
+		long cv = period.whole() ? consumables.getOrDefault(e.getKey(), 0L) : 0;
+		return cv > 0 ? value(e) + " · " + gps(cv) : value(e);
+	}
+
+	private static String value(Entry<String, Long> e)
+	{
+		return StatRegistry.isGp(e.getKey()) ? gps(e.getValue()) : fmt(e.getValue());
 	}
 }

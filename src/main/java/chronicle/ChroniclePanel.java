@@ -650,7 +650,6 @@ class ChroniclePanel extends PluginPanel
 		long began = System.nanoTime();
 		board.reset();
 		art.forget();
-		trackers.resourcesDropped = 0;
 		paintBand(plugin.journalWarning(), plugin.captureWarning(), plugin.captureWarningWhy());
 		measuredSince = null;
 		periodHolder.removeAll();
