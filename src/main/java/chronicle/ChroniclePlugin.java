@@ -425,8 +425,8 @@ public class ChroniclePlugin extends Plugin
 			configManager.getRSProfileConfiguration(GROUP, KEY_JOURNAL_NAME));
 		executor.submit(() ->
 		{
-			if (priorName != null && !LocalStore.slug(priorName).equals(LocalStore.slug(who))
-				&& LocalStore.migrateJournalFiles(localDir(), priorName, who))
+			if (priorName != null && !JournalFile.slug(priorName).equals(JournalFile.slug(who))
+				&& JournalFile.migrateJournalFiles(localDir(), priorName, who))
 			{
 				chat("Chronicle: your journal followed the rename. "
 					+ priorName + " is now " + who + ".");
@@ -922,7 +922,7 @@ public class ChroniclePlugin extends Plugin
 
 	Map<String, Long> killCounts()
 	{
-		return LocalStore.reconciledKills(localStore.clogSnapshot(),
+		return KillCounts.reconciledKills(localStore.clogSnapshot(),
 			localStore.dropSources(), localStore.chatKillCounts(),
 			localStore.anchoredKills());
 	}

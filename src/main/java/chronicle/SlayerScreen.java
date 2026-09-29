@@ -219,7 +219,7 @@ final class SlayerScreen
 
 	JPanel addKillLog(JPanel p)
 	{
-		List<Entry<String, Long>> kcs = new ArrayList<>(LocalStore.killLogCounts(board.clogNow()).entrySet());
+		List<Entry<String, Long>> kcs = new ArrayList<>(KillCounts.killLogCounts(board.clogNow()).entrySet());
 		if (kcs.isEmpty())
 		{
 			return noted(p, "No kill log yet. It copies itself the next time you open "

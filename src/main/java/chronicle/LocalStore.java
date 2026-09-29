@@ -13,13 +13,10 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -45,7 +42,11 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.game.ItemManager;
+import static chronicle.JournalFile.*;
 import static chronicle.Json.*;
+import static chronicle.KillCounts.*;
+import static chronicle.Merge.*;
+import static chronicle.SlayerLog.*;
 
 @Singleton
 @Slf4j
@@ -1138,12 +1139,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return new BagItem(canon, name, qty, each * qty);
 	}
 
-	private static String bagKey(int id, String name)
-	{
-		return id > 0 ? String.valueOf(id)
-			: "n:" + (name == null ? "" : name.toLowerCase(Locale.ROOT));
-	}
-
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class LootSeed
 	{
@@ -1214,18 +1209,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 			rebaseAnchors();
 		}
-	}
-
-	private static String keyNamed(JsonObject bag, String name)
-	{
-		for (var e : objects(bag))
-		{
-			if (name.equalsIgnoreCase(str(e.getValue(), "name", null)))
-			{
-				return e.getKey();
-			}
-		}
-		return null;
 	}
 
 	private static Integer idOf(String key)
@@ -1357,8 +1340,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	private static final int SLAYER_TASK_CAP = 1000;
-
 	private JsonObject slayerRoot()
 	{
 		JsonObject sl = sub(root, "slayer");
@@ -1367,91 +1348,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			sl.add("tasks", new JsonArray());
 		}
 		return sl;
-	}
-
-	static final long SLAYER_FINAL_KILL_GRACE = 30;
-
-	private static JsonObject openSegment(JsonArray tasks, String task)
-	{
-		if (tasks.size() == 0)
-		{
-			return null;
-		}
-		JsonObject last = tasks.get(tasks.size() - 1).getAsJsonObject();
-		return isOpen(last) && namesTask(last, task) ? last : null;
-	}
-
-	private static boolean isOpen(JsonObject seg)
-	{
-		return present(seg, "open") && seg.get("open").getAsBoolean();
-	}
-
-	private static boolean namesTask(JsonObject seg, String task)
-	{
-		return present(seg, "task")
-			&& task.equalsIgnoreCase(seg.get("task").getAsString());
-	}
-
-	private static Long optLong(JsonObject o, String key)
-	{
-		return o.has(key) && o.get(key).isJsonPrimitive()
-			? Long.valueOf(asLong(o.get(key))) : null;
-	}
-
-	private static JsonObject continuingSegment(JsonArray tasks, String task, Long rem)
-	{
-		JsonObject seg = openSegment(tasks, task);
-		Long lastRem = seg == null ? null : optLong(seg, "last_rem");
-		return rem != null && lastRem != null && rem > lastRem ? null : seg;
-	}
-
-	private static JsonObject graceSegment(JsonArray tasks, String task, Long rem, boolean live)
-	{
-		long floor = nowSec() - SLAYER_FINAL_KILL_GRACE;
-		for (int i = tasks.size() - 1; i >= 0; i--)
-		{
-			if (!tasks.get(i).isJsonObject())
-			{
-				continue;
-			}
-			JsonObject seg = tasks.get(i).getAsJsonObject();
-			if (asLong(seg.get("ts")) < floor)
-			{
-				return null;
-			}
-			if (isOpen(seg) || !namesTask(seg, task))
-			{
-				continue;
-			}
-			Long lastRem = optLong(seg, "last_rem");
-			return live && (rem == null || lastRem == null || rem > lastRem) ? null : seg;
-		}
-		return null;
-	}
-
-	private static JsonObject resumeSegment(JsonArray tasks, String task, Long rem)
-	{
-		for (int i = tasks.size() - 1; i >= 0; i--)
-		{
-			if (!tasks.get(i).isJsonObject())
-			{
-				continue;
-			}
-			JsonObject seg = tasks.get(i).getAsJsonObject();
-			if (!namesTask(seg, task))
-			{
-				continue;
-			}
-			Long minRem = optLong(seg, "min_rem");
-			if (!isOpen(seg) || rem == null || minRem == null || rem > minRem)
-			{
-				return null;
-			}
-			tasks.remove(i);
-			tasks.add(seg);
-			return seg;
-		}
-		return null;
 	}
 
 	private void slayerLoot(JsonObject data, long value, String monster, List<BagItem> items)
@@ -1513,39 +1409,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			bump(sub(seg, "monsters"), monster, 1);
 		}
 		fileByName(sub(seg, "items"), items, true);
-	}
-
-	private static JsonObject newSegment(JsonArray tasks, String task)
-	{
-		JsonObject seg = new JsonObject();
-		seg.addProperty("task", task);
-		seg.addProperty("kills", 0);
-		seg.addProperty("assignment", 0);
-		seg.addProperty("value", 0);
-		tasks.add(seg);
-		while (tasks.size() > SLAYER_TASK_CAP)
-		{
-			tasks.remove(0);
-		}
-		return seg;
-	}
-
-	private static long loggedKills(JsonObject seg)
-	{
-		Long logged = optLong(seg, "logged");
-		return logged != null ? logged : Math.max(0, asLong(seg.get("kills")) - asLong(seg.get("noLootKills")));
-	}
-
-	private static void setNoLootKills(JsonObject seg, long noLoot)
-	{
-		if (noLoot > 0)
-		{
-			seg.addProperty("noLootKills", noLoot);
-		}
-		else
-		{
-			seg.remove("noLootKills");
-		}
 	}
 
 	private void recordSlayerCompletion(JsonObject data)
@@ -1940,62 +1803,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	private static JsonObject mergeClog(JsonObject base, JsonObject inc)
-	{
-		JsonObject out = new JsonObject();
-		out.add("by_cat", nested(base, inc, "by_cat", false));
-		for (String key : new String[]{"kc_lines", "pb_lines"})
-		{
-			JsonObject lines = nested(base, inc, key, key.equals("pb_lines"));
-			if (lines.size() > 0)
-			{
-				out.add(key, lines);
-			}
-		}
-		for (String mapKey : new String[]{"kcs", "clog_items", "cat_counts", "slayer_kcs"})
-		{
-			JsonObject merged = new JsonObject();
-			for (JsonObject src : new JsonObject[]{base, inc})
-			{
-				for (var e : obj(src, mapKey).entrySet())
-				{
-					raise(merged, e.getKey(), asLong(e.getValue()));
-				}
-			}
-			if (merged.size() > 0)
-			{
-				out.add(mapKey, merged);
-			}
-		}
-		for (String numKey : new String[]{"finished", "available"})
-		{
-			out.addProperty(numKey, Math.max(asLong(base.get(numKey)), asLong(inc.get(numKey))));
-		}
-		return out;
-	}
-
-	private static JsonObject nested(JsonObject base, JsonObject inc, String key, boolean least)
-	{
-		JsonObject all = new JsonObject();
-		for (JsonObject src : new JsonObject[]{base, inc})
-		{
-			for (var pg : objects(obj(src, key)))
-			{
-				JsonObject tgt = sub(all, pg.getKey());
-				for (var ln : pg.getValue().entrySet())
-				{
-					long n = asLong(ln.getValue());
-					if (least ? n > 0 && (!tgt.has(ln.getKey()) || n < asLong(tgt.get(ln.getKey())))
-						: n > asLong(tgt.get(ln.getKey())))
-					{
-						tgt.addProperty(ln.getKey(), n);
-					}
-				}
-			}
-		}
-		return all;
-	}
-
 	private static List<JsonObject> newestFirst(JsonArray a)
 	{
 		List<JsonObject> out = objects(a);
@@ -2115,52 +1922,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			+ " journal entries · " + counters + " counters";
 	}
 
-	private static void importSource(JsonObject cur, JsonObject inc)
-	{
-		for (String k : new String[]{"kc", "loots", "value", "last_seen"})
-		{
-			floorNumber(cur, inc, k);
-		}
-		long incFirst = asLong(inc.get("first_seen"));
-		long curFirst = asLong(cur.get("first_seen"));
-		if (incFirst > 0 && (curFirst == 0 || incFirst < curFirst))
-		{
-			cur.addProperty("first_seen", incFirst);
-		}
-		double incPb = asDouble(inc.get("pb"));
-		if (incPb > 0 && (!cur.has("pb") || incPb < cur.get("pb").getAsDouble()))
-		{
-			cur.addProperty("pb", incPb);
-		}
-		if (!isObject(inc, "items"))
-		{
-			return;
-		}
-		JsonObject bag = sub(cur, "items");
-		for (var ie : objects(inc.getAsJsonObject("items")))
-		{
-			JsonObject incItem = ie.getValue();
-			String incName = str(incItem, "name", ie.getKey());
-			String key = keyNamed(bag, incName);
-			if (key == null)
-			{
-				key = incItem.has("id") && incItem.get("id").getAsInt() > 0
-					? bagKey(incItem.get("id").getAsInt(), incName) : ie.getKey();
-			}
-			JsonObject curItem = sub(bag, key);
-			floorNumber(curItem, incItem, "qty");
-			floorNumber(curItem, incItem, "value");
-			if (!curItem.has("name"))
-			{
-				curItem.addProperty("name", incName);
-			}
-			if (!curItem.has("id") && incItem.has("id"))
-			{
-				curItem.add("id", incItem.get("id"));
-			}
-		}
-	}
-
 	private void importSlayer(JsonObject incSl)
 	{
 		JsonObject sl = slayerRoot();
@@ -2197,87 +1958,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	private static final long SEGMENT_MATCH_SECONDS = 60;
-
-	private static JsonObject nearestSegment(JsonArray tasks, JsonObject inc)
-	{
-		String task = inc.has("task") ? inc.get("task").getAsString() : null;
-		JsonObject best = null;
-		long bestGap = SEGMENT_MATCH_SECONDS + 1;
-		for (JsonElement e : tasks)
-		{
-			JsonObject seg = e.isJsonObject() ? e.getAsJsonObject() : new JsonObject();
-			if (task != null && seg.has("task") && task.equalsIgnoreCase(seg.get("task").getAsString())
-				&& Math.abs(asLong(seg.get("ts")) - asLong(inc.get("ts"))) < bestGap)
-			{
-				bestGap = Math.abs(asLong(seg.get("ts")) - asLong(inc.get("ts")));
-				best = seg;
-			}
-		}
-		return best;
-	}
-
-	private static void mergeSegmentDetail(JsonObject seg, JsonObject inc, String key)
-	{
-		if (isObject(inc, key))
-		{
-			mergeRows(sub(seg, key), inc.getAsJsonObject(key), true);
-		}
-	}
-
-	private static void mergeRows(JsonObject cur, JsonObject inc, boolean keepValue)
-	{
-		for (var e : inc.entrySet())
-		{
-			if (!e.getValue().isJsonObject())
-			{
-				raise(cur, e.getKey(), asLong(e.getValue()));
-				continue;
-			}
-			JsonObject incRow = e.getValue().getAsJsonObject();
-			JsonObject curRow = sub(cur, e.getKey());
-			floorNumber(curRow, incRow, "qty");
-			if (!keepValue || asLong(curRow.get("value")) <= 0)
-			{
-				floorNumber(curRow, incRow, "value");
-			}
-			floorNumber(curRow, incRow, "kills");
-			if (!curRow.has("id") && incRow.has("id"))
-			{
-				curRow.add("id", incRow.get("id"));
-			}
-		}
-	}
-
-	private static String feedKey(JsonObject e)
-	{
-		long sec = asLong(e.get("ts")) / 1000L;
-		String kind = str(e, "type", "");
-		return kind + "|" + sec + "|" + feedSubject(e);
-	}
-
-	private static String feedSubject(JsonObject e)
-	{
-		if (!isObject(e, "data"))
-		{
-			return "";
-		}
-		JsonObject d = e.getAsJsonObject("data");
-		for (String field : new String[]{"itemName", "petName", "questName",
-			"killerName", "area", "skill", "task", "monster",
-			"name", "quest", "diary", "achievement"})
-		{
-			if (present(d, field))
-			{
-				return d.get(field).getAsString().toLowerCase(Locale.ROOT);
-			}
-		}
-		JsonObject bare = d.deepCopy();
-		bare.remove("imported");
-		bare.remove("type");
-		return bare.toString();
-	}
-
 	private void setFeed(List<JsonObject> all, int cap)
 	{
 		all.sort(Comparator.comparingLong(o -> asLong(o.get("ts"))));
@@ -2287,14 +1967,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			rebuilt.add(all.get(i));
 		}
 		root.add("feed", rebuilt);
-	}
-
-	private static void floorNumber(JsonObject cur, JsonObject inc, String key)
-	{
-		if (present(inc, key))
-		{
-			raise(cur, key, asLong(inc.get(key)));
-		}
 	}
 
 	List<BagItem> untakenItemsOf(String source)
@@ -2472,104 +2144,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	static Map<String, Long> reconciledKills(JsonObject clog,
-		List<SourceRow> sources, Map<String, Long> chat,
-		Map<String, Long> anchored)
-	{
-		Map<String, Long> out = clogKillCounts(clog);
-		Map<String, Long> stated = killLogCounts(clog);
-		foldChatCounts(stated, chat, out.keySet());
-		placeByKind(out, stated, false);
-		placeByKind(out, pageKillLines(clog), true);
-		placeByKind(out, ledgerKills(clog, sources), true);
-		placeByKind(out, respelled(anchored, out.keySet()), false);
-		return out;
-	}
-
-	static long spineKills(JsonObject clog, List<SourceRow> sources,
-		Map<String, Long> reconciled)
-	{
-		long kills = 0;
-		for (String key : spineKillKeys(clog, sources, reconciled))
-		{
-			kills += reconciled.getOrDefault(key, 0L);
-		}
-		return kills;
-	}
-
-	static Set<String> spineKillKeys(JsonObject clog, List<SourceRow> sources,
-		Map<String, Long> reconciled)
-	{
-		Map<String, String> byKind = new HashMap<>();
-		for (String key : reconciled.keySet())
-		{
-			byKind.putIfAbsent(chatKind(key), key);
-		}
-		Set<String> out = new LinkedHashSet<>();
-		for (String name : sourceKills(clog, sources, true).keySet())
-		{
-			String key = reconciled.containsKey(name) ? name : byKind.get(chatKind(name));
-			if (key != null)
-			{
-				out.add(key);
-			}
-		}
-		return out;
-	}
-
-	static Map<String, Long> ledgerKills(JsonObject clog,
-		List<SourceRow> sources)
-	{
-		return sourceKills(clog, sources, false);
-	}
-
-	private static Map<String, Long> sourceKills(JsonObject clog,
-		List<SourceRow> sources, boolean raiseToPage)
-	{
-		Map<String, Long> paged = clogKillCounts(clog);
-		Map<String, String> byKind = new HashMap<>();
-		for (String name : paged.keySet())
-		{
-			byKind.put(kindOf(name), name);
-		}
-		Map<String, Long> stated = killLogCounts(clog);
-		Map<String, Long> statedByKind = new HashMap<>();
-		for (var e : stated.entrySet())
-		{
-			statedByKind.putIfAbsent(kindOf(e.getKey()), e.getValue());
-		}
-		Map<String, Long> out = new LinkedHashMap<>();
-		for (SourceRow r : sources)
-		{
-			long kills = Math.max(r.kc, r.loots);
-			Long agreed = r.kc > 0 ? statedByKind.get(kindOf(r.name)) : null;
-			if (agreed != null && agreed.longValue() == r.kc && r.loots > r.kc)
-			{
-				kills = r.kc;
-			}
-			String name = r.name;
-			String known = byKind.get(kindOf(r.name));
-			if (known != null)
-			{
-				if (raiseToPage)
-				{
-					kills = Math.max(kills, paged.get(known));
-				}
-				name = known;
-			}
-			if (kills > 0)
-			{
-				out.merge(name, kills, Math::max);
-			}
-		}
-		return out;
-	}
-
-	private static int anchorRank(String src)
-	{
-		return "chat".equals(src) ? 3 : "log".equals(src) ? 2 : 1;
-	}
-
 	void anchorKill(String name, long stated, String src, String rsn)
 	{
 		if (name == null || name.isEmpty() || stated <= 0 || !isReadyFor(rsn))
@@ -2685,149 +2259,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	static Map<String, Long> killLogCounts(JsonObject clog)
-	{
-		return positives(clog, "slayer_kcs");
-	}
-
-	private static Map<String, Long> positives(JsonObject o, String key)
-	{
-		Map<String, Long> out = new LinkedHashMap<>();
-		for (var e : obj(o, key).entrySet())
-		{
-			long v = asLong(e.getValue());
-			if (v > 0)
-			{
-				out.put(e.getKey(), v);
-			}
-		}
-		return out;
-	}
-
-	static Map<String, Long> clogKillCounts(JsonObject clog)
-	{
-		Map<String, Long> out = positives(clog, "kcs");
-		if (clog != null && isObject(clog, "kcs"))
-		{
-			out.putAll(pageKillLines(clog));
-		}
-		return out;
-	}
-
-	static Map<String, Long> pageKillLines(JsonObject clog)
-	{
-		Map<String, Long> out = new LinkedHashMap<>();
-		for (var pg : objects(obj(clog, "kc_lines")))
-		{
-			for (var ln : pg.getValue().entrySet())
-			{
-				String label = ln.getKey().toLowerCase(Locale.ROOT);
-				if ((label.contains("kill") || label.contains("completion")) && asLong(ln.getValue()) > 0)
-				{
-					out.put(pg.getKey(), asLong(ln.getValue()));
-					break;
-				}
-			}
-		}
-		return out;
-	}
-
-	static void foldChatCounts(Map<String, Long> out,
-		Map<String, Long> chat, Set<String> vocabulary)
-	{
-		if (out == null || chat == null || chat.isEmpty())
-		{
-			return;
-		}
-		Map<String, String> byKind = new HashMap<>();
-		for (String name : out.keySet())
-		{
-			byKind.putIfAbsent(chatKind(name), name);
-		}
-		for (String name : vocabulary)
-		{
-			byKind.putIfAbsent(chatKind(name), name);
-		}
-		for (var e : chat.entrySet())
-		{
-			out.merge(spokenAs(byKind, e.getKey()), e.getValue(), Math::max);
-		}
-	}
-
-	private static String spokenAs(Map<String, String> byKind, String said)
-	{
-		String known = byKind.get(chatKind(said));
-		int space = said.indexOf(' ');
-		if (known == null && space > 0)
-		{
-			known = byKind.get(chatKind(said.substring(space + 1)));
-		}
-		if (known == null)
-		{
-			known = byKind.get(chatKind(said + " chests"));
-		}
-		return known != null ? known : said;
-	}
-
-	static Map<String, Long> respelled(Map<String, Long> said, Set<String> names)
-	{
-		Map<String, String> byKind = new HashMap<>();
-		for (String name : names)
-		{
-			byKind.putIfAbsent(chatKind(name), name);
-		}
-		Map<String, Long> out = new LinkedHashMap<>();
-		for (var e : said.entrySet())
-		{
-			out.merge(spokenAs(byKind, e.getKey()), e.getValue(), Math::max);
-		}
-		return out;
-	}
-
-	static void placeByKind(Map<String, Long> out,
-		Map<String, Long> stated, boolean floor)
-	{
-		if (out == null || stated == null || stated.isEmpty())
-		{
-			return;
-		}
-		Map<String, String> byKind = new HashMap<>();
-		for (String name : out.keySet())
-		{
-			byKind.putIfAbsent(chatKind(name), name);
-		}
-		for (var e : stated.entrySet())
-		{
-			String known = byKind.get(chatKind(e.getKey()));
-			String name = known != null ? known : e.getKey();
-			if (floor)
-			{
-				out.merge(name, e.getValue(), Math::max);
-			}
-			else
-			{
-				out.put(name, e.getValue());
-			}
-			byKind.putIfAbsent(chatKind(name), name);
-		}
-	}
-
-	static String chatKind(String name)
-	{
-		String n = kindOf(name);
-		return n.startsWith("the ") ? n.substring(4) : n;
-	}
-
-	static String kindOf(String name)
-	{
-		String n = name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
-		if (n.endsWith("ies"))
-		{
-			return n.substring(0, n.length() - 3) + "y";
-		}
-		return n.endsWith("s") ? n.substring(0, n.length() - 1) : n;
-	}
-
 	static int obtainedSlots(JsonObject cl)
 	{
 		Set<String> names = new HashSet<>();
@@ -2845,64 +2276,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			return obj(root, "collection_log").deepCopy();
 		}
-	}
-
-	static boolean migrateJournalFiles(File dir, String oldName, String newName)
-	{
-		String oldSlug = slug(oldName);
-		String newSlug = slug(newName);
-		if (oldSlug.equals(newSlug))
-		{
-			return false;
-		}
-		File journal = new File(dir, oldSlug + ".json");
-		if (!journal.isFile())
-		{
-			return false;
-		}
-		File target = new File(dir, newSlug + ".json");
-		if (target.exists() && !setAside(target, "conflict"))
-		{
-			return false;
-		}
-		if (!journal.renameTo(target))
-		{
-			log.warn("journal rename failed: {} -> {}", journal, target);
-			return false;
-		}
-		File history = new File(dir, oldSlug + HistoryLog.SPINE_SUFFIX);
-		File historyTarget = new File(dir, newSlug + HistoryLog.SPINE_SUFFIX);
-		if (history.isFile() && (!historyTarget.exists() || setAside(historyTarget, "conflict"))
-			&& !history.renameTo(historyTarget))
-		{
-			log.warn("history rename failed: {} -> {}", history, historyTarget);
-		}
-		return true;
-	}
-
-	private static boolean setAside(File f, String tag)
-	{
-		File aside = new File(f.getParentFile(),
-			f.getName() + "." + tag + "-" + System.currentTimeMillis());
-		try
-		{
-			Files.move(f.toPath(), aside.toPath(), StandardCopyOption.REPLACE_EXISTING);
-			log.warn("kept {} as {}", f.getName(), aside.getName());
-			return true;
-		}
-		catch (Exception e)
-		{
-			log.warn("could not set aside {}", f, e);
-			return false;
-		}
-	}
-
-	static String slug(String rsn)
-	{
-		String s = rsn == null ? ""
-			: rsn.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-");
-		s = s.replaceAll("(^-+|-+$)", "");
-		return s.isEmpty() ? "profile" : s;
 	}
 
 	Map<String, Long> journalFacts()
@@ -2954,30 +2327,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			: new File(mountedDir, slug(currentRsn) + HistoryLog.SPINE_SUFFIX);
 		out.put("spineBytes", spine != null && spine.isFile() ? spine.length() : 0L);
 		return out;
-	}
-
-	private static File jsonPath(File dir, String rsn)
-	{
-		return new File(dir, slug(rsn) + ".json");
-	}
-
-	private static void writeAtomic(File dest, String content) throws IOException
-	{
-		File tmp = new File(dest.getParentFile(), dest.getName() + ".tmp");
-		try (FileOutputStream out = new FileOutputStream(tmp))
-		{
-			out.write(content.getBytes(StandardCharsets.UTF_8));
-			out.getFD().sync();
-		}
-		try
-		{
-			Files.move(tmp.toPath(), dest.toPath(),
-				StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-		}
-		catch (IOException atomicUnsupported)
-		{
-			Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
-		}
 	}
 
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)

@@ -26,7 +26,7 @@ import net.runelite.api.Skill;
 import net.runelite.client.hiscore.HiscoreSkill;
 import net.runelite.client.hiscore.HiscoreSkillType;
 import static chronicle.Json.*;
-import static chronicle.LocalStore.kindOf;
+import static chronicle.KillCounts.kindOf;
 import static chronicle.Ui.*;
 
 final class Reference

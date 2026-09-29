@@ -32,7 +32,7 @@ import javax.swing.SwingUtilities;
 import net.runelite.api.Skill;
 import static chronicle.Feed.*;
 import static chronicle.Json.*;
-import static chronicle.LocalStore.kindOf;
+import static chronicle.KillCounts.kindOf;
 import static chronicle.Pictures.*;
 import static chronicle.Reference.*;
 import static chronicle.Ui.*;

@@ -163,7 +163,7 @@ public class ChronicleEventCapture
 	private long lastSlayerCompletionAtMs = -1;
 	private volatile boolean slayerSeenThisSession;
 
-	static final long SLAYER_FINAL_KILL_GRACE_MS = LocalStore.SLAYER_FINAL_KILL_GRACE * 1000L;
+	static final long SLAYER_FINAL_KILL_GRACE_MS = SlayerLog.SLAYER_FINAL_KILL_GRACE * 1000L;
 
 	@RequiredArgsConstructor
 	private static final class RecentDrop

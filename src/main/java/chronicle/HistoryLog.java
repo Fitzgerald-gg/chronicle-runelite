@@ -52,7 +52,7 @@ class HistoryLog
 		{
 			return unwritten;
 		}
-		String slug = LocalStore.slug(rsn);
+		String slug = JournalFile.slug(rsn);
 		String date = today.toString();
 		JsonObject state = new JsonObject();
 		state.add("skills", tree(skills));
@@ -462,7 +462,7 @@ class HistoryLog
 		{
 			return 0;
 		}
-		File f = new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX);
+		File f = new File(dir, JournalFile.slug(rsn) + SPINE_SUFFIX);
 		if (!f.isFile())
 		{
 			return 0;
@@ -507,7 +507,7 @@ class HistoryLog
 			log.debug("history spine: {} lines this cannot parse, left as it stands", unreadable);
 			return 0;
 		}
-		File tmp = new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX + ".compact");
+		File tmp = new File(dir, JournalFile.slug(rsn) + SPINE_SUFFIX + ".compact");
 		try
 		{
 			try (FileOutputStream out = new FileOutputStream(tmp);
@@ -549,7 +549,7 @@ class HistoryLog
 	TreeMap<LocalDate, Baseline> read(File dir, String rsn)
 	{
 		TreeMap<LocalDate, Baseline> out = new TreeMap<>();
-		File f = new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX);
+		File f = new File(dir, JournalFile.slug(rsn) + SPINE_SUFFIX);
 		if (!f.isFile())
 		{
 			return out;
@@ -622,7 +622,7 @@ class HistoryLog
 				return 0;
 			}
 			try (Writer w = new OutputStreamWriter(new FileOutputStream(
-				new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX), true), StandardCharsets.UTF_8))
+				new File(dir, JournalFile.slug(rsn) + SPINE_SUFFIX), true), StandardCharsets.UTF_8))
 			{
 				for (String line : incoming)
 				{
@@ -642,14 +642,14 @@ class HistoryLog
 		}
 		if (added > 0)
 		{
-			lastAppendedDate.remove(LocalStore.slug(rsn));
+			lastAppendedDate.remove(JournalFile.slug(rsn));
 		}
 		return added;
 	}
 
 	private String lastDate(String rsn)
 	{
-		return rsn == null ? null : lastAppendedDate.get(LocalStore.slug(rsn));
+		return rsn == null ? null : lastAppendedDate.get(JournalFile.slug(rsn));
 	}
 
 	private static String today()

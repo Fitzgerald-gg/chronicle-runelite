@@ -36,7 +36,7 @@ import lombok.RequiredArgsConstructor;
 import net.runelite.api.Skill;
 import static chronicle.Feed.*;
 import static chronicle.Json.*;
-import static chronicle.LocalStore.kindOf;
+import static chronicle.KillCounts.kindOf;
 import static chronicle.Reference.*;
 import static chronicle.Ui.*;
 import static chronicle.panel.StatRegistry.prettify;
@@ -548,7 +548,7 @@ final class Board
 		return memo("chatKc", () ->
 		{
 			Map<String, Long> out = new LinkedHashMap<>();
-			plugin.killCounts().forEach((k, v) -> out.merge(LocalStore.chatKind(k), v, Math::max));
+			plugin.killCounts().forEach((k, v) -> out.merge(KillCounts.chatKind(k), v, Math::max));
 			return out;
 		});
 	}
@@ -569,7 +569,7 @@ final class Board
 	long standingKills(SourceRow sr)
 	{
 		long own = sr.kc > 0 ? sr.kc : sr.loots;
-		Long said = chatKcByKind().get(LocalStore.chatKind(sr.name));
+		Long said = chatKcByKind().get(KillCounts.chatKind(sr.name));
 		return said == null ? own : Math.max(own, said);
 	}
 
@@ -1556,7 +1556,7 @@ final class Board
 				out.merge(low(e.getKey()), asLong(e.getValue()), Math::max);
 			}
 		}
-		LocalStore.pageKillLines(cl).forEach((k, v) -> out.put(low(k), v));
+		KillCounts.pageKillLines(cl).forEach((k, v) -> out.put(low(k), v));
 		return out;
 	}
 

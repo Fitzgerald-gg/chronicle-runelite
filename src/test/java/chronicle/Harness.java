@@ -746,12 +746,12 @@ final class Harness
 
 	File file()
 	{
-		return new File(DIR, LocalStore.slug(rsn) + ".json");
+		return new File(DIR, JournalFile.slug(rsn) + ".json");
 	}
 
 	File spineFile()
 	{
-		return new File(DIR, LocalStore.slug(rsn) + HistoryLog.SPINE_SUFFIX);
+		return new File(DIR, JournalFile.slug(rsn) + HistoryLog.SPINE_SUFFIX);
 	}
 
 	Harness save()

@@ -27,7 +27,7 @@ import javax.swing.SwingUtilities;
 import net.runelite.client.util.AsyncBufferedImage;
 import static chronicle.Feed.*;
 import static chronicle.Json.*;
-import static chronicle.LocalStore.kindOf;
+import static chronicle.KillCounts.kindOf;
 import static chronicle.Pictures.*;
 import static chronicle.Reference.*;
 import static chronicle.Ui.*;
@@ -654,11 +654,11 @@ final class LootScreen
 		{
 			return;
 		}
-		String want = LocalStore.chatKind(sr.name);
+		String want = KillCounts.chatKind(sr.name);
 		Map<String, Long> rows = new LinkedHashMap<>();
-		putKind(rows, "Kill Log", LocalStore.killLogCounts(board.clogNow()), want);
+		putKind(rows, "Kill Log", KillCounts.killLogCounts(board.clogNow()), want);
 		putKind(rows, "Said in chat", store.chatKillCounts(), want);
-		putKind(rows, "Collection log", LocalStore.pageKillLines(board.clogNow()), want);
+		putKind(rows, "Collection log", KillCounts.pageKillLines(board.clogNow()), want);
 		putKind(rows, "Running count", store.anchoredKills(), want);
 		if (sr.loots > 0)
 		{
@@ -695,7 +695,7 @@ final class LootScreen
 	{
 		for (Entry<String, Long> e : from.entrySet())
 		{
-			if (LocalStore.chatKind(e.getKey()).equals(want) && e.getValue() > 0)
+			if (KillCounts.chatKind(e.getKey()).equals(want) && e.getValue() > 0)
 			{
 				rows.put(label, e.getValue());
 				return;
