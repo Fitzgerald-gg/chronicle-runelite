@@ -57,11 +57,6 @@ final class SearchScreen extends Screen
 		final long weight;
 	}
 
-	SearchScreen(ChroniclePanel ui, Board board)
-	{
-		super(ui, board);
-	}
-
 	JPanel buildSearch(String q)
 	{
 		JPanel p = column();

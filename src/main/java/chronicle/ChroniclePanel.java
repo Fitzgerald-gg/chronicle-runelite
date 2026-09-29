@@ -167,16 +167,16 @@ class ChroniclePanel extends PluginPanel
 		this.plugin = plugin;
 		board = new Board(plugin, period, this::rebuildInPlace);
 		art = new Art(plugin);
-		home = new HomeScreen(this, board);
-		standing = new StandingScreen(this, board);
-		pages = new PagesScreen(this, board);
-		slayer = new SlayerScreen(this, board);
-		loot = new LootScreen(this, board);
-		detail = new DetailScreen(this, board);
-		trackers = new TrackersScreen(this, board);
-		search = new SearchScreen(this, board);
-		journal = new JournalScreen(this, board);
-		recap = new RecapScreen(this, board);
+		home = screen(new HomeScreen());
+		standing = screen(new StandingScreen());
+		pages = screen(new PagesScreen());
+		slayer = screen(new SlayerScreen());
+		loot = screen(new LootScreen());
+		detail = screen(new DetailScreen());
+		trackers = screen(new TrackersScreen());
+		search = screen(new SearchScreen());
+		journal = screen(new JournalScreen());
+		recap = screen(new RecapScreen());
 
 		searchDebounce = new Timer(150, e -> onSearchChanged());
 		searchDebounce.setRepeats(false);
@@ -279,6 +279,16 @@ class ChroniclePanel extends PluginPanel
 
 		board.gatherHistory();
 		rebuild();
+	}
+
+	private <T extends Screen> T screen(T s)
+	{
+		s.ui = this;
+		s.board = board;
+		s.plugin = plugin;
+		s.period = period;
+		s.store = board.store;
+		return s;
 	}
 
 	void shutdown()

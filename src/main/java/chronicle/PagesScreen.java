@@ -27,11 +27,6 @@ import static chronicle.Ui.*;
 
 final class PagesScreen extends Screen
 {
-	PagesScreen(ChroniclePanel ui, Board board)
-	{
-		super(ui, board);
-	}
-
 	JPanel buildSheetPage(String page)
 	{
 		JPanel p = ui.backPage();

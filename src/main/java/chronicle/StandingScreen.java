@@ -46,11 +46,6 @@ final class StandingScreen extends Screen
 
 	private String periodTip;
 
-	StandingScreen(ChroniclePanel ui, Board board)
-	{
-		super(ui, board);
-	}
-
 	JPanel buildSheet()
 	{
 		JPanel p = column();

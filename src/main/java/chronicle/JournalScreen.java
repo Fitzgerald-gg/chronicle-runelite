@@ -48,11 +48,6 @@ final class JournalScreen extends Screen
 	YearMonth calendarMonth = YearMonth.now();
 	private int journalShown = PAGE;
 
-	JournalScreen(ChroniclePanel ui, Board board)
-	{
-		super(ui, board);
-	}
-
 	JPanel buildJournal()
 	{
 		JPanel p = column();

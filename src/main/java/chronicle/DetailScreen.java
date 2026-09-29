@@ -25,12 +25,6 @@ import static chronicle.Ui.*;
 
 final class DetailScreen extends Screen
 {
-
-	DetailScreen(ChroniclePanel ui, Board board)
-	{
-		super(ui, board);
-	}
-
 	void forget()
 	{
 	}
@@ -200,7 +194,6 @@ final class DetailScreen extends Screen
 			head.add(row("Days it landed", fmt(count)));
 		}
 	}
-
 
 	private JPanel byTask(JPanel p, String name)
 	{

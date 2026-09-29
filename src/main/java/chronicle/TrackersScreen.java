@@ -32,11 +32,6 @@ final class TrackersScreen extends Screen
 	private Map<String, Long> consumables = Map.of();
 	private long resourcesDropped;
 
-	TrackersScreen(ChroniclePanel ui, Board board)
-	{
-		super(ui, board);
-	}
-
 	void reset(ChroniclePanel.View v)
 	{
 		if (v == ChroniclePanel.View.TRACKERS)

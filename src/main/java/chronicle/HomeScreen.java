@@ -28,11 +28,6 @@ final class HomeScreen extends Screen
 	private static final String FOLD_XP = "home:xp";
 	private static final String FOLD_DAMAGE = "home:damage";
 
-	HomeScreen(ChroniclePanel ui, Board board)
-	{
-		super(ui, board);
-	}
-
 	JPanel buildHome()
 	{
 		JPanel p = column();
