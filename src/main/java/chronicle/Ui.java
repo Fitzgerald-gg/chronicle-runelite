@@ -137,12 +137,7 @@ final class Ui
 
 	static long sumOf(List<Entry<String, Long>> rows)
 	{
-		long sum = 0;
-		for (Entry<String, Long> e : rows)
-		{
-			sum += e.getValue();
-		}
-		return sum;
+		return rows.stream().mapToLong(Entry::getValue).sum();
 	}
 
 	static String qtyGp(long qty, long value)
@@ -172,11 +167,7 @@ final class Ui
 
 	static String pb(double seconds)
 	{
-		long s = Math.round(seconds);
-		long h = s / 3600;
-		long m = (s % 3600) / 60;
-		long sec = s % 60;
-		return h > 0 ? String.format("%d:%02d:%02d", h, m, sec) : String.format("%d:%02d", m, sec);
+		return clock(Math.round(seconds));
 	}
 
 	static String count(long n, String one)
@@ -665,31 +656,15 @@ final class Ui
 
 	private static boolean stillUnder(MouseEvent e)
 	{
-		boolean over = false;
-		boolean pointerKnown = false;
 		try
 		{
-			over = e.getComponent().getMousePosition() != null;
-			pointerKnown = MouseInfo.getPointerInfo() != null;
+			return e.getComponent().getMousePosition() != null
+				|| MouseInfo.getPointerInfo() == null && e.getComponent().contains(e.getPoint());
 		}
 		catch (RuntimeException ignored)
 		{
+			return e.getComponent().contains(e.getPoint());
 		}
-		return stillUnder(over, pointerKnown, e.getComponent().contains(e.getPoint()));
-	}
-
-	private static boolean stillUnder(boolean overComponent, boolean pointerKnown,
-		boolean eventSaysInside)
-	{
-		if (overComponent)
-		{
-			return true;
-		}
-		if (pointerKnown)
-		{
-			return false;
-		}
-		return eventSaysInside;
 	}
 
 	private static Runnable litNow;
