@@ -329,14 +329,10 @@ final class Summary
 
 	private void recapLoot(RecapPicture.Facts f)
 	{
-		if (!f.whole && !f.session)
+		if (!lootDated())
 		{
-			long from = build.lootDays().rollFrom();
-			if (from <= 0 || from > build.period().ms()[0])
-			{
-				f.lootNote = "Loot is not dated this far back, so this period's cannot be told from the rest.";
-				return;
-			}
+			f.lootNote = "Loot is not dated this far back, so this period's cannot be told from the rest.";
+			return;
 		}
 		long[] loot = loot();
 		if (loot[0] > 0)
@@ -860,8 +856,19 @@ final class Summary
 		return out;
 	}
 
+	boolean lootDated()
+	{
+		Period w = build.period();
+		long from = build.lootDays().rollFrom();
+		return w.whole || w.session || from > 0 && from <= w.ms()[0];
+	}
+
 	long[] loot()
 	{
+		if (!lootDated())
+		{
+			return new long[4];
+		}
 		if (build.period().whole)
 		{
 			long[] out = new long[4];
@@ -887,8 +894,8 @@ final class Summary
 		{
 			return null;
 		}
-		LocalStore.LootWindow win = build.lootWindow();
-		return win.items.isEmpty() ? null : win.items.get(0);
+		LocalStore.LootWindow win = lootDated() ? build.lootWindow() : null;
+		return win == null || win.items.isEmpty() ? null : win.items.get(0);
 	}
 
 	String[] killedMost()
@@ -1143,9 +1150,7 @@ final class Summary
 			{
 				retro.put(key, fromFeed.getOrDefault(key, 0L));
 			}
-			long rollFrom = build.lootDays().rollFrom();
-			LocalStore.LootWindow dated = w.session || rollFrom > 0 && rollFrom <= fromMs
-				? build.lootWindow() : null;
+			LocalStore.LootWindow dated = lootDated() ? build.lootWindow() : null;
 			if (dated != null)
 			{
 				sessionsSpeak = true;
