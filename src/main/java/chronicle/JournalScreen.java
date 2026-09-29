@@ -274,25 +274,25 @@ final class JournalScreen extends Screen
 		JPanel p = ui.backPage();
 		JPanel book = card("Records");
 		int held = book.getComponentCount();
-		long[][] sitting = {{0, 0}, {0, 0}};
+		Podium sitting = new Podium();
 		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))
 		{
 			if ("SESSION".equals(typeOf(e)))
 			{
-				rank(sitting, sessionMinutes(e), sittingStart(e));
+				sitting.offer(sessionMinutes(e), sittingStart(e), 0);
 			}
 		}
-		if (sitting[0][0] > 0)
+		if (sitting.best > 0)
 		{
-			record(book, "Longest sitting", hoursMinutes(sitting[0][0]), sitting[0][1],
-				sitting[1][0] > 0 ? "Was " + hoursMinutes(sitting[1][0]) + " · " + dated(sitting[1][1]) : null);
+			record(book, "Longest sitting", hoursMinutes(sitting.best), sitting.bestTs,
+				sitting.next > 0 ? "Was " + hoursMinutes(sitting.next) + " · " + dated(sitting.nextTs) : null);
 		}
 		if (board.historySpine != null && board.historySpine.size() > 1)
 		{
 			spineRecords(book, board.historySpine);
 		}
-		long[][] rich = {{0, 0}, {0, 0}};
-		long[][] busy = {{0, 0}, {0, 0}};
+		Podium rich = new Podium();
+		Podium busy = new Podium();
 		for (Entry<String, Tally> d : board.dayTotals().entrySet())
 		{
 			long ts;
@@ -304,18 +304,18 @@ final class JournalScreen extends Screen
 			{
 				continue;
 			}
-			rank(rich, d.getValue().value, ts, d.getValue().qty);
-			rank(busy, d.getValue().qty, ts, d.getValue().value);
+			rich.offer(d.getValue().value, ts, d.getValue().qty);
+			busy.offer(d.getValue().qty, ts, d.getValue().value);
 		}
-		if (rich[0][0] > 0)
+		if (rich.best > 0)
 		{
-			record(book, "Richest day", gps(rich[0][0]), rich[0][1], count(rich[0][2], "drop")
-				+ (rich[1][0] > 0 ? " · was " + gp(rich[1][0]) + " · " + dated(rich[1][1]) : ""));
+			record(book, "Richest day", gps(rich.best), rich.bestTs, count(rich.bestAlso, "drop")
+				+ (rich.next > 0 ? " · was " + gp(rich.next) + " · " + dated(rich.nextTs) : ""));
 		}
-		if (busy[0][0] > 0)
+		if (busy.best > 0)
 		{
-			record(book, "Most drops in a day", fmt(busy[0][0]), busy[0][1], gps(busy[0][2])
-				+ (busy[1][0] > 0 ? " · was " + fmt(busy[1][0]) + " · " + dated(busy[1][1]) : ""));
+			record(book, "Most drops in a day", fmt(busy.best), busy.bestTs, gps(busy.bestAlso)
+				+ (busy.next > 0 ? " · was " + fmt(busy.next) + " · " + dated(busy.nextTs) : ""));
 		}
 		long hit = board.counters().getOrDefault("highestHit", 0L);
 		if (hit > 0)
@@ -332,8 +332,8 @@ final class JournalScreen extends Screen
 
 	private void spineRecords(JPanel book, TreeMap<LocalDate, Baseline> spine)
 	{
-		long[][] xp = {{0, 0}, {0, 0}};
-		long[][] kills = {{0, 0}, {0, 0}};
+		Podium xp = new Podium();
+		Podium kills = new Podium();
 		String xpSkill = null;
 		int run = 0;
 		int longest = 0;
@@ -351,7 +351,7 @@ final class JournalScreen extends Screen
 			{
 				long ts = noon(day.getKey());
 				Board.XpGain gained = board.dayXp(day.getKey());
-				if (rank(xp, gained == null ? 0 : gained.total, ts))
+				if (xp.offer(gained == null ? 0 : gained.total, ts, 0))
 				{
 					xpSkill = gained.top;
 				}
@@ -361,19 +361,19 @@ final class JournalScreen extends Screen
 					Long was = before.getValue().kcs.get(k.getKey());
 					killed += was != null && k.getValue() > was ? k.getValue() - was : 0;
 				}
-				rank(kills, killed, ts);
+				kills.offer(killed, ts, 0);
 			}
 			before = day;
 		}
-		if (xp[0][0] > 0)
+		if (xp.best > 0)
 		{
-			record(book, "Biggest day", "+" + gp(xp[0][0]) + " xp", xp[0][1], (xpSkill != null ? "Most in " + xpSkill : "")
-				+ (xp[1][0] > 0 ? (xpSkill != null ? " · " : "") + "was +" + gp(xp[1][0]) + " · " + dated(xp[1][1]) : ""));
+			record(book, "Biggest day", "+" + gp(xp.best) + " xp", xp.bestTs, (xpSkill != null ? "Most in " + xpSkill : "")
+				+ (xp.next > 0 ? (xpSkill != null ? " · " : "") + "was +" + gp(xp.next) + " · " + dated(xp.nextTs) : ""));
 		}
-		if (kills[0][0] > 0)
+		if (kills.best > 0)
 		{
-			record(book, "Most kills in a day", fmt(kills[0][0]), kills[0][1],
-				kills[1][0] > 0 ? "Was " + fmt(kills[1][0]) + " · " + dated(kills[1][1]) : null);
+			record(book, "Most kills in a day", fmt(kills.best), kills.bestTs,
+				kills.next > 0 ? "Was " + fmt(kills.next) + " · " + dated(kills.nextTs) : null);
 		}
 		if (longest > 1)
 		{
@@ -391,19 +391,32 @@ final class JournalScreen extends Screen
 		book.add(r);
 	}
 
-	private static boolean rank(long[][] top, long... e)
+	private static final class Podium
 	{
-		if (e[0] > top[0][0])
+		long best;
+		long bestTs;
+		long bestAlso;
+		long next;
+		long nextTs;
+
+		boolean offer(long value, long ts, long also)
 		{
-			top[1] = top[0];
-			top[0] = e;
-			return true;
+			if (value > best)
+			{
+				next = best;
+				nextTs = bestTs;
+				best = value;
+				bestTs = ts;
+				bestAlso = also;
+				return true;
+			}
+			if (value > next)
+			{
+				next = value;
+				nextTs = ts;
+			}
+			return false;
 		}
-		if (e[0] > top[1][0])
-		{
-			top[1] = e;
-		}
-		return false;
 	}
 
 	JPanel buildInfo()
