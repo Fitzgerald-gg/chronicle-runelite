@@ -334,6 +334,36 @@ final class PagesScreen extends Screen
 		{
 			return logInWindow(p);
 		}
+		spaced(p, logHead());
+		Map<String, Map<String, List<String>>> tax = taxonomy(plugin.gson());
+		JPanel pills = new JPanel(new GridLayout(0, 3, 3, 3));
+		pills.setBackground(DARK);
+		for (String tab : tax.keySet())
+		{
+			pills.add(pill(tab, tab.equals(clogTab), 4, board.tabStanding(board.clogNow(), tab), () ->
+			{
+				clogTab = tab;
+				clogPageSel = null;
+				ui.rebuild();
+			}));
+		}
+		spaced(p, pills);
+		JsonObject cl = board.clogNow();
+		Obtained ob = Board.obtained(cl);
+		Map<String, Long> kcs = Board.pageCounts(cl);
+		for (Entry<String, List<String>> pg : tax.getOrDefault(clogTab, new LinkedHashMap<>()).entrySet())
+		{
+			logPage(p, cl, ob, kcs, pg.getKey(), pg.getValue());
+		}
+		if ("Other".equals(clogTab))
+		{
+			strangers(p, tax, ob, kcs);
+		}
+		return p;
+	}
+
+	private JPanel logHead()
+	{
 		int[] standing = board.clogStanding();
 		int fin = plugin.clogFinished();
 		JPanel head = card("Collection log");
@@ -352,146 +382,108 @@ final class PagesScreen extends Screen
 		{
 			head.add(row("Open your log in game once to fill this in", ""));
 		}
-		spaced(p, head);
+		return head;
+	}
 
-		Map<String, Map<String, List<String>>> tax = taxonomy(plugin.gson());
-		JPanel pills = new JPanel(new GridLayout(0, 3, 3, 3));
-		pills.setBackground(DARK);
-		for (String tab : tax.keySet())
+	private void logPage(JPanel p, JsonObject cl, Obtained ob, Map<String, Long> kcs, String page, List<String> slots)
+	{
+		boolean[] lit = Board.lightSlots(slots, ob.byPage.get(low(page)), ob.all, sharedSlotNames(plugin.gson()));
+		int got = 0;
+		for (boolean b : lit)
 		{
-			pills.add(pill(tab, tab.equals(clogTab), 4, board.tabStanding(board.clogNow(), tab), () ->
-			{
-				clogTab = tab;
-				clogPageSel = null;
-				ui.rebuild();
-			}));
+			got += b ? 1 : 0;
 		}
-		spaced(p, pills);
-
-		JsonObject cl = board.clogNow();
-		Obtained ob = Board.obtained(cl);
-		Map<String, Long> kcs = Board.pageCounts(cl);
-
-		Map<String, List<String>> pages = tax.getOrDefault(clogTab, new LinkedHashMap<>());
-		for (Entry<String, List<String>> pg : pages.entrySet())
+		Long kc = kcs.get(low(page));
+		boolean open = page.equals(clogPageSel);
+		boolean complete = got == slots.size() && !slots.isEmpty();
+		JPanel head = row(page, got + "/" + slots.size() + (kc != null && kc > 0 ? " · " + fmt(kc) + " kc" : ""),
+			complete ? GREEN : null, complete);
+		String lines = Board.pageHeaderTip(cl, page);
+		if (lines != null)
 		{
-			String page = pg.getKey();
-			List<String> slots = pg.getValue();
-			boolean[] lit = Board.lightSlots(slots, ob.byPage.get(low(page)), ob.all,
-				sharedSlotNames(plugin.gson()));
-			int got = 0;
-			for (boolean b : lit)
+			head.setToolTipText(lines);
+		}
+		link(head, () ->
+		{
+			clogPageSel = open ? null : page;
+			ui.rebuild();
+		});
+		p.add(head);
+		if (open)
+		{
+			spaced(p, slotCard(page, slots, lit), 3);
+		}
+	}
+
+	private JPanel slotCard(String page, List<String> slots, boolean[] lit)
+	{
+		JPanel drill = cardPlain();
+		boolean pets = low(page).contains("pet");
+		Map<String, LocalStore.PetRow> known = pets ? board.petsByName() : Collections.emptyMap();
+		Map<String, GrindBook.PetChase> chases = pets ? plugin.petChases(slots) : Collections.emptyMap();
+		List<List<JPanel>> detail = new ArrayList<>();
+		for (int i = 0; i < slots.size(); i++)
+		{
+			String key = low(slots.get(i));
+			detail.add(petDetail(lit[i], known.get(key), chases.get(key)));
+		}
+		if (detail.stream().anyMatch(d -> !d.isEmpty()))
+		{
+			spaced(drill, note("Click pet to see odds. Skilling odds are based on current level."), 3);
+		}
+		Map<String, Long> landed = board.landedSlots();
+		for (int i = 0; i < slots.size(); i++)
+		{
+			String slot = slots.get(i);
+			JPanel r = row(slot, "", lit[i] || known.get(low(slot)) != null ? GREEN : RED, true);
+			Long when = landed.get(low(slot));
+			if (when != null)
 			{
-				got += b ? 1 : 0;
+				r.setToolTipText(tip(slot, "Landed", dated(when)));
 			}
-			Long kc = kcs.get(low(page));
-			boolean open = page.equals(clogPageSel);
-			boolean complete = got == slots.size() && !slots.isEmpty();
-			JPanel rowP = row(page, got + "/" + slots.size()
-				+ (kc != null && kc > 0 ? " · " + fmt(kc) + " kc" : ""),
-				complete ? GREEN : null, complete);
-			String lines = Board.pageHeaderTip(cl, page);
-			if (lines != null)
+			drill.add(r);
+			if (detail.get(i).isEmpty())
 			{
-				rowP.setToolTipText(lines);
+				continue;
 			}
-			link(rowP, () ->
+			String fold = "pets:" + page + ":" + low(slot);
+			ui.folds(r, fold);
+			if (ui.foldOpen(fold))
 			{
-				clogPageSel = open ? null : page;
-				ui.rebuild();
-			});
-			p.add(rowP);
-			if (open)
-			{
-				JPanel drill = cardPlain();
-				boolean petPage = low(page).contains("pet");
-				Map<String, LocalStore.PetRow> known = petPage
-					? board.petsByName() : Collections.emptyMap();
-				Map<String, GrindBook.PetChase> chases = petPage
-					? plugin.petChases(slots) : Collections.emptyMap();
-				List<List<JPanel>> detail = new ArrayList<>();
-				boolean anyDetail = false;
-				for (int i = 0; i < slots.size(); i++)
-				{
-					String key = low(slots.get(i));
-					List<JPanel> d = petDetail(lit[i], known.get(key), chases.get(key));
-					detail.add(d);
-					anyDetail |= !d.isEmpty();
-				}
-				if (anyDetail)
-				{
-					spaced(drill, note("Click pet to see odds. Skilling odds are based "
-						+ "on current level."), 3);
-				}
-				Map<String, Long> landed = board.landedSlots();
-				for (int i = 0; i < slots.size(); i++)
-				{
-					String slot = slots.get(i);
-					JPanel r = row(slot, "",
-						lit[i] || known.get(low(slot)) != null
-							? GREEN : RED, true);
-					Long when = landed.get(low(slot));
-					if (when != null)
-					{
-						r.setToolTipText(tip(slot, "Landed", dated(when)));
-					}
-					drill.add(r);
-					List<JPanel> d = detail.get(i);
-					if (d.isEmpty())
-					{
-						continue;
-					}
-					String foldKey = "pets:" + page + ":" + low(slot);
-					ui.folds(r, foldKey);
-					if (ui.foldOpen(foldKey))
-					{
-						for (JPanel line : d)
-						{
-							drill.add(line);
-						}
-					}
-				}
-				spaced(p, drill, 3);
+				detail.get(i).forEach(drill::add);
 			}
 		}
+		return drill;
+	}
 
-		if ("Other".equals(clogTab))
+	private void strangers(JPanel p, Map<String, Map<String, List<String>>> tax, Obtained ob, Map<String, Long> kcs)
+	{
+		Set<String> known = new HashSet<>();
+		tax.values().forEach(pages -> pages.keySet().forEach(n -> known.add(low(n))));
+		List<String> strangers = new ArrayList<>();
+		for (String name : ob.byPage.keySet())
 		{
-			Set<String> known = new HashSet<>();
-			for (Map<String, List<String>> tabPages : tax.values())
+			if (!known.contains(name))
 			{
-				for (String pageName : tabPages.keySet())
-				{
-					known.add(low(pageName));
-				}
-			}
-			List<String> strangers = new ArrayList<>();
-			for (String pageName : ob.byPage.keySet())
-			{
-				if (!known.contains(pageName))
-				{
-					strangers.add(pageName);
-				}
-			}
-			Collections.sort(strangers);
-			if (!strangers.isEmpty())
-			{
-				p.add(vgap(6));
-				p.add(group("NEW SINCE THIS RELEASE"));
-				for (String pageName : strangers)
-				{
-					Map<String, Long> held = ob.byPage.get(pageName);
-					Long kc = kcs.get(pageName);
-					p.add(row(prettyPage(pageName),
-						fmt(held == null ? 0 : held.size()) + " held"
-							+ (kc != null && kc > 0 ? " \u00b7 " + fmt(kc) + " kc" : "")));
-				}
-				p.add(ghostRow("Chronicle has no slot list for "
-					+ (strangers.size() == 1 ? "this page" : "these pages")
-					+ " yet, so only what you hold is known.", ""));
+				strangers.add(name);
 			}
 		}
-		return p;
+		if (strangers.isEmpty())
+		{
+			return;
+		}
+		Collections.sort(strangers);
+		p.add(vgap(6));
+		p.add(group("NEW SINCE THIS RELEASE"));
+		for (String name : strangers)
+		{
+			Map<String, Long> held = ob.byPage.get(name);
+			Long kc = kcs.get(name);
+			p.add(row(prettyPage(name), fmt(held == null ? 0 : held.size()) + " held"
+				+ (kc != null && kc > 0 ? " · " + fmt(kc) + " kc" : "")));
+		}
+		p.add(ghostRow("Chronicle has no slot list for " + (strangers.size() == 1 ? "this page" : "these pages")
+			+ " yet, so only what you hold is known.", ""));
 	}
 
 	private static String chaseSources(GrindBook.PetChase chase)
