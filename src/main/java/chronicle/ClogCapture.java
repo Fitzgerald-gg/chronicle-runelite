@@ -13,6 +13,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -33,6 +34,7 @@ import net.runelite.client.util.Text;
 
 @Singleton
 @Slf4j
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class ClogCapture
 {
 	private static final int VARP_CLOG_OBTAINED = 2943;
@@ -67,13 +69,6 @@ public class ClogCapture
 	private boolean clogRetrieving;
 	private int clogFlushTick = -1;
 	private int killLogTicks = -1;
-
-	@Inject
-	ClogCapture(Client client, ItemManager itemManager)
-	{
-		this.client = client;
-		this.itemManager = itemManager;
-	}
 
 	private void changed()
 	{

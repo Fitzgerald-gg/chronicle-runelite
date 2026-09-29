@@ -32,6 +32,7 @@ import javax.inject.Singleton;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.game.ItemManager;
 import static chronicle.JournalFile.*;
@@ -42,6 +43,7 @@ import static chronicle.SlayerLog.*;
 
 @Singleton
 @Slf4j
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 class LocalStore implements chronicle.counters.GatheredLedger
 {
 	private static final int SCHEMA = 1;
@@ -81,13 +83,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		final int itemId;
 		final int quantity;
 		final String name;
-	}
-
-	@Inject
-	LocalStore(ItemManager itemManager, Gson gson)
-	{
-		this.itemManager = itemManager;
-		this.gson = gson;
 	}
 
 	void load(File dir, String rsn)

@@ -26,6 +26,7 @@ import net.runelite.api.events.ItemDespawned;
 import net.runelite.api.events.ItemSpawned;
 import net.runelite.api.events.MenuOptionClicked;
 
+@RequiredArgsConstructor
 class LeftBehind
 {
 	private static final int KILL_ARM_TICKS = 3;
@@ -42,11 +43,6 @@ class LeftBehind
 	private final List<RecentDrop> recentDrops = new ArrayList<>();
 
 	private final Client client;
-
-	LeftBehind(Client client)
-	{
-		this.client = client;
-	}
 
 	void reset()
 	{

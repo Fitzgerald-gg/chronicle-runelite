@@ -10,11 +10,13 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.Quest;
 import net.runelite.api.gameval.VarbitID;
 
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class AchievementSync
 {
 	private static final String[] DIARY_TIERS = {"easy", "medium", "hard", "elite"};
@@ -43,13 +45,6 @@ public class AchievementSync
 	private volatile String lastSynced;
 	private volatile JsonObject cached;
 	private volatile int cachedTick = -1;
-
-	@Inject
-	public AchievementSync(Client client, Gson gson)
-	{
-		this.client = client;
-		this.gson = gson;
-	}
 
 	private synchronized int tierSize(String tier, int fallback)
 	{

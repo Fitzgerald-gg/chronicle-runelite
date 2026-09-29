@@ -72,6 +72,7 @@ class ChroniclePanel extends PluginPanel
 	private static final int MOVED_CLOG = 8;
 	private static final int MOVED_ANY = MOVED_RECORD | MOVED_COUNTERS | MOVED_SKILLS | MOVED_CLOG;
 
+	@RequiredArgsConstructor
 	enum Tab
 	{
 		RECORD("tab_record.png", "Record"),
@@ -82,13 +83,9 @@ class ChroniclePanel extends PluginPanel
 		final String icon;
 		final String tip;
 
-		Tab(String icon, String tip)
-		{
-			this.icon = icon;
-			this.tip = tip;
-		}
 	}
 
+	@RequiredArgsConstructor
 	enum View
 	{
 		NOW(Tab.RECORD, "Now"),
@@ -103,11 +100,6 @@ class ChroniclePanel extends PluginPanel
 		final Tab tab;
 		final String sub;
 
-		View(Tab tab, String sub)
-		{
-			this.tab = tab;
-			this.sub = sub;
-		}
 	}
 
 	enum Page
@@ -358,7 +350,6 @@ class ChroniclePanel extends PluginPanel
 		clearSearch();
 		rebuild();
 	}
-
 
 	boolean showing(Page page, String name)
 	{

@@ -21,11 +21,13 @@ import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.game.ItemManager;
 
 @Slf4j
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class SkillDeriver
 {
 	private static final JsonObject TABLES = Tables.load("counters_skill_tables.json");
@@ -79,13 +81,6 @@ public class SkillDeriver
 		final boolean qty;
 	}
 
-	@Inject
-	SkillDeriver(ItemManager itemManager, StatStore statStore)
-	{
-		this.itemManager = itemManager;
-		this.statStore = statStore;
-	}
-
 	void setGatheredLedger(GatheredLedger ledger)
 	{
 		this.gatheredLedger = ledger;
@@ -112,7 +107,6 @@ public class SkillDeriver
 			log.debug("local derive failed for {} {}", skill, xp, e);
 		}
 	}
-
 
 	void applyChat(String msg, String objectTarget)
 	{

@@ -15,12 +15,14 @@ import java.util.function.Consumer;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Skill;
 import net.runelite.client.game.SpriteManager;
 import static chronicle.Json.*;
 import static chronicle.Ui.link;
 import static chronicle.Ui.named;
 
+@RequiredArgsConstructor
 final class Art
 {
 	private final ChroniclePlugin plugin;
@@ -28,11 +30,6 @@ final class Art
 	private final Map<Integer, List<Object[]>> waiting = new HashMap<>();
 	private final Map<String, ImageIcon> scaled = new HashMap<>();
 	private final Map<Skill, BufferedImage> skills = new EnumMap<>(Skill.class);
-
-	Art(ChroniclePlugin plugin)
-	{
-		this.plugin = plugin;
-	}
 
 	BufferedImage sprite(int id)
 	{

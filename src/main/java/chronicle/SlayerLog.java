@@ -19,17 +19,14 @@ import java.util.Map;
 import java.util.Set;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import static chronicle.Json.*;
 import static chronicle.Merge.*;
 
+@RequiredArgsConstructor
 final class SlayerLog
 {
 	private final LocalStore store;
-
-	SlayerLog(LocalStore store)
-	{
-		this.store = store;
-	}
 
 	private static JsonObject openSegment(JsonArray tasks, String task)
 	{

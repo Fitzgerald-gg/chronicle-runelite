@@ -16,16 +16,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import lombok.RequiredArgsConstructor;
 import static chronicle.Json.*;
 
+@RequiredArgsConstructor
 final class LootDays
 {
 	private final LocalStore store;
-
-	LootDays(LocalStore store)
-	{
-		this.store = store;
-	}
 
 	private JsonObject dayRoll()
 	{

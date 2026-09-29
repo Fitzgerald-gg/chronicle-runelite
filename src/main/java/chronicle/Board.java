@@ -5,10 +5,10 @@ package chronicle;
 
 import chronicle.HistoryLog.Baseline;
 import chronicle.LocalStore.BagItem;
-import chronicle.SlayerLog.SlayerJourney;
 import chronicle.LocalStore.SourceRow;
 import chronicle.LocalStore.UntakenRow;
 import chronicle.Period.Window;
+import chronicle.SlayerLog.SlayerJourney;
 import chronicle.counters.ExperienceStatTracker.SkillGain;
 import chronicle.counters.StatKeys;
 import chronicle.panel.StatRegistry;
@@ -89,6 +89,7 @@ final class Board
 		final HistoryLog.Levels closed;
 	}
 
+	@RequiredArgsConstructor
 	static final class Kind
 	{
 		final String name;
@@ -96,10 +97,6 @@ final class Board
 		long value;
 		int distinct;
 
-		Kind(String name)
-		{
-			this.name = name;
-		}
 	}
 
 	static final class Obtained
