@@ -4,9 +4,9 @@
 package chronicle;
 
 import chronicle.LocalStore.BagItem;
+import chronicle.LocalStore.UntakenRow;
 import chronicle.SlayerLog.SlayerJourney;
 import chronicle.SlayerLog.SlayerTask;
-import chronicle.LocalStore.UntakenRow;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.GridLayout;
@@ -25,21 +25,11 @@ import static chronicle.Pictures.*;
 import static chronicle.Reference.*;
 import static chronicle.Ui.*;
 
-final class SlayerScreen
+final class SlayerScreen extends Screen
 {
-	private final ChroniclePanel ui;
-	private final Board board;
-	private final ChroniclePlugin plugin;
-	private final Period period;
-	private final LocalStore store;
-
 	SlayerScreen(ChroniclePanel ui, Board board)
 	{
-		this.ui = ui;
-		this.board = board;
-		this.plugin = board.plugin;
-		this.period = board.period;
-		this.store = board.store;
+		super(ui, board);
 	}
 
 	JPanel buildSlayer()

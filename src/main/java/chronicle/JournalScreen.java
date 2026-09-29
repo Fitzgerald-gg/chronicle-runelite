@@ -33,21 +33,11 @@ import static chronicle.Pictures.*;
 import static chronicle.Reference.*;
 import static chronicle.Ui.*;
 
-final class JournalScreen
+final class JournalScreen extends Screen
 {
-	private final ChroniclePanel ui;
-	private final Board board;
-	private final ChroniclePlugin plugin;
-	private final Period period;
-	private final LocalStore store;
-
 	JournalScreen(ChroniclePanel ui, Board board)
 	{
-		this.ui = ui;
-		this.board = board;
-		this.plugin = board.plugin;
-		this.period = board.period;
-		this.store = board.store;
+		super(ui, board);
 	}
 
 	JPanel buildJournal()

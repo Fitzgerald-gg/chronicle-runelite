@@ -3,45 +3,34 @@
  */
 package chronicle;
 
-import chronicle.counters.ExperienceStatTracker;
+import chronicle.counters.ExperienceStatTracker.SkillGain;
 import chronicle.panel.StatRegistry;
 import com.google.gson.JsonObject;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.GridLayout;
 import java.time.Instant;
-import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import javax.swing.JPanel;
-import static chronicle.Feed.*;
+import static chronicle.Feed.typeOf;
 import static chronicle.Json.*;
-import static chronicle.Pictures.*;
-import static chronicle.Reference.*;
 import static chronicle.Ui.*;
 import static chronicle.panel.StatRegistry.prettify;
 
-final class HomeScreen
+final class HomeScreen extends Screen
 {
-	private final ChroniclePanel ui;
-	private final Board board;
-	private final ChroniclePlugin plugin;
-	private final Period period;
-	private final LocalStore store;
+	private static final String[] PINNED = {"totalXpGained", "damageDealt", "consumedValue"};
+	private static final List<String> DAMAGE_SPLIT = List.of("damageDealtMelee", "damageDealtRanged", "damageDealtMagic");
+	private static final String FOLD_XP = "home:xp";
+	private static final String FOLD_DAMAGE = "home:damage";
 
 	HomeScreen(ChroniclePanel ui, Board board)
 	{
-		this.ui = ui;
-		this.board = board;
-		this.plugin = board.plugin;
-		this.period = board.period;
-		this.store = board.store;
+		super(ui, board);
 	}
 
 	JPanel buildHome()
@@ -52,90 +41,12 @@ final class HomeScreen
 		{
 			spaced(p, note(stalled));
 		}
-
 		ChronicleEventCapture.SlayerView task = plugin.slayerView();
 		if (task != null && plugin.slayerSeenThisSession())
 		{
 			ui.slayer.addTaskCard(p, task, "Slayer task", GREEN);
 		}
-
-		long began = plugin.sessionStart();
-		long ran = plugin.sessionElapsedMinutes();
-		JPanel strip = began > 0 && ran > 0
-			? card("This session", "since " + CLOCK.format(Instant.ofEpochMilli(began))
-				+ " · " + hoursMinutes(ran))
-			: card("This session");
-		Map<String, Integer> sess = plugin.sessionView();
-		int mounted = 0;
-		Set<String> shownKeys = new HashSet<>();
-		for (String key : HOME_PINNED)
-		{
-			long v = sess.getOrDefault(key, 0);
-			if (v > 0)
-			{
-				boolean isXp = "totalXpGained".equals(key);
-				boolean isDamage = "damageDealt".equals(key) && splitOf(sess) > 0;
-				JPanel r = row(homeLabel(key),
-					StatRegistry.isGp(key) ? gps(v)
-						: (isXp ? "+" + gp(v) : fmt(v)),
-					GREEN);
-				if (isXp)
-				{
-					ui.foldHead(r, FOLD_HOME_XP, "Each skill's xp and xp per hour this session");
-				}
-				if (isDamage)
-				{
-					ui.foldHead(r, FOLD_HOME_DAMAGE, "The damage this session, by style");
-				}
-				strip.add(r);
-				if (isXp && ui.foldOpen(FOLD_HOME_XP))
-				{
-					addXpBySkill(strip);
-				}
-				if (isDamage && ui.foldOpen(FOLD_HOME_DAMAGE))
-				{
-					for (String split : DAMAGE_SPLIT)
-					{
-						long sv = sess.getOrDefault(split, 0);
-						if (sv > 0)
-						{
-							strip.add(row(StatRegistry.label(split), fmt(sv)));
-							mounted++;
-						}
-					}
-				}
-				shownKeys.add(key);
-				mounted++;
-			}
-		}
-		if (store.loot.sessionLoots() > 0)
-		{
-			strip.add(row("Drops received",
-				store.loot.sessionLoots() + " · " + gps(store.loot.sessionLootValue()),
-				GREEN));
-			mounted++;
-			if (store.loot.sessionUntakenKills() > 0)
-			{
-				strip.add(row("Drops taken",
-					fmt(Math.max(0, store.loot.sessionLoots() - store.loot.sessionUntakenKills())),
-					GREEN));
-				mounted++;
-			}
-		}
-		long[] untaken = store.loot.sessionUntakenTally();
-		if (untaken[0] > 0)
-		{
-			strip.add(row("Left behind", qtyGp(untaken[0], untaken[1])));
-			mounted++;
-		}
-		mounted += addSittingFeats(strip);
-		mounted += addSessionMovers(strip, plugin.sessionDisplayCounters(), shownKeys);
-		if (mounted == 0)
-		{
-			strip.add(row("A fresh page", ""));
-		}
-		spaced(p, strip);
-
+		spaced(p, sessionCard());
 		List<LocalStore.RecentDrop> recent = store.recentDrops();
 		if (!recent.isEmpty())
 		{
@@ -143,81 +54,186 @@ final class HomeScreen
 			JPanel grid = new JPanel(new GridLayout(0, 5, 3, 3));
 			grid.setBackground(DARKER);
 			grid.setAlignmentX(Component.LEFT_ALIGNMENT);
-			int shown = 0;
-			for (LocalStore.RecentDrop d : recent)
-			{
-				if (shown++ >= 10)
-				{
-					break;
-				}
-				grid.add(ui.sprite(d.itemId, d.name, d.quantity));
-			}
+			firstN(recent, 10).forEach(d -> grid.add(ui.sprite(d.itemId, d.name, d.quantity)));
 			card.add(grid);
 			spaced(p, card);
 		}
-
 		return p;
 	}
 
-	static final String[] HOME_PINNED = {
-		"totalXpGained", "damageDealt", "consumedValue"
-	};
-
-	static String homeLabel(String key)
+	private JPanel sessionCard()
 	{
-		switch (key)
+		long began = plugin.sessionStart();
+		long ran = plugin.sessionElapsedMinutes();
+		JPanel strip = began > 0 && ran > 0
+			? card("This session", "since " + CLOCK.format(Instant.ofEpochMilli(began)) + " · " + hoursMinutes(ran))
+			: card("This session");
+		int head = strip.getComponentCount();
+		Map<String, Integer> sess = plugin.sessionView();
+		Set<String> shown = new HashSet<>();
+		for (String key : PINNED)
 		{
-			case "totalXpGained":
-				return "Xp gained";
-			case "consumedValue":
-				return "Consumed";
-			default:
-				return StatRegistry.label(key);
+			long v = sess.getOrDefault(key, 0);
+			if (v > 0)
+			{
+				shown.add(key);
+				addPinned(strip, key, v, sess);
+			}
+		}
+		int loots = store.loot.sessionLoots();
+		if (loots > 0)
+		{
+			strip.add(row("Drops received", loots + " · " + gps(store.loot.sessionLootValue()), GREEN));
+			int leftKills = store.loot.sessionUntakenKills();
+			if (leftKills > 0)
+			{
+				strip.add(row("Drops taken", fmt(Math.max(0, loots - leftKills)), GREEN));
+			}
+		}
+		long[] untaken = store.loot.sessionUntakenTally();
+		if (untaken[0] > 0)
+		{
+			strip.add(row("Left behind", qtyGp(untaken[0], untaken[1])));
+		}
+		addFeats(strip);
+		addMovers(strip, plugin.sessionDisplayCounters(), shown);
+		if (strip.getComponentCount() == head)
+		{
+			strip.add(row("A fresh page", ""));
+		}
+		return strip;
+	}
+
+	private void addPinned(JPanel strip, String key, long v, Map<String, Integer> sess)
+	{
+		boolean xp = "totalXpGained".equals(key);
+		boolean damage = "damageDealt".equals(key) && DAMAGE_SPLIT.stream().anyMatch(k -> sess.getOrDefault(k, 0) > 0);
+		String label = xp ? "Xp gained" : "consumedValue".equals(key) ? "Consumed" : StatRegistry.label(key);
+		JPanel r = row(label, StatRegistry.isGp(key) ? gps(v) : xp ? "+" + gp(v) : fmt(v), GREEN);
+		if (xp)
+		{
+			ui.foldHead(r, FOLD_XP, "Each skill's xp and xp per hour this session");
+		}
+		if (damage)
+		{
+			ui.foldHead(r, FOLD_DAMAGE, "The damage this session, by style");
+		}
+		strip.add(r);
+		if (xp && ui.foldOpen(FOLD_XP))
+		{
+			List<SkillGain> gains = plugin.sessionSkillXp();
+			if (gains.isEmpty())
+			{
+				strip.add(ghostRow("no skill breakdown yet", ""));
+			}
+			for (SkillGain g : gains)
+			{
+				JPanel line = row(g.skill.getName(), "+" + gp(g.xp) + (g.perHour >= 0 ? " · " + gp(g.perHour) + "/h" : ""));
+				line.setBorder(pad(1, 10, 1, 2));
+				strip.add(line);
+			}
+		}
+		if (damage && ui.foldOpen(FOLD_DAMAGE))
+		{
+			for (String split : DAMAGE_SPLIT)
+			{
+				long sv = sess.getOrDefault(split, 0);
+				if (sv > 0)
+				{
+					strip.add(row(StatRegistry.label(split), fmt(sv)));
+				}
+			}
 		}
 	}
 
-	static long splitOf(Map<String, Integer> sess)
+	private void addFeats(JPanel strip)
 	{
-		long n = 0;
-		for (String k : DAMAGE_SPLIT)
+		long since = plugin.sessionStart();
+		if (since <= 0)
 		{
-			n += sess.getOrDefault(k, 0);
-		}
-		return n;
-	}
-
-	void addXpBySkill(JPanel strip)
-	{
-		List<ExperienceStatTracker.SkillGain> gains = plugin.sessionSkillXp();
-		if (gains.isEmpty())
-		{
-			strip.add(ghostRow("no skill breakdown yet", ""));
 			return;
 		}
-		for (ExperienceStatTracker.SkillGain g : gains)
+		Map<String, Long> levels = new LinkedHashMap<>();
+		List<String> slots = new ArrayList<>();
+		List<String> pets = new ArrayList<>();
+		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))
 		{
-			String right = "+" + gp(g.xp)
-				+ (g.perHour >= 0 ? " · " + gp(g.perHour) + "/h" : "");
-			JPanel r = row(g.skill.getName(), right);
-			r.setBorder(pad(1, 10, 1, 2));
+			JsonObject d = obj(e, "data");
+			if (asLong(e.get("ts")) < since)
+			{
+				continue;
+			}
+			String type = typeOf(e);
+			if ("LEVEL".equals(type) && has(d, "skill") && has(d, "level"))
+			{
+				levels.merge(prettify(low(d.get("skill").getAsString())), asLong(d.get("level")), Math::max);
+			}
+			else if ("COLLECTION".equals(type) && has(d, "itemName"))
+			{
+				slots.add(d.get("itemName").getAsString());
+			}
+			else if ("PET".equals(type) && has(d, "petName"))
+			{
+				pets.add(d.get("petName").getAsString());
+			}
+		}
+		List<String> said = new ArrayList<>();
+		levels.forEach((skill, level) -> said.add(skill + " " + level));
+		named(strip, "Levels", said);
+		named(strip, plural(slots.size(), "Log slot"), slots);
+		named(strip, plural(pets.size(), "Pet"), pets);
+	}
+
+	private static void named(JPanel strip, String label, List<String> names)
+	{
+		if (!names.isEmpty())
+		{
+			JPanel r = row(label, names.size() <= 2 ? String.join(" · ", names) : "+" + names.size(), GREEN);
+			r.setToolTipText(String.join(" · ", names));
 			strip.add(r);
 		}
 	}
 
-	static String parentOf(String key, Map<String, Integer> sess)
+	private void addMovers(JPanel strip, Map<String, Integer> sess, Set<String> shown)
 	{
-		if (StatRegistry.isFloor(key))
+		Map<String, List<Map.Entry<String, Long>>> byFamily = new LinkedHashMap<>();
+		Map<String, List<Map.Entry<String, Long>>> under = new LinkedHashMap<>();
+		sess.forEach((key, v) ->
 		{
-			return null;
+			if (v > 0 && !shown.contains(key) && !StatRegistry.hidden(key) && !DAMAGE_SPLIT.contains(key))
+			{
+				String parent = parentOf(key, sess);
+				(parent != null ? under.computeIfAbsent(parent, k -> new ArrayList<>())
+					: byFamily.computeIfAbsent(StatRegistry.family(key), f -> new ArrayList<>()))
+					.add(Map.entry(key, (long) v));
+			}
+		});
+		for (String family : StatRegistry.FAMILIES)
+		{
+			List<Map.Entry<String, Long>> rows = byFamily.getOrDefault(family, List.of());
+			if (rows.isEmpty())
+			{
+				continue;
+			}
+			rows.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
+			String fold = "session:" + family;
+			boolean open = ui.foldOpen(fold, true);
+			strip.add(ui.quietHead(family, open ? "" : fmt(rows.size()), fold));
+			if (open)
+			{
+				rows.forEach(e -> addMover(strip, e.getKey(), e.getValue(), under.get(e.getKey())));
+			}
 		}
+	}
+
+	private static String parentOf(String key, Map<String, Integer> sess)
+	{
 		String sec = StatRegistry.subgroup(key);
-		if (sec.isEmpty())
+		if (StatRegistry.isFloor(key) || sec.isEmpty())
 		{
 			return null;
 		}
-		List<String> floors = StatRegistry.floorKeys(
-			sec.equals("Destinations") ? "Teleports" : sec);
-		for (String f : floors)
+		for (String f : StatRegistry.floorKeys(sec.equals("Destinations") ? "Teleports" : sec))
 		{
 			if (sess.getOrDefault(f, 0) > 0)
 			{
@@ -227,185 +243,30 @@ final class HomeScreen
 		return null;
 	}
 
-	int addSittingFeats(JPanel strip)
+	private void addMover(JPanel strip, String key, long value, List<Map.Entry<String, Long>> kids)
 	{
-		long since = plugin.sessionStart();
-		if (since <= 0)
-		{
-			return 0;
-		}
-		Map<String, Long> levels = new LinkedHashMap<>();
-		List<String> slots = new ArrayList<>();
-		List<String> pets = new ArrayList<>();
-		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))
-		{
-			if (asLong(e.get("ts")) < since)
-			{
-				continue;
-			}
-			JsonObject d = obj(e, "data");
-			switch (typeOf(e))
-			{
-				case "LEVEL":
-					if (has(d, "skill") && has(d, "level"))
-					{
-						levels.merge(prettify(
-							low(d.get("skill").getAsString())),
-							asLong(d.get("level")), Math::max);
-					}
-					break;
-				case "COLLECTION":
-					if (has(d, "itemName"))
-					{
-						slots.add(d.get("itemName").getAsString());
-					}
-					break;
-				case "PET":
-					if (has(d, "petName"))
-					{
-						pets.add(d.get("petName").getAsString());
-					}
-					break;
-				default:
-					break;
-			}
-		}
-		int mounted = 0;
-		if (!levels.isEmpty())
-		{
-			List<String> said = new ArrayList<>();
-			for (Entry<String, Long> l : levels.entrySet())
-			{
-				said.add(l.getKey() + " " + l.getValue());
-			}
-			strip.add(namedRow("Levels", said, GREEN));
-			mounted++;
-		}
-		if (!slots.isEmpty())
-		{
-			strip.add(namedRow(plural(slots.size(), "Log slot"), slots, GREEN));
-			mounted++;
-		}
-		if (!pets.isEmpty())
-		{
-			strip.add(namedRow(plural(pets.size(), "Pet"), pets, GREEN));
-			mounted++;
-		}
-		return mounted;
-	}
-
-	JPanel namedRow(String label, List<String> names, Color color)
-	{
-		String right = names.size() <= 2 ? String.join(" · ", names) : "+" + names.size();
-		JPanel r = row(label, right, color);
-		r.setToolTipText(String.join(" · ", names));
-		return r;
-	}
-
-	int addSessionMovers(JPanel strip, Map<String, Integer> sess,
-		Set<String> shownKeys)
-	{
-		Map<String, List<Entry<String, Long>>> byFamily = new LinkedHashMap<>();
-		Map<String, List<Entry<String, Long>>> under = new LinkedHashMap<>();
-		for (Entry<String, Integer> e : sess.entrySet())
-		{
-			String key = e.getKey();
-			if (e.getValue() <= 0 || shownKeys.contains(key) || StatRegistry.hidden(key)
-				|| DAMAGE_SPLIT.contains(key))
-			{
-				continue;
-			}
-			Entry<String, Long> moved =
-				new AbstractMap.SimpleEntry<>(key, (long) e.getValue());
-			String parent = parentOf(key, sess);
-			if (parent != null)
-			{
-				under.computeIfAbsent(parent, k -> new ArrayList<>()).add(moved);
-				continue;
-			}
-			byFamily.computeIfAbsent(StatRegistry.family(key), f -> new ArrayList<>())
-				.add(moved);
-		}
-
-		int mounted = 0;
-		for (String family : StatRegistry.FAMILIES)
-		{
-			List<Entry<String, Long>> rows = byFamily.get(family);
-			if (rows == null || rows.isEmpty())
-			{
-				continue;
-			}
-			rows.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
-			String stateKey = "session:" + family;
-			boolean open = ui.foldOpen(stateKey, true);
-			strip.add(ui.quietHead(family, open ? "" : fmt(rows.size()), stateKey));
-			mounted++;
-			if (!open)
-			{
-				continue;
-			}
-			for (Entry<String, Long> e : rows)
-			{
-				mounted += addMoverRow(strip, e.getKey(), e.getValue(),
-					under.get(e.getKey()));
-			}
-		}
-		return mounted;
-	}
-
-	int addMoverRow(JPanel strip, String key, long value,
-		List<Entry<String, Long>> kids)
-	{
+		JPanel r = row(StatRegistry.label(key), StatRegistry.isGp(key) ? gps(value) : fmt(value));
 		if (kids == null || kids.isEmpty())
 		{
-			strip.add(sessionRow(key, value));
-			return 1;
+			strip.add(r);
+			return;
 		}
-		String listKey = "session:row:" + key;
-		boolean open = ui.foldOpen(listKey);
-		strip.add(ui.folds(sessionRow(key, value), listKey));
-		int mounted = 1;
-		if (!open)
+		String fold = "session:row:" + key;
+		strip.add(ui.folds(r, fold));
+		if (!ui.foldOpen(fold))
 		{
-			return mounted;
+			return;
 		}
 		kids.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
-		int cap = ui.shownCap(listKey);
-		int shown = 0;
-		long named = 0;
-		for (Entry<String, Long> k : kids)
-		{
-			named += k.getValue();
-			if (shown++ >= cap)
-			{
-				continue;
-			}
-			strip.add(nested(row(StatRegistry.rowLabel(k.getKey()), fmt(k.getValue()))));
-			mounted++;
-		}
-		ui.addMore(strip, listKey, kids.size(), cap, true);
+		int cap = ui.shownCap(fold);
+		firstN(kids, cap).forEach(k -> strip.add(nested(row(StatRegistry.rowLabel(k.getKey()), fmt(k.getValue())))));
+		ui.addMore(strip, fold, kids.size(), cap, true);
+		long named = kids.stream().mapToLong(Map.Entry::getValue).sum();
 		if (value - named >= 1)
 		{
-			strip.add(nested(ghostRow(
-				"Teleports".equals(StatRegistry.subgroup(kids.get(0).getKey()))
-					|| "Destinations".equals(StatRegistry.subgroup(kids.get(0).getKey()))
-					? "Other means" : "Other",
-				fmt(value - named))));
-			mounted++;
+			String sec = StatRegistry.subgroup(kids.get(0).getKey());
+			boolean roads = "Teleports".equals(sec) || "Destinations".equals(sec);
+			strip.add(nested(ghostRow(roads ? "Other means" : "Other", fmt(value - named))));
 		}
-		return mounted;
 	}
-
-	JPanel sessionRow(String key, long v)
-	{
-		return row(StatRegistry.label(key),
-			StatRegistry.isGp(key) ? gps(v) : fmt(v));
-	}
-
-	static final String FOLD_HOME_XP = "home:xp";
-
-	static final String FOLD_HOME_DAMAGE = "home:damage";
-
-	static final List<String> DAMAGE_SPLIT = Arrays.asList(
-		"damageDealtMelee", "damageDealtRanged", "damageDealtMagic");
 }

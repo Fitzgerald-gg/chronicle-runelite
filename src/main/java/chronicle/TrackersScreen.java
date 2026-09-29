@@ -25,21 +25,11 @@ import static chronicle.Pictures.*;
 import static chronicle.Reference.*;
 import static chronicle.Ui.*;
 
-final class TrackersScreen
+final class TrackersScreen extends Screen
 {
-	private final ChroniclePanel ui;
-	private final Board board;
-	private final ChroniclePlugin plugin;
-	private final Period period;
-	private final LocalStore store;
-
 	TrackersScreen(ChroniclePanel ui, Board board)
 	{
-		this.ui = ui;
-		this.board = board;
-		this.plugin = board.plugin;
-		this.period = board.period;
-		this.store = board.store;
+		super(ui, board);
 	}
 
 	JPanel buildStats()
