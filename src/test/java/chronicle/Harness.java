@@ -901,9 +901,9 @@ final class Harness
 		{
 			p.resetAccountCaches();
 			go(p, path);
-			call(p, "gatherHistory");
+			board(p).gatherHistory();
 		});
-		for (int i = 0; i < 500 && (Boolean) onEdt(() -> get(p, "historyGathering")); i++)
+		for (int i = 0; i < 500 && (Boolean) onEdt(() -> board(p).historyGathering); i++)
 		{
 			edt(() -> Thread.sleep(10));
 		}
@@ -913,6 +913,11 @@ final class Harness
 			collect(p, out);
 		});
 		return out;
+	}
+
+	private static Board board(ChroniclePanel p)
+	{
+		return (Board) get(p, "board");
 	}
 
 	BufferedImage picture(String... path)
@@ -972,7 +977,7 @@ final class Harness
 	{
 		((net.runelite.client.ui.components.IconTextField) get(p, "searchField")).setText("");
 		for (String n : new String[]{"detailSource", "detailItem", "detailSkill", "sheetPage", "lootKind",
-			"lootTask", "leftBehindSource", "leftBehindItem", "histFrom", "histTo"})
+			"lootTask", "leftBehindSource", "leftBehindItem"})
 		{
 			set(p, n, null);
 		}
@@ -983,8 +988,11 @@ final class Harness
 			set(p, n, false);
 		}
 		((Collection<?>) get(p, "detailStack")).clear();
-		set(p, "histGranularity", granularity);
-		set(p, "histCursor", cursor);
+		Period period = (Period) get(p, "period");
+		period.from = null;
+		period.to = null;
+		period.granularity = granularity;
+		period.cursor = cursor;
 		String lens = null;
 		for (String step : path)
 		{

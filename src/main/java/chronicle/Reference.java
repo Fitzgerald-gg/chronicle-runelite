@@ -367,4 +367,21 @@ final class Reference
 		{"Pickpockets", "THIEVING"}, {"Trapped", "HUNTER"},
 		{"Caught", "HUNTER"}, {"Harvested", "HUNTER"},
 	};
+
+	static final String KIND_BOSS = "Bosses";
+
+	static final String KIND_ACTIVITY = "Activities";
+
+	static final String KIND_SKILLING = "Skilling";
+
+	static final String KIND_MONSTER = "Monsters";
+
+	static final String[][] ACTIVITIES = {
+		{"Clues", "", "clues"},
+		{"Rifts closed", "Guardians of the Rift", ""},
+		{"Soul Wars", "Soul Wars", ""},
+		{"Collections", "", "log"},
+		{"Quests", "", "quests"},
+		{"Diaries", "", "diaries"},
+	};
 }
