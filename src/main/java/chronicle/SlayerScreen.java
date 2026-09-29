@@ -31,6 +31,7 @@ final class SlayerScreen extends Screen
 	private String taskFilter;
 	private SlayerJourney journeyCache;
 	private boolean journeyFetching;
+	private int journeyEpoch;
 
 	SlayerScreen(ChroniclePanel ui, Board board)
 	{
@@ -47,6 +48,7 @@ final class SlayerScreen extends Screen
 	{
 		journeyCache = null;
 		journeyFetching = false;
+		journeyEpoch++;
 	}
 
 	void lens(String lens)
@@ -105,8 +107,13 @@ final class SlayerScreen extends Screen
 			return;
 		}
 		journeyFetching = true;
+		int epoch = journeyEpoch;
 		plugin.fetchSlayerJourney(j -> SwingUtilities.invokeLater(() ->
 		{
+			if (epoch != journeyEpoch)
+			{
+				return;
+			}
 			journeyFetching = false;
 			if (j == null)
 			{

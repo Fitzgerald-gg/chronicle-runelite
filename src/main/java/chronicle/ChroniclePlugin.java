@@ -749,16 +749,9 @@ public class ChroniclePlugin extends Plugin
 
 	PaceBook.Pace pace(String skill)
 	{
-		TreeMap<LocalDate, HistoryLog.Baseline> spine = historyBaselines();
-		long xp = 0;
-		try
-		{
-			xp = client.getSkillExperience(Skill.valueOf(skill.toUpperCase(Locale.ROOT)));
-		}
-		catch (RuntimeException ignored)
-		{
-		}
-		return PaceBook.forSkill(spine, skill.toLowerCase(Locale.ROOT), xp, LocalDate.now());
+		String key = skill.toLowerCase(Locale.ROOT);
+		SkillRow row = skillSheet().get(key);
+		return PaceBook.forSkill(historyBaselines(), key, row == null ? 0 : row.xp, LocalDate.now());
 	}
 
 	boolean slayerSeenThisSession()
