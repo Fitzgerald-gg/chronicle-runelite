@@ -751,7 +751,7 @@ final class RecapScreen
 		Map<String, Long> counters = period.whole() ? board.withLedgerSpend(board.counters()) : board.periodCounters();
 		Runnable toLiving = () ->
 		{
-			ui.statsFamily = "Living";
+			ui.trackers.statsFamily = "Living";
 			ui.subByTab.put(ChroniclePanel.Tab.RECORD, "Ledger");
 			ui.applyCommon();
 		};
