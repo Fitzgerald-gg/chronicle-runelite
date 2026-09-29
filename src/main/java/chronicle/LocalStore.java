@@ -529,6 +529,21 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
+	static final class Row
+	{
+		final String name;
+		final long qty;
+		final long value;
+		final double timed;
+		final double timeSum;
+
+		Row(String name, long qty, long value)
+		{
+			this(name, qty, value, 0, 0);
+		}
+	}
+
 	static final class LootWindow
 	{
 		long loots;
@@ -536,42 +551,99 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		long left;
 		long leftValue;
 		long leftKills;
-		final List<String[]> items = new ArrayList<>();
-		final List<String[]> sources = new ArrayList<>();
-		final List<String[]> leftItems = new ArrayList<>();
-		final Map<String, double[]> times = new LinkedHashMap<>();
-		private final Map<String, long[]> byItem = new LinkedHashMap<>();
-		private final Map<String, long[]> bySource = new LinkedHashMap<>();
-		private final Map<String, long[]> byLeft = new LinkedHashMap<>();
+		final List<Row> items = new ArrayList<>();
+		final List<Row> sources = new ArrayList<>();
+		final List<Row> leftItems = new ArrayList<>();
+		final Map<String, List<BagItem>> bySource = new LinkedHashMap<>();
+		final Set<String> unfiled = new HashSet<>();
 
-		void add(JsonObject d)
+		Row item(String name)
 		{
-			loots += asLong(d.get("loots"));
-			value += asLong(d.get("value"));
-			left += asLong(d.get("left"));
-			leftValue += asLong(d.get("leftValue"));
-			leftKills += asLong(d.get("leftKills"));
-			gather(d, "items", byItem, true);
-			gather(d, "sources", bySource, false);
-			gather(d, "leftItems", byLeft, true);
-			gatherTimes(d, times);
+			return Sources.find(items, r -> r.name, name, false);
 		}
 
-		LootWindow ranked()
+		Row source(String name, boolean exact)
 		{
-			rank(byItem, items);
-			rank(bySource, sources);
-			rank(byLeft, leftItems);
-			return this;
+			return Sources.find(sources, r -> r.name, name, exact);
 		}
 	}
 
-	long lootRollFrom()
+	static class LootDays
 	{
+		private final TreeMap<String, long[]> totals = new TreeMap<>();
+		private final TreeMap<String, Map<String, Long>> items = new TreeMap<>();
+		private String detailed;
+
+		long rollFrom()
+		{
+			return totals.isEmpty() ? 0 : dayMs(totals.firstKey());
+		}
+
+		long detailFrom()
+		{
+			return detailed == null ? 0 : dayMs(detailed);
+		}
+
+		Map<String, long[]> totals()
+		{
+			return totals;
+		}
+
+		long[] itemDays(String name)
+		{
+			String first = null;
+			String last = null;
+			int days = 0;
+			long held = 0;
+			for (Map.Entry<String, Map<String, Long>> day : items.entrySet())
+			{
+				boolean hit = false;
+				for (Map.Entry<String, Long> it : day.getValue().entrySet())
+				{
+					if (name.equalsIgnoreCase(it.getKey()))
+					{
+						hit = true;
+						held += it.getValue();
+					}
+				}
+				if (hit)
+				{
+					days++;
+					first = first == null ? day.getKey() : first;
+					last = day.getKey();
+				}
+			}
+			return days == 0 ? new long[4] : new long[]{dayMs(first), dayMs(last), days, held};
+		}
+	}
+
+	LootDays lootDays()
+	{
+		LootDays out = new LootDays();
 		synchronized (lock)
 		{
-			return obj(root, "loot_days").keySet().stream().min(String::compareTo).map(LocalStore::dayMs).orElse(0L);
+			for (var e : objects(obj(root, "loot_days")))
+			{
+				JsonObject d = e.getValue();
+				out.totals.put(e.getKey(), new long[]{asLong(d.get("loots")), asLong(d.get("value")),
+					asLong(d.get("left")), asLong(d.get("leftValue"))});
+				if (d.has("sources") && (out.detailed == null || e.getKey().compareTo(out.detailed) < 0))
+				{
+					out.detailed = e.getKey();
+				}
+				Map<String, Long> named = new LinkedHashMap<>();
+				for (var it : objects(obj(d, "items")))
+				{
+					String n = str(it.getValue(), "n", null);
+					if (n != null)
+					{
+						named.merge(n, asLong(it.getValue().get("q")), Long::sum);
+					}
+				}
+				out.items.put(e.getKey(), named);
+			}
 		}
+		return out;
 	}
 
 	private List<JsonObject> daysIn(LocalDate from, LocalDate to)
@@ -589,91 +661,38 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	LootWindow lootBetween(LocalDate from, LocalDate to)
+	LootWindow loot(LocalDate from, LocalDate to)
 	{
 		LootWindow w = new LootWindow();
-		synchronized (lock)
-		{
-			daysIn(from, to).forEach(w::add);
-		}
-		return w.ranked();
-	}
-
-	Map<String, long[]> dayTotals()
-	{
-		Map<String, long[]> out = new TreeMap<>();
-		synchronized (lock)
-		{
-			for (var e : objects(obj(root, "loot_days")))
-			{
-				JsonObject d = e.getValue();
-				out.put(e.getKey(), new long[]{asLong(d.get("loots")), asLong(d.get("value")),
-					asLong(d.get("left")), asLong(d.get("leftValue"))});
-			}
-		}
-		return out;
-	}
-
-	long[] itemDays(String name)
-	{
-		String first = null;
-		String last = null;
-		int days = 0;
-		long held = 0;
-		synchronized (lock)
-		{
-			JsonObject all = obj(root, "loot_days");
-			for (String day : all.keySet())
-			{
-				boolean hit = false;
-				for (var it : objects(obj(obj(all, day), "items")))
-				{
-					if (name.equalsIgnoreCase(str(it.getValue(), "n", null)))
-					{
-						hit = true;
-						held += asLong(it.getValue().get("q"));
-					}
-				}
-				if (hit)
-				{
-					days++;
-					first = first == null || day.compareTo(first) < 0 ? day : first;
-					last = last == null || day.compareTo(last) > 0 ? day : last;
-				}
-			}
-		}
-		return days == 0 ? new long[4] : new long[]{dayMs(first), dayMs(last), days, held};
-	}
-
-	private static long dayMs(String key)
-	{
-		return LocalDate.parse(key, DAY_KEY)
-			.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-	}
-
-	LootWindow sessionLootWindow()
-	{
-		LootWindow w = new LootWindow();
-		synchronized (lock)
-		{
-			w.add(sessionRoll);
-		}
-		return w.ranked();
-	}
-
-	Map<String, List<BagItem>> itemsBySource(LocalDate from, LocalDate to)
-	{
-		Map<String, Map<String, long[]>> by = new LinkedHashMap<>();
+		Map<String, long[]> byItem = new LinkedHashMap<>();
+		Map<String, long[]> bySource = new LinkedHashMap<>();
+		Map<String, long[]> byLeft = new LinkedHashMap<>();
+		Map<String, double[]> times = new LinkedHashMap<>();
+		Map<String, Map<String, long[]>> filed = new LinkedHashMap<>();
 		Map<String, Integer> ids = new HashMap<>();
 		synchronized (lock)
 		{
 			for (JsonObject d : from == null ? List.of(sessionRoll) : daysIn(from, to))
 			{
+				w.loots += asLong(d.get("loots"));
+				w.value += asLong(d.get("value"));
+				w.left += asLong(d.get("left"));
+				w.leftValue += asLong(d.get("leftValue"));
+				w.leftKills += asLong(d.get("leftKills"));
+				gather(d, "items", byItem, true);
+				gather(d, "sources", bySource, false);
+				gather(d, "leftItems", byLeft, true);
+				gatherTimes(d, times);
 				JsonObject srcs = obj(d, "sources");
 				for (String source : srcs.keySet())
 				{
-					Map<String, long[]> into = by.computeIfAbsent(source, k -> new LinkedHashMap<>());
-					JsonObject its = obj(obj(srcs, source), "items");
+					JsonObject src = obj(srcs, source);
+					if (asLong(src.get("loots")) > asLong(src.get("filed")))
+					{
+						w.unfiled.add(source);
+					}
+					Map<String, long[]> into = filed.computeIfAbsent(source, k -> new LinkedHashMap<>());
+					JsonObject its = obj(src, "items");
 					for (String id : its.keySet())
 					{
 						JsonObject e = obj(its, id);
@@ -687,9 +706,17 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				}
 			}
 		}
-		Map<String, List<BagItem>> out = new LinkedHashMap<>();
-		by.forEach((source, items) -> out.put(source, bagRows(items, ids, 0)));
-		return out;
+		rank(byItem, w.items, null);
+		rank(bySource, w.sources, times);
+		rank(byLeft, w.leftItems, null);
+		filed.forEach((source, items) -> w.bySource.put(source, bagRows(items, ids, 0)));
+		return w;
+	}
+
+	private static long dayMs(String key)
+	{
+		return LocalDate.parse(key, DAY_KEY)
+			.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 	}
 
 	private static void add(Map<String, long[]> into, String key, long qty, long value)
@@ -697,43 +724,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		long[] t = into.computeIfAbsent(key, k -> new long[2]);
 		t[0] += qty;
 		t[1] += value;
-	}
-
-	Set<String> unfiledSources(LocalDate from, LocalDate to)
-	{
-		Set<String> out = new HashSet<>();
-		synchronized (lock)
-		{
-			for (JsonObject d : daysIn(from, to))
-			{
-				JsonObject srcs = obj(d, "sources");
-				for (String source : srcs.keySet())
-				{
-					if (asLong(obj(srcs, source).get("loots")) > asLong(obj(srcs, source).get("filed")))
-					{
-						out.add(source);
-					}
-				}
-			}
-		}
-		return out;
-	}
-
-	long lootDetailFrom()
-	{
-		synchronized (lock)
-		{
-			JsonObject all = obj(root, "loot_days");
-			String first = null;
-			for (String day : all.keySet())
-			{
-				if (obj(all, day).has("sources") && (first == null || day.compareTo(first) < 0))
-				{
-					first = day;
-				}
-			}
-			return first == null ? 0 : dayMs(first);
-		}
 	}
 
 	private int splitDays()
@@ -876,13 +866,15 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	private static void rank(Map<String, long[]> from, List<String[]> into)
+	private static void rank(Map<String, long[]> from, List<Row> into, Map<String, double[]> times)
 	{
 		List<Map.Entry<String, long[]>> rows = new ArrayList<>(from.entrySet());
 		rows.sort((a, b) -> Long.compare(b.getValue()[1], a.getValue()[1]));
 		for (var e : rows)
 		{
-			into.add(new String[]{e.getKey(), String.valueOf(e.getValue()[0]), String.valueOf(e.getValue()[1])});
+			double[] t = times == null ? null : times.get(e.getKey());
+			into.add(new Row(e.getKey(), e.getValue()[0], e.getValue()[1],
+				t == null ? 0 : t[0], t == null ? 0 : t[1]));
 		}
 	}
 

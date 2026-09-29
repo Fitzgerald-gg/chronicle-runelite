@@ -148,7 +148,6 @@ import static chronicle.Json.keyOf;
 import static chronicle.Json.low;
 import static chronicle.Json.obj;
 import static chronicle.Json.safeLong;
-import static chronicle.Json.safeParse;
 import static chronicle.Json.str;
 import static chronicle.Json.strMap;
 import static chronicle.Json.strs;
@@ -850,13 +849,13 @@ class ChroniclePanel extends PluginPanel
 				paidOut.add(r);
 			}
 		}
+		LocalStore.Row dated = build.summary.source(b.name);
 		if (!wholeRecord())
 		{
 			long inWin = build.kills.bossKillsInWindow(b.name);
-			long[] paid = build.summary.source(b.name);
 			lines.add(window().label);
 			lines.add((inWin < 0 ? "-" : count(inWin, "kill"))
-				+ tail(paid[1]));
+				+ tail(dated.value));
 		}
 		long known = build.kills.bossKills(b.name);
 		lines.add("Kills tracked");
@@ -867,7 +866,7 @@ class ChroniclePanel extends PluginPanel
 			lines.add(pb(pb.getValue()));
 		}
 		double[] timed = wholeRecord() && src != null ? new double[]{src.timed, src.timeSum}
-			: build.summary.sourceTimes(b.name);
+			: new double[]{dated.timed, dated.timeSum};
 		if (timed[0] > 0)
 		{
 			lines.add("Average kill");
@@ -1627,22 +1626,19 @@ class ChroniclePanel extends PluginPanel
 	private JPanel dropsInWindow(JPanel p)
 	{
 		Period win = window();
-		LocalStore.LootWindow sitting = sessionPeriod() ? plugin.sessionLootWindow() : null;
-		long rollFrom = plugin.lootRollFrom();
-		long fromMs = startMs(win.start);
-		if (sitting == null && rollFrom <= 0)
+		long rollFrom = build.lootDays().rollFrom();
+		if (!win.session && rollFrom <= 0)
 		{
 			return noted(p, UNDATED);
 		}
-		if (sitting == null && rollFrom > fromMs)
+		if (!win.session && rollFrom > startMs(win.start))
 		{
 			LocalDate began = dayOf(rollFrom);
 			return noted(p, "The dated loot roll begins " + began.format(FULL_DAY)
 				+ ", which is inside " + window().inSentence() + ". Naming the part it can see "
 				+ "as the whole period would be worse than saying nothing.");
 		}
-		LocalStore.LootWindow w = sitting != null ? sitting
-			: plugin.lootBetween(win.start, win.end);
+		LocalStore.LootWindow w = build.lootWindow();
 		if (!dropsLeftBehind && dropsByKind)
 		{
 			if (w.items.isEmpty())
@@ -1651,7 +1647,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			return kindLens(p, win.label, bagOf(w.items), "win:");
 		}
-		List<String[]> ranked = dropsLeftBehind ? w.leftItems : w.sources;
+		List<LocalStore.Row> ranked = dropsLeftBehind ? w.leftItems : w.sources;
 		if (ranked.isEmpty())
 		{
 			return noted(p, window().phrase("Nothing " + (dropsLeftBehind ? "left behind" : "taken")));
@@ -1665,10 +1661,10 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, head);
 		final String key = dropsLeftBehind ? "win:left" : "win:source";
 		final int cap = drillShown.getOrDefault(key, ROW_CAP);
-		for (String[] r : Sources.firstN(ranked, cap))
+		for (LocalStore.Row r : Sources.firstN(ranked, cap))
 		{
-			JPanel line = row(r[0], qtyGp(safeParse(r[1]), safeParse(r[2])));
-			final String name = r[0];
+			JPanel line = row(r.name, qtyGp(r.qty, r.value));
+			final String name = r.name;
 			link(line, () ->
 			{
 				if (dropsLeftBehind)
@@ -1686,12 +1682,12 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private static List<BagItem> bagOf(List<String[]> rows)
+	private static List<BagItem> bagOf(List<LocalStore.Row> rows)
 	{
 		List<BagItem> bag = new ArrayList<>();
-		for (String[] r : rows)
+		for (LocalStore.Row r : rows)
 		{
-			bag.add(new BagItem(0, r[0], safeParse(r[1]), safeParse(r[2])));
+			bag.add(new BagItem(0, r.name, r.qty, r.value));
 		}
 		return bag;
 	}
@@ -3176,7 +3172,10 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 		}
-		final long[] inWindow = wholeRecord() ? null : Sources.rowOf(build.lootWindow().items, name);
+		final LocalStore.LootWindow win = wholeRecord() ? null : build.lootWindow();
+		final LocalStore.Row headRow = win == null ? null : win.item(name);
+		final long[] inWindow = win == null ? null
+			: headRow == null ? new long[2] : new long[]{headRow.qty, headRow.value};
 		long other = 0;
 		long otherValue = 0;
 		if (inWindow != null)
@@ -3184,9 +3183,8 @@ class ChroniclePanel extends PluginPanel
 			srcs.clear();
 			other = inWindow[0];
 			otherValue = inWindow[1];
-			String[] headRow = Sources.rowFor(build.lootWindow().items, name, false);
-			String spelled = headRow != null ? headRow[0] : name;
-			for (Map.Entry<String, List<BagItem>> e : periodItems().entrySet())
+			String spelled = headRow != null ? headRow.name : name;
+			for (Map.Entry<String, List<BagItem>> e : win.bySource.entrySet())
 			{
 				for (BagItem b : e.getValue())
 				{
@@ -3241,7 +3239,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (inWindow == null && !drawingCopy)
 		{
-			long[] days = plugin.itemDays(name);
+			long[] days = build.lootDays().itemDays(name);
 			days[2] = days.length > 3 && days[3] < got ? 0 : days[2];
 			if (days[2] == 1)
 			{
@@ -3293,15 +3291,9 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private Map<String, List<BagItem>> periodItems()
-	{
-		Period w = window();
-		return sessionPeriod() ? plugin.itemsBySource(null, null) : plugin.itemsBySource(w.start, w.end);
-	}
-
 	private String lootSince()
 	{
-		long from = plugin.lootDetailFrom();
+		long from = build.lootDays().detailFrom();
 		Period w = window();
 		return sessionPeriod() || from > 0 && from <= startMs(w.start) ? null
 			: from <= 0 ? UNDATED
@@ -3426,16 +3418,15 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel p = column();
 		final SourceRow sr = Sources.find(build.sources(), r -> r.name, name, false);
-		String[] row = wholeRecord() ? null : Sources.rowFor(build.lootWindow().sources, sr != null ? sr.name : name, sr != null);
-		long[] inWindow = wholeRecord() ? null
-			: row == null ? new long[2] : new long[]{safeParse(row[1]), safeParse(row[2])};
-		String own = row != null ? row[0] : sr != null ? sr.name : name;
-		final List<BagItem> bag = inWindow == null ? plugin.sourceItems(own)
-			: new ArrayList<>(periodItems().getOrDefault(own, new ArrayList<>()));
+		LocalStore.LootWindow win = wholeRecord() ? null : build.lootWindow();
+		LocalStore.Row row = win == null ? null : win.source(sr != null ? sr.name : name, sr != null);
+		long[] inWindow = win == null ? null : row == null ? new long[2] : new long[]{row.qty, row.value};
+		String own = row != null ? row.name : sr != null ? sr.name : name;
+		final List<BagItem> bag = win == null ? plugin.sourceItems(own)
+			: new ArrayList<>(win.bySource.getOrDefault(own, new ArrayList<>()));
 		bag.sort(Comparator.comparingLong((BagItem b) -> b.value).reversed());
 		final long other = inWindow == null ? 0 : inWindow[1] - LocalStore.tallyOf(bag)[1];
-		final boolean unfiled = other > 0 || inWindow != null && !sessionPeriod()
-			&& plugin.unfiledSources(window().start, window().end).contains(own);
+		final boolean unfiled = other > 0 || win != null && win.unfiled.contains(own);
 		spaced(p, backRow(() -> copyPage(() -> buildSourceDetail(name))), 4);
 		JPanel head = card(name);
 		if (sr != null)
@@ -3473,8 +3464,8 @@ class ChroniclePanel extends PluginPanel
 				}
 				head.add(best);
 			}
-			double[] timed = inWindow == null ? new double[]{sr.timed, sr.timeSum}
-				: build.lootWindow().times.getOrDefault(own, new double[2]);
+			double[] timed = win == null ? new double[]{sr.timed, sr.timeSum}
+				: row == null ? new double[2] : new double[]{row.timed, row.timeSum};
 			if (timed[0] > 0)
 			{
 				head.add(row("Average kill", pb(timed[1] / timed[0]) + " · "
@@ -4895,13 +4886,12 @@ class ChroniclePanel extends PluginPanel
 
 	private static final Map<String, String> FEED_SUMMARY_KEYS = strMap(Sources.KINDS, "feedSummaryKeys");
 
-	private List<String[]> itemLines(List<String[]> ranked, boolean always)
+	private static List<String[]> itemLines(List<LocalStore.Row> ranked, boolean always)
 	{
 		List<String[]> out = new ArrayList<>();
-		for (String[] r : ranked)
+		for (LocalStore.Row r : ranked)
 		{
-			long val = safeParse(r[2]);
-			out.add(new String[]{r[0], fmt(safeParse(r[1])) + (always ? " · " + gps(val) : tail(val))});
+			out.add(new String[]{r.name, fmt(r.qty) + (always ? " · " + gps(r.value) : tail(r.value))});
 		}
 		return out;
 	}
@@ -4940,10 +4930,10 @@ class ChroniclePanel extends PluginPanel
 		{
 			gained = new LinkedHashMap<>();
 			worth = new LinkedHashMap<>();
-			for (String[] r : plugin.sessionLootWindow().sources)
+			for (LocalStore.Row r : build.lootWindow().sources)
 			{
-				gained.put(r[0], safeParse(r[1]));
-				worth.put(r[0], safeParse(r[2]));
+				gained.put(r.name, r.qty);
+				worth.put(r.name, r.value);
 			}
 		}
 		else
@@ -6360,16 +6350,9 @@ class ChroniclePanel extends PluginPanel
 				{
 					retro.put(key, fromFeed.getOrDefault(key, 0L));
 				}
-				long rollFrom = plugin.lootRollFrom();
-				LocalStore.LootWindow dated = null;
-				if (sessionPeriod())
-				{
-					dated = plugin.sessionLootWindow();
-				}
-				else if (rollFrom > 0 && rollFrom <= fromMs)
-				{
-					dated = plugin.lootBetween(pStart, pEnd);
-				}
+				long rollFrom = build.lootDays().rollFrom();
+				LocalStore.LootWindow dated = sessionPeriod() || rollFrom > 0 && rollFrom <= fromMs
+					? build.lootWindow() : null;
 				if (dated != null)
 				{
 					sessionsSpeak = true;
@@ -6479,7 +6462,7 @@ class ChroniclePanel extends PluginPanel
 				spaced(p, headline(progress, gains, stand, opened, played), 5);
 			}
 			LocalDate lootSince = null;
-			long lootFromTs = earliestDatedLoot(historyFeed, plugin.lootRollFrom());
+			long lootFromTs = earliestDatedLoot(historyFeed, build.lootDays().rollFrom());
 			if (lootFromTs > 0)
 			{
 				LocalDate sat = dayOf(lootFromTs);
@@ -6774,13 +6757,13 @@ class ChroniclePanel extends PluginPanel
 			plateRow(plate, "Drops", qtyGp(loot[0], loot[1]),
 				() -> applyTab(View.DROPS));
 		}
-		String[] dearest = build.summary.dearest();
+		LocalStore.Row dearest = build.summary.dearest();
 		if (dearest != null)
 		{
-			final String item = dearest[0];
+			final String item = dearest.name;
 			Line said = new Line();
 			said.name(item);
-			said.fixed(" · " + gps(Long.parseLong(dearest[1])));
+			said.fixed(" · " + gps(dearest.value));
 			plateRow(plate, "Dearest drop", said, () -> openItem(item));
 		}
 		if (loot[2] > 0)
@@ -6984,7 +6967,7 @@ class ChroniclePanel extends PluginPanel
 
 		long[][] rich = {{0, 0}, {0, 0}};
 		long[][] busy = {{0, 0}, {0, 0}};
-		for (Entry<String, long[]> d : build.feed.dayTotals().entrySet())
+		for (Entry<String, long[]> d : build.lootDays().totals().entrySet())
 		{
 			long ts;
 			try

@@ -40,6 +40,7 @@ final class Build
 	private boolean spanAsked;
 	private Map<String, Long> periodCounters;
 	private boolean periodCountersAsked;
+	private LocalStore.LootDays lootDays;
 
 	Build(ChroniclePlugin plugin, Supplier<Period> period,
 		Supplier<TreeMap<LocalDate, Baseline>> spine, Runnable askHistory)
@@ -122,7 +123,16 @@ final class Build
 	LocalStore.LootWindow lootWindow()
 	{
 		Period w = period();
-		return w.session ? plugin.sessionLootWindow() : plugin.lootBetween(w.start, w.end);
+		return plugin.loot(w.session ? null : w.start, w.end);
+	}
+
+	LocalStore.LootDays lootDays()
+	{
+		if (lootDays == null)
+		{
+			lootDays = plugin.lootDays();
+		}
+		return lootDays;
 	}
 
 	Map<String, Long> withLedgerSpend(Map<String, Long> base)

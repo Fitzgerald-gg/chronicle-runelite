@@ -36,7 +36,6 @@ import static chronicle.Json.keyOf;
 import static chronicle.Json.low;
 import static chronicle.Json.obj;
 import static chronicle.Json.safeLong;
-import static chronicle.Json.safeParse;
 import static chronicle.Json.strMap;
 import static chronicle.Json.strs;
 import static chronicle.Json.table;
@@ -241,19 +240,18 @@ final class Kills
 
 	private Long rolledKills(String name)
 	{
-		if (build.plugin.lootRollFrom() <= 0)
+		if (build.lootDays().rollFrom() <= 0)
 		{
 			return null;
 		}
 		if (rolledKcs == null)
 		{
 			rolledKcs = new LinkedHashMap<>();
-			for (String[] r : build.lootWindow().sources)
+			for (LocalStore.Row r : build.lootWindow().sources)
 			{
-				long n = safeParse(r[1]);
-				if (n > 0)
+				if (r.qty > 0)
 				{
-					rolledKcs.put(kindOf(r[0]), n);
+					rolledKcs.put(kindOf(r.name), r.qty);
 				}
 			}
 		}
@@ -262,7 +260,7 @@ final class Kills
 
 	LocalDate rollShortOf()
 	{
-		long from = build.plugin.lootRollFrom();
+		long from = build.lootDays().rollFrom();
 		if (from <= 0)
 		{
 			return null;

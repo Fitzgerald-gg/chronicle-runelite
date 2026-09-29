@@ -96,7 +96,7 @@ public class TimeRowsTest
 		stub.history.put(cursor.withDayOfMonth(5), era(100L));
 		stub.history.put(cursor.withDayOfMonth(13), era(160L));
 		LocalStore.LootWindow w = new LocalStore.LootWindow();
-		w.sources.add(new String[]{"Abyssal demons", "24", "812400"});
+		w.sources.add(new LocalStore.Row("Abyssal demons", 24L, 812400L));
 		stub.lootWindow = w;
 		assertEquals("1h 0m · 24 kills/h", beside(page(stub, "Month", cursor), "Time here"));
 	}
@@ -112,7 +112,7 @@ public class TimeRowsTest
 		stub.history.put(cursor.withDayOfMonth(5), before);
 		stub.history.put(cursor.withDayOfMonth(13), era(60L));
 		LocalStore.LootWindow w = new LocalStore.LootWindow();
-		w.sources.add(new String[]{"Abyssal demons", "24", "812400"});
+		w.sources.add(new LocalStore.Row("Abyssal demons", 24L, 812400L));
 		stub.lootWindow = w;
 		assertNull(beside(page(stub, "Month", cursor), "Time here"));
 	}

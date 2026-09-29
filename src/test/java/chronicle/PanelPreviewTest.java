@@ -479,11 +479,11 @@ public class PanelPreviewTest
 		s.sessionWindow.left = 9;
 		s.sessionWindow.leftValue = 44_120L;
 		s.sessionWindow.leftKills = 6;
-		s.sessionWindow.sources.add(new String[]{"Abyssal demons", "24", "812400"});
-		s.sessionWindow.sources.add(new String[]{"Nechryael", "13", "391713"});
-		s.sessionWindow.items.add(new String[]{"Abyssal whip", "1", "900000"});
-		s.sessionWindow.items.add(new String[]{"Rune bar", "12", "304113"});
-		s.sessionWindow.leftItems.add(new String[]{"Bones", "9", "44120"});
+		s.sessionWindow.sources.add(new LocalStore.Row("Abyssal demons", 24L, 812400L));
+		s.sessionWindow.sources.add(new LocalStore.Row("Nechryael", 13L, 391713L));
+		s.sessionWindow.items.add(new LocalStore.Row("Abyssal whip", 1L, 900000L));
+		s.sessionWindow.items.add(new LocalStore.Row("Rune bar", 12L, 304113L));
+		s.sessionWindow.leftItems.add(new LocalStore.Row("Bones", 9L, 44120L));
 
 		s.sources.add(new LocalStore.SourceRow("Abyssal demons", 4_112, 3_890, 61_204_113L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
 		s.sources.add(new LocalStore.SourceRow("Nechryael", 2_204, 2_090, 24_113_005L, null, 0, 0, java.util.Collections.emptySet(), 0, 0));
@@ -1157,17 +1157,6 @@ public class PanelPreviewTest
 		LocalStore.LootWindow lootWindow;
 
 		@Override
-		long lootRollFrom()
-		{
-			if (lootRollDay != null)
-			{
-				return lootRollDay.atStartOfDay(java.time.ZoneId.systemDefault())
-					.toInstant().toEpochMilli();
-			}
-			return store != null ? store.lootRollFrom() : 0;
-		}
-
-		@Override
 		java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task,
 			boolean includeOpen)
 		{
@@ -1240,31 +1229,73 @@ public class PanelPreviewTest
 				: new java.util.ArrayList<>();
 		}
 
+		@Override
+		LocalStore.LootWindow loot(java.time.LocalDate from, java.time.LocalDate to)
+		{
+			LocalStore.LootWindow held = from == null ? sessionWindow : lootWindow;
+			LocalStore.LootWindow real = store != null ? store.loot(from, to) : new LocalStore.LootWindow();
+			if (store == null && from == null)
+			{
+				periodBags.forEach((k, v) -> real.bySource.put(k, new ArrayList<>(v)));
+			}
+			if (held == null)
+			{
+				return real;
+			}
+			LocalStore.LootWindow w = new LocalStore.LootWindow();
+			w.loots = held.loots;
+			w.value = held.value;
+			w.left = held.left;
+			w.leftValue = held.leftValue;
+			w.leftKills = held.leftKills;
+			w.items.addAll(held.items);
+			w.sources.addAll(held.sources);
+			w.leftItems.addAll(held.leftItems);
+			w.bySource.putAll(real.bySource);
+			w.unfiled.addAll(real.unfiled);
+			return w;
+		}
+
+		@Override
+		LocalStore.LootDays lootDays()
+		{
+			LocalStore.LootDays real = store != null ? store.lootDays() : null;
+			return new LocalStore.LootDays()
+			{
+				@Override
+				long rollFrom()
+				{
+					if (lootRollDay != null)
+					{
+						return lootRollDay.atStartOfDay(java.time.ZoneId.systemDefault())
+							.toInstant().toEpochMilli();
+					}
+					return real != null ? real.rollFrom() : 0;
+				}
+
+				@Override
+				long detailFrom()
+				{
+					return real != null && lootRollDay == null ? real.detailFrom() : rollFrom();
+				}
+
+				@Override
+				Map<String, long[]> totals()
+				{
+					return real != null ? real.totals() : dayTotals;
+				}
+
+				@Override
+				long[] itemDays(String name)
+				{
+					long[] said = StubPlugin.this.itemDays.get(name);
+					return said != null ? said : real != null ? real.itemDays(name) : new long[4];
+				}
+			};
+		}
+
 		Map<String, long[]> itemDays = new LinkedHashMap<>();
 		Map<String, long[]> dayTotals = new java.util.TreeMap<>();
-
-		@Override
-		Map<String, long[]> dayTotals()
-		{
-			return store != null ? store.dayTotals() : dayTotals;
-		}
-
-		@Override
-		long[] itemDays(String name)
-		{
-			long[] said = itemDays.get(name);
-			return said != null ? said : store != null ? store.itemDays(name) : new long[4];
-		}
-
-		@Override
-		LocalStore.LootWindow lootBetween(java.time.LocalDate from, java.time.LocalDate to)
-		{
-			if (lootWindow != null)
-			{
-				return lootWindow;
-			}
-			return store != null ? store.lootBetween(from, to) : new LocalStore.LootWindow();
-		}
 
 		@Override
 		Map<String, Integer> sessionView()
@@ -1317,16 +1348,6 @@ public class PanelPreviewTest
 		}
 
 		@Override
-		LocalStore.LootWindow sessionLootWindow()
-		{
-			if (sessionWindow != null)
-			{
-				return sessionWindow;
-			}
-			return store != null ? store.sessionLootWindow() : new LocalStore.LootWindow();
-		}
-
-		@Override
 		long[] sessionUntakenTally()
 		{
 			return sessionUntaken;
@@ -1356,34 +1377,6 @@ public class PanelPreviewTest
 
 		final java.util.Map<String, java.util.List<LocalStore.BagItem>> periodBags =
 			new java.util.LinkedHashMap<>();
-
-		@Override
-		java.util.Map<String, java.util.List<LocalStore.BagItem>> itemsBySource(
-			java.time.LocalDate from, java.time.LocalDate to)
-		{
-			if (store != null)
-			{
-				return store.itemsBySource(from, to);
-			}
-			java.util.Map<String, java.util.List<LocalStore.BagItem>> out = new java.util.LinkedHashMap<>();
-			if (from == null)
-			{
-				periodBags.forEach((k, v) -> out.put(k, new ArrayList<>(v)));
-			}
-			return out;
-		}
-
-		@Override
-		java.util.Set<String> unfiledSources(java.time.LocalDate from, java.time.LocalDate to)
-		{
-			return store != null ? store.unfiledSources(from, to) : new java.util.HashSet<>();
-		}
-
-		@Override
-		long lootDetailFrom()
-		{
-			return store != null && lootRollDay == null ? store.lootDetailFrom() : lootRollFrom();
-		}
 
 		@Override
 		java.util.List<LocalStore.UntakenRow> untakenSources()

@@ -2644,10 +2644,10 @@ public class HistoryProgressCardTest
 		w.left = 44;
 		w.leftValue = 12_500;
 		w.leftKills = 30;
-		w.items.add(new String[]{"Granite hammer", "1", "10086894"});
-		w.items.add(new String[]{"Abyssal whip", "4", "3356000"});
-		w.leftItems.add(new String[]{"Belladonna seed", "9", "958"});
-		w.sources.add(new String[]{"Nechryael", "622", "3495578"});
+		w.items.add(new LocalStore.Row("Granite hammer", 1L, 10086894L));
+		w.items.add(new LocalStore.Row("Abyssal whip", 4L, 3356000L));
+		w.leftItems.add(new LocalStore.Row("Belladonna seed", 9L, 958L));
+		w.sources.add(new LocalStore.Row("Nechryael", 622L, 3495578L));
 		s.lootWindow = w;
 
 		ChroniclePanel p = panel(s);
@@ -3124,7 +3124,7 @@ public class HistoryProgressCardTest
 		LocalStore.LootWindow held = new LocalStore.LootWindow();
 		held.loots = 4;
 		held.value = 1_234;
-		held.sources.add(new String[]{"Vorkath", "4", "1234"});
+		held.sources.add(new LocalStore.Row("Vorkath", 4L, 1234L));
 		st.lootWindow = held;
 		List<String> some = labels(drops(p));
 		assertTrue(some.toString(), some.contains("Vorkath"));
@@ -3307,7 +3307,7 @@ public class HistoryProgressCardTest
 		PanelPreviewTest.StubPlugin st = stub(true);
 		st.lootRollDay = LocalDate.now().minusDays(2);
 		LocalStore.LootWindow held = new LocalStore.LootWindow();
-		held.sources.add(new String[]{"Sarachnis", "22", "626995"});
+		held.sources.add(new LocalStore.Row("Sarachnis", 22L, 626995L));
 		st.lootWindow = held;
 		ChroniclePanel p = panel(st);
 		set(p, "histGranularity", "Week");

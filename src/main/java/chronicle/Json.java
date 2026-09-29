@@ -54,18 +54,6 @@ final class Json
 		}
 	}
 
-	static long safeParse(String s)
-	{
-		try
-		{
-			return Long.parseLong(s);
-		}
-		catch (NumberFormatException e)
-		{
-			return 0;
-		}
-	}
-
 	static String low(String s)
 	{
 		return s.toLowerCase(Locale.ROOT);

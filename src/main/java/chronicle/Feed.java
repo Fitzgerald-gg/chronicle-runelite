@@ -258,7 +258,6 @@ final class Feed
 
 	private Map<LocalDate, long[]> days;
 
-	private Map<String, long[]> dayTotals;
 
 	Map<LocalDate, long[]> days()
 	{
@@ -319,15 +318,6 @@ final class Feed
 	private Map<LocalDate, Map<String, Long>> daySkills;
 
 	private Set<LocalDate> crossedDays;
-
-	Map<String, long[]> dayTotals()
-	{
-		if (dayTotals == null)
-		{
-			dayTotals = build.plugin.dayTotals();
-		}
-		return dayTotals;
-	}
 
 	static final DateTimeFormatter ROLL_DAY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -401,7 +391,7 @@ final class Feed
 			clauses.add("+" + gp((Long) xp[0]) + " xp, most in " + xp[1]);
 		}
 		long[] loot = crossed && sat != null && sat[1] > 0 && sat[6] == sat[1]
-			? new long[]{sat[4], sat[5]} : dayTotals().get(ROLL_DAY.format(day));
+			? new long[]{sat[4], sat[5]} : build.lootDays().totals().get(ROLL_DAY.format(day));
 		if (loot != null && loot[0] > 0)
 		{
 			clauses.add(count(loot[0], "drop")

@@ -21,7 +21,6 @@ import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Skill;
 import static chronicle.Json.low;
-import static chronicle.Json.safeParse;
 import static chronicle.Json.strMap;
 import static chronicle.Json.strs;
 import static chronicle.Json.table;
@@ -156,17 +155,6 @@ final class Sources
 			loose = loose == null && !exact && named.apply(r).equalsIgnoreCase(name) ? r : loose;
 		}
 		return loose;
-	}
-
-	static long[] rowOf(List<String[]> rows, String name)
-	{
-		String[] r = rowFor(rows, name, false);
-		return r == null ? new long[]{0, 0} : new long[]{safeParse(r[1]), safeParse(r[2])};
-	}
-
-	static String[] rowFor(List<String[]> rows, String name, boolean exact)
-	{
-		return find(rows, r -> r[0], name, exact);
 	}
 
 	static <T> List<T> firstN(List<T> l, int cap)

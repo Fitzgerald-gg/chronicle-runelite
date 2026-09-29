@@ -806,24 +806,14 @@ public class ChroniclePlugin extends Plugin
 		return localStore.dropSources();
 	}
 
-	long lootRollFrom()
+	LocalStore.LootWindow loot(LocalDate from, LocalDate to)
 	{
-		return localStore.lootRollFrom();
+		return localStore.loot(from, to);
 	}
 
-	LocalStore.LootWindow lootBetween(LocalDate from, LocalDate to)
+	LocalStore.LootDays lootDays()
 	{
-		return localStore.lootBetween(from, to);
-	}
-
-	long[] itemDays(String name)
-	{
-		return localStore.itemDays(name);
-	}
-
-	Map<String, long[]> dayTotals()
-	{
-		return localStore.dayTotals();
+		return localStore.lootDays();
 	}
 
 	List<LocalStore.BagItem> sourceItems(String source)
@@ -863,26 +853,6 @@ public class ChroniclePlugin extends Plugin
 		out.add(live);
 		out.addAll(kept);
 		return out;
-	}
-
-	LocalStore.LootWindow sessionLootWindow()
-	{
-		return localStore.sessionLootWindow();
-	}
-
-	Map<String, List<LocalStore.BagItem>> itemsBySource(LocalDate from, LocalDate to)
-	{
-		return localStore.itemsBySource(from, to);
-	}
-
-	Set<String> unfiledSources(LocalDate from, LocalDate to)
-	{
-		return localStore.unfiledSources(from, to);
-	}
-
-	long lootDetailFrom()
-	{
-		return localStore.lootDetailFrom();
 	}
 
 	int sessionLoots()

@@ -68,9 +68,9 @@ public class ItemDaysTest
 	@Test
 	public void theRollSaysWhenAnItemLanded()
 	{
-		assertArrayEquals(new long[]{ms("2026-08-03"), ms("2026-09-10"), 2, 2}, store.itemDays("Abyssal whip"));
-		assertArrayEquals(new long[]{ms("2026-09-11"), ms("2026-09-11"), 1, 100}, store.itemDays("death rune"));
-		assertArrayEquals(new long[4], store.itemDays("Dragon warhammer"));
+		assertArrayEquals(new long[]{ms("2026-08-03"), ms("2026-09-10"), 2, 2}, store.lootDays().itemDays("Abyssal whip"));
+		assertArrayEquals(new long[]{ms("2026-09-11"), ms("2026-09-11"), 1, 100}, store.lootDays().itemDays("death rune"));
+		assertArrayEquals(new long[4], store.lootDays().itemDays("Dragon warhammer"));
 	}
 
 	private static JPanel page(String granularity, long[] days) throws Exception

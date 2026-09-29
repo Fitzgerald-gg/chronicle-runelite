@@ -115,11 +115,11 @@ public class DatedRecordTest
 		assertEquals(240.0, v.timeSum, 0.001);
 		assertEquals(4, v.loots);
 		java.time.LocalDate today = java.time.LocalDate.now();
-		LocalStore.LootWindow w = store.lootBetween(today, today);
-		double[] t = w.times.get("Vorkath");
-		assertEquals(3, (long) t[0]);
-		assertEquals(240.0, t[1], 0.001);
-		assertEquals(3, (long) store.sessionLootWindow().times.get("Vorkath")[0]);
+		LocalStore.LootWindow w = store.loot(today, today);
+		LocalStore.Row t = w.source("Vorkath", true);
+		assertEquals(3, (long) t.timed);
+		assertEquals(240.0, t.timeSum, 0.001);
+		assertEquals(3, (long) store.loot(null, null).source("Vorkath", true).timed);
 	}
 
 	private LocalStore.SourceRow source()

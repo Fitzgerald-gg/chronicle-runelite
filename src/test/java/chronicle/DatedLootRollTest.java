@@ -65,12 +65,12 @@ public class DatedLootRollTest
 		store.record("LOOT", loot("Nechryael", 25772, 3, "Malicious ashes"), "Tester");
 		store.record("LOOT", loot("Nechryael", 25772, 2, "Malicious ashes"), "Tester");
 		LocalDate today = LocalDate.now();
-		LocalStore.LootWindow w = store.lootBetween(today, today);
+		LocalStore.LootWindow w = store.loot(today, today);
 		assertEquals(2, w.loots);
 		assertTrue("the day's take was priced at nothing", w.value > 0);
-		assertEquals("Nechryael", w.sources.get(0)[0]);
-		assertEquals("2", w.sources.get(0)[1]);
-		assertEquals("5", w.items.get(0)[1]);
+		assertEquals("Nechryael", w.sources.get(0).name);
+		assertEquals(2L, w.sources.get(0).qty);
+		assertEquals(5L, w.items.get(0).qty);
 	}
 
 	@Test
@@ -78,10 +78,10 @@ public class DatedLootRollTest
 	{
 		store.record("LOOT", loot("Zulrah", 1, 1, "Thing"), "Tester");
 		LocalDate today = LocalDate.now();
-		LocalStore.LootWindow before = store.lootBetween(today.minusDays(9), today.minusDays(1));
+		LocalStore.LootWindow before = store.loot(today.minusDays(9), today.minusDays(1));
 		assertEquals(0, before.loots);
 		assertEquals(0, before.value);
-		LocalStore.LootWindow spanning = store.lootBetween(today.minusDays(9), today);
+		LocalStore.LootWindow spanning = store.loot(today.minusDays(9), today);
 		assertEquals(1, spanning.loots);
 	}
 
@@ -90,7 +90,7 @@ public class DatedLootRollTest
 	{
 		store.record("LOOT_UNTAKEN", untaken("Dust devil", 201, 7, 2), "Tester");
 		LocalDate today = LocalDate.now();
-		LocalStore.LootWindow w = store.lootBetween(today, today);
+		LocalStore.LootWindow w = store.loot(today, today);
 		assertEquals(7, w.left);
 		assertEquals(2, w.leftKills);
 		assertTrue(w.leftValue > 0);
@@ -100,9 +100,9 @@ public class DatedLootRollTest
 	@Test
 	public void theRollSaysWhichDayItBeginsOn()
 	{
-		assertEquals("an empty roll speaks for no day", 0, store.lootRollFrom());
+		assertEquals("an empty roll speaks for no day", 0, store.lootDays().rollFrom());
 		store.record("LOOT", loot("Zulrah", 1, 1, "Thing"), "Tester");
-		long from = store.lootRollFrom();
+		long from = store.lootDays().rollFrom();
 		assertEquals(LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault())
 			.toInstant().toEpochMilli(), from);
 	}
@@ -116,9 +116,9 @@ public class DatedLootRollTest
 		LocalStore again = new LocalStore(Mockito.mock(ItemManager.class), new Gson());
 		again.load(folder, "Tester");
 		LocalDate today = LocalDate.now();
-		LocalStore.LootWindow w = again.lootBetween(today, today);
+		LocalStore.LootWindow w = again.loot(today, today);
 		assertEquals(1, w.loots);
-		assertEquals("Vorkath", w.sources.get(0)[0]);
+		assertEquals("Vorkath", w.sources.get(0).name);
 	}
 
 	@Test
@@ -127,11 +127,11 @@ public class DatedLootRollTest
 		store.record("LOOT", loot("Zulrah", 1, 1, "Cheap thing"), "Tester");
 		store.record("LOOT", loot("Vorkath", 2, 50, "Dear thing"), "Tester");
 		LocalDate today = LocalDate.now();
-		LocalStore.LootWindow w = store.lootBetween(today, today);
+		LocalStore.LootWindow w = store.loot(today, today);
 		assertEquals(w.sources.toString(), 2, w.sources.size());
-		assertEquals("Vorkath", w.sources.get(0)[0]);
-		assertEquals("Zulrah", w.sources.get(1)[0]);
+		assertEquals("Vorkath", w.sources.get(0).name);
+		assertEquals("Zulrah", w.sources.get(1).name);
 		assertTrue(w.sources.toString(),
-			Long.parseLong(w.sources.get(0)[2]) > Long.parseLong(w.sources.get(1)[2]));
+			w.sources.get(0).value > w.sources.get(1).value);
 	}
 }

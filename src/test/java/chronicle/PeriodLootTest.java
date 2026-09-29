@@ -210,12 +210,12 @@ public class PeriodLootTest
 		s.record("LOOT", loot("Herbiboar", 199, 2), RSN);
 		s.record("LOOT", loot("Herbiboar", 995, 7), RSN);
 		LocalDate today = LocalDate.now();
-		Map<String, List<LocalStore.BagItem>> day = s.itemsBySource(today, today);
+		Map<String, List<LocalStore.BagItem>> day = s.loot(today, today).bySource;
 		assertEquals(50, qty(day, "Mad Angel", "Coins"));
 		assertEquals(7, qty(day, "Herbiboar", "Coins"));
 		assertEquals(2, qty(day, "Herbiboar", "Grimy guam leaf"));
-		assertTrue("a drop this build filed reads as unfiled", s.unfiledSources(today, today).isEmpty());
-		Map<String, List<LocalStore.BagItem>> sitting = s.itemsBySource(null, null);
+		assertTrue("a drop this build filed reads as unfiled", s.loot(today, today).unfiled.isEmpty());
+		Map<String, List<LocalStore.BagItem>> sitting = s.loot(null, null).bySource;
 		assertEquals(day.get("Herbiboar").size(), sitting.get("Herbiboar").size());
 	}
 
@@ -223,11 +223,11 @@ public class PeriodLootTest
 	public void theDaysBeforeAreSplitWhereTheRecordProvesWhose() throws Exception
 	{
 		LocalStore s = store(oldJournal());
-		assertEquals(3, qty(s.itemsBySource(D1, D1), "Herbiboar", "Grimy guam leaf"));
-		Map<String, List<LocalStore.BagItem>> d2 = s.itemsBySource(D2, D2);
+		assertEquals(3, qty(s.loot(D1, D1).bySource, "Herbiboar", "Grimy guam leaf"));
+		Map<String, List<LocalStore.BagItem>> d2 = s.loot(D2, D2).bySource;
 		assertEquals(1, qty(d2, "Herbiboar", "Grimy guam leaf"));
 		assertEquals(500, qty(d2, "Mad Angel", "Coins"));
-		Map<String, List<LocalStore.BagItem>> d3 = s.itemsBySource(D3, D3);
+		Map<String, List<LocalStore.BagItem>> d3 = s.loot(D3, D3).bySource;
 		assertEquals("a Tuna both have dropped was given to one", 0,
 			qty(d3, "Mad Angel", "Tuna") + qty(d3, "Herbiboar", "Tuna"));
 	}
@@ -260,7 +260,7 @@ public class PeriodLootTest
 		root.add("loot_days", obj(D1.toString(), day));
 		Files.write(new File(d, LocalStore.slug(RSN) + ".json").toPath(),
 			new Gson().toJson(root).getBytes(StandardCharsets.UTF_8));
-		Map<String, List<LocalStore.BagItem>> d1 = store(d).itemsBySource(D1, D1);
+		Map<String, List<LocalStore.BagItem>> d1 = store(d).loot(D1, D1).bySource;
 		assertEquals(d1.toString(), 0, qty(d1, "Mad Angel", "Tuna") + qty(d1, "Herbiboar", "Tuna"));
 	}
 
@@ -274,7 +274,7 @@ public class PeriodLootTest
 		root.getAsJsonObject("loot_days").getAsJsonObject(D1.toString())
 			.getAsJsonObject("sources").getAsJsonObject("Herbiboar").addProperty("value", 299);
 		Files.write(f.toPath(), new Gson().toJson(root).getBytes(StandardCharsets.UTF_8));
-		assertEquals(0, qty(store(d).itemsBySource(D1, D1), "Herbiboar", "Grimy guam leaf"));
+		assertEquals(0, qty(store(d).loot(D1, D1).bySource, "Herbiboar", "Grimy guam leaf"));
 	}
 
 	@Test
@@ -293,8 +293,8 @@ public class PeriodLootTest
 		LocalStore s = store(d);
 		s.record("LOOT", loot("Herbiboar", 199, 2), RSN);
 		LocalDate today = LocalDate.now();
-		assertEquals(3, qty(s.itemsBySource(today, today), "Herbiboar", "Grimy guam leaf"));
-		assertEquals("3", s.lootBetween(today, today).items.get(0)[1]);
+		assertEquals(3, qty(s.loot(today, today).bySource, "Herbiboar", "Grimy guam leaf"));
+		assertEquals(3L, s.loot(today, today).items.get(0).qty);
 	}
 
 	private File journal(JsonObject drops, JsonObject days) throws Exception
@@ -320,8 +320,8 @@ public class PeriodLootTest
 		today.add("items", obj("199", item("Grimy guam leaf", 10, 1000)));
 		LocalStore s = store(journal(new JsonObject(), obj(LocalDate.now().toString(), today)));
 		s.record("LOOT", loot("Herbiboar", 199, 2), RSN);
-		assertEquals(2, qty(s.itemsBySource(null, null), "Herbiboar", "Grimy guam leaf"));
-		assertEquals(12, qty(s.itemsBySource(LocalDate.now(), LocalDate.now()), "Herbiboar", "Grimy guam leaf"));
+		assertEquals(2, qty(s.loot(null, null).bySource, "Herbiboar", "Grimy guam leaf"));
+		assertEquals(12, qty(s.loot(LocalDate.now(), LocalDate.now()).bySource, "Herbiboar", "Grimy guam leaf"));
 	}
 
 	@Test
@@ -333,7 +333,7 @@ public class PeriodLootTest
 		day.add("sources", obj("Herbiboar", src));
 		day.add("items", obj("199", item("Grimy guam leaf", 3, 300)));
 		LocalStore s = store(journal(new JsonObject(), obj(D1.toString(), day)));
-		assertEquals(3, qty(s.itemsBySource(D1, D1), "Herbiboar", "Grimy guam leaf"));
+		assertEquals(3, qty(s.loot(D1, D1).bySource, "Herbiboar", "Grimy guam leaf"));
 	}
 
 	@Test
@@ -360,7 +360,7 @@ public class PeriodLootTest
 		day.add("sources", srcs);
 		day.add("items", heap);
 		Map<String, List<LocalStore.BagItem>> d1 = store(journal(drops, obj(D1.toString(), day)))
-			.itemsBySource(D1, D1);
+			.loot(D1, D1).bySource;
 		assertEquals(1, qty(d1, "Mad Angel", "Grimy guam leaf"));
 		assertEquals(5, qty(d1, "Mad Angel", "Coins"));
 		assertEquals(1, qty(d1, "Herbiboar", "Tuna"));
@@ -389,7 +389,7 @@ public class PeriodLootTest
 		day.add("sources", srcs);
 		day.add("items", heap);
 		Map<String, List<LocalStore.BagItem>> d1 = store(journal(drops, obj(D1.toString(), day)))
-			.itemsBySource(D1, D1);
+			.loot(D1, D1).bySource;
 		assertEquals(d1.toString(), 0, qty(d1, "O", "Old name") + qty(d1, "T", "Old name"));
 	}
 
@@ -405,7 +405,7 @@ public class PeriodLootTest
 		JsonObject day = total(2, 100);
 		day.add("sources", obj("Herbiboar", src));
 		day.add("items", heap);
-		assertEquals(1, qty(store(journal(new JsonObject(), obj(D1.toString(), day))).itemsBySource(D1, D1),
+		assertEquals(1, qty(store(journal(new JsonObject(), obj(D1.toString(), day))).loot(D1, D1).bySource,
 			"Herbiboar", "Bones"));
 	}
 
@@ -425,7 +425,7 @@ public class PeriodLootTest
 		day.add("items", obj("23866", item("Crystal shard", 30, 0)));
 		LocalStore s = store(journal(drops, obj(LocalDate.now().toString(), day)));
 		s.record("LOOT", loot("Crystalline rat", 995, 5), RSN);
-		assertTrue(s.unfiledSources(LocalDate.now(), LocalDate.now()).contains("Crystalline rat"));
+		assertTrue(s.loot(LocalDate.now(), LocalDate.now()).unfiled.contains("Crystalline rat"));
 	}
 
 	@Test
@@ -449,7 +449,7 @@ public class PeriodLootTest
 		JsonObject day = total(2, 60);
 		day.add("sources", srcs);
 		day.add("items", heap);
-		Map<String, List<LocalStore.BagItem>> d1 = store(journal(drops, obj(D1.toString(), day))).itemsBySource(D1, D1);
+		Map<String, List<LocalStore.BagItem>> d1 = store(journal(drops, obj(D1.toString(), day))).loot(D1, D1).bySource;
 		assertEquals(d1.toString(), 0, qty(d1, "Mad Angel", "Clue scroll (hard)") + qty(d1, "Mad Angel", "Coins"));
 	}
 
@@ -469,7 +469,7 @@ public class PeriodLootTest
 		day.add("sources", srcs);
 		day.add("items", heap);
 		Map<String, List<LocalStore.BagItem>> d1 = store(journal(new JsonObject(), obj(D1.toString(), day)))
-			.itemsBySource(D1, D1);
+			.loot(D1, D1).bySource;
 		assertEquals(1, qty(d1, "Herbiboar", "Clue scroll (hard)"));
 	}
 
@@ -491,7 +491,7 @@ public class PeriodLootTest
 		s.record("LOOT", loot("Mad Angel", 100, 1), RSN);
 		name[0] = "New name";
 		s.record("LOOT", loot("Herbiboar", 100, 1), RSN);
-		Map<String, List<LocalStore.BagItem>> today = s.itemsBySource(LocalDate.now(), LocalDate.now());
+		Map<String, List<LocalStore.BagItem>> today = s.loot(LocalDate.now(), LocalDate.now()).bySource;
 		assertEquals(1, qty(today, "Mad Angel", "New name"));
 		assertEquals(1, qty(today, "Herbiboar", "New name"));
 	}
@@ -508,7 +508,7 @@ public class PeriodLootTest
 		JsonObject days = new JsonObject();
 		days.add(D1.toString(), a);
 		days.add(D2.toString(), b);
-		Map<String, List<LocalStore.BagItem>> both = store(journal(new JsonObject(), days)).itemsBySource(D1, D2);
+		Map<String, List<LocalStore.BagItem>> both = store(journal(new JsonObject(), days)).loot(D1, D2).bySource;
 		assertEquals(300, qty(both, "Spiritual mage", "Coins"));
 		assertEquals(500, qty(both, "Spiritual Mage", "Coins"));
 	}

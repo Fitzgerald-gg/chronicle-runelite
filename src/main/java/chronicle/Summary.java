@@ -35,7 +35,6 @@ import static chronicle.Json.keyOf;
 import static chronicle.Json.low;
 import static chronicle.Json.obj;
 import static chronicle.Json.safeLong;
-import static chronicle.Json.safeParse;
 import static chronicle.LocalStore.kindOf;
 import static chronicle.Period.noon;
 import static chronicle.Text.climb;
@@ -241,10 +240,10 @@ final class Summary
 		}
 		else if (f.session)
 		{
-			for (String[] r : build.plugin.sessionLootWindow().sources)
+			for (LocalStore.Row r : build.plugin.loot(null, null).sources)
 			{
-				by.merge(r[0], safeParse(r[1]), Long::sum);
-				worth.merge(r[0], safeParse(r[2]), Long::sum);
+				by.merge(r.name, r.qty, Long::sum);
+				worth.merge(r.name, r.value, Long::sum);
 			}
 		}
 		else
@@ -312,7 +311,7 @@ final class Summary
 	{
 		if (!f.whole && !f.session)
 		{
-			long from = build.plugin.lootRollFrom();
+			long from = build.lootDays().rollFrom();
 			if (from <= 0 || from > build.period().ms()[0])
 			{
 				f.lootNote = "Loot is not dated this far back, so this period's cannot be told from the rest.";
@@ -351,20 +350,18 @@ final class Summary
 			return;
 		}
 		LocalStore.LootWindow win = build.lootWindow();
-		for (String[] r : Sources.firstN(win.sources, 8))
+		for (LocalStore.Row r : Sources.firstN(win.sources, 8))
 		{
-			long v = safeParse(r[2]);
-			if (v > 0)
+			if (r.value > 0)
 			{
-				f.sources.add(new RecapPicture.Named(r[0], null, gps(v)));
+				f.sources.add(new RecapPicture.Named(r.name, null, gps(r.value)));
 			}
 		}
-		for (String[] r : Sources.firstN(win.items, 6))
+		for (LocalStore.Row r : Sources.firstN(win.items, 6))
 		{
-			long v = safeParse(r[2]);
-			if (v > 0)
+			if (r.value > 0)
 			{
-				f.items.add(new RecapPicture.Named(r[0] + " ×" + fmt(safeParse(r[1])), null, gps(v)));
+				f.items.add(new RecapPicture.Named(r.name + " ×" + fmt(r.qty), null, gps(r.value)));
 			}
 		}
 		if (f.loot.isEmpty())
@@ -403,7 +400,7 @@ final class Summary
 			else if (!f.whole)
 			{
 				n = build.kills.rolled(source);
-				v = source(source)[1];
+				v = source(source).value;
 			}
 			if (n > 0)
 			{
@@ -843,14 +840,14 @@ final class Summary
 		return new long[]{win.loots, win.value, win.left, win.leftValue};
 	}
 
-	String[] dearest()
+	LocalStore.Row dearest()
 	{
 		if (build.period().whole)
 		{
 			return null;
 		}
 		LocalStore.LootWindow win = build.lootWindow();
-		return win.items.isEmpty() ? null : new String[]{win.items.get(0)[0], win.items.get(0)[2]};
+		return win.items.isEmpty() ? null : win.items.get(0);
 	}
 
 	String[] killedMost()
@@ -869,8 +866,8 @@ final class Summary
 		}
 		if (build.period().session)
 		{
-			String[] top = most(build.plugin.sessionLootWindow().sources, r -> safeParse(r[1]));
-			return top == null ? null : new String[]{top[0], fmt(safeParse(top[1]))};
+			LocalStore.Row top = most(build.plugin.loot(null, null).sources, r -> r.qty);
+			return top == null ? null : new String[]{top.name, fmt(top.qty)};
 		}
 		Span s = build.span();
 		if (s == null)
@@ -895,9 +892,9 @@ final class Summary
 		}
 		else
 		{
-			for (String[] r : build.plugin.lootBetween(from, to).sources)
+			for (LocalStore.Row r : build.plugin.loot(from, to).sources)
 			{
-				out.merge(r[0], safeParse(r[2]), Long::sum);
+				out.merge(r.name, r.value, Long::sum);
 			}
 		}
 		return out;
@@ -932,15 +929,9 @@ final class Summary
 		return 0;
 	}
 
-	double[] sourceTimes(String name)
+	LocalStore.Row source(String name)
 	{
-		Map<String, double[]> times = build.lootWindow().times;
-		String key = keyOf(times.keySet(), name);
-		return key == null ? new double[]{0, 0} : times.get(key);
-	}
-
-	long[] source(String name)
-	{
-		return Sources.rowOf(build.lootWindow().sources, name);
+		LocalStore.Row r = build.lootWindow().source(name, false);
+		return r != null ? r : new LocalStore.Row(name, 0, 0);
 	}
 }
