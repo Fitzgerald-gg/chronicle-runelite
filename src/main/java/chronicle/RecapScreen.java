@@ -305,14 +305,14 @@ final class RecapScreen extends Screen
 				return;
 			}
 		}
-		long[] loot = board.periodLoot();
-		if (loot[0] > 0)
+		LootDays.LootWindow loot = board.periodLoot();
+		if (loot.loots > 0)
 		{
-			f.loot.add(new RecapPicture.Named("Drops", fmt(loot[0]), gps(loot[1])));
+			f.loot.add(new RecapPicture.Named("Drops", fmt(loot.loots), gps(loot.value)));
 		}
-		if (loot[2] > 0)
+		if (loot.left > 0)
 		{
-			f.loot.add(new RecapPicture.Named("Left behind", fmt(loot[2]), gps(loot[3])));
+			f.loot.add(new RecapPicture.Named("Left behind", fmt(loot.left), gps(loot.leftValue)));
 		}
 		if (f.whole)
 		{
@@ -537,9 +537,9 @@ final class RecapScreen extends Screen
 
 	private void tiles(RecapPicture.Facts f)
 	{
-		long[] sat = board.sittingsInWindow(new LocalDate[1]);
-		long minutes = sat[0];
-		int sittings = (int) sat[1];
+		Board.Sittings sat = board.sittingsInWindow();
+		long minutes = sat.minutes;
+		int sittings = (int) sat.count;
 		long games = f.whole ? plugin.gamePlaytimeMinutes() : 0;
 		if (games > minutes)
 		{
@@ -549,11 +549,11 @@ final class RecapScreen extends Screen
 		{
 			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(minutes), count(sittings, "sitting")));
 		}
-		long[] xp = board.periodXp();
-		if (xp != null && xp[0] > 0)
+		Long xp = board.periodXp();
+		if (xp != null && xp > 0)
 		{
 			String most = board.periodXpMost();
-			f.tiles.add(new RecapPicture.Tile("Experience", (f.whole ? "" : "+") + gp(xp[0]),
+			f.tiles.add(new RecapPicture.Tile("Experience", (f.whole ? "" : "+") + gp(xp),
 				most == null ? null : "most in " + most));
 		}
 		if (f.totalLevel != null && f.totalLevel[1] != null)
@@ -625,43 +625,42 @@ final class RecapScreen extends Screen
 		JPanel plate = card(period.whole() ? "The whole record" : board.window().label);
 		int held = plate.getComponentCount();
 
-		LocalDate[] busiest = new LocalDate[1];
-		long[] sat = board.sittingsInWindow(busiest);
-		long minutes = sat[0];
-		int sittings = (int) sat[1];
+		Board.Sittings sat = board.sittingsInWindow();
+		long minutes = sat.minutes;
+		int sittings = (int) sat.count;
 		if (sittings > 0)
 		{
 			line(plate, "Played", hoursMinutes(minutes) + " · " + count(sittings, "sitting"),
 				() -> ui.openJournal("Sessions"));
 		}
-		if (busiest[0] != null && sittings > 1)
+		if (sat.busiest != null && sittings > 1)
 		{
-			final LocalDate day = busiest[0];
+			LocalDate day = sat.busiest;
 			line(plate, "Busiest day", TASK_DAY.format(day.atStartOfDay(
-				ZoneId.systemDefault()).toInstant()) + " · " + hoursMinutes(sat[2]),
+				ZoneId.systemDefault()).toInstant()) + " · " + hoursMinutes(sat.busiestMinutes),
 				() -> ui.openJournalOn(noon(day)));
 		}
 
-		long[] xp = board.periodXp();
-		if (xp != null && xp[0] > 0)
+		Long xp = board.periodXp();
+		if (xp != null && xp > 0)
 		{
 			String most = board.periodXpMost();
-			line(plate, period.whole() ? "Xp" : "Xp gained", (period.whole() ? "" : "+") + gp(xp[0]) + " xp"
+			line(plate, period.whole() ? "Xp" : "Xp gained", (period.whole() ? "" : "+") + gp(xp) + " xp"
 					+ (most != null ? ", most in " + most : ""),
 				() -> ui.show(ChroniclePanel.View.STANDING));
 		}
-		long[] levels = board.periodLevels();
+		Board.Climb levels = board.periodLevels();
 		if (levels != null)
 		{
 			line(plate, period.whole() ? "Total level" : "Levels",
-				period.whole() ? fmt(levels[0]) : "+" + fmt(levels[0]) + " · " + fmt(levels[1]) + " now",
+				period.whole() ? fmt(levels.gained) : "+" + fmt(levels.gained) + " · " + fmt(levels.now) + " now",
 				() -> ui.show(ChroniclePanel.View.STANDING));
 		}
 
-		long[] loot = board.periodLoot();
-		if (loot[0] > 0)
+		LootDays.LootWindow loot = board.periodLoot();
+		if (loot.loots > 0)
 		{
-			line(plate, "Drops", qtyGp(loot[0], loot[1]), () -> ui.show(ChroniclePanel.View.LOOT));
+			line(plate, "Drops", qtyGp(loot.loots, loot.value), () -> ui.show(ChroniclePanel.View.LOOT));
 		}
 		Tally dearest = board.periodDearest();
 		if (dearest != null)
@@ -671,9 +670,9 @@ final class RecapScreen extends Screen
 			said.fixed(" · " + gps(dearest.value));
 			line(plate, "Dearest drop", said, () -> ui.openItem(dearest.name));
 		}
-		if (loot[2] > 0)
+		if (loot.left > 0)
 		{
-			line(plate, "Left behind", qtyGp(loot[2], loot[3]), () -> ui.openLeftBehind(null));
+			line(plate, "Left behind", qtyGp(loot.left, loot.leftValue), () -> ui.openLeftBehind(null));
 		}
 
 		Map<String, Long> counters = period.whole() ? board.withLedgerSpend(board.counters()) : board.periodCounters();

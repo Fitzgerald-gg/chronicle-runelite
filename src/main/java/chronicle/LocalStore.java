@@ -1064,12 +1064,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	int[] clogFraction()
+	Fraction clogFraction()
 	{
 		synchronized (lock)
 		{
 			JsonObject cl = obj(root, "collection_log");
-			return new int[]{(int) asLong(cl.get("finished")), (int) asLong(cl.get("available"))};
+			return new Fraction(asLong(cl.get("finished")), asLong(cl.get("available")));
 		}
 	}
 
@@ -1317,7 +1317,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			leftKills += u.kills;
 		}
 		SlayerJourney journey = slayer.slayerJourney();
-		int finished = clogFraction()[0];
+		long finished = clogFraction().done;
 		Map<String, Long> out = new LinkedHashMap<>();
 		out.put("dropsReceived", loots);
 		out.put("lootValue", value);

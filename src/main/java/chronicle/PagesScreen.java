@@ -151,9 +151,9 @@ final class PagesScreen extends Screen
 		JPanel head = card("Achievement diaries");
 		if (known)
 		{
-			long[] d = board.diaryStanding();
-			head.add(row("Tiers done", d[0] + " / " + d[1], ACCENT));
-			head.add(row("Regions finished", fmt(d[2]) + " / " + fmt(d[3])));
+			Board.Diaries d = board.diaryStanding();
+			head.add(row("Tiers done", d.tiers.done + " / " + d.tiers.of, ACCENT));
+			head.add(row("Regions finished", fmt(d.regions.done) + " / " + fmt(d.regions.of)));
 		}
 		spaced(p, head);
 		if (!known)
@@ -215,10 +215,10 @@ final class PagesScreen extends Screen
 	private void buildCombatAchievements(JPanel p)
 	{
 		JsonObject all = CA_TASKS;
-		long[] c = board.combatStanding();
+		Board.Combat c = board.combatStanding();
 		JPanel head = card("Combat achievements");
-		head.add(row("Points", c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]), ACCENT));
-		head.add(row("Tiers unlocked", fmt(c[2]) + " / 6"));
+		head.add(row("Points", c.points.of > 0 ? fmt(c.points.done) + " / " + fmt(c.points.of) : fmt(c.points.done), ACCENT));
+		head.add(row("Tiers unlocked", fmt(c.tiers) + " / 6"));
 		Set<Integer> done = board.caDone();
 		boolean known = !done.isEmpty();
 		long named = done.stream().filter(id -> all.has(String.valueOf(id))).count();
@@ -326,14 +326,13 @@ final class PagesScreen extends Screen
 
 	private JPanel logHead()
 	{
-		int[] standing = board.clogStanding();
+		Fraction standing = board.clogStanding();
 		int fin = plugin.clogFinished();
 		JPanel head = card("Collection log");
 		if (standing != null)
 		{
-			head.add(row(fmt(standing[0]) + " / " + fmt(standing[1]),
-				Math.round(100f * standing[0] / standing[1]) + "%", ACCENT));
-			head.add(progress((float) standing[0] / standing[1]));
+			head.add(row(fmt(standing.done) + " / " + fmt(standing.of), Math.round(100f * standing.done / standing.of) + "%", ACCENT));
+			head.add(progress((float) standing.done / standing.of));
 		}
 		else if (fin > 0)
 		{

@@ -310,10 +310,10 @@ final class StandingScreen extends Screen
 		cell.add(styled(new JLabel(cb > 0 ? climbed ? climb(was, cb) : fmt(cb) : "-", JLabel.RIGHT), small(),
 			cb > 0 && (period.whole() || moved) ? LIT : DIM), BorderLayout.EAST);
 		Map<String, Long> c = board.counters();
-		long[] ca = board.combatStanding();
+		Board.Combat ca = board.combatStanding();
 		cell.setToolTipText(tip("Combat",
-			"Achievement points", ca[1] > 0 ? fmt(ca[0]) + " / " + fmt(ca[1]) : fmt(ca[0]),
-			"Tiers unlocked", fmt(ca[2]) + " / 6",
+			"Achievement points", ca.points.of > 0 ? fmt(ca.points.done) + " / " + fmt(ca.points.of) : fmt(ca.points.done),
+			"Tiers unlocked", fmt(ca.tiers) + " / 6",
 			"Damage dealt", fmt(c.getOrDefault(StatKeys.DAMAGE_DEALT, 0L)),
 			"Highest hit", fmt(c.getOrDefault(StatKeys.HIGHEST_HIT, 0L))));
 		return link(cell, () -> ui.open(ChroniclePanel.Page.SHEET, "combat"));
@@ -364,9 +364,9 @@ final class StandingScreen extends Screen
 			case "Collections":
 			{
 				figure = plugin.clogFinished();
-				int[] log = board.clogStanding();
-				hover = tip("Collection log", "Obtained", fmt(figure), "Available", log != null ? fmt(log[1]) : "not yet",
-					"Share", log != null ? share(log[0], log[1]) : "-");
+				Fraction log = board.clogStanding();
+				hover = tip("Collection log", "Obtained", fmt(figure), "Available", log != null ? fmt(log.of) : "not yet",
+					"Share", log != null ? share(log.done, log.of) : "-");
 				break;
 			}
 			case "Quests":
@@ -380,9 +380,10 @@ final class StandingScreen extends Screen
 			}
 			case "Diaries":
 			{
-				long[] d = board.diaryStanding();
-				figure = d[0];
-				hover = tip("Achievement diaries", "Tiers done", d[0] + " / " + d[1], "Regions finished", fmt(d[2]), "Regions", fmt(d[3]));
+				Board.Diaries d = board.diaryStanding();
+				figure = d.tiers.done;
+				hover = tip("Achievement diaries", "Tiers done", d.tiers.done + " / " + d.tiers.of, "Regions finished",
+					fmt(d.regions.done), "Regions", fmt(d.regions.of));
 				break;
 			}
 			default:

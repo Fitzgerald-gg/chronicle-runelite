@@ -105,9 +105,57 @@ final class Board
 		final Map<String, Map<String, Long>> byPage = new LinkedHashMap<>();
 	}
 
+	static final class DayPlay
+	{
+		long minutes;
+		long sittings;
+		long xp;
+		long xpSittings;
+		long drops;
+		long dropsGp;
+		long dropSittings;
+		long skillSittings;
+	}
+
+	@RequiredArgsConstructor
+	static final class XpGain
+	{
+		final long total;
+		final String top;
+	}
+
+	static final class Sittings
+	{
+		long minutes;
+		long count;
+		long busiestMinutes;
+		LocalDate busiest;
+	}
+
+	@RequiredArgsConstructor
+	static final class Diaries
+	{
+		final Fraction tiers;
+		final Fraction regions;
+	}
+
+	@RequiredArgsConstructor
+	static final class Combat
+	{
+		final Fraction points;
+		final long tiers;
+	}
+
+	@RequiredArgsConstructor
+	static final class Climb
+	{
+		final long gained;
+		final long now;
+	}
+
 	private static final class Days
 	{
-		final Map<LocalDate, long[]> played = new LinkedHashMap<>();
+		final Map<LocalDate, DayPlay> played = new LinkedHashMap<>();
 		final Map<LocalDate, Map<String, Long>> skills = new LinkedHashMap<>();
 		final Set<LocalDate> crossed = new HashSet<>();
 	}
@@ -1060,27 +1108,27 @@ final class Board
 						days.crossed.add(on);
 					}
 				}
-				long[] t = days.played.computeIfAbsent(day, k -> new long[8]);
-				t[0] += sessionMinutes(e);
-				t[1]++;
+				DayPlay t = days.played.computeIfAbsent(day, k -> new DayPlay());
+				t.minutes += sessionMinutes(e);
+				t.sittings++;
 				if (d.has("xp"))
 				{
-					t[2] += asLong(d.get("xp"));
-					t[3]++;
+					t.xp += asLong(d.get("xp"));
+					t.xpSittings++;
 				}
 				if (d.has("drops"))
 				{
-					t[4] += asLong(d.get("drops"));
-					t[5] += asLong(d.get("dropsGp"));
-					t[6]++;
+					t.drops += asLong(d.get("drops"));
+					t.dropsGp += asLong(d.get("dropsGp"));
+					t.dropSittings++;
 				}
 				if (d.has("xp") && asLong(d.get("xp")) == 0 && !d.has("skills"))
 				{
-					t[7]++;
+					t.skillSittings++;
 				}
 				if (isObject(d, "skills"))
 				{
-					t[7]++;
+					t.skillSittings++;
 					Map<String, Long> by = days.skills.computeIfAbsent(day, k -> new LinkedHashMap<>());
 					d.getAsJsonObject("skills").entrySet().forEach(sk -> by.merge(sk.getKey(), asLong(sk.getValue()), Long::sum));
 				}
@@ -1089,12 +1137,12 @@ final class Board
 		});
 	}
 
-	Map<LocalDate, long[]> daysPlayed()
+	Map<LocalDate, DayPlay> daysPlayed()
 	{
 		return days().played;
 	}
 
-	Object[] dayXp(LocalDate day)
+	XpGain dayXp(LocalDate day)
 	{
 		if (historySpine == null)
 		{
@@ -1123,24 +1171,24 @@ final class Board
 				}
 			}
 		}
-		return total > 0 ? new Object[]{total, prettify(top)} : null;
+		return total > 0 ? new XpGain(total, prettify(top)) : null;
 	}
 
 	String dayEntry(LocalDate day)
 	{
 		Days days = days();
 		List<String> clauses = new ArrayList<>();
-		long[] sat = days.played.get(day);
-		boolean sat1 = sat != null && sat[1] > 0;
+		DayPlay sat = days.played.get(day);
+		boolean sat1 = sat != null && sat.sittings > 0;
 		if (sat1)
 		{
-			clauses.add(count(sat[1], "sitting") + (sat[0] > 0 ? " · " + hoursMinutes(sat[0]) : ""));
+			clauses.add(count(sat.sittings, "sitting") + (sat.minutes > 0 ? " · " + hoursMinutes(sat.minutes) : ""));
 		}
 		boolean crossed = days.crossed.contains(day);
-		boolean saysXp = crossed && sat1 && sat[3] == sat[1];
-		if (saysXp && sat[2] > 0)
+		boolean saysXp = crossed && sat1 && sat.xpSittings == sat.sittings;
+		if (saysXp && sat.xp > 0)
 		{
-			Map<String, Long> by = sat[7] == sat[1] ? days.skills.get(day) : null;
+			Map<String, Long> by = sat.skillSittings == sat.sittings ? days.skills.get(day) : null;
 			String most = by == null ? null : topOf(by);
 			if (most != null)
 			{
@@ -1148,20 +1196,21 @@ final class Board
 			}
 			else
 			{
-				Object[] spine = dayXp(day);
-				most = spine != null ? (String) spine[1] : null;
+				XpGain spine = dayXp(day);
+				most = spine != null ? spine.top : null;
 			}
-			clauses.add("+" + gp(sat[2]) + " xp" + (most != null ? ", most in " + most : ""));
+			clauses.add("+" + gp(sat.xp) + " xp" + (most != null ? ", most in " + most : ""));
 		}
 		else if (!saysXp)
 		{
-			Object[] xp = dayXp(day);
+			XpGain xp = dayXp(day);
 			if (xp != null)
 			{
-				clauses.add("+" + gp((Long) xp[0]) + " xp, most in " + xp[1]);
+				clauses.add("+" + gp(xp.total) + " xp, most in " + xp.top);
 			}
 		}
-		Tally loot = crossed && sat1 && sat[6] == sat[1] ? new Tally(null, sat[4], sat[5]) : dayTotals().get(ROLL_DAY.format(day));
+		Tally loot = crossed && sat1 && sat.dropSittings == sat.sittings ? new Tally(null, sat.drops, sat.dropsGp)
+			: dayTotals().get(ROLL_DAY.format(day));
 		if (loot != null && loot.qty > 0)
 		{
 			clauses.add(count(loot.qty, "drop") + tail(loot.value));
@@ -1169,25 +1218,25 @@ final class Board
 		return clauses.isEmpty() ? null : String.join(" · ", clauses);
 	}
 
-	long[] sittingsInWindow(LocalDate[] busiest)
+	Sittings sittingsInWindow()
 	{
-		long[] sat = new long[3];
+		Sittings sat = new Sittings();
 		if (period.session())
 		{
-			sat[0] = plugin.sessionElapsedMinutes();
-			sat[1] = sat[0] > 0 ? 1 : 0;
+			sat.minutes = plugin.sessionElapsedMinutes();
+			sat.count = sat.minutes > 0 ? 1 : 0;
 			return sat;
 		}
-		for (Entry<LocalDate, long[]> d : daysPlayed().entrySet())
+		for (Entry<LocalDate, DayPlay> d : daysPlayed().entrySet())
 		{
 			if (insideWindow(noon(d.getKey())))
 			{
-				sat[0] += d.getValue()[0];
-				sat[1] += d.getValue()[1];
-				if (d.getValue()[0] > sat[2])
+				sat.minutes += d.getValue().minutes;
+				sat.count += d.getValue().sittings;
+				if (d.getValue().minutes > sat.busiestMinutes)
 				{
-					sat[2] = d.getValue()[0];
-					busiest[0] = d.getKey();
+					sat.busiestMinutes = d.getValue().minutes;
+					sat.busiest = d.getKey();
 				}
 			}
 		}
@@ -1224,13 +1273,13 @@ final class Board
 		return out;
 	}
 
-	int[] clogStanding()
+	Fraction clogStanding()
 	{
 		int avail = plugin.clogAvailable();
-		return avail > 0 ? new int[]{plugin.clogFinished(), avail} : null;
+		return avail > 0 ? new Fraction(plugin.clogFinished(), avail) : null;
 	}
 
-	long[] diaryStanding()
+	Diaries diaryStanding()
 	{
 		JsonObject d = obj(achievements(), "diaries");
 		long done = 0;
@@ -1244,10 +1293,10 @@ final class Board
 			done += here;
 			whole += here > 0 && here == tiers.size() ? 1 : 0;
 		}
-		return new long[]{done, all, whole, d.size()};
+		return new Diaries(new Fraction(done, all), new Fraction(whole, d.size()));
 	}
 
-	long[] combatStanding()
+	Combat combatStanding()
 	{
 		JsonObject c = obj(achievements(), "combat");
 		long tiers = obj(c, "tiers").entrySet().stream().filter(t -> t.getValue().getAsLong() > 0).count();
@@ -1261,7 +1310,7 @@ final class Board
 				break;
 			}
 		}
-		return new long[]{asLong(c.get("points")), possible == 0 ? CA_POINTS : possible, tiers};
+		return new Combat(new Fraction(asLong(c.get("points")), possible == 0 ? CA_POINTS : possible), tiers);
 	}
 
 	Set<Integer> caDone()
@@ -1309,15 +1358,15 @@ final class Board
 		return by;
 	}
 
-	long[] periodXp()
+	Long periodXp()
 	{
 		if (period.whole())
 		{
 			long[] overall = plugin.skillSheet().get("overall");
-			return overall != null && overall.length > 1 ? new long[]{overall[1]} : null;
+			return overall != null && overall.length > 1 ? Long.valueOf(overall[1]) : null;
 		}
 		Map<String, Long> by = xpBySkill();
-		return by == null ? null : new long[]{by.values().stream().mapToLong(Long::longValue).sum()};
+		return by == null ? null : by.values().stream().mapToLong(Long::longValue).sum();
 	}
 
 	String periodXpMost()
@@ -1327,17 +1376,17 @@ final class Board
 		return top == null ? null : prettify(top);
 	}
 
-	long[] periodLevels()
+	Climb periodLevels()
 	{
 		long[] overall = plugin.skillSheet().get("overall");
 		if (period.whole())
 		{
-			return overall != null && overall[0] > 0 ? new long[]{overall[0], overall[0]} : null;
+			return overall != null && overall[0] > 0 ? new Climb(overall[0], overall[0]) : null;
 		}
 		if (period.session())
 		{
 			long gained = stirred("LEVEL");
-			return gained > 0 && overall != null ? new long[]{gained, overall[0]} : null;
+			return gained > 0 && overall != null ? new Climb(gained, overall[0]) : null;
 		}
 		Span s = span();
 		if (s == null || !s.opening.complete || !s.closing.complete)
@@ -1346,7 +1395,7 @@ final class Board
 		}
 		HistoryLog.Levels was = HistoryLog.levels(s.opening, SKILL_KEYS);
 		HistoryLog.Levels now = HistoryLog.levels(baselineAt(closingSkills(s.closing.skills, periodReachesToday())), SKILL_KEYS);
-		return now.total > was.total ? new long[]{now.total - was.total, now.total} : null;
+		return now.total > was.total ? new Climb(now.total - was.total, now.total) : null;
 	}
 
 	private Map<String, Long> periodSkillGains()
@@ -1362,23 +1411,22 @@ final class Board
 		return out;
 	}
 
-	long[] periodLoot()
+	LootDays.LootWindow periodLoot()
 	{
 		if (!period.whole())
 		{
-			LootDays.LootWindow win = lootWindow();
-			return new long[]{win.loots, win.value, win.left, win.leftValue};
+			return lootWindow();
 		}
-		long[] out = new long[4];
+		LootDays.LootWindow out = new LootDays.LootWindow();
 		for (SourceRow r : sources())
 		{
-			out[0] += r.loots;
-			out[1] += r.value;
+			out.loots += r.loots;
+			out.value += r.value;
 		}
 		for (UntakenRow u : store.untakenSources())
 		{
-			out[2] += u.qty;
-			out[3] += u.value;
+			out.left += u.qty;
+			out.leftValue += u.value;
 		}
 		return out;
 	}

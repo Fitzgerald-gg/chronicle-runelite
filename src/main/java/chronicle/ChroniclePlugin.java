@@ -744,12 +744,12 @@ public class ChroniclePlugin extends Plugin
 
 	int clogFinished()
 	{
-		return Math.max(clogCapture.finishedCount(), localStore.clogFraction()[0]);
+		return Math.max(clogCapture.finishedCount(), (int) localStore.clogFraction().done);
 	}
 
 	int clogAvailable()
 	{
-		return Math.max(clogCapture.availableCount(), localStore.clogFraction()[1]);
+		return Math.max(clogCapture.availableCount(), (int) localStore.clogFraction().of);
 	}
 
 	PaceBook.Pace pace(String skill)

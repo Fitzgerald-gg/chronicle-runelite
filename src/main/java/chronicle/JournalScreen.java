@@ -144,11 +144,11 @@ final class JournalScreen extends Screen
 		{
 			plate.add(row("Total level", fmt(overall[0]) + (combat > 0 ? " · combat " + combat : "")));
 		}
-		int[] log = board.clogStanding();
+		Fraction log = board.clogStanding();
 		int fin = plugin.clogFinished();
 		if (log != null)
 		{
-			plate.add(row("Collection log", fmt(log[0]) + " / " + fmt(log[1])));
+			plate.add(row("Collection log", fmt(log.done) + " / " + fmt(log.of)));
 		}
 		else if (fin > 0)
 		{
@@ -192,11 +192,12 @@ final class JournalScreen extends Screen
 		{
 			grid.add(styled(new JLabel(d, JLabel.CENTER), small(), DIM));
 		}
-		Map<LocalDate, long[]> played = board.daysPlayed();
+		Map<LocalDate, Board.DayPlay> played = board.daysPlayed();
 		long most = 1;
 		for (int d = 1; d <= calendarMonth.lengthOfMonth(); d++)
 		{
-			most = Math.max(most, played.getOrDefault(calendarMonth.atDay(d), new long[1])[0]);
+			Board.DayPlay t = played.get(calendarMonth.atDay(d));
+			most = Math.max(most, t == null ? 0 : t.minutes);
 		}
 		for (int i = 1; i < calendarMonth.atDay(1).getDayOfWeek().getValue(); i++)
 		{
@@ -207,10 +208,10 @@ final class JournalScreen extends Screen
 		for (int d = 1; d <= calendarMonth.lengthOfMonth(); d++)
 		{
 			LocalDate day = calendarMonth.atDay(d);
-			long[] t = played.get(day);
+			Board.DayPlay t = played.get(day);
 			boolean onSpine = board.historySpine != null && board.historySpine.containsKey(day);
-			minutes += t != null ? t[0] : 0;
-			written += t != null && t[0] > 0 || onSpine || t != null && t[1] > 0 ? 1 : 0;
+			minutes += t != null ? t.minutes : 0;
+			written += t != null && t.minutes > 0 || onSpine || t != null && t.sittings > 0 ? 1 : 0;
 			grid.add(dayCell(day, t, onSpine, most));
 		}
 		while (grid.getComponentCount() % 7 != 0)
@@ -229,20 +230,20 @@ final class JournalScreen extends Screen
 		ui.rebuildInPlace();
 	}
 
-	private JPanel dayCell(LocalDate day, long[] t, boolean onSpine, long most)
+	private JPanel dayCell(LocalDate day, Board.DayPlay t, boolean onSpine, long most)
 	{
 		boolean future = day.isAfter(LocalDate.now());
 		JPanel cell = new JPanel(new BorderLayout());
 		cell.setPreferredSize(new Dimension(26, 24));
 		JLabel n = new JLabel(String.valueOf(day.getDayOfMonth()), JLabel.CENTER);
 		n.setFont(small());
-		if (t != null && t[0] > 0)
+		if (t != null && t.minutes > 0)
 		{
-			cell.setBackground(wash(ACCENT, 0.25f + 0.75f * Math.min(1f, (float) t[0] / most)));
+			cell.setBackground(wash(ACCENT, 0.25f + 0.75f * Math.min(1f, (float) t.minutes / most)));
 			n.setForeground(Color.WHITE);
-			cell.setToolTipText(hoursMinutes(t[0]) + " · " + count(t[1], "sitting"));
+			cell.setToolTipText(hoursMinutes(t.minutes) + " · " + count(t.sittings, "sitting"));
 		}
-		else if (onSpine || t != null && t[1] > 0)
+		else if (onSpine || t != null && t.sittings > 0)
 		{
 			cell.setBackground(wash(ACCENT, 0.18f));
 			n.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
@@ -350,10 +351,10 @@ final class JournalScreen extends Screen
 			if (before != null)
 			{
 				long ts = noon(day.getKey());
-				Object[] gained = board.dayXp(day.getKey());
-				if (rank(xp, gained == null ? 0 : (Long) gained[0], ts))
+				Board.XpGain gained = board.dayXp(day.getKey());
+				if (rank(xp, gained == null ? 0 : gained.total, ts))
 				{
-					xpSkill = (String) gained[1];
+					xpSkill = gained.top;
 				}
 				long killed = 0;
 				for (Entry<String, Long> k : day.getValue().kcs.entrySet())
