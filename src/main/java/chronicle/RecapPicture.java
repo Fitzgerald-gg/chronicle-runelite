@@ -314,28 +314,15 @@ final class RecapPicture
 		return fmt(from) + ARROW + fmt(to);
 	}
 
-	static BufferedImage paint(Facts f, Function<Skill, BufferedImage> skillIcons,
-		Function<Integer, BufferedImage> sprites)
+	private static List<Block> blocks(Facts f, int inner, Function<Integer, BufferedImage> sprites)
 	{
-		int contentW = COLUMNS * COL + (COLUMNS - 1) * GAP;
-		int inner = COL - 2 * PAD;
-		int wideInner = 2 * COL + GAP - 2 * PAD;
-
-		int headH = TOP + 12 + 4 + 34 + 16 + (f.tiles.isEmpty() ? 0 : TILE_H + 18);
-		int footNotes = f.notes.size();
-		int footH = 14 + footNotes * NOTE_ROW + 20;
-		int maxBody = MAX_HEIGHT - headH - footH;
-
-		int tableH = skillsTableHeight(f);
-
-		List<Block> left = new ArrayList<>();
+		List<Block> run = new ArrayList<>();
 		for (Map.Entry<String, List<String>> e : f.feats.entrySet())
 		{
 			Block b = new Block(e.getKey(), true);
 			b.pieces.addAll(names(e.getValue(), inner));
-			left.add(b);
+			run.add(b);
 		}
-		List<Block> right = new ArrayList<>();
 		if (!f.bosses.isEmpty() || f.bossesNote != null)
 		{
 			Block b = new Block("Bosses", true);
@@ -347,7 +334,7 @@ final class RecapPicture
 			{
 				b.pieces.addAll(note(f.bossesNote, inner));
 			}
-			right.add(b);
+			run.add(b);
 		}
 		if (!f.monsters.isEmpty() || f.monstersNote != null)
 		{
@@ -357,7 +344,7 @@ final class RecapPicture
 			{
 				b.pieces.addAll(note(f.monstersNote, inner));
 			}
-			right.add(b);
+			run.add(b);
 		}
 		if (!f.loot.isEmpty() || f.lootNote != null)
 		{
@@ -377,7 +364,7 @@ final class RecapPicture
 			{
 				b.pieces.addAll(note(f.lootNote, inner));
 			}
-			right.add(b);
+			run.add(b);
 		}
 		if (!f.slayer.isEmpty() || !f.clues.isEmpty())
 		{
@@ -391,23 +378,39 @@ final class RecapPicture
 				}
 				b.pieces.addAll(lines(f.clues));
 			}
-			right.add(b);
+			run.add(b);
 		}
 		for (Map.Entry<String, List<Named>> e : f.trackers.entrySet())
 		{
 			Block b = new Block(e.getKey(), true);
 			b.pieces.addAll(lines(e.getValue()));
-			right.add(b);
+			run.add(b);
 		}
 		if (f.trackersNote != null)
 		{
 			Block b = new Block("Trackers", false);
 			b.pieces.addAll(note(f.trackersNote, inner));
-			right.add(b);
+			run.add(b);
 		}
 
-		List<Block> run = new ArrayList<>(left);
-		run.addAll(right);
+		return run;
+	}
+
+	static BufferedImage paint(Facts f, Function<Skill, BufferedImage> skillIcons,
+		Function<Integer, BufferedImage> sprites)
+	{
+		int contentW = COLUMNS * COL + (COLUMNS - 1) * GAP;
+		int inner = COL - 2 * PAD;
+		int wideInner = 2 * COL + GAP - 2 * PAD;
+
+		int headH = TOP + 12 + 4 + 34 + 16 + (f.tiles.isEmpty() ? 0 : TILE_H + 18);
+		int footNotes = f.notes.size();
+		int footH = 14 + footNotes * NOTE_ROW + 20;
+		int maxBody = MAX_HEIGHT - headH - footH;
+
+		int tableH = skillsTableHeight(f);
+
+		List<Block> run = blocks(f, inner, sprites);
 		int[] tops = {tableH + GAP, tableH + GAP, 0, 0, 0, 0};
 		int[] cols = {0, 1, 2, 3, 4, 5};
 		int body = Math.max(MIN_BODY, tableH);
