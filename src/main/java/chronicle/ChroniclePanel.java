@@ -163,6 +163,23 @@ import static chronicle.Period.dayOf;
 import static chronicle.Period.noon;
 import static chronicle.Period.peaksNotDeltas;
 import static chronicle.Period.startMs;
+import static chronicle.Text.climb;
+import static chronicle.Text.count;
+import static chronicle.Text.dated;
+import static chronicle.Text.fmt;
+import static chronicle.Text.gp;
+import static chronicle.Text.gps;
+import static chronicle.Text.hoursMinutes;
+import static chronicle.Text.named;
+import static chronicle.Text.ordinal;
+import static chronicle.Text.pb;
+import static chronicle.Text.plural;
+import static chronicle.Text.qtyGp;
+import static chronicle.Text.rateText;
+import static chronicle.Text.share;
+import static chronicle.Text.tail;
+import static chronicle.Text.threshold;
+import static chronicle.Text.xpShort;
 import static chronicle.panel.StatRegistry.prettify;
 
 class ChroniclePanel extends PluginPanel
@@ -567,15 +584,6 @@ class ChroniclePanel extends PluginPanel
 		return tip(page, lines);
 	}
 
-	private static String clock(long seconds)
-	{
-		long h = seconds / 3600;
-		long m = (seconds % 3600) / 60;
-		long s = seconds % 60;
-		return h > 0 ? String.format(Locale.UK, "%d:%02d:%02d", h, m, s)
-			: String.format(Locale.UK, "%d:%02d", m, s);
-	}
-
 	private JPanel buildSheet()
 	{
 		JPanel p = column();
@@ -904,7 +912,7 @@ class ChroniclePanel extends PluginPanel
 		for (Entry<String, Long> pb : build.kills.pageLines(b.name, "pb_lines"))
 		{
 			lines.add(pb.getKey());
-			lines.add(clock(pb.getValue()));
+			lines.add(pb(pb.getValue()));
 		}
 		double[] timed = wholeRecord() && src != null ? new double[]{src.timed, src.timeSum}
 			: sourceTimesInWindow(b.name);
@@ -3559,7 +3567,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			for (Entry<String, Long> pbLine : build.kills.pageLines(sr.name, "pb_lines"))
 			{
-				head.add(row(pbLine.getKey(), clock(pbLine.getValue())));
+				head.add(row(pbLine.getKey(), pb(pbLine.getValue())));
 			}
 			for (Entry<String, Long> ln : build.kills.logLines(sr.name))
 			{
@@ -5540,26 +5548,6 @@ class ChroniclePanel extends PluginPanel
 		return null;
 	}
 
-	private static String rateText(double perHour)
-	{
-		return perHour >= 10 ? fmt(Math.round(perHour)) : String.format(Locale.UK, "%.1f", perHour);
-	}
-
-	private static String count(long n, String one)
-	{
-		return fmt(n) + " " + plural(n, one);
-	}
-
-	private static String plural(long n, String one)
-	{
-		return n == 1 ? one : one + "s";
-	}
-
-	private static String hoursMinutes(long minutes)
-	{
-		return minutes >= 60 ? (minutes / 60) + "h " + (minutes % 60) + "m" : minutes + "m";
-	}
-
 	private void addSkillGrid(JPanel p, List<Entry<String, Long>> gains, SkillStand stand,
 		HistoryLog.Levels opened)
 	{
@@ -7291,11 +7279,6 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private static String threshold(long xp)
-	{
-		return xp % 1_000_000_000L == 0 ? xp / 1_000_000_000L + "B" : xp / 1_000_000L + "M";
-	}
-
 	private static JsonObject milestone(long ts, String text)
 	{
 		JsonObject e = new JsonObject();
@@ -7305,15 +7288,6 @@ class ChroniclePanel extends PluginPanel
 		d.addProperty("text", text);
 		e.add("data", d);
 		return e;
-	}
-
-	private static String ordinal(long n)
-	{
-		long last = n % 10;
-		long tens = n % 100;
-		String suffix = tens >= 11 && tens <= 13 ? "th"
-			: last == 1 ? "st" : last == 2 ? "nd" : last == 3 ? "rd" : "th";
-		return n + suffix;
 	}
 
 	private List<JsonObject> withMilestones(List<JsonObject> feed)
@@ -8807,11 +8781,6 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(book);
 		return p;
-	}
-
-	private static String dated(long ts)
-	{
-		return FULL_DAY.format(Instant.ofEpochMilli(ts));
 	}
 
 	private static String day(long ms)
@@ -10416,48 +10385,6 @@ class ChroniclePanel extends PluginPanel
 		c.addMouseListener(clicker(go));
 	}
 
-	static String fmt(long n)
-	{
-		return String.format(Locale.UK, "%,d", n);
-	}
-
-	private static String gp(long n)
-	{
-		if (Math.abs(n) >= 1_000_000_000L)
-		{
-			return String.format(Locale.UK, "%.2fB", n / 1_000_000_000.0);
-		}
-		if (Math.abs(n) >= 1_000_000L)
-		{
-			return String.format(Locale.UK, "%.1fM", n / 1_000_000.0);
-		}
-		if (Math.abs(n) >= 10_000L)
-		{
-			return String.format(Locale.UK, "%dk", n / 1_000);
-		}
-		return fmt(n);
-	}
-
-	private static String gps(long n)
-	{
-		return gp(n) + " gp";
-	}
-
-	private static String named(String name, long qty)
-	{
-		return name + (qty > 1 ? " \u00d7" + fmt(qty) : "");
-	}
-
-	private static String share(long part, long whole)
-	{
-		return Math.round(part * 1000.0 / whole) / 10.0 + "%";
-	}
-
-	private static String climb(long from, long to)
-	{
-		return fmt(from) + " to " + fmt(to);
-	}
-
 	private static long sumOf(List<Entry<String, Long>> rows)
 	{
 		long sum = 0;
@@ -10466,39 +10393,5 @@ class ChroniclePanel extends PluginPanel
 			sum += e.getValue();
 		}
 		return sum;
-	}
-
-	private static String qtyGp(long qty, long value)
-	{
-		return fmt(qty) + " · " + gps(value);
-	}
-
-	private static String tail(long v)
-	{
-		return v > 0 ? " · " + gps(v) : "";
-	}
-
-	private static String xpShort(long n)
-	{
-		long a = Math.abs(n);
-		if (a >= 100_000L)
-		{
-			return gp(n);
-		}
-		if (a >= 1_000L)
-		{
-			String k = String.format(Locale.UK, "%.1f", n / 1_000.0);
-			return (k.endsWith(".0") ? k.substring(0, k.length() - 2) : k) + "k";
-		}
-		return fmt(n);
-	}
-
-	private static String pb(double seconds)
-	{
-		long s = Math.round(seconds);
-		long h = s / 3600;
-		long m = (s % 3600) / 60;
-		long sec = s % 60;
-		return h > 0 ? String.format("%d:%02d:%02d", h, m, sec) : String.format("%d:%02d", m, sec);
 	}
 }

@@ -352,11 +352,9 @@ public class SessionPeriodTest
 		java.util.List<String> said = drill("Runecraft");
 		int at = said.indexOf("Experience");
 		assertTrue("the drill named no standing figure: " + said, at >= 0);
-		Method gp = ChroniclePanel.class.getDeclaredMethod("gp", long.class);
-		gp.setAccessible(true);
 		assertEquals("the drill reported the spine's stale copy rather than what"
 			+ " the client says the skill stands at: " + said,
-			gp.invoke(null, live[1]), said.get(at + 1));
+			Text.gp(live[1]), said.get(at + 1));
 	}
 
 	@Test

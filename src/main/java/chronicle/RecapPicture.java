@@ -21,8 +21,8 @@ import lombok.RequiredArgsConstructor;
 import net.runelite.api.Skill;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
-import static chronicle.ChroniclePanel.fmt;
 import static chronicle.ChroniclePanel.small;
+import static chronicle.Text.fmt;
 
 final class RecapPicture
 {
