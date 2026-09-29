@@ -138,7 +138,7 @@ final class JournalScreen
 		if (feed.size() > journalShown)
 		{
 			p.add(vgap(6));
-			p.add(ui.moreRow("Read further back", () ->
+			p.add(moreRow("Read further back", () ->
 			{
 				journalShown += 60;
 				ui.rebuildInPlace();
@@ -193,7 +193,7 @@ final class JournalScreen
 			plate.add(row("Last milestone", str(last.getAsJsonObject("data"), "text", "")
 				+ " · " + day(safeLong(last.get("ts")))));
 		}
-		plate.add(ui.moreRow("what the journal holds", ui::openInfo));
+		plate.add(moreRow("what the journal holds", ui::openInfo));
 		p.add(plate);
 
 		String note = frontispieceNote();
@@ -250,7 +250,7 @@ final class JournalScreen
 		JLabel title = styled(new JLabel(MONTH_YEAR.format(calendarMonth.atDay(1)
 			.atStartOfDay(ZoneId.systemDefault()).toInstant()).toUpperCase(Locale.ROOT), JLabel.CENTER),
 			FontManager.getRunescapeFont(), ACCENT);
-		ui.arrows(head, () ->
+		arrows(head, () ->
 		{
 			calendarMonth = calendarMonth.minusMonths(1);
 			ui.rebuildInPlace();

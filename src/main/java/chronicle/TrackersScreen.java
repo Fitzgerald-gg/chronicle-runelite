@@ -11,6 +11,7 @@ import com.google.gson.JsonObject;
 import java.awt.GridLayout;
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -42,9 +43,7 @@ final class TrackersScreen
 	{
 		JPanel p = column();
 		consumVals = plugin.consumableValues();
-		String[] families = ui.tab == ChroniclePanel.Tab.RECORD
-			? new String[]{"Ledger & Roads", "Living"}
-			: StatRegistry.FAMILIES;
+		String[] families = ui.view == ChroniclePanel.View.LEDGER ? LEDGER_FAMILIES : StatRegistry.FAMILIES;
 		JPanel pills = new JPanel(new GridLayout(0, 2, 3, 3));
 		pills.setBackground(DARK);
 		for (String fam : families)
@@ -56,16 +55,16 @@ final class TrackersScreen
 			}));
 		}
 		p.add(pills);
-		if (ui.tab == ChroniclePanel.Tab.TRACKERS && !ui.allTrackers)
+		if (ui.view == ChroniclePanel.View.TRACKERS)
 		{
-			p.add(ui.moreRow("every counter in one place", ui::openAllTrackers));
+			p.add(moreRow("every counter in one place", ui::openAllTrackers));
 		}
 		p.add(vgap(4));
 
 		Map<String, Long> counters = board.countersForPeriod();
 		if (counters == null)
 		{
-			p.add(ui.noPeriod());
+			p.add(board.noPeriod());
 			return p;
 		}
 		resourcesDropped = counters.getOrDefault("resourcesDroppedValue", 0L);
@@ -240,7 +239,7 @@ final class TrackersScreen
 		Map<String, Long> counters = board.countersForPeriod();
 		if (counters == null)
 		{
-			p.add(ui.noPeriod());
+			p.add(board.noPeriod());
 			return p;
 		}
 		resourcesDropped = counters.getOrDefault("resourcesDroppedValue", 0L);
@@ -510,7 +509,7 @@ final class TrackersScreen
 		Map<String, Long> counters = board.countersForPeriod();
 		if (counters == null)
 		{
-			p.add(ui.noPeriod());
+			p.add(board.noPeriod());
 			return p;
 		}
 		List<Entry<String, Long>> rows = new ArrayList<>();
@@ -581,4 +580,17 @@ final class TrackersScreen
 	}
 
 	String statsFamily = StatRegistry.FAMILIES[0];
+	private static final String[] LEDGER_FAMILIES = {"Ledger & Roads", "Living"};
+
+	void reset(ChroniclePanel.View v)
+	{
+		if (v == ChroniclePanel.View.TRACKERS)
+		{
+			statsFamily = StatRegistry.FAMILIES[0];
+		}
+		else if (v == ChroniclePanel.View.LEDGER && !Arrays.asList(LEDGER_FAMILIES).contains(statsFamily))
+		{
+			statsFamily = LEDGER_FAMILIES[0];
+		}
+	}
 }

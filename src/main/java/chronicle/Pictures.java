@@ -6,6 +6,7 @@ package chronicle;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Cursor;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Image;
@@ -18,10 +19,15 @@ import java.awt.image.BufferedImage;
 import java.awt.image.RenderedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.Map;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import javax.imageio.ImageIO;
 import javax.imageio.stream.MemoryCacheImageOutputStream;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.util.OSType;
 import static chronicle.Ui.*;
@@ -283,5 +289,50 @@ final class Pictures
 			page.remove(0);
 		}
 		return page;
+	}
+
+	static JLabel copyLabel(JPanel r, String tip)
+	{
+		JLabel take = part(r, BorderLayout.EAST);
+		if (take != null)
+		{
+			styled(take, small(), DIM);
+			take.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			take.setToolTipText(tip);
+		}
+		return take;
+	}
+
+	static void reportCopy(JLabel take, boolean ok)
+	{
+		take.setText(ok ? "copied" : "cannot copy");
+		take.setForeground(ok ? ACCENT : ColorScheme.PROGRESS_ERROR_COLOR);
+	}
+
+	static JPanel copyHeader(String title, Map<String, BooleanSupplier> choices)
+	{
+		return copyHeaderLater(title, take ->
+		{
+			JPopupMenu menu = new JPopupMenu();
+			choices.forEach((name, copy) -> menuItem(menu, name, false, () -> reportCopy(take, copy.getAsBoolean())));
+			menu.show(take, 0, take.getHeight());
+		});
+	}
+
+	static JPanel copyHeader(String title, BooleanSupplier copy)
+	{
+		return copyHeaderLater(title, take -> reportCopy(take, copy.getAsBoolean()));
+	}
+
+	static JPanel copyHeaderLater(String title, Consumer<JLabel> copy)
+	{
+		JPanel r = row(title, "copy");
+		styled(part(r, BorderLayout.CENTER), small(), ACCENT);
+		JLabel take = copyLabel(r, "Copy this board as a picture");
+		if (take != null)
+		{
+			take.addMouseListener(clicker(() -> copy.accept(take)));
+		}
+		return r;
 	}
 }

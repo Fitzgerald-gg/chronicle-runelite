@@ -30,6 +30,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
+import javax.swing.JPanel;
 import javax.swing.SwingWorker;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Skill;
@@ -1950,4 +1951,12 @@ final class Board
 
 	static final String UNDATED = "No loot has been dated yet. The roll keeps one entry a "
 		+ "day and starts with the next drop that lands.";
+
+	JPanel noPeriod()
+	{
+		return note(historySpine == null
+			? "Reading your history..."
+			: "Nothing closed inside " + periodInSentence() + ". A period is the distance "
+				+ "between two baselines, and this window holds fewer than two.");
+	}
 }

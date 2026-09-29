@@ -90,20 +90,10 @@ final class SearchScreen
 		goTo(go, ql, "Records", "", ui::openRecords, 1,
 			"record", "best", "bests", "pb", "personal best");
 		goTo(go, ql, "Calendar", "", ui::openCalendar, 1, "days", "days written");
-		goTo(go, ql, "Recap", "", () ->
-		{
-			ui.subByTab.put(ChroniclePanel.Tab.RECORD, "Recap");
-			ui.applyTab(ChroniclePanel.Tab.RECORD);
-			ui.rebuild();
-		}, 1, "summary");
+		goTo(go, ql, "Recap", "", () -> ui.show(ChroniclePanel.View.RECAP), 1, "summary");
 		goTo(go, ql, "All trackers", "", ui::openAllTrackers, 1, "trackers", "counters");
 		goTo(go, ql, "Kill log", "", () -> ui.openSlayer("Monsters"), 1, "killlog", "kill count", "kc");
-		goTo(go, ql, "Left behind", "", () ->
-		{
-			ui.applyTab(ChroniclePanel.View.DROPS);
-			ui.loot.dropsLeftBehind = true;
-			ui.rebuild();
-		}, 1, "untaken", "left on the floor");
+		goTo(go, ql, "Left behind", "", () -> ui.openLeftBehind(null), 1, "untaken", "left on the floor");
 		goTo(go, ql, "Info", "what the journal holds", ui::openInfo, 1, "journal holds");
 		String kind = ItemKinds.named(q);
 		if (kind != null && !ql.isEmpty())
@@ -200,7 +190,7 @@ final class SearchScreen
 					{
 						ui.slayer.journeyCache = journey;
 					}
-					ui.applyTab(ChroniclePanel.View.SLAYER);
+					ui.show(ChroniclePanel.View.SLAYER);
 					ui.showTask(at);
 				}, matchScore(ql, name), seen[0]));
 			}
@@ -240,13 +230,8 @@ final class SearchScreen
 			{
 				continue;
 			}
-			items.add(new Hit(u.name, "×" + fmt(u.qty) + " left", RED, "Left on the floor", () ->
-			{
-				ui.applyTab(ChroniclePanel.View.DROPS);
-				ui.loot.dropsLeftBehind = true;
-				ui.leftBehindItem = u.name;
-				ui.rebuild();
-			}, matchScore(ql, u.name), u.value));
+			items.add(new Hit(u.name, "×" + fmt(u.qty) + " left", RED, "Left on the floor",
+				() -> ui.openLeftBehind(u.name), matchScore(ql, u.name), u.value));
 		}
 		total += searchGroup(p, "Items", items);
 
@@ -653,7 +638,7 @@ final class SearchScreen
 			: Long.compare(b.weight, a.weight));
 		p.add(group(title));
 		String key = "search:" + title;
-		int cap = ui.drillShown.getOrDefault(key, SEARCH_CAP);
+		int cap = ui.cap(key, SEARCH_CAP);
 		FontMetrics fm = rowMetrics();
 		for (Hit h : firstN(hits, cap))
 		{

@@ -49,7 +49,7 @@ final class RecapScreen
 	JPanel buildRecap()
 	{
 		JPanel p = column();
-		p.add(ui.copyHeaderLater("Recap", take ->
+		p.add(copyHeaderLater("Recap", take ->
 		{
 			take.setText("copying");
 			copyRecapPicture(take);
@@ -67,20 +67,20 @@ final class RecapScreen
 		}
 		catch (Throwable t)
 		{
-			ui.reportCopy(take, false);
+			reportCopy(take, false);
 			return;
 		}
 		Set<Integer> want = new LinkedHashSet<>();
 		for (RecapPicture.BossLine b : facts.bosses)
 		{
-			if (b.sprite > 0 && !ui.art.containsKey("sprite:" + b.sprite))
+			if (b.sprite > 0 && !ui.art.has(b.sprite))
 			{
 				want.add(b.sprite);
 			}
 		}
 		for (int id : want)
 		{
-			ui.wearSprite(new JLabel(), id, 22, 22);
+			ui.art.wear(new JLabel(), id, 22, 22);
 		}
 		long deadline = System.currentTimeMillis() + 1500;
 		Timer wait = new Timer(100, null);
@@ -89,12 +89,12 @@ final class RecapScreen
 			boolean all = true;
 			for (int id : want)
 			{
-				all &= ui.art.containsKey("sprite:" + id);
+				all &= ui.art.has(id);
 			}
 			if (all || System.currentTimeMillis() > deadline)
 			{
 				wait.stop();
-				ui.reportCopy(take, toClipboard(recapImage(facts)));
+				reportCopy(take, toClipboard(recapImage(facts)));
 			}
 		});
 		wait.setInitialDelay(want.isEmpty() ? 0 : 100);
@@ -105,7 +105,7 @@ final class RecapScreen
 	{
 		try
 		{
-			return RecapPicture.paint(facts, ui::skillIcon, id -> ui.art.get("sprite:" + id));
+			return RecapPicture.paint(facts, ui.art::skill, ui.art::sprite);
 		}
 		catch (Throwable t)
 		{
@@ -714,21 +714,21 @@ final class RecapScreen
 			plateRow(plate, period.whole() ? "Xp" : "Xp gained",
 				(period.whole() ? "" : "+") + gp(xp[0]) + " xp"
 					+ (most != null ? ", most in " + most : ""),
-				() -> ui.applyTab(ChroniclePanel.View.SHEET));
+				() -> ui.show(ChroniclePanel.View.STANDING));
 		}
 		long[] levels = board.periodLevels();
 		if (levels != null)
 		{
 			plateRow(plate, period.whole() ? "Total level" : "Levels",
 				period.whole() ? fmt(levels[0]) : "+" + fmt(levels[0]) + " · " + fmt(levels[1]) + " now",
-				() -> ui.applyTab(ChroniclePanel.View.SHEET));
+				() -> ui.show(ChroniclePanel.View.STANDING));
 		}
 
 		long[] loot = board.periodLoot();
 		if (loot[0] > 0)
 		{
 			plateRow(plate, "Drops", qtyGp(loot[0], loot[1]),
-				() -> ui.applyTab(ChroniclePanel.View.DROPS));
+				() -> ui.show(ChroniclePanel.View.LOOT));
 		}
 		String[] dearest = board.periodDearest();
 		if (dearest != null)
@@ -741,20 +741,11 @@ final class RecapScreen
 		}
 		if (loot[2] > 0)
 		{
-			plateRow(plate, "Left behind", qtyGp(loot[2], loot[3]), () ->
-			{
-				ui.loot.dropsLeftBehind = true;
-				ui.applyTab(ChroniclePanel.View.DROPS);
-			});
+			plateRow(plate, "Left behind", qtyGp(loot[2], loot[3]), () -> ui.openLeftBehind(null));
 		}
 
 		Map<String, Long> counters = period.whole() ? board.withLedgerSpend(board.counters()) : board.periodCounters();
-		Runnable toLiving = () ->
-		{
-			ui.trackers.statsFamily = "Living";
-			ui.subByTab.put(ChroniclePanel.Tab.RECORD, "Ledger");
-			ui.applyCommon();
-		};
+		Runnable toLiving = () -> ui.openLedger("Living");
 		long food = counters.getOrDefault("foodEaten", 0L);
 		if (food > 0)
 		{

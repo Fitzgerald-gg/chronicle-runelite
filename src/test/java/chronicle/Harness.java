@@ -973,26 +973,17 @@ final class Harness
 		return null;
 	}
 
-	private void go(ChroniclePanel p, String[] path) throws Exception
+	private void go(ChroniclePanel p, String[] path)
 	{
-		((net.runelite.client.ui.components.IconTextField) get(p, "searchField")).setText("");
-		for (String n : new String[]{"detailSource", "detailItem", "detailSkill", "sheetPage", "lootKind",
-			"lootTask", "leftBehindSource", "leftBehindItem"})
-		{
-			set(p, n, null);
-		}
-		set(p, "detailTask", -1);
-		for (String n : new String[]{"allTrackers", "showInfo", "showRecords", "showCalendar",
-			"dropsLeftBehind", "dropsByKind", "onTaskOnly"})
-		{
-			set(p, n, false);
-		}
-		((Collection<?>) get(p, "detailStack")).clear();
-		Period period = (Period) get(p, "period");
+		Period period = board(p).period;
 		period.from = null;
 		period.to = null;
 		period.granularity = granularity;
 		period.cursor = cursor;
+		p.loot.dropsLeftBehind = false;
+		p.loot.dropsByKind = false;
+		p.loot.onTaskOnly = false;
+		p.show(ChroniclePanel.View.NOW);
 		String lens = null;
 		for (String step : path)
 		{
@@ -1005,21 +996,12 @@ final class Harness
 				case "Journal":
 				case "Ledger":
 				case "Recap":
-					tab(p, "RECORD", key);
-					lens = key.equals("Journal") ? "journalLens" : key.equals("Ledger") ? "statsFamily" : null;
-					break;
 				case "Loot":
 				case "Slayer":
-					tab(p, "LOOT", key);
-					lens = key.equals("Slayer") ? "slayerLens" : null;
-					break;
 				case "Standing":
-					tab(p, "STANDING", null);
-					lens = "sheetPage";
-					break;
 				case "Trackers":
-					tab(p, "TRACKERS", null);
-					lens = "statsFamily";
+					p.show(ChroniclePanel.View.valueOf(key.toUpperCase()));
+					lens = key;
 					break;
 				case "Records":
 					p.openRecords();
@@ -1034,16 +1016,16 @@ final class Harness
 					p.openAllTrackers();
 					break;
 				case "left":
-					set(p, "dropsLeftBehind", true);
+					p.loot.dropsLeftBehind = true;
 					break;
 				case "kinds":
-					set(p, "dropsByKind", true);
+					p.loot.dropsByKind = true;
 					break;
 				case "onTask":
-					set(p, "onTaskOnly", true);
+					p.loot.onTaskOnly = true;
 					break;
 				case "kind":
-					set(p, "lootKind", val);
+					p.loot.lootKind = val;
 					break;
 				case "source":
 					p.openSource(val);
@@ -1055,36 +1037,37 @@ final class Harness
 					p.openSkill(val);
 					break;
 				case "task":
-					set(p, "detailTask", Integer.parseInt(val));
+					p.showTask(Integer.parseInt(val));
 					break;
 				case "clog":
-					set(p, "clogTab", val);
+					p.standing.clogTab = val;
 					break;
 				case "page":
-					set(p, "clogPageSel", val);
+					p.standing.clogPageSel = val;
 					break;
 				case "search":
-					((net.runelite.client.ui.components.IconTextField) get(p, "searchField")).setText(val);
+					p.searchField.setText(val);
 					break;
 				default:
-					set(p, lens, step);
+					if ("Journal".equals(lens))
+					{
+						p.journal.journalLens = step;
+					}
+					else if ("Slayer".equals(lens))
+					{
+						p.slayer.slayerLens = step;
+					}
+					else if ("Standing".equals(lens))
+					{
+						p.open(ChroniclePanel.Page.SHEET, step);
+					}
+					else
+					{
+						p.trackers.statsFamily = step;
+					}
 			}
 		}
-		call(p, "rebuildNow");
-	}
-
-	@SuppressWarnings({"unchecked", "rawtypes"})
-	private static void tab(ChroniclePanel p, String tab, String sub) throws Exception
-	{
-		Class<?> type = Class.forName("chronicle.ChroniclePanel$Tab");
-		Object t = Enum.valueOf((Class) type, tab);
-		if (sub != null)
-		{
-			((Map<Object, String>) get(p, "subByTab")).put(t, sub);
-		}
-		Method m = ChroniclePanel.class.getDeclaredMethod("applyTab", type);
-		m.setAccessible(true);
-		m.invoke(p, t);
+		p.rebuild();
 	}
 
 	private static void collect(Component c, List<String> out)

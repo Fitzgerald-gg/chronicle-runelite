@@ -33,6 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.TreeMap;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
@@ -184,16 +185,11 @@ final class StandingScreen
 			figure = named > 0 ? named : board.bossKills(source);
 			hover = tip(label, "Count", fmt(figure));
 		}
-		ui.wearSprite(icon, activitySprite(label), ChroniclePanel.ICON_W, ChroniclePanel.ICON_H);
+		ui.art.wear(icon, activitySprite(label), ICON_W, ICON_H);
 		cell.setToolTipText(hover);
 		if (!page.isEmpty())
 		{
-			final String to = page;
-			link(cell, () ->
-			{
-				ui.sheetPage = to;
-				ui.rebuild();
-			});
+			link(cell, () -> ui.open(ChroniclePanel.Page.SHEET, page));
 		}
 		else if (!source.isEmpty())
 		{
@@ -228,7 +224,7 @@ final class StandingScreen
 		}
 		if (!period.whole() && !period.session() && board.span() == null)
 		{
-			p.add(ui.noPeriod());
+			p.add(board.noPeriod());
 			return p;
 		}
 		if (!period.whole())
@@ -273,7 +269,7 @@ final class StandingScreen
 		JLabel icon = new JLabel();
 		if (b.sprite > 0)
 		{
-			ui.wearSprite(icon, b.sprite, 24, 24);
+			ui.art.wear(icon, b.sprite, 24, 24);
 		}
 		cell.add(icon, BorderLayout.WEST);
 
@@ -518,7 +514,7 @@ final class StandingScreen
 				}
 			}
 			String since = period.whole() ? null
-				: ChroniclePanel.countersSince(hist.headMap(at.getKey(), true), from.getKey(),
+				: countersSince(hist.headMap(at.getKey(), true), from.getKey(),
 					lootSince, lootFromTs > 0);
 			if (since != null)
 			{
@@ -593,11 +589,7 @@ final class StandingScreen
 			"Tiers unlocked", fmt(ca[2]) + " / 6",
 			"Damage dealt", fmt(c.getOrDefault(StatKeys.DAMAGE_DEALT, 0L)),
 			"Highest hit", fmt(c.getOrDefault(StatKeys.HIGHEST_HIT, 0L))));
-		link(cell, () ->
-		{
-			ui.sheetPage = "combat";
-			ui.rebuild();
-		});
+		link(cell, () -> ui.open(ChroniclePanel.Page.SHEET, "combat"));
 		return cell;
 	}
 
@@ -698,22 +690,22 @@ final class StandingScreen
 		return false;
 	}
 
-	JPanel buildSheetPage()
+	JPanel buildSheetPage(String page)
 	{
 		JPanel p = ui.backPage();
-		if ("log".equals(ui.sheetPage))
+		if ("log".equals(page))
 		{
 			p.add(buildLog());
 		}
-		else if ("clues".equals(ui.sheetPage))
+		else if ("clues".equals(page))
 		{
 			buildClues(p);
 		}
-		else if ("quests".equals(ui.sheetPage))
+		else if ("quests".equals(page))
 		{
 			buildQuests(p);
 		}
-		else if ("diaries".equals(ui.sheetPage))
+		else if ("diaries".equals(page))
 		{
 			buildDiaries(p);
 		}
@@ -1037,7 +1029,7 @@ final class StandingScreen
 		link(cell, slayer ? () -> ui.openSlayer("Tasks") : () -> ui.openSkill(craft));
 
 		JLabel icon = new JLabel();
-		BufferedImage img = ui.skillIcon(sk);
+		BufferedImage img = ui.art.skill(sk);
 		if (img != null)
 		{
 			icon.setIcon(new ImageIcon(img));
@@ -1070,7 +1062,7 @@ final class StandingScreen
 		JPanel p = column();
 		if (!period.whole())
 		{
-			return ui.logInWindow(p);
+			return logInWindow(p);
 		}
 		int[] standing = board.clogStanding();
 		int fin = plugin.clogFinished();
@@ -1358,4 +1350,60 @@ final class StandingScreen
 	String clogTab = "Bosses";
 
 	String clogPageSel;
+
+	JPanel logInWindow(JPanel p)
+	{
+		List<JsonObject> got = new ArrayList<>();
+		for (JsonObject e : plugin.feedNewest(Board.FEED_SCAN_DEEP))
+		{
+			if ("COLLECTION".equals(typeOf(e)) && board.insideWindow(safeLong(e.get("ts"))))
+			{
+				got.add(e);
+			}
+		}
+		if (got.isEmpty())
+		{
+			return noted(p, board.inside("Nothing new was logged"));
+		}
+		JPanel head = card("Collection log");
+		head.add(row("Slots logged", fmt(got.size()), ACCENT));
+		spaced(p, head);
+		for (JsonObject e : got)
+		{
+			JsonObject d = obj(e, "data");
+			final String name = str(d, "itemName", "new item");
+			JPanel line = row(name, stamp(e));
+			link(line, () -> ui.openItem(name));
+			p.add(line);
+		}
+		return p;
+	}
+
+	private static String countersSince(
+		SortedMap<LocalDate, Baseline> spine,
+		LocalDate startLine, LocalDate lootFrom, boolean lootFromSittings)
+	{
+		LocalDate counters = HistoryLog.firstCarrying(spine, null);
+		LocalDate loot = lootFromSittings
+			? lootFrom : HistoryLog.firstCarrying(spine, "dropsReceived");
+		StringBuilder note = new StringBuilder();
+		LocalDate since = startLine;
+		if (counters != null && (since == null || counters.isAfter(since)))
+		{
+			note.append("Counters since ").append(counters.format(FULL_DAY));
+			since = counters;
+		}
+		if (loot != null && (lootFromSittings || since == null || loot.isAfter(since)))
+		{
+			String what = lootFromSittings ? "loot" : "loot and kills";
+			note.append(note.length() == 0
+				? prettyTier(what) + " since "
+				: " · " + what + " since ")
+				.append(loot.format(FULL_DAY));
+		}
+		return note.length() == 0 ? null : note.toString();
+	}
+
+	private static final int ICON_W = 22;
+	private static final int ICON_H = 18;
 }

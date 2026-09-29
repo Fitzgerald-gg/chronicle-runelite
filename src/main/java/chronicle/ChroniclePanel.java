@@ -1,82 +1,39 @@
 /*
-* Copyright (c) 2026, Chronicle
-* All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted provided that the conditions of the
-* BSD 2-Clause License (see LICENSE) are met.
-*/
+ * Copyright (c) 2026, Chronicle. BSD 2-Clause (see LICENSE).
+ */
 package chronicle;
 
-import chronicle.HistoryLog.Baseline;
-import chronicle.LocalStore.BagItem;
-import chronicle.LocalStore.SlayerJourney;
-import chronicle.LocalStore.SlayerTask;
-import chronicle.LocalStore.SourceRow;
-import chronicle.LocalStore.UntakenRow;
-import chronicle.Board.Kind;
-import chronicle.Board.Obtained;
-import chronicle.Board.SkillStand;
-import chronicle.Board.Span;
 import chronicle.Period.Window;
-import chronicle.counters.ExperienceStatTracker;
-import chronicle.counters.StatKeys;
-import chronicle.panel.StatRegistry;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
-import java.awt.FontMetrics;
 import java.awt.GridLayout;
-import java.awt.Image;
 import java.awt.MouseInfo;
 import java.awt.Point;
 import java.awt.PointerInfo;
 import java.awt.Rectangle;
 import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseListener;
-import java.awt.image.BufferedImage;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
-import java.util.AbstractMap;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
 import java.util.function.IntConsumer;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
-import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
@@ -87,98 +44,134 @@ import javax.swing.MenuSelectionManager;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.Scrollable;
 import javax.swing.SwingUtilities;
-import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import javax.swing.ToolTipManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import lombok.RequiredArgsConstructor;
-import net.runelite.api.Skill;
-import net.runelite.api.SpriteID;
-import net.runelite.client.game.SpriteManager;
-import net.runelite.client.hiscore.HiscoreSkill;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.ui.components.IconTextField;
 import net.runelite.client.ui.components.materialtabs.MaterialTab;
 import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
-import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
-import static chronicle.Feed.*;
-import static chronicle.LocalStore.kindOf;
-import static chronicle.Pictures.*;
-import static chronicle.Reference.*;
+import static chronicle.Pictures.copyPicture;
+import static chronicle.Pictures.stripChrome;
+import static chronicle.Reference.taxonomy;
 import static chronicle.Ui.*;
-import static chronicle.panel.StatRegistry.prettify;
 
 class ChroniclePanel extends PluginPanel
 {
-
-	enum View
-	{
-		HOME, DROPS, SLAYER, STATS, JOURNAL, SHEET, RECAP
-	}
+	static final int MOVED_RECORD = 1;
+	static final int MOVED_COUNTERS = 2;
+	static final int MOVED_SKILLS = 4;
+	static final int MOVED_CLOG = 8;
+	private static final int MOVED_ANY = MOVED_RECORD | MOVED_COUNTERS | MOVED_SKILLS | MOVED_CLOG;
+	private static final int FOLD_CAP = 6;
 
 	enum Tab
 	{
-		RECORD, STANDING, LOOT, TRACKERS
+		RECORD("tab_record.png", "Record"),
+		STANDING("tab_standing.png", "Standing"),
+		LOOT("tab_loot.png", "Loot"),
+		TRACKERS("tab_trackers.png", "Trackers");
+
+		final String icon;
+		final String tip;
+
+		Tab(String icon, String tip)
+		{
+			this.icon = icon;
+			this.tip = tip;
+		}
 	}
 
-	private static final Map<Tab, String[]> SUBS = new EnumMap<>(Tab.class);
-
-	static
+	enum View
 	{
-		SUBS.put(Tab.RECORD, new String[]{"Now", "Journal", "Ledger", "Recap"});
-		SUBS.put(Tab.STANDING, new String[0]);
-		SUBS.put(Tab.LOOT, new String[]{"Loot", "Slayer"});
-		SUBS.put(Tab.TRACKERS, new String[0]);
+		NOW(Tab.RECORD, "Now"),
+		JOURNAL(Tab.RECORD, "Journal"),
+		LEDGER(Tab.RECORD, "Ledger"),
+		RECAP(Tab.RECORD, "Recap"),
+		STANDING(Tab.STANDING, null),
+		LOOT(Tab.LOOT, "Loot"),
+		SLAYER(Tab.LOOT, "Slayer"),
+		TRACKERS(Tab.TRACKERS, null);
+
+		final Tab tab;
+		final String sub;
+
+		View(Tab tab, String sub)
+		{
+			this.tab = tab;
+			this.sub = sub;
+		}
+	}
+
+	enum Page
+	{
+		ITEM, SOURCE, SKILL, TRACKERS, RECORDS, CALENDAR, INFO, TASK, LEFT_SOURCE, LEFT_ITEM, SHEET
+	}
+
+	@RequiredArgsConstructor
+	static final class Place
+	{
+		final Page page;
+		final String name;
+		final int index;
 	}
 
 	private final ChroniclePlugin plugin;
-
-	private final JPanel display = new JPanel(new BorderLayout());
-
-	private final ScrollColumn canvas = new ScrollColumn();
-	private final JScrollPane scrollPane = new JScrollPane(canvas,
-		ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
-		ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-	private final MaterialTabGroup tabGroup = new MaterialTabGroup();
-	final Map<Tab, String> subByTab = new EnumMap<>(Tab.class);
-	final IconTextField searchField = new IconTextField();
-	private final Timer searchDebounce;
-	private final Timer homeTicker;
-
-	View view = View.HOME;
-	Tab tab = Tab.RECORD;
-	private String detailItem;
-	String detailSource;
-	private String detailSkill;
-	boolean allTrackers;
-	private boolean showInfo;
-	private boolean showRecords;
-	private boolean showCalendar;
-	private final ArrayDeque<String[]> detailStack = new ArrayDeque<>();
-
-	private final JPanel band = new JPanel(new BorderLayout());
-	private final JLabel bandText = new JLabel();
 	private final Period period = new Period();
 	private final Board board;
-	private final HomeScreen home;
-	private final StandingScreen standing;
+	final Art art;
+	final HomeScreen home;
+	final StandingScreen standing;
 	final SlayerScreen slayer;
 	final LootScreen loot;
 	final TrackersScreen trackers;
-	private final SearchScreen search;
-	private final JournalScreen journal;
-	private final RecapScreen recap;
+	final SearchScreen search;
+	final JournalScreen journal;
+	final RecapScreen recap;
+
+	View view = View.NOW;
+	Place place;
+	private final ArrayDeque<Place> back = new ArrayDeque<>();
+	private final Map<Tab, View> lastView = new EnumMap<>(Tab.class);
+	private final Set<String> openFolds = new HashSet<>();
+	private final Map<String, Integer> shown = new HashMap<>();
+	String measuredSince;
+	boolean drawingCopy;
+
+	private final JPanel north = new JPanel();
+	private final JPanel periodHolder = new JPanel(new BorderLayout());
+	private final MaterialTabGroup tabGroup = new MaterialTabGroup();
+	final IconTextField searchField = new IconTextField();
+	private final JPanel band = new JPanel(new BorderLayout());
+	private final JLabel bandText = new JLabel();
+	private final JPanel display = new JPanel(new BorderLayout());
+	private final ScrollColumn canvas = new ScrollColumn();
+	private final JScrollPane scrollPane = new JScrollPane(canvas,
+		ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+	private JPanel subStrip;
+	private final Timer searchDebounce;
+	private final Timer ticker;
+
+	private final AtomicBoolean queued = new AtomicBoolean();
+	private boolean everShown;
+	private boolean stale;
+	private boolean keepScroll;
+	private Point lastPointer;
+	private long lastBuildNanos;
+	private long lastBuildAt;
 
 	ChroniclePanel(ChroniclePlugin plugin)
 	{
 		super(false);
 		this.plugin = plugin;
 		board = new Board(plugin, period, this::rebuildInPlace);
+		art = new Art(plugin);
 		home = new HomeScreen(this, board);
 		standing = new StandingScreen(this, board);
 		slayer = new SlayerScreen(this, board);
@@ -188,37 +181,44 @@ class ChroniclePanel extends PluginPanel
 		journal = new JournalScreen(this, board);
 		recap = new RecapScreen(this, board);
 
-		watchForReturn();
+		searchDebounce = new Timer(150, e -> onSearchChanged());
+		searchDebounce.setRepeats(false);
 		setLayout(new BorderLayout());
-		setBorder(pad(
-			PANEL_INSET, PANEL_INSET, PANEL_INSET, PANEL_INSET));
+		setBorder(pad(PANEL_INSET, PANEL_INSET, PANEL_INSET, PANEL_INSET));
 		setBackground(DARK);
-
 		north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
 		north.setBackground(DARK);
+
+		periodHolder.setBackground(DARK);
+		periodHolder.setAlignmentX(Component.CENTER_ALIGNMENT);
+		periodHolder.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
+		periodHolder.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 16, 22));
+		spaced(north, periodHolder, 3);
+
+		tabGroup.setLayout(new GridLayout(1, 4, 2, 0));
+		for (Tab t : Tab.values())
+		{
+			MaterialTab mt = new MaterialTab(new ImageIcon(ImageUtil.loadImageResource(ChroniclePanel.class, t.icon)),
+				tabGroup, new JPanel());
+			mt.setToolTipText(t.tip);
+			mt.setOnSelectEvent(() ->
+			{
+				show(lastView.getOrDefault(t, firstView(t)));
+				return true;
+			});
+			tabGroup.addTab(mt);
+			if (t == Tab.RECORD)
+			{
+				tabGroup.select(mt);
+			}
+		}
+		spaced(north, tabGroup, 7);
 
 		searchField.setIcon(IconTextField.Icon.SEARCH);
 		searchField.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 16, 28));
 		searchField.setBackground(DARKER);
 		searchField.setHoverBackgroundColor(ColorScheme.DARK_GRAY_HOVER_COLOR);
-		searchDebounce = new Timer(150, e -> onSearchChanged());
-		searchDebounce.setRepeats(false);
-		searchField.addActionListener(e ->
-		{
-			if (searchQuery().isEmpty())
-			{
-				return;
-			}
-			if (searchDebounce.isRunning())
-			{
-				searchDebounce.stop();
-				onSearchChanged();
-			}
-			if (search.searchFirst != null)
-			{
-				search.searchFirst.run();
-			}
-		});
+		searchField.addActionListener(e -> enterSearch());
 		searchField.getDocument().addDocumentListener(new DocumentListener()
 		{
 			@Override
@@ -239,46 +239,7 @@ class ChroniclePanel extends PluginPanel
 				searchDebounce.restart();
 			}
 		});
-		periodHolder.setBackground(DARK);
-		periodHolder.setAlignmentX(Component.CENTER_ALIGNMENT);
-		periodHolder.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
-		periodHolder.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 16, 22));
-		spaced(north, periodHolder, 3);
-
-		tabGroup.setLayout(new GridLayout(1, 4, 2, 0));
-		addTab("tab_record.png", "Record", Tab.RECORD);
-		addTab("tab_standing.png", "Standing", Tab.STANDING);
-		addTab("tab_loot.png", "Loot", Tab.LOOT);
-		addTab("tab_trackers.png", "Trackers", Tab.TRACKERS);
-		spaced(north, tabGroup, 7);
 		spaced(north, searchField, 8);
-
-		add(north, BorderLayout.NORTH);
-		add(display, BorderLayout.CENTER);
-
-		canvas.setBackground(DARK);
-		scrollPane.setBorder(null);
-		scrollPane.getVerticalScrollBar().setUnitIncrement(14);
-		OverlayScrollBarUI.install(scrollPane);
-		display.add(scrollPane, BorderLayout.CENTER);
-
-		homeTicker = new Timer(3000, e ->
-		{
-			if (staleWhileHidden && everShown && getWrappedPanel().isShowing()
-				&& !popupShowing())
-			{
-				staleWhileHidden = false;
-				update();
-				return;
-			}
-			if (showingSitting())
-			{
-				update();
-			}
-		});
-		homeTicker.start();
-		ToolTipManager.sharedInstance().setInitialDelay(220);
-		ToolTipManager.sharedInstance().setDismissDelay(20_000);
 
 		band.setAlignmentX(Component.CENTER_ALIGNMENT);
 		band.setMaximumSize(new Dimension(Integer.MAX_VALUE, 22));
@@ -288,203 +249,272 @@ class ChroniclePanel extends PluginPanel
 		band.setVisible(false);
 		north.add(band);
 
+		canvas.setBackground(DARK);
+		scrollPane.setBorder(null);
+		scrollPane.getVerticalScrollBar().setUnitIncrement(14);
+		OverlayScrollBarUI.install(scrollPane);
+		display.add(scrollPane, BorderLayout.CENTER);
+		add(north, BorderLayout.NORTH);
+		add(display, BorderLayout.CENTER);
+
+		getWrappedPanel().addHierarchyListener(e ->
+		{
+			if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0 && getWrappedPanel().isShowing())
+			{
+				everShown = true;
+				catchUp();
+			}
+		});
+		ticker = new Timer(3000, e ->
+		{
+			if (stale && everShown && getWrappedPanel().isShowing() && !popupShowing())
+			{
+				catchUp();
+			}
+			else if (showingSitting())
+			{
+				update();
+			}
+		});
+		ticker.start();
+		ToolTipManager.sharedInstance().setInitialDelay(220);
+		ToolTipManager.sharedInstance().setDismissDelay(20_000);
+
 		board.gatherHistory();
 		rebuild();
 	}
 
-	private void addTab(String icon, String tooltip, Tab target)
+	void shutdown()
 	{
-		MaterialTab mt = new MaterialTab(new ImageIcon(ImageUtil.loadImageResource(ChroniclePanel.class, icon)),
-			tabGroup, new JPanel());
-		mt.setToolTipText(tooltip);
-		mt.setOnSelectEvent(() ->
-		{
-			applyTab(target);
-			return true;
-		});
-		tabGroup.addTab(mt);
-		if (target == Tab.RECORD)
-		{
-			tabGroup.select(mt);
-		}
+		ticker.stop();
+		searchDebounce.stop();
 	}
 
-	private JPanel subStrip()
+	void resetAccountCaches()
 	{
-		String[] subs = SUBS.get(tab);
-		if (subs == null || subs.length == 0 || !searchQuery().isEmpty()
-			|| detailItem != null || detailSource != null || detailSkill != null
-			|| allTrackers || showRecords || showCalendar || detailTask >= 0
-			|| leftBehindSource != null || leftBehindItem != null)
-		{
-			return null;
-		}
-		JPanel strip = new JPanel(new GridLayout(1, subs.length, 3, 3));
-		strip.setBackground(DARK);
-		String on = sub();
-		for (String name : subs)
-		{
-			strip.add(pill(name, name.equals(on), 4, null, () ->
-			{
-				subByTab.put(tab, name);
-				applyCommon();
-			}));
-		}
-		return strip;
+		slayer.forget();
+		loot.forget();
+		board.forget();
+		place = null;
+		back.clear();
+		shown.clear();
+		openFolds.clear();
+		board.gatherHistory();
+		rebuild();
 	}
 
-	private String sub()
+	private static View firstView(Tab t)
 	{
-		String[] subs = SUBS.get(tab);
-		if (subs == null || subs.length == 0)
+		for (View v : View.values())
 		{
-			return "";
-		}
-		String chosen = subByTab.get(tab);
-		for (String s : subs)
-		{
-			if (s.equals(chosen))
+			if (v.tab == t)
 			{
-				return s;
+				return v;
 			}
 		}
-		return subs[0];
+		return View.NOW;
 	}
 
-	private View viewOf()
+	void show(View v)
 	{
-		switch (tab)
+		switchTo(v);
+		rebuild();
+	}
+
+	private void switchTo(View v)
+	{
+		view = v;
+		lastView.put(v.tab, v);
+		trackers.reset(v);
+		loot.reset();
+		slayer.reset();
+		shown.clear();
+		place = null;
+		back.clear();
+		clearSearch();
+	}
+
+	void open(Page page, String name)
+	{
+		open(new Place(page, name, -1));
+	}
+
+	private void open(Place to)
+	{
+		if (place != null)
 		{
-			case STANDING:
-				return View.SHEET;
-			case LOOT:
-				return "Slayer".equals(sub()) ? View.SLAYER : View.DROPS;
-			case TRACKERS:
-				return View.STATS;
-			case RECORD:
-			default:
-				switch (sub())
-				{
-					case "Journal":
-						return View.JOURNAL;
-					case "Ledger":
-						return View.STATS;
-					case "Recap":
-						return View.RECAP;
-					case "Now":
-					default:
-						return View.HOME;
-				}
+			back.push(place);
+			while (back.size() > 16)
+			{
+				back.removeLast();
+			}
 		}
-	}
-
-	private Tab tabFor(View v)
-	{
-		switch (v)
-		{
-			case DROPS:
-			case SLAYER:
-				return Tab.LOOT;
-			case SHEET:
-				return Tab.STANDING;
-			case STATS:
-				return Tab.TRACKERS;
-			case JOURNAL:
-			case HOME:
-			default:
-				return Tab.RECORD;
-		}
-	}
-
-	private String subFor(View v)
-	{
-		switch (v)
-		{
-			case SHEET:
-			case STATS:
-				return "";
-			case DROPS:
-				return "Loot";
-			case SLAYER:
-				return "Slayer";
-			case JOURNAL:
-				return "Journal";
-			case RECAP:
-				return "Recap";
-			case HOME:
-			default:
-				return "Now";
-		}
-	}
-
-	void applyTab(Tab target)
-	{
-		tab = target;
-		applyCommon();
-	}
-
-	void applyTab(View target)
-	{
-		tab = tabFor(target);
-		subByTab.put(tab, subFor(target));
-		applyCommon();
-	}
-
-	void applyCommon()
-	{
-		view = viewOf();
-		sheetPage = null;
-		if (tab == Tab.TRACKERS)
-		{
-			trackers.statsFamily = StatRegistry.FAMILIES[0];
-		}
-		else if (tab == Tab.RECORD && "Ledger".equals(sub())
-			&& !"Ledger & Roads".equals(trackers.statsFamily) && !"Living".equals(trackers.statsFamily))
-		{
-			trackers.statsFamily = "Ledger & Roads";
-		}
-		loot.dropsShown = ROW_CAP;
-		slayer.slayerShown = ROW_CAP;
-		loot.lootKind = null;
-		loot.lootTask = null;
-		drillShown.clear();
-		histListShown.clear();
-		detailItem = null;
-		detailSource = null;
-		detailSkill = null;
-		leaveSentPage();
-		detailTask = -1;
-		leftBehindSource = null;
-		leftBehindItem = null;
-		detailStack.clear();
+		place = to;
 		clearSearch();
 		rebuild();
 	}
 
-	void openActivity(String source)
+	void back()
 	{
-		if (board.resolveSourceNamed(source) == null && openLogPage(source))
-		{
-			return;
-		}
-		openSourceLoose(source);
+		place = back.poll();
+		rebuild();
 	}
 
-	boolean openLogPage(String page)
+	boolean showing(Page page, String name)
 	{
-		for (Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
+		return place != null && place.page == page && name.equals(place.name);
+	}
+
+	void openItem(String name)
+	{
+		open(Page.ITEM, name);
+	}
+
+	void openSource(String name)
+	{
+		open(Page.SOURCE, name);
+	}
+
+	void openSourceLoose(String name)
+	{
+		openSource(board.resolveSource(name));
+	}
+
+	void openSkill(String craft)
+	{
+		open(Page.SKILL, craft);
+	}
+
+	void openAllTrackers()
+	{
+		open(Page.TRACKERS, null);
+	}
+
+	void openRecords()
+	{
+		open(Page.RECORDS, null);
+	}
+
+	void openInfo()
+	{
+		open(Page.INFO, null);
+	}
+
+	void openCalendar()
+	{
+		journal.calendarMonth = YearMonth.from(period.cursor);
+		open(Page.CALENDAR, null);
+	}
+
+	void showTask(int index)
+	{
+		open(new Place(Page.TASK, null, index));
+	}
+
+	void showLeftBehind(String source, String item)
+	{
+		open(source != null ? Page.LEFT_SOURCE : Page.LEFT_ITEM, source != null ? source : item);
+	}
+
+	void openSheetPage(String page)
+	{
+		switchTo(View.STANDING);
+		place = new Place(Page.SHEET, page, -1);
+		rebuild();
+	}
+
+	void openLogPage(String page)
+	{
+		for (Map.Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
 		{
 			if (tab.getValue().containsKey(page))
 			{
-				applyTab(Tab.STANDING);
-				sheetPage = "log";
 				standing.clogTab = tab.getKey();
 				standing.clogPageSel = page;
-				rebuild();
-				return true;
+				openSheetPage("log");
+				return;
 			}
 		}
-		return false;
+	}
+
+	boolean hasLogPage(String page)
+	{
+		return taxonomy(plugin.gson()).values().stream().anyMatch(t -> t.containsKey(page));
+	}
+
+	void openActivity(String source)
+	{
+		if (board.resolveSourceNamed(source) == null && hasLogPage(source))
+		{
+			openLogPage(source);
+		}
+		else
+		{
+			openSourceLoose(source);
+		}
+	}
+
+	void openSlayer(String lens)
+	{
+		switchTo(View.SLAYER);
+		slayer.slayerLens = lens;
+		rebuild();
+	}
+
+	void openJournal(String lens)
+	{
+		switchTo(View.JOURNAL);
+		journal.journalLens = lens;
+		rebuild();
+	}
+
+	void openJournalOn(long ts)
+	{
+		if (ts > 0)
+		{
+			period.day(ts);
+		}
+		openJournal("All");
+	}
+
+	void openLedger(String family)
+	{
+		switchTo(View.LEDGER);
+		trackers.statsFamily = family;
+		rebuild();
+	}
+
+	void openLootKind(String kind, boolean onTask)
+	{
+		switchTo(View.LOOT);
+		loot.dropsByKind = true;
+		loot.onTaskOnly = onTask;
+		loot.lootKind = kind;
+		rebuild();
+	}
+
+	void openLeftBehind(String item)
+	{
+		switchTo(View.LOOT);
+		loot.dropsLeftBehind = true;
+		place = item == null ? null : new Place(Page.LEFT_ITEM, item, -1);
+		rebuild();
+	}
+
+	void promptImport()
+	{
+		JFileChooser fc = new JFileChooser();
+		fc.setDialogTitle("Import a Chronicle journal");
+		fc.setFileFilter(new FileNameExtensionFilter("Chronicle journal (*.json)", "json"));
+		if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
+		{
+			plugin.actionImport(fc.getSelectedFile());
+		}
+	}
+
+	String searchQuery()
+	{
+		return searchField.getText() == null ? "" : searchField.getText().trim();
 	}
 
 	private void clearSearch()
@@ -493,45 +523,26 @@ class ChroniclePanel extends PluginPanel
 		searchDebounce.stop();
 	}
 
-	String searchQuery()
+	private void onSearchChanged()
 	{
-		return searchField.getText() == null ? "" : searchField.getText().trim();
+		shown.keySet().removeIf(k -> k.startsWith("search:"));
+		rebuild();
 	}
 
-	private final AtomicBoolean queued =
-		new AtomicBoolean();
-
-	private boolean everShown;
-
-	private boolean staleWhileHidden;
-
-	static final int MOVED_RECORD = 1;
-
-	static final int MOVED_COUNTERS = 2;
-
-	static final int MOVED_SKILLS = 4;
-
-	static final int MOVED_CLOG = 8;
-
-	private static final int MOVED_ANY = MOVED_RECORD | MOVED_COUNTERS
-		| MOVED_SKILLS | MOVED_CLOG;
-
-	private boolean viewCares(int moved)
+	private void enterSearch()
 	{
-		if ((moved & MOVED_ANY) == 0)
+		if (searchQuery().isEmpty())
 		{
-			return false;
+			return;
 		}
-		switch (view)
+		if (searchDebounce.isRunning())
 		{
-			case DROPS:
-			case SLAYER:
-			case JOURNAL:
-				return (moved & MOVED_RECORD) != 0;
-			case STATS:
-				return (moved & (MOVED_COUNTERS | MOVED_RECORD)) != 0;
-			default:
-				return true;
+			searchDebounce.stop();
+			onSearchChanged();
+		}
+		if (search.searchFirst != null)
+		{
+			search.searchFirst.run();
 		}
 	}
 
@@ -549,657 +560,74 @@ class ChroniclePanel extends PluginPanel
 		SwingUtilities.invokeLater(() ->
 		{
 			queued.set(false);
-			if (everShown && !getWrappedPanel().isShowing())
+			if (everShown && !getWrappedPanel().isShowing() || popupShowing()
+				|| scrollPane.getVerticalScrollBar().getValueIsAdjusting() || beingRead())
 			{
-				staleWhileHidden = true;
-				return;
+				stale = true;
 			}
-			if (popupShowing() || scrollHeld() || beingRead())
+			else if (cares(moved))
 			{
-				staleWhileHidden = true;
-				return;
-			}
-			if (!viewCares(moved))
-			{
-				return;
-			}
-			long floor = redrawFloorMs();
-			if (floor > 0 && System.currentTimeMillis() - lastBuildAt < floor)
-			{
-				staleWhileHidden = true;
-				return;
-			}
-			keepScroll = true;
-			try
-			{
-				rebuild();
-			}
-			finally
-			{
-				keepScroll = false;
+				long floor = lastBuildNanos < 12_000_000L ? 0 : Math.min(2000L, lastBuildNanos / 1_000_000L * 60L);
+				if (System.currentTimeMillis() - lastBuildAt < floor)
+				{
+					stale = true;
+				}
+				else
+				{
+					rebuildInPlace();
+				}
 			}
 		});
 	}
 
-	private Point lastPointer;
+	private void catchUp()
+	{
+		if (stale)
+		{
+			stale = false;
+			update();
+		}
+	}
+
+	private boolean cares(int moved)
+	{
+		switch (view)
+		{
+			case LOOT:
+			case SLAYER:
+			case JOURNAL:
+				return (moved & MOVED_RECORD) != 0;
+			case LEDGER:
+			case TRACKERS:
+				return (moved & (MOVED_COUNTERS | MOVED_RECORD)) != 0;
+			default:
+				return (moved & MOVED_ANY) != 0;
+		}
+	}
 
 	private boolean beingRead()
 	{
 		Point was = lastPointer;
-		Point now = null;
+		lastPointer = null;
 		try
 		{
 			PointerInfo at = MouseInfo.getPointerInfo();
-			if (at != null)
+			if (at != null && new Rectangle(getWrappedPanel().getLocationOnScreen(), getWrappedPanel().getSize())
+				.contains(at.getLocation()))
 			{
-				now = at.getLocation();
-				Point origin = getWrappedPanel().getLocationOnScreen();
-				Rectangle over = new Rectangle(origin,
-					getWrappedPanel().getSize());
-				if (!over.contains(now))
-				{
-					now = null;
-				}
+				lastPointer = at.getLocation();
 			}
 		}
-		catch (RuntimeException e)
+		catch (RuntimeException ignored)
 		{
-			now = null;
 		}
-		lastPointer = now;
-		return now != null && now.equals(was);
-	}
-
-	private boolean scrollHeld()
-	{
-		return scrollPane.getVerticalScrollBar().getValueIsAdjusting();
+		return lastPointer != null && lastPointer.equals(was);
 	}
 
 	private static boolean popupShowing()
 	{
-		MenuElement[] path = MenuSelectionManager
-			.defaultManager().getSelectedPath();
+		MenuElement[] path = MenuSelectionManager.defaultManager().getSelectedPath();
 		return path != null && path.length > 0;
-	}
-
-	private void watchForReturn()
-	{
-		getWrappedPanel().addHierarchyListener(e ->
-		{
-			if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) == 0
-				|| !getWrappedPanel().isShowing())
-			{
-				return;
-			}
-			everShown = true;
-			if (staleWhileHidden)
-			{
-				staleWhileHidden = false;
-				update();
-			}
-		});
-	}
-
-	private boolean keepScroll;
-
-	private final JPanel periodHolder = new JPanel(new BorderLayout());
-	private final JPanel north = new JPanel();
-
-	private long buildsRun;
-
-	void rebuild()
-	{
-		long began = System.nanoTime();
-		try
-		{
-			rebuildNow();
-		}
-		finally
-		{
-			lastBuildNanos = System.nanoTime() - began;
-			lastBuildAt = System.currentTimeMillis();
-		}
-	}
-
-	private long lastBuildNanos;
-	private long lastBuildAt;
-
-	private long redrawFloorMs()
-	{
-		long ms = lastBuildNanos / 1_000_000L;
-		return ms < 12 ? 0 : Math.min(2000L, ms * 60L);
-	}
-
-	private void rebuildNow()
-	{
-		buildsRun++;
-		board.reset();
-		trackers.resourcesDropped = 0;
-		artWaiting.clear();
-		paintBand(plugin.journalWarning(), plugin.captureWarning(),
-			plugin.captureWarningWhy());
-		if (aboveBoard != null)
-		{
-			display.remove(aboveBoard);
-			aboveBoard = null;
-		}
-		measuredSince = null;
-		periodHolder.removeAll();
-		periodHolder.add(periodRow(), BorderLayout.CENTER);
-		periodHolder.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 16, 22));
-		periodHolder.invalidate();
-		north.invalidate();
-		north.revalidate();
-		north.repaint();
-		JPanel body = !searchQuery().isEmpty() ? search.buildSearch(searchQuery())
-			: detailItem != null ? loot.buildItemDetail(detailItem)
-			: detailSource != null ? loot.buildSourceDetail(detailSource)
-			: detailSkill != null ? trackers.buildSkillDetail(detailSkill)
-			: allTrackers ? trackers.buildAllTrackers()
-			: showRecords ? journal.buildRecords()
-			: showCalendar ? journal.buildCalendar()
-			: showInfo ? journal.buildInfo()
-			: detailTask >= 0 ? slayer.buildTaskDetail(detailTask)
-			: leftBehindSource != null || leftBehindItem != null ? loot.buildLeftBehindDetail()
-			: sheetPage != null ? standing.buildSheetPage()
-			: buildView();
-		periodHolder.setToolTipText(measuredSince);
-		unlight();
-		canvas.removeAll();
-		canvas.add(body, BorderLayout.NORTH);
-		JPanel above = new JPanel();
-		above.setLayout(new BoxLayout(above, BoxLayout.Y_AXIS));
-		above.setBackground(DARK);
-		JPanel subs = subStrip();
-		if (subs != null)
-		{
-			spaced(above, subs);
-		}
-		if (above.getComponentCount() > 0)
-		{
-			aboveBoard = above;
-			display.add(above, BorderLayout.NORTH);
-		}
-		canvas.revalidate();
-		canvas.repaint();
-		display.revalidate();
-		display.repaint();
-		if (!keepScroll)
-		{
-			scrollPane.getVerticalScrollBar().setValue(0);
-		}
-	}
-
-	private JPanel buildView()
-	{
-		switch (view)
-		{
-			case SHEET:
-				return standing.buildSheet();
-			case DROPS:
-				return loot.buildDrops();
-			case SLAYER:
-				return slayer.buildSlayer();
-			case STATS:
-				return trackers.buildStats();
-			case JOURNAL:
-				return journal.buildJournal();
-			case RECAP:
-				return recap.buildRecap();
-			case HOME:
-			default:
-				return home.buildHome();
-		}
-	}
-
-	private JPanel aboveBoard;
-
-	private void onSearchChanged()
-	{
-		drillShown.keySet().removeIf(k -> k.startsWith("search:"));
-		rebuild();
-	}
-
-	private boolean bandFixes;
-
-	private void paintBand(String stalled, String capture, String captureWhy)
-	{
-		if (stalled == null && capture == null)
-		{
-			band.setVisible(false);
-			bandFixes = false;
-			return;
-		}
-		boolean red = stalled != null;
-		Color ink = red ? ColorScheme.PROGRESS_ERROR_COLOR : ACCENT;
-		bandFixes = !red;
-		for (MouseListener l : band.getMouseListeners())
-		{
-			band.removeMouseListener(l);
-		}
-		if (bandFixes)
-		{
-			band.addMouseListener(clicker(() ->
-			{
-				plugin.turnOnMissingCapture();
-				update();
-			}));
-		}
-		bandText.setText(red ? "Not saving the journal"
-			: capture + "  \u00b7  click to turn it on");
-		bandText.setForeground(ink);
-		band.setBackground(wash(ink));
-		band.setOpaque(true);
-		band.setToolTipText(red ? stalled : captureWhy);
-		band.setCursor(bandFixes
-			? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-			: Cursor.getDefaultCursor());
-		band.setVisible(true);
-	}
-
-	void foldHead(JPanel head, String fold, String tip)
-	{
-		JLabel name = part(head, BorderLayout.CENTER);
-		if (foldOpen(fold))
-		{
-			name.setForeground(ACCENT);
-		}
-		head.setToolTipText(tip);
-		folds(head, fold);
-	}
-
-	JPanel quietHead(String name, String count, String stateKey)
-	{
-		JPanel head = subHead(name.toUpperCase(Locale.ROOT), count, stateKey);
-		head.setBorder(pad(7, 2, 1, 2));
-		return head;
-	}
-	int detailTask = -1;
-	String leftBehindSource;
-	String leftBehindItem;
-
-	void resetAccountCaches()
-	{
-		slayer.journeyCache = null;
-		slayer.journeyFetching = false;
-		detailTask = -1;
-		leftBehindSource = null;
-		leftBehindItem = null;
-		loot.grindsCache = null;
-		loot.grindsFetching = false;
-		board.forget();
-		detailItem = null;
-		detailSource = null;
-		detailStack.clear();
-		drillShown.clear();
-		histListShown.clear();
-		openFolds.clear();
-		signatureItems.clear();
-		scaledIcons.clear();
-		board.gatherHistory();
-		rebuild();
-	}
-
-	void shutdown()
-	{
-		homeTicker.stop();
-		searchDebounce.stop();
-	}
-
-	void showTask(int at)
-	{
-		detailTask = at;
-		rebuild();
-	}
-
-	void showLeftBehind(String source, String item)
-	{
-		leftBehindSource = source;
-		leftBehindItem = item;
-		rebuild();
-	}
-
-	void openSlayer(String lens)
-	{
-		slayer.slayerLens = lens;
-		applyTab(View.SLAYER);
-	}
-
-	JPanel moreRow(long remaining, Runnable reveal)
-	{
-		return moreRow("Show " + fmt(remaining) + " more", reveal);
-	}
-
-	JPanel moreRow(String label, Runnable reveal)
-	{
-		JPanel more = ghostRow(label, "");
-		link(more, reveal);
-		return more;
-	}
-
-	void drillMore(JPanel p, String key, int size, int cap)
-	{
-		loot.more(p, size, cap, false, n -> drillShown.put(key, n));
-	}
-
-	JLabel sprite(int itemId, String name, long qty)
-	{
-		JLabel slot = new JLabel();
-		slot.setPreferredSize(new Dimension(36, 32));
-		slot.setHorizontalAlignment(JLabel.CENTER);
-		slot.setToolTipText(named(name, qty));
-		link(slot, () -> openItem(name));
-		plugin.items().getImage(itemId, (int) Math.min(Integer.MAX_VALUE, qty), qty > 1).addTo(slot);
-		return slot;
-	}
-
-	private static JLabel copyLabel(JPanel r, String tip)
-	{
-		JLabel take = part(r, BorderLayout.EAST);
-		if (take != null)
-		{
-			styled(take, small(), DIM);
-			take.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-			take.setToolTipText(tip);
-		}
-		return take;
-	}
-
-	void reportCopy(JLabel take, boolean ok)
-	{
-		take.setText(ok ? "copied" : "cannot copy");
-		take.setForeground(ok ? ACCENT : ColorScheme.PROGRESS_ERROR_COLOR);
-	}
-
-	JPanel copyHeader(String title,
-		LinkedHashMap<String, BooleanSupplier> choices)
-	{
-		return copyHeaderLater(title, take ->
-		{
-			JPopupMenu menu = new JPopupMenu();
-			for (Entry<String, BooleanSupplier> e
-				: choices.entrySet())
-			{
-				menuItem(menu, e.getKey(), false, () -> reportCopy(take, e.getValue().getAsBoolean()));
-			}
-			menu.show(take, 0, take.getHeight());
-		});
-	}
-
-	JPanel copyHeaderLater(String title, Consumer<JLabel> copy)
-	{
-		JPanel r = row(title, "copy");
-		styled(part(r, BorderLayout.CENTER), small(), ACCENT);
-		JLabel take = copyLabel(r, "Copy this board as a picture");
-		if (take != null)
-		{
-			take.addMouseListener(clicker(() -> copy.accept(take)));
-		}
-		return r;
-	}
-
-	JPanel copyHeader(String title, BooleanSupplier copy)
-	{
-		return copyHeaderLater(title, take -> reportCopy(take, copy.getAsBoolean()));
-	}
-
-	final Map<String, Integer> drillShown = new LinkedHashMap<>();
-
-	private void leaveSentPage()
-	{
-		allTrackers = false;
-		showInfo = false;
-		showRecords = false;
-		showCalendar = false;
-	}
-
-	private void leaveAll()
-	{
-		leaveSentPage();
-		detailItem = null;
-		detailSource = null;
-		detailSkill = null;
-		detailTask = -1;
-		clearSearch();
-	}
-
-	void openRecords()
-	{
-		leaveAll();
-		showRecords = true;
-		rebuild();
-	}
-
-	void openCalendar()
-	{
-		leaveAll();
-		showCalendar = true;
-		journal.calendarMonth = YearMonth.from(period.cursor);
-		rebuild();
-	}
-
-	void openItem(String name)
-	{
-		leaveSentPage();
-		pushDetail();
-		detailItem = name;
-		detailSource = null;
-		clearSearch();
-		rebuild();
-	}
-
-	void openInfo()
-	{
-		leaveAll();
-		showInfo = true;
-		rebuild();
-	}
-
-	void openAllTrackers()
-	{
-		leaveAll();
-		allTrackers = true;
-		rebuild();
-	}
-
-	void openLootKind(String kind, boolean onTask)
-	{
-		tab = Tab.LOOT;
-		subByTab.put(Tab.LOOT, "Loot");
-		applyCommon();
-		loot.dropsLeftBehind = false;
-		loot.dropsByKind = true;
-		loot.onTaskOnly = onTask;
-		loot.lootKind = kind;
-		rebuild();
-	}
-
-	void openSkill(String craft)
-	{
-		leaveAll();
-		detailSkill = craft;
-		rebuild();
-	}
-
-	void openSource(String name)
-	{
-		leaveSentPage();
-		pushDetail();
-		detailSource = name;
-		detailItem = null;
-		clearSearch();
-		rebuild();
-	}
-
-	void openSourceLoose(String name)
-	{
-		openSource(board.resolveSource(name));
-	}
-
-	private void pushDetail()
-	{
-		if (detailItem != null)
-		{
-			detailStack.push(new String[]{"i", detailItem});
-		}
-		else if (detailSource != null)
-		{
-			detailStack.push(new String[]{"s", detailSource});
-		}
-		while (detailStack.size() > 16)
-		{
-			detailStack.removeLast();
-		}
-	}
-
-	private void backDetail()
-	{
-		if (showInfo || showRecords || showCalendar)
-		{
-			showInfo = false;
-			showRecords = false;
-			showCalendar = false;
-			rebuild();
-			return;
-		}
-		if (detailItem != null || detailSource != null)
-		{
-			String[] prev = detailStack.poll();
-			if (prev == null)
-			{
-				detailItem = null;
-				detailSource = null;
-			}
-			else if ("i".equals(prev[0]))
-			{
-				detailItem = prev[1];
-				detailSource = null;
-			}
-			else
-			{
-				detailSource = prev[1];
-				detailItem = null;
-			}
-			rebuild();
-			return;
-		}
-		if (detailSkill != null)
-		{
-			detailSkill = null;
-			rebuild();
-			return;
-		}
-		if (allTrackers)
-		{
-			allTrackers = false;
-			rebuild();
-			return;
-		}
-		if (sheetPage != null)
-		{
-			sheetPage = null;
-			rebuild();
-			return;
-		}
-		rebuild();
-	}
-
-	JPanel backRow(String label, String right, Runnable go)
-	{
-		JPanel r = row(label, right);
-		styled(part(r, BorderLayout.CENTER), small(), ACCENT);
-		link(r, go);
-		return r;
-	}
-
-	JPanel backRow()
-	{
-		return backRow(null);
-	}
-
-	JPanel backRow(BooleanSupplier copy)
-	{
-		JPanel r = backRow("< Back", copy == null ? "" : "copy", this::backDetail);
-		JLabel take = copy == null ? null : copyLabel(r, "Copy this page as a picture");
-		if (take != null)
-		{
-			take.addMouseListener(clicker(() -> reportCopy(take, copy.getAsBoolean())));
-		}
-		return r;
-	}
-
-	boolean drawingCopy;
-
-	boolean copyPage(Supplier<JPanel> page)
-	{
-		drawingCopy = true;
-		try
-		{
-			return copyPicture(stripChrome(page.get()));
-		}
-		catch (Throwable ignored)
-		{
-			return false;
-		}
-		finally
-		{
-			drawingCopy = false;
-		}
-	}
-
-	JPanel logInWindow(JPanel p)
-	{
-		List<JsonObject> got = new ArrayList<>();
-		for (JsonObject e : plugin.feedNewest(Board.FEED_SCAN_DEEP))
-		{
-			if ("COLLECTION".equals(typeOf(e)) && board.insideWindow(safeLong(e.get("ts"))))
-			{
-				got.add(e);
-			}
-		}
-		if (got.isEmpty())
-		{
-			return noted(p, board.inside("Nothing new was logged"));
-		}
-		JPanel head = card("Collection log");
-		head.add(row("Slots logged", fmt(got.size()), ACCENT));
-		spaced(p, head);
-		for (JsonObject e : got)
-		{
-			JsonObject d = obj(e, "data");
-			final String name = str(d, "itemName", "new item");
-			JPanel line = row(name, stamp(e));
-			link(line, () -> openItem(name));
-			p.add(line);
-		}
-		return p;
-	}
-
-	private final Set<String> openFolds = new HashSet<>();
-
-	boolean foldOpen(String key)
-	{
-		return openFolds.contains(key);
-	}
-
-	boolean foldOpen(String key, boolean byDefault)
-	{
-		return openFolds.contains(key) != byDefault;
-	}
-
-	JPanel folds(JPanel head, String key)
-	{
-		link(head, () -> toggleFold(key));
-		return head;
-	}
-
-	private void toggleFold(String key)
-	{
-		if (!openFolds.remove(key))
-		{
-			openFolds.add(key);
-		}
-		rebuildInPlace();
 	}
 
 	void rebuildInPlace()
@@ -1215,154 +643,167 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	JPanel subHead(String label, String totalStr, String stateKey)
+	void rebuild()
 	{
-		JPanel head = row(label, totalStr);
-		styled(part(head, BorderLayout.CENTER), small(), DIM);
-		head.setBorder(pad(3, 10, 1, 2));
-		return folds(head, stateKey);
-	}
-
-	private static final int HIST_LIST_CAP = 6;
-	private final Map<String, Integer> histListShown = new LinkedHashMap<>();
-
-	int shownCap(String key)
-	{
-		return histListShown.getOrDefault(key, HIST_LIST_CAP);
-	}
-
-	void addMore(JPanel card, String key, int size, int cap, boolean inset)
-	{
-		loot.more(card, size, cap, inset, n -> histListShown.put(key, n));
-	}
-
-	static String countersSince(
-		SortedMap<LocalDate, Baseline> spine,
-		LocalDate startLine, LocalDate lootFrom, boolean lootFromSittings)
-	{
-		LocalDate counters = HistoryLog.firstCarrying(spine, null);
-		LocalDate loot = lootFromSittings
-			? lootFrom : HistoryLog.firstCarrying(spine, "dropsReceived");
-		StringBuilder note = new StringBuilder();
-		LocalDate since = startLine;
-		if (counters != null && (since == null || counters.isAfter(since)))
+		long began = System.nanoTime();
+		board.reset();
+		art.forget();
+		trackers.resourcesDropped = 0;
+		paintBand(plugin.journalWarning(), plugin.captureWarning(), plugin.captureWarningWhy());
+		measuredSince = null;
+		periodHolder.removeAll();
+		periodHolder.add(periodRow(), BorderLayout.CENTER);
+		north.revalidate();
+		north.repaint();
+		JPanel body = !searchQuery().isEmpty() ? search.buildSearch(searchQuery())
+			: place != null ? buildPlace(place) : buildView();
+		periodHolder.setToolTipText(measuredSince);
+		unlight();
+		canvas.removeAll();
+		canvas.add(body, BorderLayout.NORTH);
+		if (subStrip != null)
 		{
-			note.append("Counters since ").append(counters.format(FULL_DAY));
-			since = counters;
+			display.remove(subStrip);
 		}
-		if (loot != null && (lootFromSittings || since == null || loot.isAfter(since)))
+		subStrip = view.sub == null || place != null || !searchQuery().isEmpty() ? null : subStrip();
+		if (subStrip != null)
 		{
-			String what = lootFromSittings ? "loot" : "loot and kills";
-			note.append(note.length() == 0
-				? prettyTier(what) + " since "
-				: " · " + what + " since ")
-				.append(loot.format(FULL_DAY));
+			display.add(subStrip, BorderLayout.NORTH);
 		}
-		return note.length() == 0 ? null : note.toString();
+		display.revalidate();
+		display.repaint();
+		if (!keepScroll)
+		{
+			scrollPane.getVerticalScrollBar().setValue(0);
+		}
+		lastBuildNanos = System.nanoTime() - began;
+		lastBuildAt = System.currentTimeMillis();
 	}
 
-	private final Map<String, Integer> signatureItems = new LinkedHashMap<>();
-
-	static final int ICON_W = 22;
-	static final int ICON_H = 18;
-
-	private static final Map<Skill, BufferedImage> SKILL_ICONS =
-		new EnumMap<>(Skill.class);
-
-	BufferedImage skillIcon(Skill sk)
+	private JPanel buildPlace(Place at)
 	{
-		return SKILL_ICONS.computeIfAbsent(sk, s ->
+		switch (at.page)
 		{
-			try
-			{
-				return plugin.skillIcons().getSkillImage(s, true);
-			}
-			catch (Throwable e)
-			{
-				return null;
-			}
-		});
-	}
-	String sheetPage;
-	String measuredSince;
-
-	final Map<String, BufferedImage> art = new HashMap<>();
-	private final Set<String> artAsked = new HashSet<>();
-	private final Map<String, List<Object[]>> artWaiting = new LinkedHashMap<>();
-
-	void wearSprite(JLabel label, int spriteId, int w, int h)
-	{
-		wear(label, "sprite:" + spriteId, w, h, done ->
-		{
-			SpriteManager sm = plugin.sprites();
-			if (sm != null)
-			{
-				sm.getSpriteAsync(spriteId, 0, done);
-			}
-			return sm != null;
-		});
+			case ITEM:
+				return loot.buildItemDetail(at.name);
+			case SOURCE:
+				return loot.buildSourceDetail(at.name);
+			case SKILL:
+				return trackers.buildSkillDetail(at.name);
+			case TRACKERS:
+				return trackers.buildAllTrackers();
+			case RECORDS:
+				return journal.buildRecords();
+			case CALENDAR:
+				return journal.buildCalendar();
+			case INFO:
+				return journal.buildInfo();
+			case TASK:
+				return slayer.buildTaskDetail(at.index);
+			case LEFT_SOURCE:
+				return loot.buildLeftBehindDetail(at.name, null);
+			case LEFT_ITEM:
+				return loot.buildLeftBehindDetail(null, at.name);
+			default:
+				return standing.buildSheetPage(at.name);
+		}
 	}
 
-	private void wear(JLabel label, String key, int w, int h,
-		Predicate<Consumer<BufferedImage>> fetch)
+	private JPanel buildView()
 	{
-		BufferedImage have = art.get(key);
-		if (have != null)
+		switch (view)
 		{
-			dress(label, key + "@" + w, have, w, h);
-			return;
+			case JOURNAL:
+				return journal.buildJournal();
+			case LEDGER:
+			case TRACKERS:
+				return trackers.buildStats();
+			case RECAP:
+				return recap.buildRecap();
+			case STANDING:
+				return standing.buildSheet();
+			case LOOT:
+				return loot.buildDrops();
+			case SLAYER:
+				return slayer.buildSlayer();
+			default:
+				return home.buildHome();
 		}
-		artWaiting.computeIfAbsent(key, k -> new ArrayList<>()).add(new Object[]{label, w, h});
-		if (!artAsked.add(key))
+	}
+
+	private JPanel subStrip()
+	{
+		JPanel strip = new JPanel(new BorderLayout());
+		strip.setBackground(DARK);
+		JPanel pills = new JPanel(new GridLayout(1, 0, 3, 3));
+		pills.setBackground(DARK);
+		for (View v : View.values())
 		{
-			return;
-		}
-		try
-		{
-			if (!fetch.test(img -> SwingUtilities.invokeLater(() -> landed(key, img))))
+			if (v.tab == view.tab)
 			{
-				artAsked.remove(key);
+				pills.add(pill(v.sub, v == view, 4, null, () -> show(v)));
 			}
 		}
-		catch (Throwable ignored)
-		{
-		}
+		strip.add(pills, BorderLayout.NORTH);
+		strip.add(vgap(6), BorderLayout.SOUTH);
+		return strip;
 	}
 
-	private void landed(String key, BufferedImage img)
+	private void paintBand(String stalled, String capture, String captureWhy)
 	{
-		if (img == null)
+		band.setVisible(stalled != null || capture != null);
+		if (!band.isVisible())
 		{
 			return;
 		}
-		art.put(key, img);
-		for (Object[] want : artWaiting.getOrDefault(key, Collections.emptyList()))
+		boolean red = stalled != null;
+		Color ink = red ? ColorScheme.PROGRESS_ERROR_COLOR : ACCENT;
+		for (MouseListener l : band.getMouseListeners())
 		{
-			dress((JLabel) want[0], key + "@" + want[1], img, (Integer) want[1], (Integer) want[2]);
+			band.removeMouseListener(l);
 		}
-		artWaiting.remove(key);
-	}
-	private final Map<String, ImageIcon> scaledIcons = new LinkedHashMap<>();
-
-	private void dress(JLabel label, String key, BufferedImage img, int w, int h)
-	{
-		ImageIcon icon = scaledIcons.get(key);
-		if (icon == null)
+		if (!red)
 		{
-			icon = w <= 0 || h <= 0 ? new ImageIcon(img) : fit(img, w, h);
-			scaledIcons.put(key, icon);
+			band.addMouseListener(clicker(() ->
+			{
+				plugin.turnOnMissingCapture();
+				update();
+			}));
 		}
-		label.setIcon(icon);
-		label.setText("");
+		bandText.setText(red ? "Not saving the journal" : capture + "  ·  click to turn it on");
+		bandText.setForeground(ink);
+		band.setBackground(wash(ink));
+		band.setOpaque(true);
+		band.setToolTipText(red ? stalled : captureWhy);
+		band.setCursor(red ? Cursor.getDefaultCursor() : Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 	}
 
-	private static ImageIcon fit(BufferedImage img, int w, int h)
+	private boolean showingSitting()
 	{
-		double scale = Math.min(w / (double) img.getWidth(), h / (double) img.getHeight());
-		return new ImageIcon(img.getScaledInstance(
-			Math.max(1, (int) Math.round(img.getWidth() * scale)),
-			Math.max(1, (int) Math.round(img.getHeight() * scale)),
-			Image.SCALE_SMOOTH));
+		return view == View.NOW && place == null && searchQuery().isEmpty();
+	}
+
+	private JPanel periodRow()
+	{
+		Window w = board.window();
+		JPanel r = stepStrip();
+		if (showingSitting())
+		{
+			return fixedPeriod(r, "This session");
+		}
+		if (!searchQuery().isEmpty())
+		{
+			return fixedPeriod(r, "Whole record");
+		}
+		if (period.steps())
+		{
+			arrows(r, () -> stepPeriod(-1), period.canStepForward(), () -> stepPeriod(1), null);
+		}
+		JLabel label = styled(new JLabel(w.label, JLabel.CENTER), FontManager.getRunescapeFont(), ACCENT);
+		label.setToolTipText("Choose the period");
+		link(label, () -> periodMenu().show(r, 0, r.getHeight()));
+		r.add(label, BorderLayout.CENTER);
+		return r;
 	}
 
 	private JPopupMenu periodMenu()
@@ -1377,85 +818,8 @@ class ChroniclePanel extends PluginPanel
 			});
 		}
 		menu.addSeparator();
-		menuItem(menu, "Exact dates", period.from != null, () -> onSetExactDates(
-			period.suggestedFrom(), period.suggestedTo()));
+		menuItem(menu, "Exact dates", period.from != null, this::askExactDates);
 		return menu;
-	}
-
-	void menuItem(JPopupMenu menu, String text, boolean on, Runnable go)
-	{
-		JMenuItem item = new JMenuItem(text);
-		item.setFont(small());
-		if (on)
-		{
-			item.setForeground(ACCENT);
-		}
-		item.addActionListener(e -> go.run());
-		menu.add(item);
-	}
-
-	JPanel noPeriod()
-	{
-		return note(board.historySpine == null
-			? "Reading your history..."
-			: "Nothing closed inside " + board.periodInSentence() + ". A period is the distance "
-				+ "between two baselines, and this window holds fewer than two.");
-	}
-
-	private JPanel periodRow()
-	{
-		final Window w = board.window();
-		JPanel r = stepStrip();
-		if (showingSitting())
-		{
-			return fixedPeriod(r, "This session");
-		}
-		if (!searchQuery().isEmpty())
-		{
-			return fixedPeriod(r, "Whole record");
-		}
-		if (period.steps())
-		{
-			arrows(r, () -> stepPeriod(-1), period.canStepForward(), () -> stepPeriod(1), null);
-		}
-		JLabel lbl = styled(new JLabel(w.label, JLabel.CENTER), FontManager.getRunescapeFont(),
-			ACCENT);
-		lbl.setToolTipText("Choose the period");
-		link(lbl, () -> periodMenu().show(r, 0, r.getHeight()));
-		r.add(lbl, BorderLayout.CENTER);
-		return r;
-	}
-
-	void arrows(JPanel r, Runnable back, boolean ahead, Runnable forward, JLabel title)
-	{
-		JLabel b = new JLabel("<");
-		JLabel fwd = new JLabel(">");
-		for (JLabel arrow : new JLabel[]{b, fwd})
-		{
-			arrow.setFont(FontManager.getRunescapeBoldFont());
-			arrow.setBorder(pad(0, 6, 0, 6));
-		}
-		b.setForeground(ACCENT);
-		link(b, back);
-		fwd.setForeground(ahead ? ACCENT : DIM);
-		if (ahead)
-		{
-			link(fwd, forward);
-		}
-		r.add(b, BorderLayout.WEST);
-		if (title != null)
-		{
-			r.add(title, BorderLayout.CENTER);
-		}
-		r.add(fwd, BorderLayout.EAST);
-	}
-
-	private boolean showingSitting()
-	{
-		return view == View.HOME && !allTrackers && detailSkill == null
-			&& detailItem == null && detailSource == null && detailTask < 0
-			&& leftBehindSource == null && leftBehindItem == null
-			&& searchQuery().isEmpty();
 	}
 
 	private void stepPeriod(int by)
@@ -1464,18 +828,16 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	private void onSetExactDates(LocalDate from, LocalDate to)
+	private void askExactDates()
 	{
-		JTextField fromField = new JTextField(from.toString());
-		JTextField toField = new JTextField(to.toString());
+		JTextField fromField = new JTextField(period.suggestedFrom().toString());
+		JTextField toField = new JTextField(period.suggestedTo().toString());
 		JPanel form = new JPanel(new GridLayout(0, 1, 0, 4));
 		form.add(new JLabel("From (yyyy-mm-dd):"));
 		form.add(fromField);
 		form.add(new JLabel("To (yyyy-mm-dd):"));
 		form.add(toField);
-		int ok = JOptionPane.showConfirmDialog(this, form,
-			"Exact dates", JOptionPane.OK_CANCEL_OPTION);
-		if (ok != JOptionPane.OK_OPTION)
+		if (JOptionPane.showConfirmDialog(this, form, "Exact dates", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION)
 		{
 			return;
 		}
@@ -1483,53 +845,132 @@ class ChroniclePanel extends PluginPanel
 		LocalDate t = Period.parse(toField.getText());
 		if (f == null || t == null)
 		{
-			JOptionPane.showMessageDialog(this,
-				"Dates read as yyyy-mm-dd (or d/m/yyyy). Nothing changed.");
+			JOptionPane.showMessageDialog(this, "Dates read as yyyy-mm-dd (or d/m/yyyy). Nothing changed.");
 			return;
 		}
 		period.exact(f, t);
 		rebuild();
 	}
 
-	void openJournalOn(long ts)
+	boolean foldOpen(String key)
 	{
-		if (ts > 0)
+		return openFolds.contains(key);
+	}
+
+	boolean foldOpen(String key, boolean byDefault)
+	{
+		return openFolds.contains(key) != byDefault;
+	}
+
+	JPanel folds(JPanel head, String key)
+	{
+		link(head, () ->
 		{
-			period.day(ts);
-		}
-		openJournal("All");
+			if (!openFolds.remove(key))
+			{
+				openFolds.add(key);
+			}
+			rebuildInPlace();
+		});
+		return head;
 	}
 
-	void openJournal(String lens)
+	void foldHead(JPanel head, String fold, String tip)
 	{
-		journal.journalLens = lens;
-		applyTab(View.JOURNAL);
-	}
-
-	void promptImport()
-	{
-		JFileChooser fc = new JFileChooser();
-		fc.setDialogTitle("Import a Chronicle journal");
-		fc.setFileFilter(new FileNameExtensionFilter(
-			"Chronicle journal (*.json)", "json"));
-		if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
+		if (foldOpen(fold))
 		{
-			plugin.actionImport(fc.getSelectedFile());
+			part(head, BorderLayout.CENTER).setForeground(ACCENT);
+		}
+		head.setToolTipText(tip);
+		folds(head, fold);
+	}
+
+	JPanel subHead(String label, String total, String fold)
+	{
+		JPanel head = row(label, total);
+		styled(part(head, BorderLayout.CENTER), small(), DIM);
+		head.setBorder(pad(3, 10, 1, 2));
+		return folds(head, fold);
+	}
+
+	JPanel quietHead(String name, String count, String fold)
+	{
+		JPanel head = subHead(name.toUpperCase(Locale.ROOT), count, fold);
+		head.setBorder(pad(7, 2, 1, 2));
+		return head;
+	}
+
+	int cap(String key, int fallback)
+	{
+		return shown.getOrDefault(key, fallback);
+	}
+
+	int shownCap(String key)
+	{
+		return cap(key, FOLD_CAP);
+	}
+
+	void more(JPanel p, int size, int cap, boolean inset, IntConsumer reveal)
+	{
+		if (size > cap)
+		{
+			JPanel more = moreRow("Show " + fmt(size - cap) + " more", () ->
+			{
+				reveal.accept(size);
+				rebuildInPlace();
+			});
+			p.add(inset ? nested(more) : more);
 		}
 	}
 
-	void openSheetPage(String page)
+	void drillMore(JPanel p, String key, int size, int cap)
 	{
-		applyTab(Tab.STANDING);
-		sheetPage = page;
-		rebuild();
+		more(p, size, cap, false, n -> shown.put(key, n));
+	}
+
+	void addMore(JPanel p, String key, int size, int cap, boolean inset)
+	{
+		more(p, size, cap, inset, n -> shown.put(key, n));
+	}
+
+	JPanel backRow(BooleanSupplier copy)
+	{
+		JPanel r = Ui.backRow("< Back", copy == null ? "" : "copy", this::back);
+		JLabel take = copy == null ? null : Pictures.copyLabel(r, "Copy this page as a picture");
+		if (take != null)
+		{
+			take.addMouseListener(clicker(() -> Pictures.reportCopy(take, copy.getAsBoolean())));
+		}
+		return r;
 	}
 
 	JPanel backPage()
 	{
 		JPanel p = column();
-		spaced(p, backRow(), 4);
+		spaced(p, backRow(null), 4);
 		return p;
+	}
+
+	boolean copyPage(Supplier<JPanel> page)
+	{
+		drawingCopy = true;
+		try
+		{
+			return copyPicture(stripChrome(page.get()));
+		}
+		catch (RuntimeException e)
+		{
+			return false;
+		}
+		finally
+		{
+			drawingCopy = false;
+		}
+	}
+
+	JLabel sprite(int itemId, String name, long qty)
+	{
+		return art.item(itemId, name, qty, this::openItem);
 	}
 
 	private static final class ScrollColumn extends JPanel implements Scrollable

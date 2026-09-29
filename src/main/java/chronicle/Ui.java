@@ -41,7 +41,9 @@ import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.border.Border;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
@@ -1083,5 +1085,56 @@ final class Ui
 	static long startMs(LocalDate d)
 	{
 		return d.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+	}
+
+	static JPanel moreRow(String label, Runnable reveal)
+	{
+		JPanel more = ghostRow(label, "");
+		link(more, reveal);
+		return more;
+	}
+
+	static JPanel backRow(String label, String right, Runnable go)
+	{
+		JPanel r = row(label, right);
+		styled(part(r, BorderLayout.CENTER), small(), ACCENT);
+		link(r, go);
+		return r;
+	}
+
+	static void menuItem(JPopupMenu menu, String text, boolean on, Runnable go)
+	{
+		JMenuItem item = new JMenuItem(text);
+		item.setFont(small());
+		if (on)
+		{
+			item.setForeground(ACCENT);
+		}
+		item.addActionListener(e -> go.run());
+		menu.add(item);
+	}
+
+	static void arrows(JPanel r, Runnable back, boolean ahead, Runnable forward, JLabel title)
+	{
+		JLabel b = new JLabel("<");
+		JLabel fwd = new JLabel(">");
+		for (JLabel arrow : new JLabel[]{b, fwd})
+		{
+			arrow.setFont(FontManager.getRunescapeBoldFont());
+			arrow.setBorder(pad(0, 6, 0, 6));
+		}
+		b.setForeground(ACCENT);
+		link(b, back);
+		fwd.setForeground(ahead ? ACCENT : DIM);
+		if (ahead)
+		{
+			link(fwd, forward);
+		}
+		r.add(b, BorderLayout.WEST);
+		if (title != null)
+		{
+			r.add(title, BorderLayout.CENTER);
+		}
+		r.add(fwd, BorderLayout.EAST);
 	}
 }

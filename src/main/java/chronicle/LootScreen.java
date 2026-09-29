@@ -21,7 +21,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.function.BooleanSupplier;
-import java.util.function.IntConsumer;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
@@ -117,7 +116,7 @@ final class LootScreen
 			listCard(p, row(r.name, gps(r.value), ACCENT), sub,
 				r.loots > 0 ? perOne(r.value, r.loots, killed) : "", () -> ui.openSource(r.name));
 		}
-		more(p, sources.size(), dropsShown, false, n -> dropsShown = n);
+		ui.more(p, sources.size(), dropsShown, false, n -> dropsShown = n);
 		return p;
 	}
 
@@ -161,7 +160,7 @@ final class LootScreen
 		}
 		spaced(p, head);
 		final String key = dropsLeftBehind ? "win:left" : "win:source";
-		final int cap = ui.drillShown.getOrDefault(key, ROW_CAP);
+		final int cap = ui.cap(key, ROW_CAP);
 		for (String[] r : firstN(ranked, cap))
 		{
 			JPanel line = row(r[0], qtyGp(safeParse(r[1]), safeParse(r[2])));
@@ -246,7 +245,7 @@ final class LootScreen
 			new LinkedHashMap<>();
 		ways.put("These kinds", () -> copyPicture(lootPicture(title, bag, sum, true)));
 		ways.put("Every item", () -> copyPicture(lootPicture(title, bag, sum, false), true));
-		p.add(ui.copyHeader("Drops", ways));
+		p.add(copyHeader("Drops", ways));
 		addKindRows(p, bag);
 		return p;
 	}
@@ -261,9 +260,9 @@ final class LootScreen
 		{
 			return noted(p, "Nothing of this kind here.");
 		}
-		p.add(ui.copyHeader(lootKind, () -> copyPicture(
+		p.add(copyHeader(lootKind, () -> copyPicture(
 			lootPicture(lootKind, kept, mine, false), true)));
-		int cap = ui.drillShown.getOrDefault(key + lootKind, ROW_CAP);
+		int cap = ui.cap(key + lootKind, ROW_CAP);
 		addBagRows(p, firstN(kept, cap));
 		ui.drillMore(p, key + lootKind, kept.size(), cap);
 		return p;
@@ -298,7 +297,7 @@ final class LootScreen
 		final boolean byItem = dropsByKind;
 		List<UntakenRow> list = byItem ? items : rows;
 		String key = byItem ? "left:item" : "left:source";
-		final int cap = ui.drillShown.getOrDefault(key, ROW_CAP);
+		final int cap = ui.cap(key, ROW_CAP);
 		for (UntakenRow r : firstN(list, cap))
 		{
 			listCard(p, row(r.name, gps(r.value), RED),
@@ -334,19 +333,6 @@ final class LootScreen
 		};
 	}
 
-	void more(JPanel p, int size, int cap, boolean inset, IntConsumer show)
-	{
-		if (size > cap)
-		{
-			JPanel more = ui.moreRow(size - cap, () ->
-			{
-				show.accept(size);
-				ui.rebuildInPlace();
-			});
-			p.add(inset ? nested(more) : more);
-		}
-	}
-
 	JPanel bagCard(String title, List<BagItem> bag, long[] sum)
 	{
 		JPanel head = tallyCard(title, "Items", fmt(sum[0]), ACCENT, sum[1]);
@@ -356,7 +342,7 @@ final class LootScreen
 
 	JPanel backToKinds(int held)
 	{
-		return ui.backRow("< All kinds", count(held, "item"), () ->
+		return backRow("< All kinds", count(held, "item"), () ->
 		{
 			lootKind = null;
 			ui.rebuildInPlace();
@@ -404,17 +390,30 @@ final class LootScreen
 
 	int dropsShown = ROW_CAP;
 
-	JPanel buildLeftBehindDetail()
+	void reset()
+	{
+		dropsShown = ROW_CAP;
+		lootKind = null;
+		lootTask = null;
+	}
+
+	void forget()
+	{
+		grindsCache = null;
+		grindsFetching = false;
+	}
+
+	JPanel buildLeftBehindDetail(String source, String item)
 	{
 		JPanel p = column();
-		p.add(ui.backRow("< Back", "", () -> ui.showLeftBehind(null, null)));
+		p.add(ui.backRow(null));
 		p.add(vgap(4));
 
-		if (ui.leftBehindSource != null)
+		if (source != null)
 		{
-			List<BagItem> bag = plugin.untakenItemsOf(ui.leftBehindSource);
-			UntakenRow left = find(plugin.untakenSources(), u -> u.name, ui.leftBehindSource, true);
-			spaced(p, tallyCard(ui.leftBehindSource.toUpperCase(Locale.ROOT), "Left on the floor",
+			List<BagItem> bag = plugin.untakenItemsOf(source);
+			UntakenRow left = find(plugin.untakenSources(), u -> u.name, source, true);
+			spaced(p, tallyCard(source.toUpperCase(Locale.ROOT), "Left on the floor",
 				count(left == null ? 0 : left.qty, "item"), RED, left == null ? 0 : left.value));
 			if (bag.isEmpty())
 			{
@@ -432,9 +431,9 @@ final class LootScreen
 			return p;
 		}
 
-		List<UntakenRow> sources = plugin.untakenSourcesOf(ui.leftBehindItem);
-		UntakenRow held = find(plugin.untakenItems(), u -> u.name, ui.leftBehindItem, true);
-		spaced(p, tallyCard(ui.leftBehindItem.toUpperCase(Locale.ROOT), "Left behind",
+		List<UntakenRow> sources = plugin.untakenSourcesOf(item);
+		UntakenRow held = find(plugin.untakenItems(), u -> u.name, item, true);
+		spaced(p, tallyCard(item.toUpperCase(Locale.ROOT), "Left behind",
 			"×" + fmt(held == null ? 0 : held.qty), RED, held == null ? 0 : held.value));
 		if (sources.isEmpty())
 		{
@@ -576,7 +575,7 @@ final class LootScreen
 				: noted(p, "The journal hasn't seen this item drop yet.");
 		}
 		p.add(group("From"));
-		final int srcCap = Math.max(ui.drawingCopy ? COPY_MOST : 40, ui.drillShown.getOrDefault("item:src:" + name, 0));
+		final int srcCap = Math.max(ui.drawingCopy ? COPY_MOST : 40, ui.cap("item:src:" + name, 0));
 		for (Object[] s : firstN(srcs, srcCap))
 		{
 			JPanel r = row((String) s[0], "×" + fmt((long) s[1])
@@ -637,7 +636,7 @@ final class LootScreen
 			return noted(p, board.inside("No task paid this"));
 		}
 		p.add(group("By task"));
-		final int taskCap = Math.max(ui.drawingCopy ? COPY_MOST : 40, ui.drillShown.getOrDefault("item:task:" + name, 0));
+		final int taskCap = Math.max(ui.drawingCopy ? COPY_MOST : 40, ui.cap("item:task:" + name, 0));
 		for (Object[] t : firstN(split, taskCap))
 		{
 			p.add(row("Task: " + t[0], "×" + fmt((long) t[1]) + tail((long) t[2])));
@@ -710,7 +709,7 @@ final class LootScreen
 			return;
 		}
 		p.add(group("Killed on task"));
-		int cap = ui.drillShown.getOrDefault("ontask:src:" + npc, ROW_CAP);
+		int cap = ui.cap("ontask:src:" + npc, ROW_CAP);
 		for (LocalStore.Assignment a : firstN(was, cap))
 		{
 			p.add(row("Task: " + a.task, fmt(a.killsHere)));
@@ -728,12 +727,7 @@ final class LootScreen
 				JPanel r = row("Left behind", qtyGp(u.qty, u.value)
 					+ (u.kills > 0 ? " · " + count(u.kills, "kill") : ""));
 				r.setToolTipText("Open what was left on the floor");
-				link(r, () ->
-				{
-					ui.detailSource = null;
-					ui.leftBehindSource = u.name;
-					ui.rebuild();
-				});
+				link(r, () -> ui.showLeftBehind(u.name, null));
 				head.add(r);
 				return;
 			}
@@ -821,7 +815,7 @@ final class LootScreen
 						return;
 					}
 					grindsCache = rows2;
-					if (sr.name.equals(ui.detailSource))
+					if (ui.showing(ChroniclePanel.Page.SOURCE, sr.name))
 					{
 						ui.rebuildInPlace();
 					}
@@ -873,7 +867,7 @@ final class LootScreen
 				spaced(p, grid, 5);
 			}
 			p.add(group("Loot"));
-			int cap = ui.drawingCopy ? COPY_MOST : ui.drillShown.getOrDefault(name, 25);
+			int cap = ui.drawingCopy ? COPY_MOST : ui.cap(name, 25);
 			addBagRows(p, firstN(bag, cap));
 			if (bag.size() > cap)
 			{

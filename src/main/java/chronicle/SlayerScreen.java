@@ -142,7 +142,7 @@ final class SlayerScreen
 				break;
 			}
 		}
-		ui.applyTab(ChroniclePanel.View.SLAYER);
+		ui.show(ChroniclePanel.View.SLAYER);
 		if (at >= 0)
 		{
 			ui.showTask(at);
@@ -152,6 +152,17 @@ final class SlayerScreen
 	String slayerLens = "Tasks";
 
 	int slayerShown = ROW_CAP;
+
+	void reset()
+	{
+		slayerShown = ROW_CAP;
+	}
+
+	void forget()
+	{
+		journeyCache = null;
+		journeyFetching = false;
+	}
 
 	JPanel addOnTaskLoot(JPanel p)
 	{
@@ -186,7 +197,7 @@ final class SlayerScreen
 		ways.put("Every item", () -> copyPicture(
 			ui.loot.lootPicture(ui.loot.lootTask == null ? "On-task loot" : ui.loot.lootTask, bag,
 				new long[]{qty, value}, false), true));
-		p.add(ui.copyHeader("Drops", ways));
+		p.add(copyHeader("Drops", ways));
 		ui.loot.addKindRows(p, bag);
 		return p;
 	}
@@ -214,7 +225,7 @@ final class SlayerScreen
 		}
 		kcs.sort(Entry.<String, Long>comparingByValue().reversed());
 		JPanel card = card("Kill log");
-		final int cap = ui.drillShown.getOrDefault("killlog", ROW_CAP);
+		final int cap = ui.cap("killlog", ROW_CAP);
 		for (Entry<String, Long> e : firstN(kcs, cap))
 		{
 			JPanel r = row(e.getKey(), fmt(e.getValue()));
@@ -266,11 +277,7 @@ final class SlayerScreen
 	JPanel buildTaskDetail(int index)
 	{
 		JPanel p = column();
-		p.add(ui.backRow("< Back", "", () ->
-		{
-			ui.detailTask = -1;
-			ui.rebuild();
-		}));
+		p.add(ui.backRow(null));
 		p.add(vgap(4));
 		SlayerJourney j = journeyCache;
 		SlayerTask t = j != null && index >= 0 && index < j.tasks.size()
@@ -327,11 +334,7 @@ final class SlayerScreen
 		}
 		p.add(vgap(8));
 		JPanel all = row("All kills of " + t.task, "", ACCENT, true);
-		link(all, () ->
-		{
-			ui.detailTask = -1;
-			ui.openSourceLoose(t.task);
-		});
+		link(all, () -> ui.openSourceLoose(t.task));
 		p.add(all);
 		return p;
 	}
@@ -403,7 +406,7 @@ final class SlayerScreen
 		}
 		if (shown.size() > slayerShown)
 		{
-			ui.loot.more(p, shown.size(), slayerShown, false, n -> slayerShown = n);
+			ui.more(p, shown.size(), slayerShown, false, n -> slayerShown = n);
 			p.add(vgap(4));
 		}
 	}
@@ -415,11 +418,11 @@ final class SlayerScreen
 	JPopupMenu taskMenu()
 	{
 		JPopupMenu menu = new JPopupMenu();
-		ui.menuItem(menu, "Every task", ui.loot.lootTask == null, () -> pickTask(null));
+		menuItem(menu, "Every task", ui.loot.lootTask == null, () -> pickTask(null));
 		menu.addSeparator();
 		for (String task : plugin.taskNames())
 		{
-			ui.menuItem(menu, task, task.equals(ui.loot.lootTask), () -> pickTask(task));
+			menuItem(menu, task, task.equals(ui.loot.lootTask), () -> pickTask(task));
 		}
 		return menu;
 	}
