@@ -5,7 +5,6 @@ package chronicle;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -62,7 +61,7 @@ public class ChronicleEventCapture
 	private static final Pattern KILL_COUNT = Pattern.compile("^Your (?:completed )?(?<subject>.+?)"
 			+ "(?: (?<kind>kill|chest|lap|harvest|success|completion))? count is: (?<tally>[\\d,]+)\\.$");
 
-	private static final Set<String> NOT_A_KILL = new HashSet<>(Arrays.asList("lap", "harvest"));
+	private static final Set<String> NOT_A_KILL = Set.of("lap", "harvest");
 
 	private static final Pattern COLLECTION_ITEM = Pattern.compile(
 		"^New item added to your collection log: (?<entry>.+)$");

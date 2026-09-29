@@ -15,7 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -48,11 +47,9 @@ class LocalStore implements chronicle.counters.GatheredLedger
 {
 	private static final int SCHEMA = 1;
 	private static final int FEED_CAP = 20000;
-	static final Set<String> MAX_KEYS = new HashSet<>(Arrays.asList("highestHit", "highestHitTaken"));
-	private static final Set<String> FEED_TYPES = new HashSet<>(Arrays.asList(
-		"PET", "COLLECTION", "COMBAT_ACHIEVEMENT", "QUEST", "DIARY", "CLUE", "DEATH", "SLAYER",
-		"LEVEL",
-		"SESSION"));
+	static final Set<String> MAX_KEYS = Set.of("highestHit", "highestHitTaken");
+	private static final Set<String> FEED_TYPES = Set.of("PET", "COLLECTION", "COMBAT_ACHIEVEMENT", "QUEST", "DIARY", "CLUE",
+		"DEATH", "SLAYER", "LEVEL", "SESSION");
 
 	private final ItemManager itemManager;
 	private final Gson gson;
