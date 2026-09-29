@@ -743,7 +743,7 @@ final class RecapScreen
 		{
 			plateRow(plate, "Left behind", qtyGp(loot[2], loot[3]), () ->
 			{
-				ui.dropsLeftBehind = true;
+				ui.loot.dropsLeftBehind = true;
 				ui.applyTab(ChroniclePanel.View.DROPS);
 			});
 		}

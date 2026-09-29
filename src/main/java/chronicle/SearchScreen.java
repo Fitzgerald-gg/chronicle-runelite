@@ -101,7 +101,7 @@ final class SearchScreen
 		goTo(go, ql, "Left behind", "", () ->
 		{
 			ui.applyTab(ChroniclePanel.View.DROPS);
-			ui.dropsLeftBehind = true;
+			ui.loot.dropsLeftBehind = true;
 			ui.rebuild();
 		}, 1, "untaken", "left on the floor");
 		goTo(go, ql, "Info", "what the journal holds", ui::openInfo, 1, "journal holds");
@@ -243,7 +243,7 @@ final class SearchScreen
 			items.add(new Hit(u.name, "×" + fmt(u.qty) + " left", RED, "Left on the floor", () ->
 			{
 				ui.applyTab(ChroniclePanel.View.DROPS);
-				ui.dropsLeftBehind = true;
+				ui.loot.dropsLeftBehind = true;
 				ui.leftBehindItem = u.name;
 				ui.rebuild();
 			}, matchScore(ql, u.name), u.value));
