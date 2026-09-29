@@ -25,6 +25,11 @@ import static chronicle.Ui.*;
 
 final class DetailScreen extends Screen
 {
+	DetailScreen(ChroniclePanel ui, Board board)
+	{
+		super(ui, board);
+	}
+
 	void forget()
 	{
 	}

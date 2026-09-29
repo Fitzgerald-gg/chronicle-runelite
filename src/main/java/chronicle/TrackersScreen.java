@@ -31,6 +31,11 @@ final class TrackersScreen extends Screen
 
 	private String statsFamily = StatRegistry.FAMILIES[0];
 
+	TrackersScreen(ChroniclePanel ui, Board board)
+	{
+		super(ui, board);
+	}
+
 	void family(String family)
 	{
 		statsFamily = family;

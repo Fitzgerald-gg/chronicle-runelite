@@ -34,6 +34,11 @@ final class JournalScreen extends Screen
 	private static final int FEED_SCAN = 4000;
 	private static final Map<String, List<String>> LENSES = new java.util.LinkedHashMap<>();
 
+	JournalScreen(ChroniclePanel ui, Board board)
+	{
+		super(ui, board);
+	}
+
 	static
 	{
 		LENSES.put("All", List.of());

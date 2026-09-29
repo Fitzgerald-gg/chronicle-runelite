@@ -45,6 +45,11 @@ final class SearchScreen extends Screen
 
 	private Runnable searchFirst;
 
+	SearchScreen(ChroniclePanel ui, Board board)
+	{
+		super(ui, board);
+	}
+
 	@RequiredArgsConstructor
 	private static final class Hit
 	{

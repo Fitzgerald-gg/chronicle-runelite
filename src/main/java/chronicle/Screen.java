@@ -5,9 +5,18 @@ package chronicle;
 
 abstract class Screen
 {
-	ChroniclePanel ui;
-	Board board;
-	ChroniclePlugin plugin;
-	Period period;
-	LocalStore store;
+	final ChroniclePanel ui;
+	final Board board;
+	final ChroniclePlugin plugin;
+	final Period period;
+	final LocalStore store;
+
+	Screen(ChroniclePanel ui, Board board)
+	{
+		this.ui = ui;
+		this.board = board;
+		this.plugin = board.plugin;
+		this.period = board.period;
+		this.store = board.store;
+	}
 }

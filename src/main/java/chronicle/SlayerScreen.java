@@ -33,6 +33,11 @@ final class SlayerScreen extends Screen
 	private SlayerJourney journeyCache;
 	private boolean journeyFetching;
 
+	SlayerScreen(ChroniclePanel ui, Board board)
+	{
+		super(ui, board);
+	}
+
 	void reset()
 	{
 		slayerShown = ROW_CAP;

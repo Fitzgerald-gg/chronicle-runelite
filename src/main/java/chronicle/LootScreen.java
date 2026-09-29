@@ -33,6 +33,11 @@ final class LootScreen extends Screen
 	private String lootKind;
 	private int dropsShown = ROW_CAP;
 
+	LootScreen(ChroniclePanel ui, Board board)
+	{
+		super(ui, board);
+	}
+
 	void reset()
 	{
 		dropsShown = ROW_CAP;

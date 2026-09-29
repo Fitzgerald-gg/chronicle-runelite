@@ -34,6 +34,11 @@ import static chronicle.panel.StatRegistry.prettify;
 
 final class RecapScreen extends Screen
 {
+	RecapScreen(ChroniclePanel ui, Board board)
+	{
+		super(ui, board);
+	}
+
 	JPanel build()
 	{
 		JPanel p = column();

@@ -27,6 +27,14 @@ import static chronicle.Ui.*;
 
 final class PagesScreen extends Screen
 {
+	private String clogTab = "Bosses";
+	private String clogPageSel;
+
+	PagesScreen(ChroniclePanel ui, Board board)
+	{
+		super(ui, board);
+	}
+
 	void showLogPage(String tab, String page)
 	{
 		clogTab = tab;
@@ -479,8 +487,4 @@ final class PagesScreen extends Screen
 		}
 		return p;
 	}
-
-	private String clogTab = "Bosses";
-
-	private String clogPageSel;
 }
