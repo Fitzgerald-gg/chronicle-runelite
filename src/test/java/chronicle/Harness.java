@@ -73,6 +73,7 @@ import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.ServerNpcLoot;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
@@ -115,6 +116,8 @@ final class Harness
 	private final EventBus bus = new EventBus();
 	private final ItemManager items = mock(ItemManager.class);
 	private final List<String> said = new ArrayList<>();
+	private final ChronicleConfig settings = mock(ChronicleConfig.class);
+	private static final String CLOUD_TOKEN = "token";
 	private ChroniclePlugin plugin;
 	private String rsn;
 	private GameState state = GameState.LOGIN_SCREEN;
@@ -332,6 +335,11 @@ final class Harness
 			profile.put(i.getArgument(1), String.valueOf(i.<Object>getArgument(2)));
 			return null;
 		}).when(config).setRSProfileConfiguration(anyString(), anyString(), any());
+		doAnswer(i ->
+		{
+			profile.remove(i.<String>getArgument(1));
+			return null;
+		}).when(config).unsetRSProfileConfiguration(anyString(), anyString());
 		when(config.getRSProfileKey()).thenReturn("profile");
 		when(config.getRSProfileConfigurationKeys(anyString(), anyString(), anyString()))
 			.thenAnswer(i -> new ArrayList<>(lootTracker.keySet()));
@@ -354,7 +362,7 @@ final class Harness
 			b.bind(Client.class).toInstance(client);
 			b.bind(ClientThread.class).toInstance(thread);
 			b.bind(ConfigManager.class).toInstance(config);
-			b.bind(ChronicleConfig.class).toInstance(mock(ChronicleConfig.class));
+			b.bind(ChronicleConfig.class).toInstance(settings);
 			b.bind(okhttp3.OkHttpClient.class).toInstance(new okhttp3.OkHttpClient());
 			b.bind(ScheduledExecutorService.class).toInstance(exec);
 			b.bind(ClientToolbar.class).toInstance(mock(ClientToolbar.class));
@@ -758,6 +766,55 @@ final class Harness
 	{
 		call(plugin, "refreshLocal");
 		return this;
+	}
+
+	Harness cloud(String server, String token)
+	{
+		when(settings.cloudSync()).thenReturn(true);
+		when(settings.serverBaseUrl()).thenReturn(server);
+		if (token != null)
+		{
+			profile.put(CLOUD_TOKEN, token);
+		}
+		return configChanged("cloudSync", "true");
+	}
+
+	Harness cloudOff()
+	{
+		when(settings.cloudSync()).thenReturn(false);
+		return configChanged("cloudSync", "false");
+	}
+
+	Harness server(String server)
+	{
+		when(settings.serverBaseUrl()).thenReturn(server);
+		return configChanged("serverBaseUrl", server);
+	}
+
+	Harness manualToken(String token)
+	{
+		when(settings.manualToken()).thenReturn(token);
+		return configChanged("manualToken", token);
+	}
+
+	Harness push()
+	{
+		call(plugin, "scheduledPush");
+		return this;
+	}
+
+	String storedToken()
+	{
+		return profile.get(CLOUD_TOKEN);
+	}
+
+	private Harness configChanged(String key, String value)
+	{
+		ConfigChanged e = new ConfigChanged();
+		e.setGroup(ChronicleConfig.GROUP);
+		e.setKey(key);
+		e.setNewValue(value);
+		return post(e);
 	}
 
 	JsonObject journal()
