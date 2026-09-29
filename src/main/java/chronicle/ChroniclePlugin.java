@@ -410,7 +410,7 @@ public class ChroniclePlugin extends Plugin
 		loadPlaytime();
 		refreshPanel();
 		final String who = name;
-		final String priorName = trimToNull(
+		final String priorName = CloudSync.trim(
 			configManager.getRSProfileConfiguration(GROUP, KEY_JOURNAL_NAME));
 		executor.submit(() ->
 		{
@@ -577,21 +577,15 @@ public class ChroniclePlugin extends Plugin
 
 	long gamePlaytimeMinutes()
 	{
-		return carriedForward(playtimeMinutes, playtimeAt, System.currentTimeMillis(),
-			sessionStartMs, sessionElapsedMinutes());
-	}
-
-	static long carriedForward(long had, long at, long now, long sessionStart,
-		long sessionElapsed)
-	{
+		long had = playtimeMinutes;
+		long at = playtimeAt;
 		if (had <= 0)
 		{
 			return 0;
 		}
-		long since = at > 0 && at >= sessionStart
-			? Math.max(0, (now - at) / 60_000L)
-			: Math.max(0, sessionElapsed);
-		return had + since;
+		return had + (at > 0 && at >= sessionStartMs
+			? Math.max(0, (System.currentTimeMillis() - at) / 60_000L)
+			: sessionElapsedMinutes());
 	}
 
 	private void watchPlaytime()
@@ -637,8 +631,7 @@ public class ChroniclePlugin extends Plugin
 
 	long sessionElapsedMinutes()
 	{
-		if (sessionStartMs <= 0 || client == null
-			|| client.getGameState() != GameState.LOGGED_IN)
+		if (sessionStartMs <= 0 || client.getGameState() != GameState.LOGGED_IN)
 		{
 			return 0;
 		}
@@ -647,8 +640,7 @@ public class ChroniclePlugin extends Plugin
 
 	List<SkillGain> sessionSkillXp()
 	{
-		ChronicleCounters c = counters;
-		return c == null ? Collections.emptyList() : c.sessionSkillXp();
+		return counters.sessionSkillXp();
 	}
 
 	void fetchSlayerJourney(Consumer<SlayerLog.SlayerJourney> onDone)
@@ -753,7 +745,7 @@ public class ChroniclePlugin extends Plugin
 
 	JsonObject achievements()
 	{
-		return localStore == null ? new JsonObject() : localStore.achievements();
+		return localStore.achievements();
 	}
 
 	SkillIconManager skillIcons()
@@ -876,12 +868,8 @@ public class ChroniclePlugin extends Plugin
 		return data;
 	}
 
-	JsonObject liveSessionLine()
+	private JsonObject liveSessionLine()
 	{
-		if (client == null || localStore == null)
-		{
-			return null;
-		}
 		long mins = sessionElapsedMinutes();
 		if (sessionStartMs <= 0 || client.getGameState() != GameState.LOGGED_IN || !ready())
 		{
@@ -1096,10 +1084,5 @@ public class ChroniclePlugin extends Plugin
 			{
 			}
 		});
-	}
-
-	private static String trimToNull(String s)
-	{
-		return s == null || s.trim().isEmpty() ? null : s.trim();
 	}
 }
