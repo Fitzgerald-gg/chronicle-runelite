@@ -44,6 +44,7 @@ final class SearchScreen
 	private final Board board;
 	private final ChroniclePlugin plugin;
 	private final Period period;
+	private final LocalStore store;
 
 	SearchScreen(ChroniclePanel ui, Board board)
 	{
@@ -51,6 +52,7 @@ final class SearchScreen
 		this.board = board;
 		this.plugin = board.plugin;
 		this.period = board.period;
+		this.store = board.store;
 	}
 
 	JPanel buildSearch(String q)
@@ -202,7 +204,7 @@ final class SearchScreen
 		Map<String, List<String>> itemSrcs = new LinkedHashMap<>();
 		for (SourceRow src : board.sources())
 		{
-			for (BagItem b : plugin.sourceItems(src.name))
+			for (BagItem b : store.sourceItems(src.name))
 			{
 				if (matchScore(ql, b.name) < 0)
 				{
@@ -225,7 +227,7 @@ final class SearchScreen
 			items.add(new Hit(itm, "×" + fmt(e.getValue()[0]), null, tip, () -> ui.openItem(itm),
 				matchScore(ql, itm), e.getValue()[1]));
 		}
-		for (UntakenRow u : plugin.untakenItems())
+		for (UntakenRow u : store.untakenItems())
 		{
 			if (itemAgg.containsKey(u.name) || matchScore(ql, u.name) < 0)
 			{
@@ -414,7 +416,7 @@ final class SearchScreen
 		for (SourceRow r : board.sources())
 		{
 			names.add(r.name);
-			for (BagItem b : plugin.sourceItems(r.name))
+			for (BagItem b : store.sourceItems(r.name))
 			{
 				names.add(b.name);
 			}

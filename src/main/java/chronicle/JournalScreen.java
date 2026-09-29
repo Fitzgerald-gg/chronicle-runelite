@@ -39,6 +39,7 @@ final class JournalScreen
 	private final Board board;
 	private final ChroniclePlugin plugin;
 	private final Period period;
+	private final LocalStore store;
 
 	JournalScreen(ChroniclePanel ui, Board board)
 	{
@@ -46,6 +47,7 @@ final class JournalScreen
 		this.board = board;
 		this.plugin = board.plugin;
 		this.period = board.period;
+		this.store = board.store;
 	}
 
 	JPanel buildJournal()
@@ -170,7 +172,7 @@ final class JournalScreen
 		}
 		Map<String, long[]> sheet = plugin.skillSheet();
 		long[] overall = sheet.get("overall");
-		int combat = plugin.combatLevel();
+		int combat = store.combatLevel();
 		if (overall != null && overall[0] > 0)
 		{
 			plate.add(row("Total level", fmt(overall[0])
@@ -218,7 +220,7 @@ final class JournalScreen
 				}
 			}
 		}
-		List<JsonObject> recent = plugin.feedNewest(2);
+		List<JsonObject> recent = store.feedNewest(2);
 		if (recent.size() == 2)
 		{
 			long days = (asLong(recent.get(0).get("ts")) - asLong(recent.get(1).get("ts"))) / 86_400_000L;
@@ -353,7 +355,7 @@ final class JournalScreen
 		int held = book.getComponentCount();
 
 		long[][] best = {{0, 0}, {0, 0}};
-		for (JsonObject e : plugin.feedNewest(Board.FEED_SCAN_DEEP))
+		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))
 		{
 			if ("SESSION".equals(typeOf(e)))
 			{
@@ -498,7 +500,7 @@ final class JournalScreen
 	{
 		JPanel p = column();
 		spaced(p, ui.backRow(() -> ui.copyPage(this::buildInfo)), 4);
-		Map<String, Long> f = plugin.journalFacts();
+		Map<String, Long> f = store.journalFacts();
 
 		JPanel loot = facts(card("Loot"), f, ACCENT, "Sources", "sources",
 			"Item rows", "itemRows", "Loot events", "lootEvents");

@@ -55,6 +55,7 @@ final class StandingScreen
 	private final Board board;
 	private final ChroniclePlugin plugin;
 	private final Period period;
+	private final LocalStore store;
 
 	StandingScreen(ChroniclePanel ui, Board board)
 	{
@@ -62,6 +63,7 @@ final class StandingScreen
 		this.board = board;
 		this.plugin = board.plugin;
 		this.period = board.period;
+		this.store = board.store;
 	}
 
 	JPanel buildSheet()
@@ -356,7 +358,7 @@ final class StandingScreen
 
 	String paidFigure(SourceRow r)
 	{
-		return qtyGp(board.tallyOf(plugin.sourceItems(r.name))[0], r.value);
+		return qtyGp(board.tallyOf(store.sourceItems(r.name))[0], r.value);
 	}
 
 	JPanel buildHistory()
@@ -368,7 +370,7 @@ final class StandingScreen
 		final boolean live = !pEnd.isBefore(LocalDate.now());
 
 		if (board.historySpine == null || !LocalDate.now().equals(board.historyDay)
-			|| newestTs(plugin.feedNewest(1)) != board.historyFeedTs)
+			|| newestTs(store.feedNewest(1)) != board.historyFeedTs)
 		{
 			board.gatherHistory();
 		}
@@ -503,7 +505,7 @@ final class StandingScreen
 				: HistoryLog.levels(opening, stand.keys);
 			periodTip = periodTip(played, gains);
 			LocalDate lootSince = null;
-			long lootFromTs = earliestDatedLoot(board.historyFeed, plugin.lootRollFrom());
+			long lootFromTs = earliestDatedLoot(board.historyFeed, store.lootRollFrom());
 			if (lootFromTs > 0)
 			{
 				LocalDate sat = dayOf(lootFromTs);
@@ -572,7 +574,7 @@ final class StandingScreen
 	JPanel combatLevelTile(Map<String, Long> gain, HistoryLog.Levels opened)
 	{
 		JPanel cell = levelTile("Combat");
-		int cb = plugin.combatLevel();
+		int cb = store.combatLevel();
 		Integer was = openingCombat(opened);
 		boolean climbed = !period.whole() && was != null && cb > was;
 		JLabel fig = new JLabel(cb > 0 ? (climbed ? climb(was, cb) : fmt(cb)) : "-",
@@ -1353,7 +1355,7 @@ final class StandingScreen
 	JPanel logInWindow(JPanel p)
 	{
 		List<JsonObject> got = new ArrayList<>();
-		for (JsonObject e : plugin.feedNewest(Board.FEED_SCAN_DEEP))
+		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))
 		{
 			if ("COLLECTION".equals(typeOf(e)) && board.insideWindow(asLong(e.get("ts"))))
 			{

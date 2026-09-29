@@ -38,6 +38,7 @@ final class RecapScreen
 	private final Board board;
 	private final ChroniclePlugin plugin;
 	private final Period period;
+	private final LocalStore store;
 
 	RecapScreen(ChroniclePanel ui, Board board)
 	{
@@ -45,6 +46,7 @@ final class RecapScreen
 		this.board = board;
 		this.plugin = board.plugin;
 		this.period = board.period;
+		this.store = board.store;
 	}
 
 	JPanel buildRecap()
@@ -212,9 +214,9 @@ final class RecapScreen
 		f.totalXp = new Long[]{startsKnown ? startXp : null,
 			f.whole && overall != null && overall.length > 1 && overall[1] > 0 ? overall[1] : endXp};
 		Integer cEnd = combatOf(endLevels);
-		if (f.whole && plugin.combatLevel() > 0)
+		if (f.whole && store.combatLevel() > 0)
 		{
-			cEnd = plugin.combatLevel();
+			cEnd = store.combatLevel();
 		}
 		Integer cStart = startsKnown ? combatOf(startLevels) : null;
 		f.combat = cEnd == null ? null : new Long[]{cStart == null ? null : (long) cStart, (long) cEnd};
@@ -295,7 +297,7 @@ final class RecapScreen
 		}
 		else if (f.session)
 		{
-			for (String[] r : plugin.sessionLootWindow().sources)
+			for (String[] r : store.sessionLootWindow().sources)
 			{
 				by.merge(r[0], safeParse(r[1]), Long::sum);
 				worth.merge(r[0], safeParse(r[2]), Long::sum);
@@ -338,7 +340,7 @@ final class RecapScreen
 	{
 		if (!f.whole && !f.session)
 		{
-			long from = plugin.lootRollFrom();
+			long from = store.lootRollFrom();
 			if (from <= 0 || from > board.windowMs()[0])
 			{
 				f.lootNote = "Loot is not dated this far back, so this period's cannot be told from the rest.";
@@ -365,7 +367,7 @@ final class RecapScreen
 					f.sources.add(new RecapPicture.Named(r.name, null, gps(r.value)));
 				}
 			}
-			List<BagItem> bag = new ArrayList<>(plugin.allLoot());
+			List<BagItem> bag = new ArrayList<>(store.allLoot());
 			bag.sort((a, b) -> Long.compare(b.value, a.value));
 			for (BagItem b : firstN(bag, 6))
 			{
@@ -510,7 +512,7 @@ final class RecapScreen
 			}
 		}
 		Set<String> bests = new HashSet<>();
-		for (JsonObject e : plugin.feedNewest(20_000))
+		for (JsonObject e : store.feedNewest(20_000))
 		{
 			if (!board.insideWindow(asLong(e.get("ts"))))
 			{
@@ -776,7 +778,7 @@ final class RecapScreen
 		}
 
 		Map<String, String> firstNamed = new LinkedHashMap<>();
-		for (JsonObject e : plugin.feedNewest(Board.FEED_SCAN_DEEP))
+		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))
 		{
 			String name = feedName(e);
 			if (name != null && board.insideWindow(asLong(e.get("ts"))))

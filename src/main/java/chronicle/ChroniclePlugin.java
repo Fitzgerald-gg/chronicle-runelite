@@ -712,6 +712,11 @@ public class ChroniclePlugin extends Plugin
 		clientThread.invoke(this::pushCurrent);
 	}
 
+	LocalStore store()
+	{
+		return localStore;
+	}
+
 	boolean cloudActive()
 	{
 		return config.cloudSync() && !config.serverBaseUrl().trim().isEmpty();
@@ -800,36 +805,6 @@ public class ChroniclePlugin extends Plugin
 		return c == null ? Collections.emptyList() : c.sessionSkillXp();
 	}
 
-	List<LocalStore.SourceRow> dropSources()
-	{
-		return localStore.dropSources();
-	}
-
-	long lootRollFrom()
-	{
-		return localStore.lootRollFrom();
-	}
-
-	LocalStore.LootWindow lootBetween(LocalDate from, LocalDate to)
-	{
-		return localStore.lootBetween(from, to);
-	}
-
-	long[] itemDays(String name)
-	{
-		return localStore.itemDays(name);
-	}
-
-	Map<String, long[]> dayTotals()
-	{
-		return localStore.dayTotals();
-	}
-
-	List<LocalStore.BagItem> sourceItems(String source)
-	{
-		return localStore.sourceItems(source);
-	}
-
 	void fetchSlayerJourney(Consumer<LocalStore.SlayerJourney> onDone)
 	{
 		if (!ready())
@@ -845,11 +820,6 @@ public class ChroniclePlugin extends Plugin
 		return ready() ? localStore.slayerJourney() : null;
 	}
 
-	List<JsonObject> feedNewest(int n)
-	{
-		return localStore.feedNewest(n);
-	}
-
 	List<JsonObject> feedWithSitting(int n)
 	{
 		List<JsonObject> kept = localStore.feedNewest(n);
@@ -862,41 +832,6 @@ public class ChroniclePlugin extends Plugin
 		out.add(live);
 		out.addAll(kept);
 		return out;
-	}
-
-	LocalStore.LootWindow sessionLootWindow()
-	{
-		return localStore.sessionLootWindow();
-	}
-
-	Map<String, List<LocalStore.BagItem>> itemsBySource(LocalDate from, LocalDate to)
-	{
-		return localStore.itemsBySource(from, to);
-	}
-
-	Set<String> unfiledSources(LocalDate from, LocalDate to)
-	{
-		return localStore.unfiledSources(from, to);
-	}
-
-	long lootDetailFrom()
-	{
-		return localStore.lootDetailFrom();
-	}
-
-	int sessionLoots()
-	{
-		return localStore.sessionLoots();
-	}
-
-	long sessionLootValue()
-	{
-		return localStore.sessionLootValue();
-	}
-
-	List<LocalStore.RecentDrop> recentDrops()
-	{
-		return localStore.recentDrops();
 	}
 
 	ChronicleEventCapture.SlayerView slayerView()
@@ -975,11 +910,6 @@ public class ChroniclePlugin extends Plugin
 		return localStore == null ? new JsonObject() : localStore.achievements();
 	}
 
-	int combatLevel()
-	{
-		return localStore.combatLevel();
-	}
-
 	SkillIconManager skillIcons()
 	{
 		return skillIcons;
@@ -1003,11 +933,6 @@ public class ChroniclePlugin extends Plugin
 		return now.isEmpty() ? localStore.skillSheet() : now;
 	}
 
-	JsonObject clogSnapshot()
-	{
-		return localStore.clogSnapshot();
-	}
-
 	int clogFinished()
 	{
 		return Math.max(clogCapture.finishedCount(), localStore.clogFraction()[0]);
@@ -1016,86 +941,6 @@ public class ChroniclePlugin extends Plugin
 	int clogAvailable()
 	{
 		return Math.max(clogCapture.availableCount(), localStore.clogFraction()[1]);
-	}
-
-	List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task, boolean includeOpen)
-	{
-		return localStore.onTaskLoot(fromMs, toMs, task, includeOpen);
-	}
-
-	List<LocalStore.BagItem> allLoot()
-	{
-		return localStore.allLoot();
-	}
-
-	List<String> taskNames()
-	{
-		return localStore.taskNames();
-	}
-
-	long[] onTaskTally(long fromMs, long toMs, String onlyTask, boolean includeOpen)
-	{
-		return localStore.onTaskTally(fromMs, toMs, onlyTask, includeOpen);
-	}
-
-	Map<String, Long> journalFacts()
-	{
-		return localStore.journalFacts();
-	}
-
-	Map<String, Long> chatKills()
-	{
-		return localStore.chatKillCounts();
-	}
-
-	Map<String, Long> anchoredKills()
-	{
-		return localStore.anchoredKills();
-	}
-
-	Map<String, long[]> onTaskItems(long fromMs, long toMs)
-	{
-		return localStore.onTaskItems(fromMs, toMs);
-	}
-
-	Map<String, Long> onTaskKills(long fromMs, long toMs)
-	{
-		return localStore.onTaskKills(fromMs, toMs);
-	}
-
-	List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
-	{
-		return localStore.onTaskItemByTask(itemName, fromMs, toMs);
-	}
-
-	List<LocalStore.Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
-	{
-		return localStore.onTaskAssignments(npc, fromMs, toMs);
-	}
-
-	List<LocalStore.BagItem> untakenItemsOf(String source)
-	{
-		return localStore.untakenItemsOf(source);
-	}
-
-	List<LocalStore.UntakenRow> untakenSourcesOf(String item)
-	{
-		return localStore.untakenSourcesOf(item);
-	}
-
-	List<LocalStore.BagItem> slayerTaskItems(int index)
-	{
-		return localStore.slayerTaskItems(index);
-	}
-
-	List<LocalStore.UntakenRow> slayerTaskMonsters(int index)
-	{
-		return localStore.slayerTaskMonsters(index);
-	}
-
-	List<LocalStore.PetRow> pets()
-	{
-		return localStore.pets();
 	}
 
 	PaceBook.Pace pace(String skill)
@@ -1110,21 +955,6 @@ public class ChroniclePlugin extends Plugin
 		{
 		}
 		return PaceBook.forSkill(spine, skill.toLowerCase(Locale.ROOT), xp, LocalDate.now());
-	}
-
-	List<LocalStore.UntakenRow> untakenSources()
-	{
-		return localStore.untakenSources();
-	}
-
-	List<LocalStore.UntakenRow> untakenItems()
-	{
-		return localStore.untakenItems();
-	}
-
-	Map<String, Long> consumableValues()
-	{
-		return localStore.consumableValues();
 	}
 
 	void fetchGrinds(Consumer<List<GrindBook.GrindRow>> onDone)
@@ -1224,16 +1054,6 @@ public class ChroniclePlugin extends Plugin
 		line.addProperty("live", true);
 		line.add("data", sessionData(mins, xp, drops, localStore.sessionLootValue()));
 		return line;
-	}
-
-	long[] sessionUntakenTally()
-	{
-		return localStore.sessionUntakenTally();
-	}
-
-	int sessionUntakenKills()
-	{
-		return localStore.sessionUntakenKills();
 	}
 
 	Map<String, Integer> sessionDisplayCounters()

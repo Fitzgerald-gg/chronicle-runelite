@@ -38,6 +38,7 @@ final class LootScreen
 	private final Board board;
 	private final ChroniclePlugin plugin;
 	private final Period period;
+	private final LocalStore store;
 
 	LootScreen(ChroniclePanel ui, Board board)
 	{
@@ -45,6 +46,7 @@ final class LootScreen
 		this.board = board;
 		this.plugin = board.plugin;
 		this.period = board.period;
+		this.store = board.store;
 	}
 
 	JPanel buildDrops()
@@ -72,7 +74,7 @@ final class LootScreen
 		if (canAskOnTask && onTaskOnly)
 		{
 			long[] w = board.windowMs();
-			List<BagItem> taskBag = plugin.onTaskLoot(w[0], w[1], null, period.whole());
+			List<BagItem> taskBag = store.onTaskLoot(w[0], w[1], null, period.whole());
 			if (taskBag.isEmpty())
 			{
 				return noted(p, board.inside("No task closed"));
@@ -124,8 +126,8 @@ final class LootScreen
 	JPanel dropsInWindow(JPanel p)
 	{
 		Window win = board.window();
-		LocalStore.LootWindow sitting = period.session() ? plugin.sessionLootWindow() : null;
-		long rollFrom = plugin.lootRollFrom();
+		LocalStore.LootWindow sitting = period.session() ? store.sessionLootWindow() : null;
+		long rollFrom = store.lootRollFrom();
 		long fromMs = startMs(win.start);
 		if (sitting == null && rollFrom <= 0)
 		{
@@ -139,7 +141,7 @@ final class LootScreen
 				+ "as the whole period would be worse than saying nothing.");
 		}
 		LocalStore.LootWindow w = sitting != null ? sitting
-			: plugin.lootBetween(win.start, win.end);
+			: store.lootBetween(win.start, win.end);
 		if (!dropsLeftBehind && dropsByKind)
 		{
 			if (w.items.isEmpty())
@@ -195,7 +197,7 @@ final class LootScreen
 
 	JPanel buildLootByKind(JPanel p)
 	{
-		final List<BagItem> bag = plugin.allLoot();
+		final List<BagItem> bag = store.allLoot();
 		if (bag.isEmpty())
 		{
 			return noted(p, "Drops appear here as you play: every kill, priced as it lands.");
@@ -271,7 +273,7 @@ final class LootScreen
 
 	JPanel buildLeftBehind(JPanel p)
 	{
-		List<UntakenRow> rows = plugin.untakenSources();
+		List<UntakenRow> rows = store.untakenSources();
 		rows.sort(Comparator.comparingLong((UntakenRow r) -> r.value).reversed());
 		long totalQty = 0;
 		long totalVal = 0;
@@ -285,7 +287,7 @@ final class LootScreen
 			return noted(p, "What you walk past gets counted here, priced at the "
 				+ "moment you declined it.");
 		}
-		List<UntakenRow> items = plugin.untakenItems();
+		List<UntakenRow> items = store.untakenItems();
 		items.sort(Comparator.comparingLong((UntakenRow r) -> r.value).reversed());
 		JPanel head = tallyCard("Left behind", "Items", fmt(totalQty), RED, totalVal);
 		head.add(row(dropsByKind ? "Distinct items" : "Sources",
@@ -412,8 +414,8 @@ final class LootScreen
 
 		if (source != null)
 		{
-			List<BagItem> bag = plugin.untakenItemsOf(source);
-			UntakenRow left = find(plugin.untakenSources(), u -> u.name, source, true);
+			List<BagItem> bag = store.untakenItemsOf(source);
+			UntakenRow left = find(store.untakenSources(), u -> u.name, source, true);
 			spaced(p, tallyCard(source.toUpperCase(Locale.ROOT), "Left on the floor",
 				count(left == null ? 0 : left.qty, "item"), RED, left == null ? 0 : left.value));
 			if (bag.isEmpty())
@@ -432,8 +434,8 @@ final class LootScreen
 			return p;
 		}
 
-		List<UntakenRow> sources = plugin.untakenSourcesOf(item);
-		UntakenRow held = find(plugin.untakenItems(), u -> u.name, item, true);
+		List<UntakenRow> sources = store.untakenSourcesOf(item);
+		UntakenRow held = find(store.untakenItems(), u -> u.name, item, true);
 		spaced(p, tallyCard(item.toUpperCase(Locale.ROOT), "Left behind",
 			"×" + fmt(held == null ? 0 : held.qty), RED, held == null ? 0 : held.value));
 		if (sources.isEmpty())
@@ -459,7 +461,7 @@ final class LootScreen
 		final List<Object[]> srcs = new ArrayList<>();
 		for (SourceRow r : board.sources())
 		{
-			for (BagItem b : plugin.sourceItems(r.name))
+			for (BagItem b : store.sourceItems(r.name))
 			{
 				if (b.name.equalsIgnoreCase(name))
 				{
@@ -515,7 +517,7 @@ final class LootScreen
 		final boolean hasTask = board.taskItemsEver().containsKey(properName(name));
 		long[] tw = board.windowMs();
 		long[] mine = inWindow == null ? board.taskItemsEver().get(properName(name))
-			: plugin.onTaskItems(tw[0], tw[1]).getOrDefault(properName(name), new long[2]);
+			: store.onTaskItems(tw[0], tw[1]).getOrDefault(properName(name), new long[2]);
 		if (hasTask && onTaskOnly)
 		{
 			head.add(row("Obtained on task", "×" + fmt(mine[0]), ACCENT));
@@ -538,7 +540,7 @@ final class LootScreen
 		}
 		if (inWindow == null && !ui.drawingCopy)
 		{
-			long[] days = plugin.itemDays(name);
+			long[] days = store.itemDays(name);
 			days[2] = days.length > 3 && days[3] < got ? 0 : days[2];
 			if (days[2] == 1)
 			{
@@ -592,7 +594,7 @@ final class LootScreen
 
 	String lootSince()
 	{
-		long from = plugin.lootDetailFrom();
+		long from = store.lootDetailFrom();
 		Window w = board.window();
 		return period.session() || from > 0 && from <= startMs(w.start) ? null
 			: from <= 0 ? Board.UNDATED
@@ -631,7 +633,7 @@ final class LootScreen
 	JPanel byTaskRows(JPanel p, String name)
 	{
 		long[] w = board.windowMs();
-		List<Object[]> split = plugin.onTaskItemByTask(name, w[0], w[1]);
+		List<Object[]> split = store.onTaskItemByTask(name, w[0], w[1]);
 		if (split.isEmpty())
 		{
 			return noted(p, board.inside("No task paid this"));
@@ -655,9 +657,9 @@ final class LootScreen
 		String want = LocalStore.chatKind(sr.name);
 		Map<String, Long> rows = new LinkedHashMap<>();
 		putKind(rows, "Kill Log", LocalStore.killLogCounts(board.clogNow()), want);
-		putKind(rows, "Said in chat", plugin.chatKills(), want);
+		putKind(rows, "Said in chat", store.chatKillCounts(), want);
 		putKind(rows, "Collection log", LocalStore.pageKillLines(board.clogNow()), want);
-		putKind(rows, "Running count", plugin.anchoredKills(), want);
+		putKind(rows, "Running count", store.anchoredKills(), want);
 		if (sr.loots > 0)
 		{
 			rows.put("Drops logged", (long) sr.loots);
@@ -704,7 +706,7 @@ final class LootScreen
 	void addAssignments(JPanel p, String npc)
 	{
 		long[] w = board.windowMs();
-		List<LocalStore.Assignment> was = plugin.onTaskAssignments(npc, w[0], w[1]);
+		List<LocalStore.Assignment> was = store.onTaskAssignments(npc, w[0], w[1]);
 		if (was.isEmpty())
 		{
 			return;
@@ -721,7 +723,7 @@ final class LootScreen
 
 	void addFloorRow(JPanel head, String name)
 	{
-		for (UntakenRow u : plugin.untakenSources())
+		for (UntakenRow u : store.untakenSources())
 		{
 			if (u.qty > 0 && u.name.equalsIgnoreCase(name))
 			{
@@ -743,12 +745,12 @@ final class LootScreen
 		long[] inWindow = period.whole() ? null
 			: row == null ? new long[2] : new long[]{safeParse(row[1]), safeParse(row[2])};
 		String own = row != null ? row[0] : sr != null ? sr.name : name;
-		final List<BagItem> bag = inWindow == null ? plugin.sourceItems(own)
+		final List<BagItem> bag = inWindow == null ? store.sourceItems(own)
 			: new ArrayList<>(board.periodItems().getOrDefault(own, new ArrayList<>()));
 		bag.sort(Comparator.comparingLong((BagItem b) -> b.value).reversed());
 		final long other = inWindow == null ? 0 : inWindow[1] - board.tallyOf(bag)[1];
 		final boolean unfiled = other > 0 || inWindow != null && !period.session()
-			&& plugin.unfiledSources(board.window().start, board.window().end).contains(own);
+			&& store.unfiledSources(board.window().start, board.window().end).contains(own);
 		spaced(p, ui.backRow(() -> ui.copyPage(() -> buildSourceDetail(name))), 4);
 		JPanel head = card(name);
 		if (sr != null)

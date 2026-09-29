@@ -54,6 +54,7 @@ final class Board
 
 	final ChroniclePlugin plugin;
 	final Period period;
+	final LocalStore store;
 	private final Runnable onHistory;
 	private final Map<String, Object> memo = new HashMap<>();
 	boolean rollUsed;
@@ -117,6 +118,7 @@ final class Board
 	{
 		this.plugin = plugin;
 		this.period = period;
+		this.store = plugin.store();
 		this.onHistory = onHistory;
 	}
 
@@ -162,7 +164,7 @@ final class Board
 			@Override
 			protected Object[] doInBackground()
 			{
-				return new Object[]{plugin.historyBaselines(), plugin.feedNewest(HISTORY_FEED_SCAN),
+				return new Object[]{plugin.historyBaselines(), store.feedNewest(HISTORY_FEED_SCAN),
 					plugin.slayerJourney(), LocalDate.now()};
 			}
 
@@ -399,7 +401,7 @@ final class Board
 		Map<String, Long> out = new LinkedHashMap<>(base);
 		long food = 0;
 		long potions = 0;
-		for (Entry<String, Long> e : plugin.consumableValues().entrySet())
+		for (Entry<String, Long> e : store.consumableValues().entrySet())
 		{
 			long v = e.getValue() == null ? 0 : e.getValue();
 			if (v > 0 && e.getKey().endsWith("Eaten"))
@@ -452,12 +454,12 @@ final class Board
 
 	List<SourceRow> sources()
 	{
-		return memo("sources", plugin::dropSources);
+		return memo("sources", store::dropSources);
 	}
 
 	JsonObject clogNow()
 	{
-		return memo("clog", plugin::clogSnapshot);
+		return memo("clog", store::clogSnapshot);
 	}
 
 	JsonObject achievements()
@@ -467,19 +469,19 @@ final class Board
 
 	Map<String, long[]> dayTotals()
 	{
-		return memo("dayTotals", plugin::dayTotals);
+		return memo("dayTotals", store::dayTotals);
 	}
 
 	LocalStore.LootWindow lootWindow()
 	{
 		Window w = window();
-		return period.session() ? plugin.sessionLootWindow() : plugin.lootBetween(w.start, w.end);
+		return period.session() ? store.sessionLootWindow() : store.lootBetween(w.start, w.end);
 	}
 
 	Map<String, List<BagItem>> periodItems()
 	{
 		Window w = window();
-		return period.session() ? plugin.itemsBySource(null, null) : plugin.itemsBySource(w.start, w.end);
+		return period.session() ? store.itemsBySource(null, null) : store.itemsBySource(w.start, w.end);
 	}
 
 	double[] sourceTimesInWindow(String name)
@@ -507,12 +509,12 @@ final class Board
 
 	Map<String, long[]> taskItemsEver()
 	{
-		return memo("taskItems", () -> plugin.onTaskItems(EVER_FROM, EVER_TO));
+		return memo("taskItems", () -> store.onTaskItems(EVER_FROM, EVER_TO));
 	}
 
 	Map<String, Long> taskKillsEver()
 	{
-		return memo("taskKills", () -> plugin.onTaskKills(EVER_FROM, EVER_TO));
+		return memo("taskKills", () -> store.onTaskKills(EVER_FROM, EVER_TO));
 	}
 
 	boolean everOnTask()
@@ -536,8 +538,8 @@ final class Board
 	long[] taskTally()
 	{
 		long[] ms = windowMs();
-		long[] tally = Arrays.copyOf(plugin.onTaskTally(ms[0], ms[1], null, period.whole()), 4);
-		tally[3] = tallyOf(plugin.onTaskLoot(ms[0], ms[1], null, period.whole()))[1];
+		long[] tally = Arrays.copyOf(store.onTaskTally(ms[0], ms[1], null, period.whole()), 4);
+		tally[3] = tallyOf(store.onTaskLoot(ms[0], ms[1], null, period.whole()))[1];
 		return tally;
 	}
 
@@ -651,7 +653,7 @@ final class Board
 
 	private Long rolledKills(String name)
 	{
-		if (plugin.lootRollFrom() <= 0)
+		if (store.lootRollFrom() <= 0)
 		{
 			return null;
 		}
@@ -673,7 +675,7 @@ final class Board
 
 	LocalDate rollShortOf()
 	{
-		long from = plugin.lootRollFrom();
+		long from = store.lootRollFrom();
 		if (from <= 0)
 		{
 			return null;
@@ -980,7 +982,7 @@ final class Board
 		Map<String, Long> moved = memo("stirred", () ->
 		{
 			Map<String, Long> out = new HashMap<>();
-			for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
+			for (JsonObject e : store.feedNewest(FEED_SCAN_DEEP))
 			{
 				if (insideWindow(asLong(e.get("ts"))))
 				{
@@ -1047,7 +1049,7 @@ final class Board
 		return memo("landed", () ->
 		{
 			Map<String, Long> out = new LinkedHashMap<>();
-			for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
+			for (JsonObject e : store.feedNewest(FEED_SCAN_DEEP))
 			{
 				JsonObject d = obj(e, "data");
 				if ("COLLECTION".equals(typeOf(e)) && has(d, "itemName"))
@@ -1064,7 +1066,7 @@ final class Board
 		return memo("records", () ->
 		{
 			Map<String, JsonObject> out = new LinkedHashMap<>();
-			for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
+			for (JsonObject e : store.feedNewest(FEED_SCAN_DEEP))
 			{
 				JsonObject d = obj(e, "data");
 				if ("RECORD".equals(typeOf(e)) && has(d, "source"))
@@ -1235,11 +1237,11 @@ final class Board
 
 	List<Object[]> searchFeed()
 	{
-		long newest = newestTs(plugin.feedNewest(1));
+		long newest = newestTs(store.feedNewest(1));
 		if (searchFeed == null || newest != searchFeedTs || historySpine != searchFeedSpine)
 		{
 			List<Object[]> out = new ArrayList<>();
-			List<JsonObject> all = new ArrayList<>(plugin.feedNewest(JOURNAL_DEEP));
+			List<JsonObject> all = new ArrayList<>(store.feedNewest(JOURNAL_DEEP));
 			all.addAll(milestones());
 			for (JsonObject e : all)
 			{
@@ -1259,7 +1261,7 @@ final class Board
 	Map<String, LocalStore.PetRow> petsByName()
 	{
 		Map<String, LocalStore.PetRow> out = new LinkedHashMap<>();
-		plugin.pets().forEach(r -> out.putIfAbsent(low(r.name), r));
+		store.pets().forEach(r -> out.putIfAbsent(low(r.name), r));
 		return out;
 	}
 
@@ -1291,7 +1293,7 @@ final class Board
 		JsonObject c = obj(achievements(), "combat");
 		long tiers = obj(c, "tiers").entrySet().stream().filter(t -> t.getValue().getAsLong() > 0).count();
 		long possible = 0;
-		for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
+		for (JsonObject e : store.feedNewest(FEED_SCAN_DEEP))
 		{
 			JsonObject data = obj(e, "data");
 			if ("COMBAT_ACHIEVEMENT".equals(typeOf(e)) && data.has("totalPossiblePoints"))
@@ -1413,7 +1415,7 @@ final class Board
 			out[0] += r.loots;
 			out[1] += r.value;
 		}
-		for (UntakenRow u : plugin.untakenSources())
+		for (UntakenRow u : store.untakenSources())
 		{
 			out[2] += u.qty;
 			out[3] += u.value;
@@ -1447,7 +1449,7 @@ final class Board
 		}
 		if (period.session())
 		{
-			String[] top = most(plugin.sessionLootWindow().sources, r -> safeParse(r[1]));
+			String[] top = most(store.sessionLootWindow().sources, r -> safeParse(r[1]));
 			return top == null ? null : new String[]{top[0], fmt(safeParse(top[1]))};
 		}
 		Span s = span();
@@ -1470,7 +1472,7 @@ final class Board
 		}
 		else
 		{
-			plugin.lootBetween(from, to).sources.forEach(r -> out.merge(r[0], safeParse(r[2]), Long::sum));
+			store.lootBetween(from, to).sources.forEach(r -> out.merge(r[0], safeParse(r[2]), Long::sum));
 		}
 		return out;
 	}

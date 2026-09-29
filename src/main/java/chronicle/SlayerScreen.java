@@ -31,6 +31,7 @@ final class SlayerScreen
 	private final Board board;
 	private final ChroniclePlugin plugin;
 	private final Period period;
+	private final LocalStore store;
 
 	SlayerScreen(ChroniclePanel ui, Board board)
 	{
@@ -38,6 +39,7 @@ final class SlayerScreen
 		this.board = board;
 		this.plugin = board.plugin;
 		this.period = board.period;
+		this.store = board.store;
 	}
 
 	JPanel buildSlayer()
@@ -167,7 +169,7 @@ final class SlayerScreen
 	JPanel addOnTaskLoot(JPanel p)
 	{
 		long[] ms = board.windowMs();
-		final List<BagItem> bag = plugin.onTaskLoot(ms[0], ms[1], ui.loot.lootTask,
+		final List<BagItem> bag = store.onTaskLoot(ms[0], ms[1], ui.loot.lootTask,
 			period.whole());
 		if (bag.isEmpty())
 		{
@@ -187,7 +189,7 @@ final class SlayerScreen
 			p.add(taskPicker());
 			return ui.loot.kindDrill(p, bag, "task:");
 		}
-		final long[] tally = plugin.onTaskTally(ms[0], ms[1], ui.loot.lootTask, period.whole());
+		final long[] tally = store.onTaskTally(ms[0], ms[1], ui.loot.lootTask, period.whole());
 		spaced(p, onTaskHead(qty, value, tally));
 		p.add(taskPicker());
 
@@ -303,7 +305,7 @@ final class SlayerScreen
 		addTaskAgainstRecord(head, j, index, t);
 		spaced(p, head);
 
-		List<UntakenRow> monsters = plugin.slayerTaskMonsters(index);
+		List<UntakenRow> monsters = store.slayerTaskMonsters(index);
 		if (!monsters.isEmpty())
 		{
 			p.add(group("Killed"));
@@ -316,7 +318,7 @@ final class SlayerScreen
 			p.add(vgap(6));
 		}
 
-		List<BagItem> bag = plugin.slayerTaskItems(index);
+		List<BagItem> bag = store.slayerTaskItems(index);
 		if (bag.isEmpty())
 		{
 			p.add(note("No loot recorded against this task."));
@@ -420,7 +422,7 @@ final class SlayerScreen
 		JPopupMenu menu = new JPopupMenu();
 		menuItem(menu, "Every task", ui.loot.lootTask == null, () -> pickTask(null));
 		menu.addSeparator();
-		for (String task : plugin.taskNames())
+		for (String task : store.taskNames())
 		{
 			menuItem(menu, task, task.equals(ui.loot.lootTask), () -> pickTask(task));
 		}

@@ -31,6 +31,7 @@ final class TrackersScreen
 	private final Board board;
 	private final ChroniclePlugin plugin;
 	private final Period period;
+	private final LocalStore store;
 
 	TrackersScreen(ChroniclePanel ui, Board board)
 	{
@@ -38,12 +39,13 @@ final class TrackersScreen
 		this.board = board;
 		this.plugin = board.plugin;
 		this.period = board.period;
+		this.store = board.store;
 	}
 
 	JPanel buildStats()
 	{
 		JPanel p = column();
-		consumVals = plugin.consumableValues();
+		consumVals = store.consumableValues();
 		String[] families = ui.view == ChroniclePanel.View.LEDGER ? LEDGER_FAMILIES : StatRegistry.FAMILIES;
 		JPanel pills = new JPanel(new GridLayout(0, 2, 3, 3));
 		pills.setBackground(DARK);
@@ -236,7 +238,7 @@ final class TrackersScreen
 	JPanel buildAllTrackers()
 	{
 		JPanel p = ui.backPage();
-		consumVals = plugin.consumableValues();
+		consumVals = store.consumableValues();
 		Map<String, Long> counters = board.countersForPeriod();
 		if (counters == null)
 		{
@@ -323,7 +325,7 @@ final class TrackersScreen
 			return;
 		}
 		Map<String, long[]> killers = new LinkedHashMap<>();
-		for (JsonObject e : plugin.feedNewest(Board.FEED_SCAN_DEEP))
+		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))
 		{
 			long ts = asLong(e.get("ts"));
 			if (!"DEATH".equals(typeOf(e)) || !board.insideWindow(ts))
@@ -470,7 +472,7 @@ final class TrackersScreen
 	JPanel buildSkillDetail(String craft)
 	{
 		JPanel p = ui.backPage();
-		consumVals = plugin.consumableValues();
+		consumVals = store.consumableValues();
 		String key = low(craft);
 
 		JPanel head = card(craft);

@@ -33,6 +33,7 @@ final class HomeScreen
 	private final Board board;
 	private final ChroniclePlugin plugin;
 	private final Period period;
+	private final LocalStore store;
 
 	HomeScreen(ChroniclePanel ui, Board board)
 	{
@@ -40,6 +41,7 @@ final class HomeScreen
 		this.board = board;
 		this.plugin = board.plugin;
 		this.period = board.period;
+		this.store = board.store;
 	}
 
 	JPanel buildHome()
@@ -106,21 +108,21 @@ final class HomeScreen
 				mounted++;
 			}
 		}
-		if (plugin.sessionLoots() > 0)
+		if (store.sessionLoots() > 0)
 		{
 			strip.add(row("Drops received",
-				plugin.sessionLoots() + " · " + gps(plugin.sessionLootValue()),
+				store.sessionLoots() + " · " + gps(store.sessionLootValue()),
 				GREEN));
 			mounted++;
-			if (plugin.sessionUntakenKills() > 0)
+			if (store.sessionUntakenKills() > 0)
 			{
 				strip.add(row("Drops taken",
-					fmt(Math.max(0, plugin.sessionLoots() - plugin.sessionUntakenKills())),
+					fmt(Math.max(0, store.sessionLoots() - store.sessionUntakenKills())),
 					GREEN));
 				mounted++;
 			}
 		}
-		long[] untaken = plugin.sessionUntakenTally();
+		long[] untaken = store.sessionUntakenTally();
 		if (untaken[0] > 0)
 		{
 			strip.add(row("Left behind", qtyGp(untaken[0], untaken[1])));
@@ -134,7 +136,7 @@ final class HomeScreen
 		}
 		spaced(p, strip);
 
-		List<LocalStore.RecentDrop> recent = plugin.recentDrops();
+		List<LocalStore.RecentDrop> recent = store.recentDrops();
 		if (!recent.isEmpty())
 		{
 			JPanel card = card("Recent drops");
@@ -235,7 +237,7 @@ final class HomeScreen
 		Map<String, Long> levels = new LinkedHashMap<>();
 		List<String> slots = new ArrayList<>();
 		List<String> pets = new ArrayList<>();
-		for (JsonObject e : plugin.feedNewest(Board.FEED_SCAN_DEEP))
+		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))
 		{
 			if (asLong(e.get("ts")) < since)
 			{
