@@ -621,18 +621,14 @@ final class Summary
 
 	private void recapTiles(RecapPicture.Facts f)
 	{
-		long[] sat = played(new LocalDate[1]);
-		long minutes = sat[0];
-		int sittings = (int) sat[1];
-		long games = f.whole ? build.plugin.gamePlaytimeMinutes() : 0;
-		if (games > minutes)
+		long[] sat = played();
+		if (sat[2] == 1)
 		{
-			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(games), "the game's own count"));
+			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(sat[0]), "the game's own count"));
 		}
-		else if (sittings > 0)
+		else if (sat[1] > 0)
 		{
-			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(minutes),
-				count(sittings, "sitting")));
+			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(sat[0]), count(sat[1], "sitting")));
 		}
 		long[] xp = xp();
 		if (xp != null && xp[0] > 0)
@@ -712,32 +708,56 @@ final class Summary
 		}
 	}
 
-	long[] played(LocalDate[] busiest)
+	long[] played()
 	{
-		long[] sat = new long[3];
-		if (build.period().session)
+		Period w = build.period();
+		long fromMs = w.session ? w.ms()[0] : startMs(w.start);
+		long toMs = w.session ? w.ms()[1] : startMs(w.end.plusDays(1));
+		long[] out = new long[3];
+		List<JsonObject> feed = build.feed.all();
+		long oldest = oldestTs(feed, false);
+		if (w.whole || oldest > 0 && oldest < fromMs)
 		{
-			sat[0] = build.plugin.sessionElapsedMinutes();
-			sat[1] = sat[0] > 0 ? 1 : 0;
-		}
-		else
-		{
-			for (Entry<LocalDate, long[]> d : build.feed.days().entrySet())
+			for (JsonObject e : feed)
 			{
-				if (!build.period().inside(noon(d.getKey())))
+				long filed = filedAt(e);
+				if ("SESSION".equals(typeOf(e)) && filed >= fromMs && filed < toMs)
 				{
-					continue;
-				}
-				sat[0] += d.getValue()[0];
-				sat[1] += d.getValue()[1];
-				if (d.getValue()[0] > sat[2])
-				{
-					sat[2] = d.getValue()[0];
-					busiest[0] = d.getKey();
+					out[0] += sessionMinutes(e);
+					out[1]++;
 				}
 			}
 		}
-		return sat;
+		long began = build.plugin.sessionStart();
+		if (w.session ? w.reachesToday() : began > 0 && began >= fromMs && began < toMs)
+		{
+			long running = build.plugin.sessionElapsedMinutes();
+			if (running > 0)
+			{
+				out[0] += running;
+				out[1]++;
+			}
+		}
+		long theirs = w.whole ? build.plugin.gamePlaytimeMinutes() : 0;
+		if (theirs > out[0])
+		{
+			out[0] = theirs;
+			out[2] = 1;
+		}
+		return out;
+	}
+
+	Entry<LocalDate, Long> busiest()
+	{
+		Entry<LocalDate, Long> top = null;
+		for (Entry<LocalDate, long[]> d : build.feed.days().entrySet())
+		{
+			if (build.period().inside(noon(d.getKey())) && d.getValue()[0] > (top == null ? 0 : top.getValue()))
+			{
+				top = new AbstractMap.SimpleEntry<>(d.getKey(), d.getValue()[0]);
+			}
+		}
+		return top;
 	}
 
 	long[] xp()
@@ -1056,7 +1076,7 @@ final class Summary
 			: startMs(pEnd.plusDays(1));
 		Map<String, Long> fromFeed = new HashMap<>();
 		Map<String, List<String[]>> named = b.named;
-		long[] played = b.played;
+		long sittings = 0;
 		long[] took = {0, 0, 0, 0, 0, 0};
 		for (JsonObject e : feed)
 		{
@@ -1078,8 +1098,7 @@ final class Summary
 				}
 				if ("SESSION".equals(type))
 				{
-					played[0] += sessionMinutes(e);
-					played[1]++;
+					sittings++;
 					JsonObject d = obj(e, "data");
 					took[0] += safeLong(d.get("drops"));
 					took[1] += safeLong(d.get("dropsGp"));
@@ -1149,7 +1168,7 @@ final class Summary
 					named.put("dropsReceived", itemLines(dated.sources, true));
 				}
 			}
-			else if (sittingsCover(feed, fromMs) && played[1] > 0 && took[0] > 0)
+			else if (sittingsCover(feed, fromMs) && sittings > 0 && took[0] > 0)
 			{
 				sessionsSpeak = true;
 				retro.put("dropsReceived", took[0]);
@@ -1157,7 +1176,7 @@ final class Summary
 				retro.put("lootLeftCount", took[2]);
 				retro.put("lootLeftValue", took[3]);
 				retro.put("lootLeftKills", took[4]);
-				sessionsHoldTheFloor = took[5] == played[1];
+				sessionsHoldTheFloor = took[5] == sittings;
 			}
 		}
 		else
@@ -1168,29 +1187,10 @@ final class Summary
 				{
 					named.remove(key);
 				}
-				played[0] = 0;
-				played[1] = 0;
 			}
 		}
 
-		long began = build.plugin.sessionStart();
-		if (w.session ? live : (began > 0 && began >= fromMs && began < toMs))
-		{
-			long running = build.plugin.sessionElapsedMinutes();
-			if (running > 0)
-			{
-				played[0] += running;
-				played[1]++;
-			}
-		}
-		if (w.whole)
-		{
-			long theirs = build.plugin.gamePlaytimeMinutes();
-			if (theirs > played[0])
-			{
-				played[0] = theirs;
-			}
-		}
+		System.arraycopy(played(), 0, b.played, 0, 2);
 
 		LocalDate leftFrom = HistoryLog.firstCarrying(
 			hist.headMap(at.getKey(), true), "lootLeftKills");

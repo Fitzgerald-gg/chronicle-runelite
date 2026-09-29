@@ -6305,20 +6305,18 @@ class ChroniclePanel extends PluginPanel
 		JPanel plate = card(wholeRecord() ? "The whole record" : window().label);
 		int held = plate.getComponentCount();
 
-		LocalDate[] busiest = new LocalDate[1];
-		long[] sat = build.summary.played(busiest);
-		long minutes = sat[0];
-		int sittings = (int) sat[1];
-		if (sittings > 0)
+		long[] sat = build.summary.played();
+		if (sat[1] > 0)
 		{
-			plateRow(plate, "Played", hoursMinutes(minutes) + " · " + count(sittings, "sitting"),
+			plateRow(plate, "Played", hoursMinutes(sat[0]) + " · " + count(sat[1], "sitting"),
 				() -> openJournal("Sessions"));
 		}
-		if (busiest[0] != null && sittings > 1)
+		Entry<LocalDate, Long> busiest = sat[1] > 1 ? build.summary.busiest() : null;
+		if (busiest != null)
 		{
-			final LocalDate day = busiest[0];
+			final LocalDate day = busiest.getKey();
 			plateRow(plate, "Busiest day", TASK_DAY.format(day.atStartOfDay(
-				ZoneId.systemDefault()).toInstant()) + " · " + hoursMinutes(sat[2]),
+				ZoneId.systemDefault()).toInstant()) + " · " + hoursMinutes(busiest.getValue()),
 				() -> openJournalOn(noon(day)));
 		}
 
