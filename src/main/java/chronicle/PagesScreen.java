@@ -236,17 +236,11 @@ final class PagesScreen extends Screen
 		head.add(row("Points", c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]),
 			ACCENT));
 		head.add(row("Tiers unlocked", fmt(c[2]) + " / 6"));
-		Set<Integer> headDone = board.caDone();
-		long named = 0;
-		for (int id : headDone)
-		{
-			if (all.has(String.valueOf(id)))
-			{
-				named++;
-			}
-		}
-		long unnamed = headDone.size() - named;
-		if (!headDone.isEmpty())
+		Set<Integer> done = board.caDone();
+		boolean known = !done.isEmpty();
+		long named = done.stream().filter(id -> all.has(String.valueOf(id))).count();
+		long unnamed = done.size() - named;
+		if (known)
 		{
 			head.add(row("Tasks done", fmt(named) + " / " + fmt(all.size()), ACCENT));
 		}
@@ -258,8 +252,6 @@ final class PagesScreen extends Screen
 				+ " Chronicle was built. They are counted by the game, not named"
 				+ " here, until the plugin updates."), 4);
 		}
-		Set<Integer> done = headDone;
-		boolean known = !done.isEmpty();
 		if (!known)
 		{
 			spaced(p, note("Which tasks you have done arrives when you next log in. "
@@ -276,14 +268,7 @@ final class PagesScreen extends Screen
 		}
 		for (Entry<String, List<JsonObject>> e : bySource.entrySet())
 		{
-			long got = 0;
-			for (JsonObject task : e.getValue())
-			{
-				if (done.contains(task.get("id").getAsInt()))
-				{
-					got++;
-				}
-			}
+			long got = e.getValue().stream().filter(t -> done.contains(t.get("id").getAsInt())).count();
 			String foldKey = "ca:" + e.getKey();
 			boolean open = ui.foldOpen(foldKey);
 			int n = e.getValue().size();
