@@ -139,13 +139,14 @@ public class RebuildBenchTest
 						}
 						System.out.printf("BENCH   ..buildDrops alone %6.2f ms%n",
 							t / 1_000_000.0);
-						Method src = ChroniclePanel.class.getDeclaredMethod("sources");
-						src.setAccessible(true);
+						Method src = Build.class.getDeclaredMethod("sources");
+						java.lang.reflect.Field bf = ChroniclePanel.class.getDeclaredField("build");
+						bf.setAccessible(true);
 						long t2 = Long.MAX_VALUE;
 						for (int i = 0; i < 10; i++)
 						{
 							long t0 = System.nanoTime();
-							src.invoke(panel);
+							src.invoke(bf.get(panel));
 							t2 = Math.min(t2, System.nanoTime() - t0);
 						}
 						System.out.printf("BENCH   ..sources() alone %6.2f ms%n",

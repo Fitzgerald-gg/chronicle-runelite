@@ -54,14 +54,16 @@ public class SkillHoverTest
 		Field from = ChroniclePanel.class.getDeclaredField("histFrom");
 		from.setAccessible(true);
 		from.set(panel, null);
-		for (String memo : new String[]{"buildPeriodCounters", "buildSpan", "movedTypes",
-			"rolledKcs", "movedKcs"})
+		Method fresh = ChroniclePanel.class.getDeclaredMethod("freshBuild");
+		fresh.setAccessible(true);
+		fresh.invoke(panel);
+		for (String memo : new String[]{"buildPeriodCounters", "movedTypes"})
 		{
 			Field m = ChroniclePanel.class.getDeclaredField(memo);
 			m.setAccessible(true);
 			m.set(panel, null);
 		}
-		for (String flag : new String[]{"periodCountersAsked", "spanAsked"})
+		for (String flag : new String[]{"periodCountersAsked"})
 		{
 			Field m = ChroniclePanel.class.getDeclaredField(flag);
 			m.setAccessible(true);

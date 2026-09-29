@@ -18,10 +18,10 @@ public class SelfHealingRosterTest
 	@SuppressWarnings("unchecked")
 	private static List<Object> roster() throws Exception
 	{
-		java.lang.reflect.Method m = ChroniclePanel.class
+		java.lang.reflect.Method m = Kills.class
 			.getDeclaredMethod("bossRoster", com.google.gson.Gson.class);
 		m.setAccessible(true);
-		java.lang.reflect.Field cache = ChroniclePanel.class.getDeclaredField("bossRoster");
+		java.lang.reflect.Field cache = Kills.class.getDeclaredField("bossRoster");
 		cache.setAccessible(true);
 		cache.set(null, null);
 		return (List<Object>) m.invoke(null, new com.google.gson.Gson());

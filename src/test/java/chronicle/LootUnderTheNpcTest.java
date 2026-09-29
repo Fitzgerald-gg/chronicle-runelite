@@ -49,12 +49,9 @@ public class LootUnderTheNpcTest
 
 	private static String opens(String boss) throws Exception
 	{
-		Class<?> bc = Class.forName("chronicle.ChroniclePanel$Boss");
-		Constructor<?> c = bc.getDeclaredConstructor(String.class, int.class);
-		c.setAccessible(true);
-		Method m = ChroniclePanel.class.getDeclaredMethod("bossLootSource", bc);
-		m.setAccessible(true);
-		return (String) m.invoke(panel, c.newInstance(boss, 0));
+		java.lang.reflect.Field f = ChroniclePanel.class.getDeclaredField("build");
+		f.setAccessible(true);
+		return ((Build) f.get(panel)).kills.bossLootSource(new Kills.Boss(boss, 0));
 	}
 
 	@Test

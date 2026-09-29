@@ -203,6 +203,7 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	private final ChroniclePlugin plugin;
+	private Build build;
 
 	private final JPanel display = new JPanel(new BorderLayout());
 
@@ -244,6 +245,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		super(false);
 		this.plugin = plugin;
+		freshBuild();
 
 		watchForReturn();
 		setLayout(new BorderLayout());
@@ -544,221 +546,6 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	@RequiredArgsConstructor
-	private static final class Boss
-	{
-		final String name;
-		final int sprite;
-	}
-
-	private static List<Boss> bossRoster;
-	private Map<String, Long> movedKcs;
-	private Map<String, Long> rolledKcs;
-	private boolean rollUsed;
-
-	private static synchronized List<Boss> bossRoster(Gson gson)
-	{
-		if (bossRoster != null)
-		{
-			return bossRoster;
-		}
-		List<Boss> out = new ArrayList<>();
-		try
-		{
-			for (HiscoreSkill s
-				: HiscoreSkill.values())
-			{
-				if (s.getType() == HiscoreSkillType.BOSS)
-				{
-					out.add(new Boss(s.getName(), s.getSpriteId()));
-				}
-			}
-		}
-		catch (RuntimeException | LinkageError ex)
-		{
-			out.clear();
-		}
-		if (!out.isEmpty())
-		{
-			bossRoster = out;
-			return out;
-		}
-		try (InputStream in = ChroniclePanel.class.getResourceAsStream("osrs_bosses.json"))
-		{
-			if (in != null)
-			{
-				JsonArray arr = gson.fromJson(
-					new InputStreamReader(in, StandardCharsets.UTF_8),
-					JsonArray.class);
-				for (JsonElement e : arr)
-				{
-					JsonObject o = e.getAsJsonObject();
-					out.add(new Boss(o.get("name").getAsString(),
-						o.has("sprite") ? o.get("sprite").getAsInt() : -1));
-				}
-			}
-		}
-		catch (Exception ex)
-		{
-		}
-		bossRoster = out;
-		return out;
-	}
-
-	private static final JsonObject FIGHTS = table("panel_fights.json");
-
-	private static final Map<String, String> LOG_PAGE_FOR = strMap(FIGHTS, "logPage");
-	private static final Map<String, List<String>> PAYS_OUT = new LinkedHashMap<>();
-	private static final Map<String, List<String>> FOUGHT_AS = new LinkedHashMap<>();
-
-	static
-	{
-		obj(FIGHTS, "paysOut").entrySet().forEach(e -> PAYS_OUT.put(e.getKey(), strs(e.getValue())));
-		obj(FIGHTS, "foughtAs").entrySet().forEach(e ->
-			FOUGHT_AS.put(kindOf(e.getKey()), strs(e.getValue())));
-	}
-
-	private Map<String, Long> kcByKind;
-
-	private Map<String, Long> kcByKind()
-	{
-		if (kcByKind != null)
-		{
-			return kcByKind;
-		}
-		Map<String, Long> out = new LinkedHashMap<>(chatKcByKind());
-		for (SourceRow r : sources())
-		{
-			out.merge(kindOf(r.name), (long) r.kc, Math::max);
-		}
-		kcByKind = out;
-		return out;
-	}
-
-	private long bossKills(String name)
-	{
-		JsonObject cl = clogNow();
-		long best = Math.max(0, lookup(cl, "slayer_kcs", name));
-		String kind = kindOf(name);
-		Long byKind = kcByKind().get(kind);
-		if (byKind != null)
-		{
-			best = Math.max(best, byKind);
-		}
-		if (best > 0)
-		{
-			return best;
-		}
-		for (Entry<String, Long> ln : pageLines(name, "kc_lines"))
-		{
-			String said = low(ln.getKey());
-			if (said.contains("kill") || said.contains("completion"))
-			{
-				return ln.getValue();
-			}
-		}
-		String page = LOG_PAGE_FOR.getOrDefault(name, name);
-		return Math.max(0, lookup(cl, "kcs", page));
-	}
-
-	private static long lookup(JsonObject clog, String map, String key)
-	{
-		if (clog == null)
-		{
-			return -1;
-		}
-		JsonElement v = getIgnoreCase(obj(clog, map), key);
-		return v == null ? -1 : safeLong(v);
-	}
-
-	private long bossKillsInWindow(String name)
-	{
-		if (wholeRecord())
-		{
-			return bossKills(name);
-		}
-		if (sessionPeriod())
-		{
-			rollUsed = true;
-			return rolled(name);
-		}
-		Span s = span();
-		if (s == null)
-		{
-			return -1;
-		}
-		if (movedKcs == null)
-		{
-			movedKcs = HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
-				window().closingNow(s.closing.kcs, plugin.killCounts()));
-		}
-		String key = keyOf(movedKcs.keySet(), name);
-		Long moved = key == null ? null : movedKcs.get(key);
-		if (moved != null)
-		{
-			return Math.max(0, moved);
-		}
-		Long rolled = rolledKills(name);
-		if (rolled != null)
-		{
-			rollUsed = true;
-			return rolled;
-		}
-		return -1;
-	}
-
-	private long rolled(String name)
-	{
-		Long n = rolledKills(name);
-		return n == null ? 0 : n;
-	}
-
-	private Long rolledKills(String name)
-	{
-		if (plugin.lootRollFrom() <= 0)
-		{
-			return null;
-		}
-		if (rolledKcs == null)
-		{
-			rolledKcs = new LinkedHashMap<>();
-			for (String[] r : lootWindow().sources)
-			{
-				long n = safeParse(r[1]);
-				if (n > 0)
-				{
-					rolledKcs.put(kindOf(r[0]), n);
-				}
-			}
-		}
-		return rolledKcs.get(kindOf(name));
-	}
-
-	private LocalDate rollShortOf()
-	{
-		long from = plugin.lootRollFrom();
-		if (from <= 0)
-		{
-			return null;
-		}
-		Period w = window();
-		LocalDate began = dayOf(from);
-		return began.isAfter(w.start) ? began : null;
-	}
-
-	private List<Entry<String, Long>> logLines(String boss)
-	{
-		List<Entry<String, Long>> out = pageLines(boss, "kc_lines");
-		long kills = bossKills(boss);
-		out.removeIf(ln ->
-		{
-			String said = low(ln.getKey());
-			return ln.getValue() == kills
-				&& (said.contains("kill") || said.contains("completion"));
-		});
-		return out;
-	}
-
 	private String tabStanding(JsonObject cl, String tab)
 	{
 		if (cl == null)
@@ -828,77 +615,6 @@ class ChroniclePanel extends PluginPanel
 		return tip(page, lines);
 	}
 
-	private List<Entry<String, Long>> pageLines(String boss, String map)
-	{
-		List<Entry<String, Long>> out = new ArrayList<>();
-		JsonObject cl = clogNow();
-		if (cl == null)
-		{
-			return out;
-		}
-		JsonElement found = getIgnoreCase(obj(cl, map), LOG_PAGE_FOR.getOrDefault(boss, boss));
-		if (found == null || !found.isJsonObject())
-		{
-			return out;
-		}
-		for (Entry<String, JsonElement> ln
-			: found.getAsJsonObject().entrySet())
-		{
-			long n = safeLong(ln.getValue());
-			if (n > 0 && lineBelongsTo(boss, ln.getKey()))
-			{
-				out.add(new AbstractMap.SimpleEntry<>(ln.getKey(), n));
-			}
-		}
-		return out;
-	}
-
-	private boolean isKillSource(String name)
-	{
-		return killKinds().contains(kindOf(name))
-			|| taskKillsEver().containsKey(name);
-	}
-
-	private Set<String> killKinds;
-
-	private Set<String> killKinds()
-	{
-		if (killKinds != null)
-		{
-			return killKinds;
-		}
-		Set<String> out = new HashSet<>();
-		for (Boss b : bossRoster(plugin.gson()))
-		{
-			out.add(kindOf(b.name));
-		}
-		JsonObject cl = clogNow();
-		if (cl != null)
-		{
-			for (String said : obj(cl, "slayer_kcs").keySet())
-			{
-				out.add(kindOf(said));
-			}
-		}
-		killKinds = out;
-		return out;
-	}
-
-	private static boolean namesInBrackets(String source, String boss)
-	{
-		int open = source.lastIndexOf('(');
-		int close = source.lastIndexOf(')');
-		return open > 0 && close > open
-			&& kindOf(source.substring(open + 1, close))
-				.equals(kindOf(boss));
-	}
-
-	private static String beforeBracket(String source)
-	{
-		int open = source.lastIndexOf('(');
-		return open > 0 ? source.substring(0, open).trim() : source;
-	}
-
 	private static String clock(long seconds)
 	{
 		long h = seconds / 3600;
@@ -906,83 +622,6 @@ class ChroniclePanel extends PluginPanel
 		long s = seconds % 60;
 		return h > 0 ? String.format(Locale.UK, "%d:%02d:%02d", h, m, s)
 			: String.format(Locale.UK, "%d:%02d", m, s);
-	}
-
-	private boolean lineBelongsTo(String boss, String label)
-	{
-		if (label == null || label.isEmpty())
-		{
-			return false;
-		}
-		if (Character.isDigit(label.charAt(label.length() - 1)))
-		{
-			return false;
-		}
-		String said = low(label);
-		String mine = bare(boss);
-		String best = null;
-		for (Boss b : bossRoster(plugin.gson()))
-		{
-			String name = bare(b.name);
-			if (!name.isEmpty() && said.contains(name)
-				&& (best == null || name.length() > best.length()))
-			{
-				best = name;
-			}
-		}
-		if (best != null)
-		{
-			return best.equals(mine);
-		}
-		String page = LOG_PAGE_FOR.getOrDefault(boss, boss);
-		if (!page.equalsIgnoreCase(boss))
-		{
-			return namesOneOf(said, words(mine, bare(page)));
-		}
-		for (Boss other : bossRoster(plugin.gson()))
-		{
-			String onPage = LOG_PAGE_FOR.getOrDefault(other.name, other.name);
-			if (other.name.equalsIgnoreCase(boss) || !onPage.equalsIgnoreCase(page))
-			{
-				continue;
-			}
-			if (namesOneOf(said, words(bare(other.name), mine)))
-			{
-				return false;
-			}
-		}
-		return true;
-	}
-
-	private static List<String> words(String name, String against)
-	{
-		List<String> out = new ArrayList<>();
-		for (String w : name.split("\\s+"))
-		{
-			if (w.length() > 3 && !against.contains(w))
-			{
-				out.add(w);
-			}
-		}
-		return out;
-	}
-
-	private static boolean namesOneOf(String said, List<String> words)
-	{
-		for (String w : words)
-		{
-			if (said.contains(w))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static String bare(String name)
-	{
-		String n = name == null ? "" : low(name.trim());
-		return n.startsWith("the ") ? n.substring(4) : n;
 	}
 
 	private JPanel buildSheet()
@@ -1038,7 +677,7 @@ class ChroniclePanel extends PluginPanel
 
 	private SourceRow clue(String tier)
 	{
-		return find(sources(), r -> r.name, "Clue Scroll (" + tier + ")", false);
+		return find(build.sources(), r -> r.name, "Clue Scroll (" + tier + ")", false);
 	}
 
 	private JPanel activitySheet()
@@ -1155,8 +794,8 @@ class ChroniclePanel extends PluginPanel
 		}
 		else
 		{
-			long named = namedLine(source, label);
-			figure = named > 0 ? named : bossKills(source);
+			long named = build.kills.namedLine(source, label);
+			figure = named > 0 ? named : build.kills.bossKills(source);
 			hover = tip(label, "Count", fmt(figure));
 		}
 		wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
@@ -1214,25 +853,23 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildKills()
 	{
 		JPanel p = column();
-		movedKcs = null;
-		rolledKcs = null;
-		rollUsed = false;
-		List<Boss> roster = bossRoster(plugin.gson());
+		build.kills.forgetWindow();
+		List<Kills.Boss> roster = Kills.bossRoster(plugin.gson());
 		if (roster.isEmpty())
 		{
 			return noted(p, "The boss roster did not load.");
 		}
-		if (!wholeRecord() && !sessionPeriod() && span() == null)
+		if (!wholeRecord() && !sessionPeriod() && build.span() == null)
 		{
 			p.add(noPeriod());
 			return p;
 		}
 		if (!wholeRecord())
 		{
-			List<Boss> had = new ArrayList<>();
-			for (Boss b : roster)
+			List<Kills.Boss> had = new ArrayList<>();
+			for (Kills.Boss b : roster)
 			{
-				if (bossKillsInWindow(b.name) > 0)
+				if (build.kills.bossKillsInWindow(b.name) > 0)
 				{
 					had.add(b);
 				}
@@ -1245,11 +882,11 @@ class ChroniclePanel extends PluginPanel
 			roster = had;
 		}
 		JPanel grid = grid3();
-		for (Boss b : roster)
+		for (Kills.Boss b : roster)
 		{
 			grid.add(bossCell(b));
 		}
-		LocalDate shortFrom = rollUsed ? rollShortOf() : null;
+		LocalDate shortFrom = build.kills.rollUsed() ? build.kills.rollShortOf() : null;
 		if (shortFrom != null)
 		{
 			spaced(p, note("Kills the journal cannot date are counted from loot "
@@ -1260,9 +897,9 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private JPanel bossCell(Boss b)
+	private JPanel bossCell(Kills.Boss b)
 	{
-		final long kc = bossKillsInWindow(b.name);
+		final long kc = build.kills.bossKillsInWindow(b.name);
 		JPanel cell = tile(3, 3);
 		cell.setToolTipText(bossTip(b));
 
@@ -1276,18 +913,18 @@ class ChroniclePanel extends PluginPanel
 		JLabel fig = styled(new JLabel(kc > 0 ? fmt(kc) : "-", JLabel.RIGHT), small(),
 			kc > 0 ? TILE_LIT : dim());
 		cell.add(fig, BorderLayout.EAST);
-		final String open = bossLootSource(b);
+		final String open = build.kills.bossLootSource(b);
 		link(cell, () -> openSourceLoose(open));
 		return cell;
 	}
 
-	private String bossTip(Boss b)
+	private String bossTip(Kills.Boss b)
 	{
 		List<String> lines = new ArrayList<>();
 		String kind = kindOf(b.name);
 		SourceRow src = null;
 		List<SourceRow> paidOut = new ArrayList<>();
-		for (SourceRow r : sources())
+		for (SourceRow r : build.sources())
 		{
 			if (kindOf(r.name).equals(kind))
 			{
@@ -1297,24 +934,24 @@ class ChroniclePanel extends PluginPanel
 				}
 				continue;
 			}
-			if (namesInBrackets(r.name, b.name)
-				|| paysOutThrough(b.name, r.name))
+			if (Kills.namesInBrackets(r.name, b.name)
+				|| Kills.paysOutThrough(b.name, r.name))
 			{
 				paidOut.add(r);
 			}
 		}
 		if (!wholeRecord())
 		{
-			long inWin = bossKillsInWindow(b.name);
+			long inWin = build.kills.bossKillsInWindow(b.name);
 			long[] paid = sourceInWindow(b.name);
 			lines.add(window().label);
 			lines.add((inWin < 0 ? "-" : count(inWin, "kill"))
 				+ tail(paid[1]));
 		}
-		long known = bossKills(b.name);
+		long known = build.kills.bossKills(b.name);
 		lines.add("Kills tracked");
 		lines.add(known > 0 ? fmt(known) : src != null ? fmt(src.loots) : "-");
-		for (Entry<String, Long> pb : pageLines(b.name, "pb_lines"))
+		for (Entry<String, Long> pb : build.kills.pageLines(b.name, "pb_lines"))
 		{
 			lines.add(pb.getKey());
 			lines.add(clock(pb.getValue()));
@@ -1326,13 +963,13 @@ class ChroniclePanel extends PluginPanel
 			lines.add("Average kill");
 			lines.add(pb(timed[1] / timed[0]) + " · " + fmt((long) timed[0]) + " timed");
 		}
-		long here = minutesAt(b.name, wholeRecord() ? counters() : periodCounters());
-		if (here > 0 && minutesCoverPeriod())
+		long here = build.kills.minutesAt(b.name, wholeRecord() ? counters() : periodCounters());
+		if (here > 0 && build.kills.minutesCoverPeriod())
 		{
 			lines.add("Time here");
 			lines.add(hoursMinutes(here));
 		}
-		for (Entry<String, Long> ln : logLines(b.name))
+		for (Entry<String, Long> ln : build.kills.logLines(b.name))
 		{
 			lines.add(ln.getKey());
 			lines.add(fmt(ln.getValue()));
@@ -1344,7 +981,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		for (SourceRow r : paidOut)
 		{
-			lines.add(beforeBracket(r.name));
+			lines.add(Kills.beforeBracket(r.name));
 			lines.add(paidFigure(r));
 		}
 		if (src == null && paidOut.isEmpty())
@@ -1358,33 +995,6 @@ class ChroniclePanel extends PluginPanel
 	private String paidFigure(SourceRow r)
 	{
 		return qtyGp(tallyOf(plugin.sourceItems(r.name))[0], r.value);
-	}
-
-	private String bossLootSource(Boss b)
-	{
-		String kind = kindOf(b.name);
-		for (SourceRow r : sources())
-		{
-			if (kindOf(r.name).equals(kind))
-			{
-				return r.name;
-			}
-		}
-		SourceRow best = null;
-		for (SourceRow r : sources())
-		{
-			if ((namesInBrackets(r.name, b.name) || paysOutThrough(b.name, r.name))
-				&& (best == null || r.value > best.value))
-			{
-				best = r;
-			}
-		}
-		return best != null ? best.name : b.name;
-	}
-
-	private static boolean paysOutThrough(String fight, String source)
-	{
-		return PAYS_OUT.getOrDefault(fight, Collections.emptyList()).stream().anyMatch(source::equalsIgnoreCase);
 	}
 
 	private Color accent()
@@ -1589,11 +1199,7 @@ class ChroniclePanel extends PluginPanel
 	private void rebuildNow()
 	{
 		buildsRun++;
-		buildSources = null;
-		buildClog = null;
-		buildSpan = null;
-		spanAsked = false;
-		taskKillsEverCache = null;
+		freshBuild();
 		taskItemsEver = null;
 		buildAchievements = null;
 		milestones = null;
@@ -1602,15 +1208,9 @@ class ChroniclePanel extends PluginPanel
 		daysPlayed = null;
 		dayTotals = null;
 		resourcesDropped = 0;
-		kcByKind = null;
-		chatKcByKind = null;
-		killKinds = null;
 		movedTypes = null;
 		buildPeriodCounters = null;
 		periodCountersAsked = false;
-		movedKcs = null;
-		rolledKcs = null;
-		rollUsed = false;
 		skilled = null;
 		ledgerNames = null;
 		sourceKinds.clear();
@@ -2284,7 +1884,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return buildLootByKind(p);
 		}
-		List<SourceRow> sources = new ArrayList<>(sources());
+		List<SourceRow> sources = new ArrayList<>(build.sources());
 		sources.sort(Comparator.comparingLong((SourceRow r) -> r.value).reversed());
 		if (sources.isEmpty())
 		{
@@ -2302,8 +1902,8 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, lifeHead);
 		for (SourceRow r : firstN(sources, dropsShown))
 		{
-			boolean killed = isKillSource(r.name);
-			String sub = (killed ? fmt(standingKills(r)) + " kc" : count(r.loots, "drop"))
+			boolean killed = build.kills.isKillSource(r.name);
+			String sub = (killed ? fmt(build.kills.standingKills(r)) + " kc" : count(r.loots, "drop"))
 				+ (r.pb != null ? " · PB " + pb(r.pb) : "");
 			listCard(p, row(r.name, gps(r.value), accent()), sub,
 				r.loots > 0 ? perOne(r.value, r.loots, killed) : "", () -> openSource(r.name));
@@ -2900,7 +2500,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel addKillLog(JPanel p)
 	{
-		List<Entry<String, Long>> kcs = new ArrayList<>(LocalStore.killLogCounts(clogNow()).entrySet());
+		List<Entry<String, Long>> kcs = new ArrayList<>(LocalStore.killLogCounts(build.clog()).entrySet());
 		if (kcs.isEmpty())
 		{
 			return noted(p, "No kill log yet. It copies itself the next time you open "
@@ -3309,14 +2909,14 @@ class ChroniclePanel extends PluginPanel
 
 	private double[] sourceTimesInWindow(String name)
 	{
-		Map<String, double[]> times = lootWindow().times;
+		Map<String, double[]> times = build.lootWindow().times;
 		String key = keyOf(times.keySet(), name);
 		return key == null ? new double[]{0, 0} : times.get(key);
 	}
 
 	private long[] sourceInWindow(String name)
 	{
-		return rowOf(lootWindow().sources, name);
+		return rowOf(build.lootWindow().sources, name);
 	}
 
 	private static long[] rowOf(List<String[]> rows, String name)
@@ -3359,9 +2959,9 @@ class ChroniclePanel extends PluginPanel
 		}
 		String kind = kindOf(name);
 		SourceRow best = null;
-		for (SourceRow r : sources())
+		for (SourceRow r : build.sources())
 		{
-			if ((kindOf(r.name).equals(kind) || namesInBrackets(r.name, name))
+			if ((kindOf(r.name).equals(kind) || Kills.namesInBrackets(r.name, name))
 				&& (best == null || r.value > best.value))
 			{
 				best = r;
@@ -3375,7 +2975,7 @@ class ChroniclePanel extends PluginPanel
 		if (ledgerNames == null)
 		{
 			Map<String, String> index = new HashMap<>();
-			for (SourceRow r : sources())
+			for (SourceRow r : build.sources())
 			{
 				index.putIfAbsent(low(r.name), r.name);
 			}
@@ -3759,7 +3359,7 @@ class ChroniclePanel extends PluginPanel
 		long worth = 0;
 		int found = 0;
 		final List<Object[]> srcs = new ArrayList<>();
-		for (SourceRow r : sources())
+		for (SourceRow r : build.sources())
 		{
 			for (BagItem b : plugin.sourceItems(r.name))
 			{
@@ -3775,7 +3375,7 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 		}
-		final long[] inWindow = wholeRecord() ? null : rowOf(lootWindow().items, name);
+		final long[] inWindow = wholeRecord() ? null : rowOf(build.lootWindow().items, name);
 		long other = 0;
 		long otherValue = 0;
 		if (inWindow != null)
@@ -3783,7 +3383,7 @@ class ChroniclePanel extends PluginPanel
 			srcs.clear();
 			other = inWindow[0];
 			otherValue = inWindow[1];
-			String[] headRow = rowFor(lootWindow().items, name, false);
+			String[] headRow = rowFor(build.lootWindow().items, name, false);
 			String spelled = headRow != null ? headRow[0] : name;
 			for (Map.Entry<String, List<BagItem>> e : periodItems().entrySet())
 			{
@@ -3954,50 +3554,13 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private long standingKills(SourceRow sr)
-	{
-		long own = sr.kc > 0 ? sr.kc : sr.loots;
-		Long said = chatKcByKind().get(LocalStore.chatKind(sr.name));
-		return said == null ? own : Math.max(own, said);
-	}
-
-	private Map<String, Long> chatKcByKind;
-
-	private Map<String, Long> chatKcByKind()
-	{
-		if (chatKcByKind == null)
-		{
-			Map<String, Long> out = new LinkedHashMap<>();
-			for (Entry<String, Long> e : plugin.killCounts().entrySet())
-			{
-				out.merge(LocalStore.chatKind(e.getKey()), e.getValue(), Math::max);
-			}
-			chatKcByKind = out;
-		}
-		return chatKcByKind;
-	}
-
 	private void addKillSources(JPanel head, SourceRow sr, long headline)
 	{
 		if (headline < 0)
 		{
 			return;
 		}
-		String want = LocalStore.chatKind(sr.name);
-		Map<String, Long> rows = new LinkedHashMap<>();
-		putKind(rows, "Kill Log", LocalStore.killLogCounts(clogNow()), want);
-		putKind(rows, "Said in chat", plugin.chatKills(), want);
-		putKind(rows, "Collection log", LocalStore.pageKillLines(clogNow()), want);
-		putKind(rows, "Running count", plugin.anchoredKills(), want);
-		if (sr.loots > 0)
-		{
-			rows.put("Drops logged", (long) sr.loots);
-		}
-		Long dropped = taskKillsEver().get(sr.name);
-		if (dropped != null && dropped > 0)
-		{
-			rows.put("Dropped on task", dropped);
-		}
+		Map<String, Long> rows = build.kills.sayers(sr);
 		boolean accounted = false;
 		for (Long v : rows.values())
 		{
@@ -4017,30 +3580,6 @@ class ChroniclePanel extends PluginPanel
 		{
 			head.add(row(e.getKey(), fmt(e.getValue())));
 		}
-	}
-
-	private static void putKind(Map<String, Long> rows, String label,
-		Map<String, Long> from, String want)
-	{
-		for (Entry<String, Long> e : from.entrySet())
-		{
-			if (LocalStore.chatKind(e.getKey()).equals(want) && e.getValue() > 0)
-			{
-				rows.put(label, e.getValue());
-				return;
-			}
-		}
-	}
-
-	private Map<String, Long> taskKillsEverCache;
-
-	private Map<String, Long> taskKillsEver()
-	{
-		if (taskKillsEverCache == null)
-		{
-			taskKillsEverCache = plugin.onTaskKills(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2);
-		}
-		return taskKillsEverCache;
 	}
 
 	private void addAssignments(JPanel p, String npc)
@@ -4082,47 +3621,11 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private boolean minutesCoverPeriod()
-	{
-		if (wholeRecord())
-		{
-			return false;
-		}
-		if (sessionPeriod())
-		{
-			return true;
-		}
-		Span s = span();
-		if (s == null)
-		{
-			return false;
-		}
-		for (String key : s.opening.counters.keySet())
-		{
-			if (StatKeys.isTime(key))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private long minutesAt(String name, Map<String, Long> counters)
-	{
-		long minutes = counters.getOrDefault(StatKeys.timeKey(name), 0L);
-		for (String npc : FOUGHT_AS.getOrDefault(kindOf(name),
-			Collections.emptyList()))
-		{
-			minutes += counters.getOrDefault(StatKeys.timeKey(npc), 0L);
-		}
-		return minutes;
-	}
-
 	private JPanel buildSourceDetail(String name)
 	{
 		JPanel p = column();
-		final SourceRow sr = find(sources(), r -> r.name, name, false);
-		String[] row = wholeRecord() ? null : rowFor(lootWindow().sources, sr != null ? sr.name : name, sr != null);
+		final SourceRow sr = find(build.sources(), r -> r.name, name, false);
+		String[] row = wholeRecord() ? null : rowFor(build.lootWindow().sources, sr != null ? sr.name : name, sr != null);
 		long[] inWindow = wholeRecord() ? null
 			: row == null ? new long[2] : new long[]{safeParse(row[1]), safeParse(row[2])};
 		String own = row != null ? row[0] : sr != null ? sr.name : name;
@@ -4136,9 +3639,9 @@ class ChroniclePanel extends PluginPanel
 		JPanel head = card(name);
 		if (sr != null)
 		{
-			boolean killed = isKillSource(sr.name);
+			boolean killed = build.kills.isKillSource(sr.name);
 			long shown = inWindow != null ? inWindow[0]
-				: killed ? standingKills(sr) : sr.loots;
+				: killed ? build.kills.standingKills(sr) : sr.loots;
 			head.add(row(killed ? "Kills" : "Times looted", fmt(shown), accent()));
 			long worth = inWindow != null ? inWindow[1] : sr.value;
 			long over = inWindow != null ? inWindow[0] : sr.loots;
@@ -4149,11 +3652,11 @@ class ChroniclePanel extends PluginPanel
 				addKillSources(head, sr, killed ? shown : -1);
 				addFloorRow(head, sr.name);
 			}
-			for (Entry<String, Long> pbLine : pageLines(sr.name, "pb_lines"))
+			for (Entry<String, Long> pbLine : build.kills.pageLines(sr.name, "pb_lines"))
 			{
 				head.add(row(pbLine.getKey(), clock(pbLine.getValue())));
 			}
-			for (Entry<String, Long> ln : logLines(sr.name))
+			for (Entry<String, Long> ln : build.kills.logLines(sr.name))
 			{
 				head.add(row(ln.getKey(), fmt(ln.getValue())));
 			}
@@ -4170,14 +3673,14 @@ class ChroniclePanel extends PluginPanel
 				head.add(best);
 			}
 			double[] timed = inWindow == null ? new double[]{sr.timed, sr.timeSum}
-				: lootWindow().times.getOrDefault(own, new double[2]);
+				: build.lootWindow().times.getOrDefault(own, new double[2]);
 			if (timed[0] > 0)
 			{
 				head.add(row("Average kill", pb(timed[1] / timed[0]) + " · "
 					+ fmt((long) timed[0]) + " timed"));
 			}
-			long here = minutesAt(sr.name, inWindow == null ? counters() : periodCounters());
-			if (here > 0 && minutesCoverPeriod())
+			long here = build.kills.minutesAt(sr.name, inWindow == null ? counters() : periodCounters());
+			if (here > 0 && build.kills.minutesCoverPeriod())
 			{
 				boolean rate = killed && shown > 0 && here >= 30;
 				head.add(row("Time here", hoursMinutes(here)
@@ -4327,7 +3830,7 @@ class ChroniclePanel extends PluginPanel
 		pills.setBackground(DARK);
 		for (String tab : tax.keySet())
 		{
-			pills.add(pill(tab, tab.equals(clogTab), 4, tabStanding(clogNow(), tab), () ->
+			pills.add(pill(tab, tab.equals(clogTab), 4, tabStanding(build.clog(), tab), () ->
 			{
 				clogTab = tab;
 				clogPageSel = null;
@@ -4336,7 +3839,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		spaced(p, pills);
 
-		JsonObject cl = clogNow();
+		JsonObject cl = build.clog();
 		Obtained ob = obtained(cl);
 		Map<String, Long> kcs = pageCounts(cl);
 
@@ -5080,29 +4583,6 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private List<SourceRow> buildSources;
-	private JsonObject buildClog;
-	private Span buildSpan;
-	private boolean spanAsked;
-
-	private List<SourceRow> sources()
-	{
-		if (buildSources == null)
-		{
-			buildSources = plugin.dropSources();
-		}
-		return buildSources;
-	}
-
-	private JsonObject clogNow()
-	{
-		if (buildClog == null)
-		{
-			buildClog = plugin.clogSnapshot();
-		}
-		return buildClog;
-	}
-
 	private Map<String, Long> consumVals = new LinkedHashMap<>();
 
 	private long resourcesDropped;
@@ -5403,7 +4883,7 @@ class ChroniclePanel extends PluginPanel
 			else if (sec.equals("Food") || sec.equals("Potions"))
 			{
 				String gpKey = sec.equals("Food") ? "foodConsumedValue" : "potionsConsumedValue";
-				Span s = span();
+				Span s = build.span();
 				if (sessionPeriod() || (s != null && s.opening.counters.containsKey(gpKey)))
 				{
 					secGp = counters.getOrDefault(gpKey, 0L);
@@ -6046,7 +5526,7 @@ class ChroniclePanel extends PluginPanel
 		Map<String, Long> out = new LinkedHashMap<>();
 		if (wholeRecord())
 		{
-			for (SourceRow r : sources())
+			for (SourceRow r : build.sources())
 			{
 				out.merge(r.name, r.value, Long::sum);
 			}
@@ -6678,26 +6158,14 @@ class ChroniclePanel extends PluginPanel
 			long all = 0;
 			for (String tier : CLUE_TIERS)
 			{
-				all += rolled("Clue Scroll (" + tier + ")");
+				all += build.kills.rolled("Clue Scroll (" + tier + ")");
 			}
 			return all;
 		}
 		if (!source.isEmpty())
 		{
-			long rolled = rolled(source);
-			return rolled > 0 && namedLine(source, label) > 0 ? -1 : rolled;
-		}
-		return 0;
-	}
-
-	private long namedLine(String source, String label)
-	{
-		for (Entry<String, Long> ln : pageLines(source, "kc_lines"))
-		{
-			if (ln.getKey().equalsIgnoreCase(label))
-			{
-				return ln.getValue();
-			}
+			long rolled = build.kills.rolled(source);
+			return rolled > 0 && build.kills.namedLine(source, label) > 0 ? -1 : rolled;
 		}
 		return 0;
 	}
@@ -7489,28 +6957,19 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	private LocalStore.LootWindow lootWindow()
+	private void freshBuild()
 	{
-		Period w = window();
-		return sessionPeriod() ? plugin.sessionLootWindow() : plugin.lootBetween(w.start, w.end);
+		build = new Build(plugin, this::window, this::foldSpan);
 	}
 
-	private Span span()
+	private Span foldSpan()
 	{
-		if (spanAsked)
-		{
-			return buildSpan;
-		}
-		spanAsked = true;
 		if (historySpine == null)
 		{
 			gatherHistory();
+			return null;
 		}
-		else if (!historySpine.isEmpty())
-		{
-			buildSpan = window().span(historySpine);
-		}
-		return buildSpan;
+		return historySpine.isEmpty() ? null : window().span(historySpine);
 	}
 
 	private Period window()
@@ -7540,7 +6999,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			return out;
 		}
-		Span s = span();
+		Span s = build.span();
 		if (s == null)
 		{
 			return null;
@@ -7565,7 +7024,7 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		List<SourceRow> out = new ArrayList<>();
-		for (SourceRow r : sources())
+		for (SourceRow r : build.sources())
 		{
 			if (ownTile.contains(low(r.name)))
 			{
@@ -7607,7 +7066,7 @@ class ChroniclePanel extends PluginPanel
 		String key = low(craft);
 
 		JPanel head = card(craft);
-		Span s = span();
+		Span s = build.span();
 		Long now = liveXp(key);
 		if (now == null)
 		{
@@ -7631,7 +7090,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		long minutes = (wholeRecord() ? counters() : periodCounters())
 			.getOrDefault(StatKeys.timeKey(craft), 0L);
-		if (minutes > 0 && minutesCoverPeriod())
+		if (minutes > 0 && build.kills.minutesCoverPeriod())
 		{
 			long gained = !wholeRecord() && was != null && now != null && now > was ? now - was : 0;
 			boolean rate = gained > 0 && minutes >= 30;
@@ -8677,7 +8136,7 @@ class ChroniclePanel extends PluginPanel
 		f.whole = wholeRecord();
 		f.session = sessionPeriod();
 		f.title = f.whole ? "The whole record" : window().label;
-		Span s = f.whole || f.session ? null : span();
+		Span s = f.whole || f.session ? null : build.span();
 		recapSkills(f, s);
 		recapBosses(f, s);
 		recapMonsters(f, s);
@@ -8796,26 +8255,27 @@ class ChroniclePanel extends PluginPanel
 
 	private void recapBosses(RecapPicture.Facts f, Span s)
 	{
-		List<Boss> roster = bossRoster(plugin.gson());
+		List<Kills.Boss> roster = Kills.bossRoster(plugin.gson());
 		Map<String, Long> closing = s == null ? null : window().closingNow(s.closing.kcs, plugin.killCounts());
-		for (Boss b : roster)
+		for (Kills.Boss b : roster)
 		{
 			if (f.whole)
 			{
-				long k = bossKills(b.name);
+				long k = build.kills.bossKills(b.name);
 				if (k > 0)
 				{
 					f.bosses.add(new RecapPicture.BossLine(b.name, b.sprite, null, k, k));
 				}
 				continue;
 			}
-			long moved = bossKillsInWindow(b.name);
+			long moved = build.kills.bossKillsInWindow(b.name);
 			if (moved <= 0)
 			{
 				continue;
 			}
 			Long start = null;
 			Long end = null;
+			Map<String, Long> movedKcs = build.kills.movedKcs();
 			String key = closing == null || movedKcs == null ? null : keyOf(movedKcs.keySet(), b.name);
 			if (key != null)
 			{
@@ -8833,7 +8293,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			f.bosses.sort((a, b) -> Long.compare(b.gained, a.gained));
 		}
-		if (rollUsed)
+		if (build.kills.rollUsed())
 		{
 			f.notes.add("Kill counts without a start and an end are read from loot, and count only the kills that dropped something.");
 		}
@@ -8852,7 +8312,7 @@ class ChroniclePanel extends PluginPanel
 		if (f.whole)
 		{
 			by.putAll(plugin.killCounts());
-			for (SourceRow r : sources())
+			for (SourceRow r : build.sources())
 			{
 				worth.merge(r.name, r.value, Long::sum);
 			}
@@ -8905,15 +8365,15 @@ class ChroniclePanel extends PluginPanel
 			return false;
 		}
 		String kind = kindOf(name);
-		for (Boss b : bossRoster(plugin.gson()))
+		for (Kills.Boss b : Kills.bossRoster(plugin.gson()))
 		{
-			if (kindOf(b.name).equals(kind) || namesInBrackets(name, b.name)
-				|| paysOutThrough(b.name, name))
+			if (kindOf(b.name).equals(kind) || Kills.namesInBrackets(name, b.name)
+				|| Kills.paysOutThrough(b.name, name))
 			{
 				return false;
 			}
 		}
-		for (List<String> npcs : FOUGHT_AS.values())
+		for (List<String> npcs : Kills.FOUGHT_AS.values())
 		{
 			for (String npc : npcs)
 			{
@@ -8948,7 +8408,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (f.whole)
 		{
-			List<SourceRow> rows = new ArrayList<>(sources());
+			List<SourceRow> rows = new ArrayList<>(build.sources());
 			rows.sort((a, b) -> Long.compare(b.value, a.value));
 			for (SourceRow r : firstN(rows, 8))
 			{
@@ -8968,7 +8428,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			return;
 		}
-		LocalStore.LootWindow win = lootWindow();
+		LocalStore.LootWindow win = build.lootWindow();
 		for (String[] r : firstN(win.sources, 8))
 		{
 			long v = safeParse(r[2]);
@@ -9020,7 +8480,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			else if (!f.whole)
 			{
-				n = rolled(source);
+				n = build.kills.rolled(source);
 				v = sourceInWindow(source)[1];
 			}
 			if (n > 0)
@@ -9272,7 +8732,7 @@ class ChroniclePanel extends PluginPanel
 		RecapPicture.BossLine top = most(f.bosses, b -> b.gained);
 		if (bossKills > 0)
 		{
-			f.tiles.add(new RecapPicture.Tile("Boss kills", (f.whole ? "" : "+") + fmt(bossKills),
+			f.tiles.add(new RecapPicture.Tile("Kills.Boss kills", (f.whole ? "" : "+") + fmt(bossKills),
 				"most " + top.name));
 		}
 		for (RecapPicture.Named n : f.slayer)
@@ -9466,7 +8926,7 @@ class ChroniclePanel extends PluginPanel
 
 	private String splitSpend(String key, Map<String, Long> counters)
 	{
-		Span s = span();
+		Span s = build.span();
 		if (!wholeRecord() && !sessionPeriod() && (s == null || !s.opening.counters.containsKey(key)))
 		{
 			return "";
@@ -9609,7 +9069,7 @@ class ChroniclePanel extends PluginPanel
 			long gained = stirred("LEVEL");
 			return gained > 0 && overall != null ? new long[]{gained, overall[0]} : null;
 		}
-		Span s = span();
+		Span s = build.span();
 		if (s == null || !s.opening.complete || !s.closing.complete)
 		{
 			return null;
@@ -9624,7 +9084,7 @@ class ChroniclePanel extends PluginPanel
 
 	private Map<String, Long> periodSkillGains()
 	{
-		Span s = span();
+		Span s = build.span();
 		if (s == null)
 		{
 			return null;
@@ -9656,7 +9116,7 @@ class ChroniclePanel extends PluginPanel
 		if (wholeRecord())
 		{
 			long[] out = new long[4];
-			for (SourceRow r : sources())
+			for (SourceRow r : build.sources())
 			{
 				out[0] += r.loots;
 				out[1] += r.value;
@@ -9668,7 +9128,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			return out;
 		}
-		LocalStore.LootWindow win = lootWindow();
+		LocalStore.LootWindow win = build.lootWindow();
 		return new long[]{win.loots, win.value, win.left, win.leftValue};
 	}
 
@@ -9678,7 +9138,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return null;
 		}
-		LocalStore.LootWindow win = lootWindow();
+		LocalStore.LootWindow win = build.lootWindow();
 		return win.items.isEmpty() ? null : new String[]{win.items.get(0)[0], win.items.get(0)[2]};
 	}
 
@@ -9687,21 +9147,21 @@ class ChroniclePanel extends PluginPanel
 		if (wholeRecord())
 		{
 			SourceRow top = null;
-			for (SourceRow r : sources())
+			for (SourceRow r : build.sources())
 			{
-				if (isKillSource(r.name) && (top == null || standingKills(r) > standingKills(top)))
+				if (build.kills.isKillSource(r.name) && (top == null || build.kills.standingKills(r) > build.kills.standingKills(top)))
 				{
 					top = r;
 				}
 			}
-			return top == null ? null : new String[]{top.name, fmt(standingKills(top))};
+			return top == null ? null : new String[]{top.name, fmt(build.kills.standingKills(top))};
 		}
 		if (sessionPeriod())
 		{
 			String[] top = most(plugin.sessionLootWindow().sources, r -> safeParse(r[1]));
 			return top == null ? null : new String[]{top[0], fmt(safeParse(top[1]))};
 		}
-		Span s = span();
+		Span s = build.span();
 		if (s == null)
 		{
 			return null;
@@ -10180,7 +9640,7 @@ class ChroniclePanel extends PluginPanel
 			return null;
 		}
 		List<String> names = new ArrayList<>();
-		for (SourceRow r : sources())
+		for (SourceRow r : build.sources())
 		{
 			names.add(r.name);
 			for (BagItem b : plugin.sourceItems(r.name))
@@ -10196,11 +9656,11 @@ class ChroniclePanel extends PluginPanel
 				names.addAll(slots);
 			}
 		}
-		for (Boss b : bossRoster(plugin.gson()))
+		for (Kills.Boss b : Kills.bossRoster(plugin.gson()))
 		{
 			names.add(b.name);
 		}
-		JsonObject cl = clogNow();
+		JsonObject cl = build.clog();
 		names.addAll(obj(cl, "slayer_kcs").keySet());
 		names.addAll(obj(achievements(), "quests").keySet());
 		for (Skill sk : skillOrder())
@@ -10590,41 +10050,41 @@ class ChroniclePanel extends PluginPanel
 		List<Hit> fights = new ArrayList<>();
 		Set<String> kinds = new HashSet<>();
 		Map<String, SourceRow> ledgerRows = new HashMap<>();
-		for (SourceRow r : sources())
+		for (SourceRow r : build.sources())
 		{
 			ledgerRows.put(r.name, r);
 		}
-		for (Boss b : bossRoster(plugin.gson()))
+		for (Kills.Boss b : Kills.bossRoster(plugin.gson()))
 		{
 			int sc = matchScore(ql, b.name);
 			if (sc < 0 || !kinds.add(kindOf(b.name)))
 			{
 				continue;
 			}
-			final String open = bossLootSource(b);
+			final String open = build.kills.bossLootSource(b);
 			kinds.add(kindOf(open));
 			SourceRow r = ledgerRows.get(open);
 			boolean own = r != null && kindOf(open).equals(kindOf(b.name))
-				&& isKillSource(open);
-			long n = own ? standingKills(r) : bossKills(b.name);
+				&& build.kills.isKillSource(open);
+			long n = own ? build.kills.standingKills(r) : build.kills.bossKills(b.name);
 			fights.add(new Hit(b.name, n > 0 ? fmt(n) + " kc" : "-", null,
 				r == null ? null : gps(r.value) + (r.pb != null ? " · PB " + pb(r.pb) : ""),
 				() -> openSourceLoose(open), sc, n));
 		}
-		for (SourceRow r : sources())
+		for (SourceRow r : build.sources())
 		{
 			int sc = matchScore(ql, r.name);
 			if (sc < 0 || !kinds.add(kindOf(r.name)))
 			{
 				continue;
 			}
-			boolean killed = isKillSource(r.name);
-			long n = killed ? standingKills(r) : r.loots;
+			boolean killed = build.kills.isKillSource(r.name);
+			long n = killed ? build.kills.standingKills(r) : r.loots;
 			fights.add(new Hit(r.name, killed ? fmt(n) + " kc" : count(r.loots, "drop"), null,
 				gps(r.value) + (r.pb != null ? " · PB " + pb(r.pb) : ""),
 				() -> openSource(r.name), sc, n));
 		}
-		JsonObject cl = clogNow();
+		JsonObject cl = build.clog();
 		for (Entry<String, JsonElement> e : obj(cl, "slayer_kcs").entrySet())
 		{
 			int sc = matchScore(ql, e.getKey());
@@ -10676,7 +10136,7 @@ class ChroniclePanel extends PluginPanel
 
 		Map<String, long[]> itemAgg = new LinkedHashMap<>();
 		Map<String, List<String>> itemSrcs = new LinkedHashMap<>();
-		for (SourceRow src : sources())
+		for (SourceRow src : build.sources())
 		{
 			for (BagItem b : plugin.sourceItems(src.name))
 			{
@@ -10718,7 +10178,7 @@ class ChroniclePanel extends PluginPanel
 		total += searchGroup(p, "Items", items);
 
 		List<Hit> log = new ArrayList<>();
-		Obtained ob = obtained(clogNow());
+		Obtained ob = obtained(build.clog());
 		Set<String> slotSeen = new HashSet<>();
 		for (Map<String, List<String>> tab : taxonomy(plugin.gson()).values())
 		{

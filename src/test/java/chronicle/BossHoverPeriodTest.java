@@ -48,7 +48,7 @@ public class BossHoverPeriodTest
 				Field g = ChroniclePanel.class.getDeclaredField("histGranularity");
 				g.setAccessible(true);
 				g.set(p, granularity);
-				Class<?> boss = Class.forName("chronicle.ChroniclePanel$Boss");
+				Class<?> boss = Class.forName("chronicle.Kills$Boss");
 				Constructor<?> c = boss.getDeclaredConstructor(String.class, int.class);
 				c.setAccessible(true);
 				Method m = ChroniclePanel.class.getDeclaredMethod("bossTip", boss);

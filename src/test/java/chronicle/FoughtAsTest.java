@@ -139,7 +139,7 @@ public class FoughtAsTest
 	@SuppressWarnings("unchecked")
 	public void noNpcBelongsToTwoFights() throws Exception
 	{
-		Field f = ChroniclePanel.class.getDeclaredField("FOUGHT_AS");
+		Field f = Kills.class.getDeclaredField("FOUGHT_AS");
 		f.setAccessible(true);
 		Map<String, List<String>> table = (Map<String, List<String>>) f.get(null);
 		assertTrue("the table is empty", table.size() >= 20);

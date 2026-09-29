@@ -5,6 +5,7 @@ import java.lang.reflect.Method;
 import javax.swing.SwingUtilities;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertTrue;
 
 public class PanelRebuildCostTest
@@ -127,6 +128,7 @@ public class PanelRebuildCostTest
 	public void theMemoDoesNotOutliveTheBuild() throws Exception
 	{
 		ChroniclePanel p = panel();
+		Object before = field("build").get(p);
 		Method rebuild = ChroniclePanel.class.getDeclaredMethod("rebuild");
 		rebuild.setAccessible(true);
 		SwingUtilities.invokeAndWait(() ->
@@ -140,9 +142,6 @@ public class PanelRebuildCostTest
 				throw new RuntimeException(e);
 			}
 		});
-		assertEquals("the sources memo outlived its build",
-			null, field("buildSources").get(p));
-		assertEquals("the collection log memo outlived its build",
-			null, field("buildClog").get(p));
+		assertNotSame("the build's memos outlived it", before, field("build").get(p));
 	}
 }
