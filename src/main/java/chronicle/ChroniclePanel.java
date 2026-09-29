@@ -722,7 +722,7 @@ class ChroniclePanel extends PluginPanel
 			case TRACKERS:
 				return trackers.buildStats();
 			case RECAP:
-				return recap.buildRecap();
+				return recap.build();
 			case STANDING:
 				return standing.buildSheet();
 			case LOOT:

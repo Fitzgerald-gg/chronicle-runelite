@@ -39,24 +39,24 @@ final class RecapScreen extends Screen
 		super(ui, board);
 	}
 
-	JPanel buildRecap()
+	JPanel build()
 	{
 		JPanel p = column();
 		p.add(copyHeaderLater("Recap", take ->
 		{
 			take.setText("copying");
-			copyRecapPicture(take);
+			copy(take);
 		}));
-		p.add(recapPlate());
+		p.add(plate());
 		return p;
 	}
 
-	void copyRecapPicture(JLabel take)
+	private void copy(JLabel take)
 	{
 		RecapPicture.Facts facts;
 		try
 		{
-			facts = recapFacts();
+			facts = facts();
 		}
 		catch (Throwable t)
 		{
@@ -87,44 +87,32 @@ final class RecapScreen extends Screen
 			if (all || System.currentTimeMillis() > deadline)
 			{
 				wait.stop();
-				reportCopy(take, toClipboard(recapImage(facts)));
+				reportCopy(take, toClipboard(picture(facts)));
 			}
 		});
 		wait.setInitialDelay(want.isEmpty() ? 0 : 100);
 		wait.start();
 	}
 
-	BufferedImage recapImage(RecapPicture.Facts facts)
-	{
-		try
-		{
-			return RecapPicture.paint(facts, ui.art::skill, ui.art::sprite);
-		}
-		catch (Throwable t)
-		{
-			return null;
-		}
-	}
-
-	RecapPicture.Facts recapFacts()
+	private RecapPicture.Facts facts()
 	{
 		RecapPicture.Facts f = new RecapPicture.Facts();
 		f.whole = period.whole();
 		f.session = period.session();
 		f.title = f.whole ? "The whole record" : board.window().label;
 		Span s = f.whole || f.session ? null : board.span();
-		recapSkills(f, s);
-		recapBosses(f, s);
-		recapMonsters(f, s);
-		recapLoot(f);
-		recapSlayerAndClues(f);
-		recapTrackers(f);
-		recapFeats(f);
-		recapTiles(f);
+		skills(f, s);
+		bosses(f, s);
+		monsters(f, s);
+		loot(f);
+		slayerAndClues(f);
+		trackers(f);
+		feats(f);
+		tiles(f);
 		return f;
 	}
 
-	void recapSkills(RecapPicture.Facts f, Span s)
+	private void skills(RecapPicture.Facts f, Span s)
 	{
 		Map<String, long[]> sheet = plugin.skillSheet();
 		Map<String, Long> closing = null;
@@ -212,17 +200,24 @@ final class RecapScreen extends Screen
 		f.combat = cEnd == null ? null : new Long[]{cStart == null ? null : (long) cStart, (long) cEnd};
 	}
 
-	static long sum(Map<String, Integer> levels)
+	private static long sum(Map<String, Integer> levels)
 	{
-		long t = 0;
-		for (int l : levels.values())
-		{
-			t += l;
-		}
-		return t;
+		return levels.values().stream().mapToLong(Integer::longValue).sum();
 	}
 
-	void recapBosses(RecapPicture.Facts f, Span s)
+	private BufferedImage picture(RecapPicture.Facts facts)
+	{
+		try
+		{
+			return RecapPicture.paint(facts, ui.art::skill, ui.art::sprite);
+		}
+		catch (Throwable t)
+		{
+			return null;
+		}
+	}
+
+	private void bosses(RecapPicture.Facts f, Span s)
 	{
 		List<Boss> roster = bossRoster(plugin.gson());
 		Map<String, Long> closing = s == null ? null : board.closingNow(s.closing.kcs, plugin.killCounts());
@@ -273,7 +268,7 @@ final class RecapScreen extends Screen
 		}
 	}
 
-	void recapMonsters(RecapPicture.Facts f, Span s)
+	private void monsters(RecapPicture.Facts f, Span s)
 	{
 		Map<String, Long> by = new LinkedHashMap<>();
 		Map<String, Long> worth = new LinkedHashMap<>();
@@ -326,7 +321,7 @@ final class RecapScreen extends Screen
 		}
 	}
 
-	void recapLoot(RecapPicture.Facts f)
+	private void loot(RecapPicture.Facts f)
 	{
 		if (!f.whole && !f.session)
 		{
@@ -391,7 +386,7 @@ final class RecapScreen extends Screen
 		}
 	}
 
-	void recapSlayerAndClues(RecapPicture.Facts f)
+	private void slayerAndClues(RecapPicture.Facts f)
 	{
 		long[] tally = board.taskTally();
 		long paid = tally[3];
@@ -430,11 +425,11 @@ final class RecapScreen extends Screen
 		}
 	}
 
-	static final String[] RECAP_FAMILIES = {"Combat", "Skilling", "Living", "Ledger & Roads"};
+	private static final String[] FAMILIES = {"Combat", "Skilling", "Living", "Ledger & Roads"};
 
-	static final int[] RECAP_ROWS = {8, 10, 6, 10};
+	private static final int[] ROWS = {8, 10, 6, 10};
 
-	void recapTrackers(RecapPicture.Facts f)
+	private void trackers(RecapPicture.Facts f)
 	{
 		Map<String, Long> counters = board.countersForPeriod();
 		if (counters == null)
@@ -444,9 +439,9 @@ final class RecapScreen extends Screen
 				: board.inside("Nothing closed");
 			return;
 		}
-		for (int fi = 0; fi < RECAP_FAMILIES.length; fi++)
+		for (int fi = 0; fi < FAMILIES.length; fi++)
 		{
-			String family = RECAP_FAMILIES[fi];
+			String family = FAMILIES[fi];
 			List<String> order = StatRegistry.fixedSections(family);
 			List<Entry<String, Long>> rows = new ArrayList<>();
 			for (Entry<String, Long> e : counters.entrySet())
@@ -472,7 +467,7 @@ final class RecapScreen extends Screen
 				return Long.compare(b.getValue(), a.getValue());
 			});
 			List<RecapPicture.Named> out = new ArrayList<>();
-			for (Entry<String, Long> e : rows.subList(0, Math.min(RECAP_ROWS[fi], rows.size())))
+			for (Entry<String, Long> e : rows.subList(0, Math.min(ROWS[fi], rows.size())))
 			{
 				String key = e.getKey();
 				boolean money = StatRegistry.isGp(key);
@@ -486,7 +481,7 @@ final class RecapScreen extends Screen
 		}
 	}
 
-	void recapFeats(RecapPicture.Facts f)
+	private void feats(RecapPicture.Facts f)
 	{
 		Map<String, List<String>> named = new LinkedHashMap<>();
 		for (String k : new String[]{"Milestones", "Collection log", "Pets", "Personal bests",
@@ -585,7 +580,7 @@ final class RecapScreen extends Screen
 		}
 	}
 
-	void recapTiles(RecapPicture.Facts f)
+	private void tiles(RecapPicture.Facts f)
 	{
 		long[] sat = board.sittingsInWindow(new LocalDate[1]);
 		long minutes = sat[0];
@@ -678,7 +673,7 @@ final class RecapScreen extends Screen
 		}
 	}
 
-	JPanel recapPlate()
+	private JPanel plate()
 	{
 		JPanel plate = card(period.whole() ? "The whole record" : board.window().label);
 		int held = plate.getComponentCount();
@@ -689,13 +684,13 @@ final class RecapScreen extends Screen
 		int sittings = (int) sat[1];
 		if (sittings > 0)
 		{
-			plateRow(plate, "Played", hoursMinutes(minutes) + " · " + count(sittings, "sitting"),
+			line(plate, "Played", hoursMinutes(minutes) + " · " + count(sittings, "sitting"),
 				() -> ui.openJournal("Sessions"));
 		}
 		if (busiest[0] != null && sittings > 1)
 		{
 			final LocalDate day = busiest[0];
-			plateRow(plate, "Busiest day", TASK_DAY.format(day.atStartOfDay(
+			line(plate, "Busiest day", TASK_DAY.format(day.atStartOfDay(
 				ZoneId.systemDefault()).toInstant()) + " · " + hoursMinutes(sat[2]),
 				() -> ui.openJournalOn(noon(day)));
 		}
@@ -704,7 +699,7 @@ final class RecapScreen extends Screen
 		if (xp != null && xp[0] > 0)
 		{
 			String most = board.periodXpMost();
-			plateRow(plate, period.whole() ? "Xp" : "Xp gained",
+			line(plate, period.whole() ? "Xp" : "Xp gained",
 				(period.whole() ? "" : "+") + gp(xp[0]) + " xp"
 					+ (most != null ? ", most in " + most : ""),
 				() -> ui.show(ChroniclePanel.View.STANDING));
@@ -712,7 +707,7 @@ final class RecapScreen extends Screen
 		long[] levels = board.periodLevels();
 		if (levels != null)
 		{
-			plateRow(plate, period.whole() ? "Total level" : "Levels",
+			line(plate, period.whole() ? "Total level" : "Levels",
 				period.whole() ? fmt(levels[0]) : "+" + fmt(levels[0]) + " · " + fmt(levels[1]) + " now",
 				() -> ui.show(ChroniclePanel.View.STANDING));
 		}
@@ -720,7 +715,7 @@ final class RecapScreen extends Screen
 		long[] loot = board.periodLoot();
 		if (loot[0] > 0)
 		{
-			plateRow(plate, "Drops", qtyGp(loot[0], loot[1]),
+			line(plate, "Drops", qtyGp(loot[0], loot[1]),
 				() -> ui.show(ChroniclePanel.View.LOOT));
 		}
 		String[] dearest = board.periodDearest();
@@ -730,11 +725,11 @@ final class RecapScreen extends Screen
 			Line said = new Line();
 			said.name(item);
 			said.fixed(" · " + gps(Long.parseLong(dearest[1])));
-			plateRow(plate, "Dearest drop", said, () -> ui.openItem(item));
+			line(plate, "Dearest drop", said, () -> ui.openItem(item));
 		}
 		if (loot[2] > 0)
 		{
-			plateRow(plate, "Left behind", qtyGp(loot[2], loot[3]), () -> ui.openLeftBehind(null));
+			line(plate, "Left behind", qtyGp(loot[2], loot[3]), () -> ui.openLeftBehind(null));
 		}
 
 		Map<String, Long> counters = period.whole() ? board.withLedgerSpend(board.counters()) : board.periodCounters();
@@ -742,14 +737,14 @@ final class RecapScreen extends Screen
 		long food = counters.getOrDefault("foodEaten", 0L);
 		if (food > 0)
 		{
-			plateRow(plate, "Food", fmt(food)
-				+ splitSpend("foodConsumedValue", counters), toLiving);
+			line(plate, "Food", fmt(food)
+				+ spend("foodConsumedValue", counters), toLiving);
 		}
 		long doses = counters.getOrDefault("potionDoses", 0L);
 		if (doses > 0)
 		{
-			plateRow(plate, "Potions", count(doses, "dose")
-				+ splitSpend("potionsConsumedValue", counters), toLiving);
+			line(plate, "Potions", count(doses, "dose")
+				+ spend("potionsConsumedValue", counters), toLiving);
 		}
 
 		String[] killed = board.periodKilledMost();
@@ -759,12 +754,12 @@ final class RecapScreen extends Screen
 			Line said = new Line();
 			said.name(who);
 			said.fixed(" · " + killed[1]);
-			plateRow(plate, "Killed most", said, () -> ui.openSourceLoose(who));
+			line(plate, "Killed most", said, () -> ui.openSourceLoose(who));
 		}
 		long[] tally = board.taskTally();
 		if (tally[2] > 0)
 		{
-			plateRow(plate, "Tasks", fmt(tally[2]) + tail(tally[3]), () -> ui.openSlayer("Tasks"));
+			line(plate, "Tasks", fmt(tally[2]) + tail(tally[3]), () -> ui.openSlayer("Tasks"));
 		}
 
 		Map<String, String> firstNamed = new LinkedHashMap<>();
@@ -776,13 +771,13 @@ final class RecapScreen extends Screen
 				firstNamed.putIfAbsent(typeOf(e), name);
 			}
 		}
-		feedPlateRow(plate, firstNamed, "COLLECTION", "Log slot", "Log slots", "Log");
-		feedPlateRow(plate, firstNamed, "PET", "Pet", "Pets", "Feats");
-		feedPlateRow(plate, firstNamed, "QUEST", "Quest", "Quests", "Feats");
-		feedPlateRow(plate, firstNamed, "DIARY", "Diary", "Diaries", "Feats");
-		feedPlateRow(plate, firstNamed, "COMBAT_ACHIEVEMENT", "Combat achievement",
+		feedLine(plate, firstNamed, "COLLECTION", "Log slot", "Log slots", "Log");
+		feedLine(plate, firstNamed, "PET", "Pet", "Pets", "Feats");
+		feedLine(plate, firstNamed, "QUEST", "Quest", "Quests", "Feats");
+		feedLine(plate, firstNamed, "DIARY", "Diary", "Diaries", "Feats");
+		feedLine(plate, firstNamed, "COMBAT_ACHIEVEMENT", "Combat achievement",
 			"Combat achievements", "Feats");
-		feedPlateRow(plate, firstNamed, "DEATH", "Death", "Deaths", "Deaths");
+		feedLine(plate, firstNamed, "DEATH", "Death", "Deaths", "Deaths");
 
 		if (plate.getComponentCount() == held)
 		{
@@ -792,7 +787,7 @@ final class RecapScreen extends Screen
 		return plate;
 	}
 
-	String splitSpend(String key, Map<String, Long> counters)
+	private String spend(String key, Map<String, Long> counters)
 	{
 		Span s = board.span();
 		if (!period.whole() && !period.session() && (s == null || !s.opening.counters.containsKey(key)))
@@ -803,19 +798,19 @@ final class RecapScreen extends Screen
 		return tail(spend);
 	}
 
-	void plateRow(JPanel plate, String left, String right, Runnable go)
+	private void line(JPanel plate, String left, String right, Runnable go)
 	{
 		JPanel r = row(left, right);
 		link(r, go);
 		plate.add(r);
 	}
 
-	void plateRow(JPanel plate, String left, Line right, Runnable go)
+	private void line(JPanel plate, String left, Line right, Runnable go)
 	{
 		String whole = right.whole();
 		String fitted = fitLine(right, right.names, NAME_FLOOR, rowMetrics(),
 			chaseRoom(left, rowMetrics()));
-		plateRow(plate, left, fitted != null ? fitted : whole, go);
+		line(plate, left, fitted != null ? fitted : whole, go);
 		if (fitted != null && !fitted.equals(whole))
 		{
 			((JPanel) plate.getComponent(plate.getComponentCount() - 1))
@@ -823,7 +818,7 @@ final class RecapScreen extends Screen
 		}
 	}
 
-	void feedPlateRow(JPanel plate, Map<String, String> named,
+	private void feedLine(JPanel plate, Map<String, String> named,
 		String type, String one, String many, String lens)
 	{
 		long n = board.stirred(type);
@@ -839,6 +834,6 @@ final class RecapScreen extends Screen
 			right.fixed(" · ");
 			right.name(name);
 		}
-		plateRow(plate, n == 1 ? one : many, right, () -> ui.openJournal(lens));
+		line(plate, n == 1 ? one : many, right, () -> ui.openJournal(lens));
 	}
 }
