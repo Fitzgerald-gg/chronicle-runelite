@@ -1,3 +1,6 @@
+/*
+ * Copyright (c) 2026, Chronicle. BSD 2-Clause (see LICENSE).
+ */
 package chronicle;
 
 import chronicle.LocalStore.BagItem;
