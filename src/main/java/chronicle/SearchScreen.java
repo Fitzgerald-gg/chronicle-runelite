@@ -28,7 +28,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.regex.Pattern;
 import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
 import net.runelite.api.Skill;
 import static chronicle.Feed.*;
 import static chronicle.Json.*;
@@ -155,7 +154,7 @@ final class SearchScreen extends Screen
 
 		List<Hit> tasks = new ArrayList<>();
 		final SlayerJourney journey = ui.slayer.journeyCache != null ? ui.slayer.journeyCache : board.historyJourney;
-		fetchJourneyForSearch();
+		ui.slayer.fetchJourney(true);
 		if (journey != null)
 		{
 			Map<String, int[]> byTask = new LinkedHashMap<>();
@@ -672,28 +671,5 @@ final class SearchScreen extends Screen
 		{
 			searchFirst = go;
 		}
-	}
-
-	void fetchJourneyForSearch()
-	{
-		if (ui.slayer.journeyFetching)
-		{
-			return;
-		}
-		ui.slayer.journeyFetching = true;
-		plugin.fetchSlayerJourney(j -> SwingUtilities.invokeLater(() ->
-		{
-			ui.slayer.journeyFetching = false;
-			if (j == null)
-			{
-				return;
-			}
-			boolean moved = Board.journeyMoved(ui.slayer.journeyCache != null ? ui.slayer.journeyCache : board.historyJourney, j);
-			ui.slayer.journeyCache = j;
-			if (moved && !ui.searchQuery().isEmpty())
-			{
-				ui.rebuildInPlace();
-			}
-		}));
 	}
 }

@@ -375,7 +375,6 @@ final class LootScreen extends Screen
 
 	String lootKind;
 
-	String lootTask;
 
 	boolean dropsByKind;
 
@@ -387,7 +386,6 @@ final class LootScreen extends Screen
 	{
 		dropsShown = ROW_CAP;
 		lootKind = null;
-		lootTask = null;
 	}
 
 	void forget()

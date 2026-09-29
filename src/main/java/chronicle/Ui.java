@@ -774,10 +774,11 @@ final class Ui
 		};
 	}
 
-	static void link(Component c, Runnable go)
+	static <T extends Component> T link(T c, Runnable go)
 	{
 		c.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		c.addMouseListener(clicker(go));
+		return c;
 	}
 
 	static JPanel ghostRow(String left, String right)
