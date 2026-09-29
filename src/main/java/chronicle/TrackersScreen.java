@@ -48,7 +48,7 @@ final class TrackersScreen extends Screen
 	private Map<String, Long> read()
 	{
 		consumables = store.consumableValues();
-		Map<String, Long> counters = board.countersForPeriod();
+		Map<String, Long> counters = board.counts.countersForPeriod();
 		resourcesDropped = counters == null ? 0 : counters.getOrDefault("resourcesDroppedValue", 0L);
 		return counters;
 	}
@@ -367,12 +367,12 @@ final class TrackersScreen extends Screen
 		String key = low(craft);
 		JPanel head = card(craft);
 		Span s = board.span();
-		Long now = board.liveXp(key);
+		Long now = board.skill.liveXp(key);
 		if (now == null && s != null)
 		{
 			now = s.closing.skills.get(key);
 		}
-		Long was = period.session() ? now == null ? null : Math.max(0, now - board.sessionXp(key))
+		Long was = period.session() ? now == null ? null : Math.max(0, now - board.skill.sessionXp(key))
 			: s == null ? null : s.opening.skills.get(key);
 		long gained = !period.whole() && was != null && now != null && now > was ? now - was : 0;
 		if (now != null && now > 0)
@@ -388,14 +388,14 @@ final class TrackersScreen extends Screen
 		{
 			head.add(row("Level", "-"));
 		}
-		long minutes = (period.whole() ? board.counters() : board.periodCounters()).getOrDefault(StatKeys.timeKey(craft), 0L);
-		if (minutes > 0 && board.minutesCoverPeriod())
+		long minutes = (period.whole() ? board.counts.counters() : board.counts.periodCounters()).getOrDefault(StatKeys.timeKey(craft), 0L);
+		if (minutes > 0 && board.counts.minutesCoverPeriod())
 		{
 			boolean rate = gained > 0 && minutes >= 30;
 			head.add(row("Time", hoursMinutes(minutes) + (rate ? " · " + gp(Math.round(gained * 60.0 / minutes)) + " xp/h" : "")));
 		}
 		spaced(p, head);
-		Map<String, Long> counters = board.countersForPeriod();
+		Map<String, Long> counters = board.counts.countersForPeriod();
 		if (counters == null)
 		{
 			p.add(board.noPeriod());
@@ -409,7 +409,7 @@ final class TrackersScreen extends Screen
 				rows.add(Map.entry(k, v));
 			}
 		});
-		List<SourceRow> ground = board.skillGround(craft);
+		List<SourceRow> ground = board.skill.skillGround(craft);
 		if (rows.isEmpty() && ground.isEmpty())
 		{
 			String unkept = board.notCounting(false);

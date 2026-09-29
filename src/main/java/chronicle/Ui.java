@@ -272,7 +272,7 @@ final class Ui
 		return sb.toString();
 	}
 
-	static long safeParse(String s)
+	private static long safeParse(String s)
 	{
 		try
 		{

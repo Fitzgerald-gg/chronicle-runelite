@@ -71,7 +71,7 @@ final class JournalScreen extends Screen
 			all = plugin.feedWithSitting(Board.JOURNAL_DEEP);
 		}
 		List<JsonObject> feed = new ArrayList<>();
-		board.withMilestones(all).stream().filter(e -> (wanted.isEmpty() || wanted.contains(typeOf(e))) && board.insideWindow(filedAt(e)))
+		board.days.withMilestones(all).stream().filter(e -> (wanted.isEmpty() || wanted.contains(typeOf(e))) && board.insideWindow(filedAt(e)))
 			.forEach(feed::add);
 		feed.sort((a, b) -> dayOf(filedAt(b)).compareTo(dayOf(filedAt(a))));
 		if (feed.isEmpty())
@@ -92,7 +92,7 @@ final class JournalScreen extends Screen
 				g.setAlignmentX(Component.LEFT_ALIGNMENT);
 				g.setBorder(pad(7, 2, 3, 0));
 				p.add(g);
-				String entry = board.dayEntry(dayOf(ts));
+				String entry = board.days.dayEntry(dayOf(ts));
 				if (entry != null)
 				{
 					wrapClauses(entry, boardRowRoom()).forEach(line -> p.add(ghostRow(line, "")));
@@ -143,7 +143,7 @@ final class JournalScreen extends Screen
 		{
 			plate.add(row("Total level", fmt(overall.level) + (combat > 0 ? " · combat " + combat : "")));
 		}
-		Fraction log = board.clogStanding();
+		Fraction log = board.clog.clogStanding();
 		int fin = plugin.clogFinished();
 		if (log != null)
 		{
@@ -153,7 +153,7 @@ final class JournalScreen extends Screen
 		{
 			plate.add(row("Collection log", fmt(fin) + " obtained"));
 		}
-		List<JsonObject> marks = board.milestones();
+		List<JsonObject> marks = board.days.milestones();
 		if (!marks.isEmpty())
 		{
 			JsonObject last = marks.get(0);
@@ -191,11 +191,11 @@ final class JournalScreen extends Screen
 		{
 			grid.add(styled(new JLabel(d, JLabel.CENTER), small(), DIM));
 		}
-		Map<LocalDate, Board.DayPlay> played = board.daysPlayed();
+		Map<LocalDate, DayQuery.DayPlay> played = board.days.daysPlayed();
 		long most = 1;
 		for (int d = 1; d <= calendarMonth.lengthOfMonth(); d++)
 		{
-			Board.DayPlay t = played.get(calendarMonth.atDay(d));
+			DayQuery.DayPlay t = played.get(calendarMonth.atDay(d));
 			most = Math.max(most, t == null ? 0 : t.minutes);
 		}
 		for (int i = 1; i < calendarMonth.atDay(1).getDayOfWeek().getValue(); i++)
@@ -207,7 +207,7 @@ final class JournalScreen extends Screen
 		for (int d = 1; d <= calendarMonth.lengthOfMonth(); d++)
 		{
 			LocalDate day = calendarMonth.atDay(d);
-			Board.DayPlay t = played.get(day);
+			DayQuery.DayPlay t = played.get(day);
 			boolean onSpine = board.historySpine != null && board.historySpine.containsKey(day);
 			minutes += t != null ? t.minutes : 0;
 			written += t != null && t.minutes > 0 || onSpine || t != null && t.sittings > 0 ? 1 : 0;
@@ -229,7 +229,7 @@ final class JournalScreen extends Screen
 		ui.rebuildInPlace();
 	}
 
-	private JPanel dayCell(LocalDate day, Board.DayPlay t, boolean onSpine, long most)
+	private JPanel dayCell(LocalDate day, DayQuery.DayPlay t, boolean onSpine, long most)
 	{
 		boolean future = day.isAfter(LocalDate.now());
 		JPanel cell = new JPanel(new BorderLayout());
@@ -293,7 +293,7 @@ final class JournalScreen extends Screen
 		}
 		Podium rich = new Podium();
 		Podium busy = new Podium();
-		for (Entry<String, Tally> d : board.dayTotals().entrySet())
+		for (Entry<String, Tally> d : board.loot.dayTotals().entrySet())
 		{
 			long ts;
 			try
@@ -317,7 +317,7 @@ final class JournalScreen extends Screen
 			record(book, "Most drops in a day", fmt(busy.best), busy.bestTs, gps(busy.bestAlso)
 				+ (busy.next > 0 ? " · was " + fmt(busy.next) + " · " + dated(busy.nextTs) : ""));
 		}
-		long hit = board.counters().getOrDefault("highestHit", 0L);
+		long hit = board.counts.counters().getOrDefault("highestHit", 0L);
 		if (hit > 0)
 		{
 			book.add(row("Highest hit", fmt(hit)));
@@ -350,7 +350,7 @@ final class JournalScreen extends Screen
 			if (before != null)
 			{
 				long ts = noon(day.getKey());
-				Board.XpGain gained = board.dayXp(day.getKey());
+				DayQuery.XpGain gained = board.days.dayXp(day.getKey());
 				if (xp.offer(gained == null ? 0 : gained.total, ts, 0))
 				{
 					xpSkill = gained.top;

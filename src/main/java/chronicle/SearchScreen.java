@@ -3,7 +3,7 @@
  */
 package chronicle;
 
-import chronicle.Board.Obtained;
+import chronicle.LogQuery.Obtained;
 import chronicle.LocalStore.BagItem;
 import chronicle.LocalStore.SourceRow;
 import chronicle.LocalStore.UntakenRow;
@@ -122,7 +122,7 @@ final class SearchScreen extends Screen
 			int ks = matchScore(ql, kind);
 			ks = ks < 0 || ks > 2 ? 2 : ks;
 			go.add(new Hit(kind, "every one you have had", null, null, () -> ui.openLootKind(kind, false), ks, 0));
-			if (board.everOnTask() && board.hasKindOnTask(kind))
+			if (board.loot.everOnTask() && board.loot.hasKindOnTask(kind))
 			{
 				go.add(new Hit(kind, "from slayer tasks", null, null, () -> ui.openLootKind(kind, true), ks, -1));
 			}
@@ -143,11 +143,11 @@ final class SearchScreen extends Screen
 			{
 				continue;
 			}
-			String open = board.bossLootSource(b);
+			String open = board.kills.bossLootSource(b);
 			kinds.add(kindOf(open));
 			SourceRow r = rows.get(open);
-			boolean own = r != null && kindOf(open).equals(kindOf(b.name)) && board.isKillSource(open);
-			long n = own ? board.standingKills(r) : board.bossKills(b.name);
+			boolean own = r != null && kindOf(open).equals(kindOf(b.name)) && board.kills.isKillSource(open);
+			long n = own ? board.kills.standingKills(r) : board.kills.bossKills(b.name);
 			fights.add(new Hit(b.name, n > 0 ? fmt(n) + " kc" : "-", null, r == null ? null : worth(r),
 				() -> ui.openSourceLoose(open), sc, n));
 		}
@@ -156,8 +156,8 @@ final class SearchScreen extends Screen
 			int sc = matchScore(ql, r.name);
 			if (sc >= 0 && kinds.add(kindOf(r.name)))
 			{
-				boolean killed = board.isKillSource(r.name);
-				long n = killed ? board.standingKills(r) : r.loots;
+				boolean killed = board.kills.isKillSource(r.name);
+				long n = killed ? board.kills.standingKills(r) : r.loots;
 				fights.add(new Hit(r.name, killed ? fmt(n) + " kc" : count(r.loots, "drop"), null, worth(r),
 					() -> ui.openSource(r.name), sc, n));
 			}
@@ -251,7 +251,7 @@ final class SearchScreen extends Screen
 	private List<Hit> logSlots(String ql)
 	{
 		List<Hit> log = new ArrayList<>();
-		Obtained ob = Board.obtained(board.clogNow());
+		Obtained ob = LogQuery.obtained(board.clogNow());
 		Set<String> seen = new HashSet<>();
 		for (Map<String, List<String>> tab : taxonomy(plugin.gson()).values())
 		{
@@ -259,11 +259,11 @@ final class SearchScreen extends Screen
 			{
 				String page = pg.getKey();
 				List<String> slots = pg.getValue();
-				boolean[] lit = Board.lightSlots(slots, ob.byPage.get(low(page)), ob.all, sharedSlotNames(plugin.gson()));
+				boolean[] lit = LogQuery.lightSlots(slots, ob.byPage.get(low(page)), ob.all, sharedSlotNames(plugin.gson()));
 				int ps = matchScore(ql, page);
 				if (ps >= 0)
 				{
-					log.add(new Hit(page, Board.lit(lit) + " / " + slots.size(), null, "The page", () -> ui.openLogPage(page), Math.max(0, ps - 1), 2));
+					log.add(new Hit(page, LogQuery.lit(lit) + " / " + slots.size(), null, "The page", () -> ui.openLogPage(page), Math.max(0, ps - 1), 2));
 				}
 				for (String slot : slots)
 				{
@@ -302,7 +302,7 @@ final class SearchScreen extends Screen
 
 	private List<Hit> combatTasks(String ql)
 	{
-		Set<Integer> done = board.caDone();
+		Set<Integer> done = board.clog.caDone();
 		List<Hit> hits = new ArrayList<>();
 		for (String id : CA_TASKS.keySet())
 		{
@@ -348,7 +348,7 @@ final class SearchScreen extends Screen
 	private List<Hit> trackers(String ql)
 	{
 		List<Hit> hits = new ArrayList<>();
-		board.withLedgerSpend(board.counters()).forEach((key, v) ->
+		board.counts.withLedgerSpend(board.counts.counters()).forEach((key, v) ->
 		{
 			String label = StatRegistry.label(key);
 			int sc = Math.min(score(matchScore(ql, label)), score(matchScore(ql, key)));
@@ -374,7 +374,7 @@ final class SearchScreen extends Screen
 		{
 			return hits;
 		}
-		for (Board.FeedLine line : board.searchFeed())
+		for (DayQuery.FeedLine line : board.days.searchFeed())
 		{
 			if (line.key.contains(qj))
 			{

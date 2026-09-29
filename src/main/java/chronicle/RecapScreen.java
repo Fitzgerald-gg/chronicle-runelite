@@ -139,7 +139,7 @@ final class RecapScreen extends Screen
 				end = cur != null ? Long.valueOf(cur.xp) : null;
 				if (f.session && end != null)
 				{
-					start = Math.max(0, end - board.sessionXp(key));
+					start = Math.max(0, end - board.skill.sessionXp(key));
 				}
 			}
 			if (end == null)
@@ -209,21 +209,21 @@ final class RecapScreen extends Screen
 		{
 			if (f.whole)
 			{
-				long k = board.bossKills(b.name);
+				long k = board.kills.bossKills(b.name);
 				if (k > 0)
 				{
 					f.bosses.add(new RecapPicture.BossLine(b.name, b.sprite, null, k, k));
 				}
 				continue;
 			}
-			long moved = board.bossKillsInWindow(b.name);
+			long moved = board.kills.bossKillsInWindow(b.name);
 			if (moved <= 0)
 			{
 				continue;
 			}
 			Long start = null;
 			Long end = null;
-			String key = closing == null ? null : keyOf(board.movedKcs(s).keySet(), b.name);
+			String key = closing == null ? null : keyOf(board.kills.movedKcs(s).keySet(), b.name);
 			if (key != null)
 			{
 				end = closing.get(key);
@@ -277,15 +277,15 @@ final class RecapScreen extends Screen
 			by.putAll(HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
 				board.closingNow(s.closing.kcs, plugin.killCounts())));
 			Window w = board.window();
-			worth.putAll(board.periodWorth(w.start, w.end));
+			worth.putAll(board.loot.periodWorth(w.start, w.end));
 		}
-		Map<String, Long> loose = Board.loosely(worth);
+		Map<String, Long> loose = LootQuery.loosely(worth);
 		List<Entry<String, Long>> kept = new ArrayList<>();
-		by.entrySet().stream().filter(e -> e.getValue() > 0 && board.recapMonster(e.getKey())).forEach(kept::add);
+		by.entrySet().stream().filter(e -> e.getValue() > 0 && board.kills.recapMonster(e.getKey())).forEach(kept::add);
 		kept.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
 		for (Entry<String, Long> e : kept.subList(0, Math.min(10, kept.size())))
 		{
-			long paid = Board.paidFor(worth, loose, e.getKey());
+			long paid = LootQuery.paidFor(worth, loose, e.getKey());
 			f.monsters.add(new RecapPicture.Named(e.getKey(), fmt(e.getValue()), paid > 0 ? gps(paid) : null));
 		}
 		if (f.session && !f.monsters.isEmpty())
@@ -305,7 +305,7 @@ final class RecapScreen extends Screen
 				return;
 			}
 		}
-		LootDays.LootWindow loot = board.periodLoot();
+		LootDays.LootWindow loot = board.loot.periodLoot();
 		if (loot.loots > 0)
 		{
 			f.loot.add(new RecapPicture.Named("Drops", fmt(loot.loots), gps(loot.value)));
@@ -336,7 +336,7 @@ final class RecapScreen extends Screen
 			}
 			return;
 		}
-		LootDays.LootWindow win = board.lootWindow();
+		LootDays.LootWindow win = board.loot.lootWindow();
 		firstN(win.sources, 8).stream().filter(r -> r.value > 0)
 			.forEach(r -> f.sources.add(new RecapPicture.Named(r.name, null, gps(r.value))));
 		firstN(win.items, 6).stream().filter(r -> r.value > 0)
@@ -349,7 +349,7 @@ final class RecapScreen extends Screen
 
 	private void slayerAndClues(RecapPicture.Facts f)
 	{
-		SlayerLog.TaskTally tally = board.taskTally();
+		SlayerLog.TaskTally tally = board.loot.taskTally();
 		long paid = tally.loot;
 		if (tally.tasks > 0)
 		{
@@ -368,7 +368,7 @@ final class RecapScreen extends Screen
 			String source = "Clue Scroll (" + tier + ")";
 			long n = 0;
 			long v = 0;
-			SourceRow r = board.clue(tier);
+			SourceRow r = board.kills.clue(tier);
 			if (f.whole && r != null)
 			{
 				n = Math.max(r.kc, r.loots);
@@ -376,8 +376,8 @@ final class RecapScreen extends Screen
 			}
 			else if (!f.whole)
 			{
-				n = board.rolled(source);
-				v = board.sourceInWindow(source).value;
+				n = board.loot.rolled(source);
+				v = board.loot.sourceInWindow(source).value;
 			}
 			if (n > 0)
 			{
@@ -392,7 +392,7 @@ final class RecapScreen extends Screen
 
 	private void trackers(RecapPicture.Facts f)
 	{
-		Map<String, Long> counters = board.countersForPeriod();
+		Map<String, Long> counters = board.counts.countersForPeriod();
 		if (counters == null)
 		{
 			f.trackersNote = board.notCounting(false) != null ? "The record keeps no counters this far back."
@@ -449,7 +449,7 @@ final class RecapScreen extends Screen
 		{
 			named.put(k, new ArrayList<>());
 		}
-		for (JsonObject m : board.milestones())
+		for (JsonObject m : board.days.milestones())
 		{
 			if (board.insideWindow(asLong(m.get("ts"))) && m.has("data"))
 			{
@@ -537,7 +537,7 @@ final class RecapScreen extends Screen
 
 	private void tiles(RecapPicture.Facts f)
 	{
-		Board.Sittings sat = board.sittingsInWindow();
+		DayQuery.Sittings sat = board.days.sittingsInWindow();
 		long minutes = sat.minutes;
 		int sittings = (int) sat.count;
 		long games = f.whole ? plugin.gamePlaytimeMinutes() : 0;
@@ -549,10 +549,10 @@ final class RecapScreen extends Screen
 		{
 			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(minutes), count(sittings, "sitting")));
 		}
-		Long xp = board.periodXp();
+		Long xp = board.skill.periodXp();
 		if (xp != null && xp > 0)
 		{
-			String most = board.periodXpMost();
+			String most = board.skill.periodXpMost();
 			f.tiles.add(new RecapPicture.Tile("Experience", (f.whole ? "" : "+") + gp(xp),
 				most == null ? null : "most in " + most));
 		}
@@ -625,7 +625,7 @@ final class RecapScreen extends Screen
 		JPanel plate = card(period.whole() ? "The whole record" : board.window().label);
 		int held = plate.getComponentCount();
 
-		Board.Sittings sat = board.sittingsInWindow();
+		DayQuery.Sittings sat = board.days.sittingsInWindow();
 		long minutes = sat.minutes;
 		int sittings = (int) sat.count;
 		if (sittings > 0)
@@ -641,15 +641,15 @@ final class RecapScreen extends Screen
 				() -> ui.openJournalOn(noon(day)));
 		}
 
-		Long xp = board.periodXp();
+		Long xp = board.skill.periodXp();
 		if (xp != null && xp > 0)
 		{
-			String most = board.periodXpMost();
+			String most = board.skill.periodXpMost();
 			line(plate, period.whole() ? "Xp" : "Xp gained", (period.whole() ? "" : "+") + gp(xp) + " xp"
 					+ (most != null ? ", most in " + most : ""),
 				() -> ui.show(ChroniclePanel.View.STANDING));
 		}
-		Board.Climb levels = board.periodLevels();
+		SkillQuery.Climb levels = board.skill.periodLevels();
 		if (levels != null)
 		{
 			line(plate, period.whole() ? "Total level" : "Levels",
@@ -657,12 +657,12 @@ final class RecapScreen extends Screen
 				() -> ui.show(ChroniclePanel.View.STANDING));
 		}
 
-		LootDays.LootWindow loot = board.periodLoot();
+		LootDays.LootWindow loot = board.loot.periodLoot();
 		if (loot.loots > 0)
 		{
 			line(plate, "Drops", qtyGp(loot.loots, loot.value), () -> ui.show(ChroniclePanel.View.LOOT));
 		}
-		Tally dearest = board.periodDearest();
+		Tally dearest = board.loot.periodDearest();
 		if (dearest != null)
 		{
 			Line said = new Line();
@@ -675,7 +675,7 @@ final class RecapScreen extends Screen
 			line(plate, "Left behind", qtyGp(loot.left, loot.leftValue), () -> ui.openLeftBehind(null));
 		}
 
-		Map<String, Long> counters = period.whole() ? board.withLedgerSpend(board.counters()) : board.periodCounters();
+		Map<String, Long> counters = period.whole() ? board.counts.withLedgerSpend(board.counts.counters()) : board.counts.periodCounters();
 		Runnable toLiving = () -> ui.openLedger("Living");
 		long food = counters.getOrDefault("foodEaten", 0L);
 		if (food > 0)
@@ -690,7 +690,7 @@ final class RecapScreen extends Screen
 				+ spend("potionsConsumedValue", counters), toLiving);
 		}
 
-		Tally killed = board.periodKilledMost();
+		Tally killed = board.kills.periodKilledMost();
 		if (killed != null)
 		{
 			Line said = new Line();
@@ -698,7 +698,7 @@ final class RecapScreen extends Screen
 			said.fixed(" · " + fmt(killed.qty));
 			line(plate, "Killed most", said, () -> ui.openSourceLoose(killed.name));
 		}
-		SlayerLog.TaskTally tally = board.taskTally();
+		SlayerLog.TaskTally tally = board.loot.taskTally();
 		if (tally.tasks > 0)
 		{
 			line(plate, "Tasks", fmt(tally.tasks) + tail(tally.loot), () -> ui.openSlayer("Tasks"));
@@ -759,7 +759,7 @@ final class RecapScreen extends Screen
 
 	private void feedLine(JPanel plate, Map<String, String> named, String type, String one, String many, String lens)
 	{
-		long n = board.stirred(type);
+		long n = board.days.stirred(type);
 		if (n == 0)
 		{
 			return;

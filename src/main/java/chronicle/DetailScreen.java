@@ -82,7 +82,7 @@ final class DetailScreen extends Screen
 				}
 			}
 		}
-		Tally headRow = period.whole() ? null : Tally.find(board.lootWindow().items, name, false);
+		Tally headRow = period.whole() ? null : Tally.find(board.loot.lootWindow().items, name, false);
 		Tally inWindow = period.whole() ? null : headRow != null ? headRow : new Tally(name);
 		long other = 0;
 		long otherValue = 0;
@@ -92,7 +92,7 @@ final class DetailScreen extends Screen
 			other = inWindow.qty;
 			otherValue = inWindow.value;
 			String spelled = inWindow.name;
-			for (Map.Entry<String, List<BagItem>> e : board.periodItems().entrySet())
+			for (Map.Entry<String, List<BagItem>> e : board.loot.periodItems().entrySet())
 			{
 				for (BagItem b : e.getValue())
 				{
@@ -118,14 +118,14 @@ final class DetailScreen extends Screen
 			plugin.items().getImage(itemId, (int) Math.min(Integer.MAX_VALUE, Math.max(1, qty)), qty > 1).addTo(slot);
 			head.add(slot);
 		}
-		String onTaskAs = keyOf(board.taskItemsEver().keySet(), name);
+		String onTaskAs = keyOf(board.loot.taskItemsEver().keySet(), name);
 		String proper = onTaskAs == null ? name : onTaskAs;
-		boolean hasTask = board.taskItemsEver().containsKey(proper);
+		boolean hasTask = board.loot.taskItemsEver().containsKey(proper);
 		boolean onTask = hasTask && ui.loot.onTaskOnly;
 		if (onTask)
 		{
-			Range tw = board.range();
-			Tally mine = inWindow == null ? board.taskItemsEver().get(proper)
+			Interval tw = board.range();
+			Tally mine = inWindow == null ? board.loot.taskItemsEver().get(proper)
 				: store.slayer.onTaskItems(tw.from, tw.to).getOrDefault(proper, new Tally(proper));
 			head.add(row("Obtained on task", "×" + fmt(mine.qty), ACCENT));
 			if (inWindow == null || lootSince() == null)
@@ -197,7 +197,7 @@ final class DetailScreen extends Screen
 
 	private JPanel byTask(JPanel p, String name)
 	{
-		Range w = board.range();
+		Interval w = board.range();
 		List<Tally> split = store.slayer.onTaskItemByTask(name, w.from, w.to);
 		if (split.isEmpty())
 		{
@@ -251,10 +251,10 @@ final class DetailScreen extends Screen
 	{
 		JPanel p = column();
 		SourceRow sr = find(board.sources(), r -> r.name, name, false);
-		Tally row = period.whole() ? null : Tally.find(board.lootWindow().sources, sr != null ? sr.name : name, sr != null);
+		Tally row = period.whole() ? null : Tally.find(board.loot.lootWindow().sources, sr != null ? sr.name : name, sr != null);
 		Tally inWindow = period.whole() ? null : row != null ? row : new Tally(name);
 		String own = row != null ? row.name : sr != null ? sr.name : name;
-		List<BagItem> bag = inWindow == null ? store.sourceItems(own) : new ArrayList<>(board.periodItems().getOrDefault(own, List.of()));
+		List<BagItem> bag = inWindow == null ? store.sourceItems(own) : new ArrayList<>(board.loot.periodItems().getOrDefault(own, List.of()));
 		bag.sort(Comparator.comparingLong((BagItem b) -> b.value).reversed());
 		long other = inWindow == null ? 0 : inWindow.value - Tally.of(bag).value;
 		boolean unfiled = other > 0 || inWindow != null && !period.session()
@@ -302,8 +302,8 @@ final class DetailScreen extends Screen
 
 	private void sourceHead(JPanel head, SourceRow sr, String own, Tally inWindow)
 	{
-		boolean killed = board.isKillSource(sr.name);
-		long shown = inWindow != null ? inWindow.qty : killed ? board.standingKills(sr) : sr.loots;
+		boolean killed = board.kills.isKillSource(sr.name);
+		long shown = inWindow != null ? inWindow.qty : killed ? board.kills.standingKills(sr) : sr.loots;
 		head.add(row(killed ? "Kills" : "Times looted", fmt(shown), ACCENT));
 		long worth = inWindow != null ? inWindow.value : sr.value;
 		long over = inWindow != null ? inWindow.qty : sr.loots;
@@ -316,11 +316,11 @@ final class DetailScreen extends Screen
 			}
 			addFloorRow(head, sr.name);
 		}
-		board.pageLines(sr.name, "pb_lines").forEach(ln -> head.add(row(ln.getKey(), clock(ln.getValue()))));
-		board.logLines(sr.name).forEach(ln -> head.add(row(ln.getKey(), fmt(ln.getValue()))));
+		board.kills.pageLines(sr.name, "pb_lines").forEach(ln -> head.add(row(ln.getKey(), clock(ln.getValue()))));
+		board.kills.logLines(sr.name).forEach(ln -> head.add(row(ln.getKey(), fmt(ln.getValue()))));
 		if (sr.pb != null)
 		{
-			JsonObject rec = board.records().get(low(sr.name));
+			JsonObject rec = board.days.records().get(low(sr.name));
 			JPanel best = row("Personal best", pb(sr.pb) + (rec != null ? " · set " + day(asLong(rec.get("ts"))) : ""));
 			JsonObject data = rec != null ? obj(rec, "data") : new JsonObject();
 			if (data.has("was"))
@@ -330,13 +330,13 @@ final class DetailScreen extends Screen
 			head.add(best);
 		}
 		LootDays.Timing timed = inWindow == null ? LootDays.Timing.of(sr.timed, sr.timeSum)
-			: board.lootWindow().times.getOrDefault(own, new LootDays.Timing());
+			: board.loot.lootWindow().times.getOrDefault(own, new LootDays.Timing());
 		if (timed.kills > 0)
 		{
 			head.add(row("Average kill", pb(timed.seconds / timed.kills) + " · " + fmt(timed.kills) + " timed"));
 		}
-		long here = board.minutesAt(sr.name, inWindow == null ? board.counters() : board.periodCounters());
-		if (here > 0 && board.minutesCoverPeriod())
+		long here = board.counts.minutesAt(sr.name, inWindow == null ? board.counts.counters() : board.counts.periodCounters());
+		if (here > 0 && board.counts.minutesCoverPeriod())
 		{
 			boolean rate = killed && shown > 0 && here >= 30;
 			head.add(row("Time here", hoursMinutes(here) + (rate ? " · " + rateText(shown * 60.0 / here) + " kills/h" : "")));
@@ -359,7 +359,7 @@ final class DetailScreen extends Screen
 		{
 			rows.put("Drops logged", (long) sr.loots);
 		}
-		Long dropped = board.taskKillsEver().get(sr.name);
+		Long dropped = board.kills.taskKillsEver().get(sr.name);
 		if (dropped != null && dropped > 0)
 		{
 			rows.put("Dropped on task", dropped);
@@ -386,7 +386,7 @@ final class DetailScreen extends Screen
 
 	private void addAssignments(JPanel p, String npc)
 	{
-		Range w = board.range();
+		Interval w = board.range();
 		List<SlayerLog.Assignment> was = store.slayer.onTaskAssignments(npc, w.from, w.to);
 		if (was.isEmpty())
 		{

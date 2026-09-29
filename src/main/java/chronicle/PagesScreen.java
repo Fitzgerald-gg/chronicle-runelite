@@ -3,7 +3,7 @@
 */
 package chronicle;
 
-import chronicle.Board.Obtained;
+import chronicle.LogQuery.Obtained;
 import chronicle.LocalStore.SourceRow;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -60,7 +60,7 @@ final class PagesScreen extends Screen
 		List<SourceRow> mine = new ArrayList<>();
 		for (String tier : CLUE_TIERS)
 		{
-			SourceRow r = board.clue(tier);
+			SourceRow r = board.kills.clue(tier);
 			if (r != null)
 			{
 				mine.add(r);
@@ -81,7 +81,7 @@ final class PagesScreen extends Screen
 		p.add(group("BY TIER"));
 		for (String tier : CLUE_TIERS)
 		{
-			SourceRow r = board.clue(tier);
+			SourceRow r = board.kills.clue(tier);
 			if (r == null)
 			{
 				p.add(row(tier, "-", DIM, true));
@@ -151,7 +151,7 @@ final class PagesScreen extends Screen
 		JPanel head = card("Achievement diaries");
 		if (known)
 		{
-			Board.Diaries d = board.diaryStanding();
+			LogQuery.Diaries d = board.clog.diaryStanding();
 			head.add(row("Tiers done", d.tiers.done + " / " + d.tiers.of, ACCENT));
 			head.add(row("Regions finished", fmt(d.regions.done) + " / " + fmt(d.regions.of)));
 		}
@@ -215,11 +215,11 @@ final class PagesScreen extends Screen
 	private void buildCombatAchievements(JPanel p)
 	{
 		JsonObject all = CA_TASKS;
-		Board.Combat c = board.combatStanding();
+		LogQuery.Combat c = board.clog.combatStanding();
 		JPanel head = card("Combat achievements");
 		head.add(row("Points", c.points.of > 0 ? fmt(c.points.done) + " / " + fmt(c.points.of) : fmt(c.points.done), ACCENT));
 		head.add(row("Tiers unlocked", fmt(c.tiers) + " / 6"));
-		Set<Integer> done = board.caDone();
+		Set<Integer> done = board.clog.caDone();
 		boolean known = !done.isEmpty();
 		long named = done.stream().filter(id -> all.has(String.valueOf(id))).count();
 		long unnamed = done.size() - named;
@@ -304,7 +304,7 @@ final class PagesScreen extends Screen
 		pills.setBackground(DARK);
 		for (String tab : tax.keySet())
 		{
-			pills.add(pill(tab, tab.equals(clogTab), 4, board.tabStanding(board.clogNow(), tab), () ->
+			pills.add(pill(tab, tab.equals(clogTab), 4, LogQuery.tabStanding(board.clogNow(), tab), () ->
 			{
 				clogTab = tab;
 				clogPageSel = null;
@@ -313,8 +313,8 @@ final class PagesScreen extends Screen
 		}
 		spaced(p, pills);
 		JsonObject cl = board.clogNow();
-		Obtained ob = Board.obtained(cl);
-		Map<String, Long> kcs = Board.pageCounts(cl);
+		Obtained ob = LogQuery.obtained(cl);
+		Map<String, Long> kcs = LogQuery.pageCounts(cl);
 		tax.getOrDefault(clogTab, new LinkedHashMap<>()).entrySet().forEach(pg ->
 			logPage(p, cl, ob, kcs, pg.getKey(), pg.getValue()));
 		if ("Other".equals(clogTab))
@@ -326,7 +326,7 @@ final class PagesScreen extends Screen
 
 	private JPanel logHead()
 	{
-		Fraction standing = board.clogStanding();
+		Fraction standing = board.clog.clogStanding();
 		int fin = plugin.clogFinished();
 		JPanel head = card("Collection log");
 		if (standing != null)
@@ -348,14 +348,14 @@ final class PagesScreen extends Screen
 
 	private void logPage(JPanel p, JsonObject cl, Obtained ob, Map<String, Long> kcs, String page, List<String> slots)
 	{
-		boolean[] lit = Board.lightSlots(slots, ob.byPage.get(low(page)), ob.all, sharedSlotNames(plugin.gson()));
-		int got = Board.lit(lit);
+		boolean[] lit = LogQuery.lightSlots(slots, ob.byPage.get(low(page)), ob.all, sharedSlotNames(plugin.gson()));
+		int got = LogQuery.lit(lit);
 		Long kc = kcs.get(low(page));
 		boolean open = page.equals(clogPageSel);
 		boolean complete = got == slots.size() && !slots.isEmpty();
 		JPanel head = row(page, got + "/" + slots.size() + (kc != null && kc > 0 ? " · " + fmt(kc) + " kc" : ""),
 			complete ? GREEN : null, complete);
-		head.setToolTipText(Board.pageHeaderTip(cl, page));
+		head.setToolTipText(LogQuery.pageHeaderTip(cl, page));
 		link(head, () ->
 		{
 			clogPageSel = open ? null : page;
@@ -372,14 +372,14 @@ final class PagesScreen extends Screen
 	{
 		JPanel drill = cardPlain();
 		boolean pets = low(page).contains("pet");
-		Map<String, LocalStore.PetRow> known = pets ? board.petsByName() : Collections.emptyMap();
+		Map<String, LocalStore.PetRow> known = pets ? board.clog.petsByName() : Collections.emptyMap();
 		List<List<JPanel>> detail = new ArrayList<>();
 		for (int i = 0; i < slots.size(); i++)
 		{
 			String key = low(slots.get(i));
 			detail.add(petDetail(known.get(key)));
 		}
-		Map<String, Long> landed = board.landedSlots();
+		Map<String, Long> landed = board.days.landedSlots();
 		for (int i = 0; i < slots.size(); i++)
 		{
 			String slot = slots.get(i);

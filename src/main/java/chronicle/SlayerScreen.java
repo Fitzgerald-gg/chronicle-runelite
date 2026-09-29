@@ -94,7 +94,7 @@ final class SlayerScreen extends Screen
 			journeyCache = j;
 			boolean shown = forSearch ? !ui.searchQuery().isEmpty()
 				: ui.view == ChroniclePanel.View.SLAYER && "Tasks".equals(slayerLens);
-			if (shown && Board.journeyMoved(was, j))
+			if (shown && SlayerLog.journeyMoved(was, j))
 			{
 				ui.rebuildInPlace();
 			}
@@ -146,7 +146,7 @@ final class SlayerScreen extends Screen
 
 	private JPanel onTaskLoot(JPanel p)
 	{
-		Range ms = board.range();
+		Interval ms = board.range();
 		List<BagItem> bag = store.slayer.onTaskLoot(ms.from, ms.to, taskFilter, period.whole());
 		if (bag.isEmpty() || ui.loot.lootKind != null)
 		{

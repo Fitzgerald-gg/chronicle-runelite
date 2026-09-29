@@ -6,7 +6,7 @@ package chronicle;
 import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
-final class Range
+final class Interval
 {
 	final long from;
 	final long to;

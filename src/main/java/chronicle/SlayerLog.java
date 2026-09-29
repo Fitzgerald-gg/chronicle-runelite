@@ -547,4 +547,11 @@ final class SlayerLog
 		public final long totalValue;
 		public final boolean inProgress;
 	}
+
+	static boolean journeyMoved(SlayerJourney was, SlayerJourney now)
+	{
+		return was == null || was.completedTasks != now.completedTasks || was.totalKills != now.totalKills
+			|| was.tasks.size() != now.tasks.size()
+			|| !was.tasks.isEmpty() && was.tasks.get(0).kills != now.tasks.get(0).kills;
+	}
 }

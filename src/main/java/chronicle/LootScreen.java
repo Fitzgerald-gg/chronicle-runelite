@@ -3,7 +3,7 @@
  */
 package chronicle;
 
-import chronicle.Board.Kind;
+import chronicle.LootQuery.Kind;
 import chronicle.LocalStore.BagItem;
 import chronicle.LocalStore.SourceRow;
 import chronicle.LocalStore.UntakenRow;
@@ -45,7 +45,7 @@ final class LootScreen extends Screen
 			axes.add(toggle(!dropsByKind ? "By source" : dropsLeftBehind ? "By item" : "By kind",
 				relens(() -> dropsByKind = !dropsByKind)));
 		}
-		boolean askOnTask = !dropsLeftBehind && dropsByKind && board.everOnTask();
+		boolean askOnTask = !dropsLeftBehind && dropsByKind && board.loot.everOnTask();
 		if (askOnTask)
 		{
 			axes.add(toggle(onTaskOnly ? "On task" : "All", relens(() -> onTaskOnly = !onTaskOnly)));
@@ -56,7 +56,7 @@ final class LootScreen extends Screen
 		spaced(p, lens);
 		if (askOnTask && onTaskOnly)
 		{
-			Range w = board.range();
+			Interval w = board.range();
 			List<BagItem> bag = store.slayer.onTaskLoot(w.from, w.to, null, period.whole());
 			return bag.isEmpty() ? noted(p, board.inside("No task closed"))
 				: kindLens(p, period.whole() ? "On-task loot" : "Tasks closed in " + board.window().label, bag, "ontask:");
@@ -86,8 +86,8 @@ final class LootScreen extends Screen
 		spaced(p, head);
 		for (SourceRow r : firstN(sources, dropsShown))
 		{
-			boolean killed = board.isKillSource(r.name);
-			String under = (killed ? fmt(board.standingKills(r)) + " kc" : count(r.loots, "drop"))
+			boolean killed = board.kills.isKillSource(r.name);
+			String under = (killed ? fmt(board.kills.standingKills(r)) + " kc" : count(r.loots, "drop"))
 				+ (r.pb != null ? " · PB " + pb(r.pb) : "");
 			listCard(p, row(r.name, gps(r.value), ACCENT), under,
 				r.loots > 0 ? perOne(r.value, r.loots, killed) : "", () -> ui.openSource(r.name));
@@ -217,7 +217,7 @@ final class LootScreen extends Screen
 
 	void addKindRows(JPanel p, List<BagItem> bag)
 	{
-		for (Kind k : Board.kindsOf(bag))
+		for (Kind k : LootQuery.kindsOf(bag))
 		{
 			JPanel r = row(k.name, qtyGp(k.qty, k.value), ACCENT);
 			r.setToolTipText(count(k.distinct, "distinct item"));

@@ -378,7 +378,7 @@ class ChroniclePanel extends PluginPanel
 
 	void openSourceLoose(String name)
 	{
-		openSource(board.resolveSource(name));
+		openSource(board.kills.resolveSource(name));
 	}
 
 	void openSkill(String craft)
@@ -441,7 +441,7 @@ class ChroniclePanel extends PluginPanel
 
 	void openActivity(String source)
 	{
-		if (board.resolveSourceNamed(source) != null || !openLogPage(source))
+		if (board.kills.resolveSourceNamed(source) != null || !openLogPage(source))
 		{
 			openSourceLoose(source);
 		}

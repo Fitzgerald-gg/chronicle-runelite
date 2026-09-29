@@ -3,7 +3,7 @@
  */
 package chronicle;
 
-import chronicle.Board.SkillStand;
+import chronicle.SkillQuery.SkillStand;
 import chronicle.HistoryLog.Baseline;
 import chronicle.LocalStore.SourceRow;
 import chronicle.Period.Window;
@@ -104,12 +104,12 @@ final class StandingScreen extends Screen
 		{
 			Map<String, Long> openXp = new HashMap<>(closesOn);
 			gains.forEach((key, xp) -> openXp.computeIfPresent(key, (k, had) -> Math.max(0, had - xp)));
-			opening = Board.baselineAt(openXp);
-			closing = Board.baselineAt(closesOn);
+			opening = SkillQuery.baselineAt(openXp);
+			closing = SkillQuery.baselineAt(closesOn);
 		}
-		SkillStand stand = board.skillStand(closing, live);
+		SkillStand stand = board.skill.skillStand(closing, live);
 		HistoryLog.Levels opened = HistoryLog.levels(opening, stand.keys);
-		Board.Sittings played = played(w);
+		DayQuery.Sittings played = played(w);
 		periodTip = tip(period.session() ? "This sitting" : period.whole() ? "Lifetime" : "The period",
 			"Time played", hoursMinutes(played.minutes),
 			"Sessions", fmt(played.count),
@@ -149,12 +149,12 @@ final class StandingScreen extends Screen
 		return out;
 	}
 
-	private Board.Sittings played(Window w)
+	private DayQuery.Sittings played(Window w)
 	{
-		Range ms = board.range();
+		Interval ms = board.range();
 		long fromMs = period.session() ? ms.from : startMs(w.start);
 		long toMs = period.session() ? ms.to : startMs(w.end.plusDays(1));
-		Board.Sittings played = new Board.Sittings();
+		DayQuery.Sittings played = new DayQuery.Sittings();
 		long oldest = oldestTs(board.historyFeed, false);
 		if (oldest > 0 && oldest < fromMs || period.whole())
 		{
@@ -267,7 +267,7 @@ final class StandingScreen extends Screen
 
 	private String skillTip(String craft)
 	{
-		Map<String, Long> now = board.periodCounters();
+		Map<String, Long> now = board.counts.periodCounters();
 		List<String> lines = new ArrayList<>();
 		List<Entry<String, Long>> named = new ArrayList<>();
 		for (String key : StatRegistry.headlines(craft))
@@ -296,7 +296,7 @@ final class StandingScreen extends Screen
 
 	private String slayerTip()
 	{
-		SlayerLog.TaskTally tally = board.taskTally();
+		SlayerLog.TaskTally tally = board.loot.taskTally();
 		return tip("Slayer", "Tasks tracked", fmt(tally.tasks), "Kills on task", fmt(tally.kills), "On-task loot", gps(tally.loot));
 	}
 
@@ -309,8 +309,8 @@ final class StandingScreen extends Screen
 		boolean moved = Arrays.stream(COMBAT_SKILLS).anyMatch(sk -> gains.getOrDefault(low(sk.name()), 0L) > 0);
 		cell.add(styled(new JLabel(cb > 0 ? climbed ? climb(was, cb) : fmt(cb) : "-", JLabel.RIGHT), small(),
 			cb > 0 && (period.whole() || moved) ? LIT : DIM), BorderLayout.EAST);
-		Map<String, Long> c = board.counters();
-		Board.Combat ca = board.combatStanding();
+		Map<String, Long> c = board.counts.counters();
+		LogQuery.Combat ca = board.clog.combatStanding();
 		cell.setToolTipText(tip("Combat",
 			"Achievement points", ca.points.of > 0 ? fmt(ca.points.done) + " / " + fmt(ca.points.of) : fmt(ca.points.done),
 			"Tiers unlocked", fmt(ca.tiers) + " / 6",
@@ -350,7 +350,7 @@ final class StandingScreen extends Screen
 				long worth = 0;
 				for (String tier : CLUE_TIERS)
 				{
-					SourceRow r = board.clue(tier);
+					SourceRow r = board.kills.clue(tier);
 					long n = r == null ? 0 : Math.max(r.kc, r.loots);
 					all += n;
 					worth += r == null ? 0 : r.value;
@@ -364,7 +364,7 @@ final class StandingScreen extends Screen
 			case "Collections":
 			{
 				figure = plugin.clogFinished();
-				Fraction log = board.clogStanding();
+				Fraction log = board.clog.clogStanding();
 				hover = tip("Collection log", "Obtained", fmt(figure), "Available", log != null ? fmt(log.of) : "not yet",
 					"Share", log != null ? share(log.done, log.of) : "-");
 				break;
@@ -380,7 +380,7 @@ final class StandingScreen extends Screen
 			}
 			case "Diaries":
 			{
-				Board.Diaries d = board.diaryStanding();
+				LogQuery.Diaries d = board.clog.diaryStanding();
 				figure = d.tiers.done;
 				hover = tip("Achievement diaries", "Tiers done", d.tiers.done + " / " + d.tiers.of, "Regions finished",
 					fmt(d.regions.done), "Regions", fmt(d.regions.of));
@@ -388,8 +388,8 @@ final class StandingScreen extends Screen
 			}
 			default:
 			{
-				long named = board.namedLine(source, label);
-				figure = named > 0 ? named : board.bossKills(source);
+				long named = board.kills.namedLine(source, label);
+				figure = named > 0 ? named : board.kills.bossKills(source);
 				hover = tip(label, "Count", fmt(figure));
 			}
 		}
@@ -446,16 +446,16 @@ final class StandingScreen extends Screen
 		switch (label)
 		{
 			case "Collections":
-				return board.stirred("COLLECTION");
+				return board.days.stirred("COLLECTION");
 			case "Quests":
-				return board.stirred("QUEST");
+				return board.days.stirred("QUEST");
 			case "Diaries":
-				return board.stirred("DIARY");
+				return board.days.stirred("DIARY");
 			case "Clues":
-				return Arrays.stream(CLUE_TIERS).mapToLong(t -> board.rolled("Clue Scroll (" + t + ")")).sum();
+				return Arrays.stream(CLUE_TIERS).mapToLong(t -> board.loot.rolled("Clue Scroll (" + t + ")")).sum();
 			default:
-				long rolled = source.isEmpty() ? 0 : board.rolled(source);
-				return rolled > 0 && board.namedLine(source, label) > 0 ? -1 : rolled;
+				long rolled = source.isEmpty() ? 0 : board.loot.rolled(source);
+				return rolled > 0 && board.kills.namedLine(source, label) > 0 ? -1 : rolled;
 		}
 	}
 
@@ -475,7 +475,7 @@ final class StandingScreen extends Screen
 		}
 		if (!period.whole())
 		{
-			roster.removeIf(b -> board.bossKillsInWindow(b.name) <= 0);
+			roster.removeIf(b -> board.kills.bossKillsInWindow(b.name) <= 0);
 			if (roster.isEmpty())
 			{
 				String unkept = board.notCounting(true);
@@ -484,7 +484,7 @@ final class StandingScreen extends Screen
 		}
 		JPanel grid = grid3();
 		roster.forEach(b -> grid.add(bossCell(b)));
-		LocalDate shortFrom = board.rollUsed ? board.rollShortOf() : null;
+		LocalDate shortFrom = board.rollUsed ? board.loot.rollShortOf() : null;
 		if (shortFrom != null)
 		{
 			spaced(p, note("Kills the journal cannot date are counted from loot instead, which reaches back only to "
@@ -496,7 +496,7 @@ final class StandingScreen extends Screen
 
 	private JPanel bossCell(Boss b)
 	{
-		long kc = board.bossKillsInWindow(b.name);
+		long kc = board.kills.bossKillsInWindow(b.name);
 		JPanel cell = tile(3, 3);
 		cell.setToolTipText(bossTip(b));
 		JLabel icon = new JLabel();
@@ -506,7 +506,7 @@ final class StandingScreen extends Screen
 		}
 		cell.add(icon, BorderLayout.WEST);
 		cell.add(styled(new JLabel(kc > 0 ? fmt(kc) : "-", JLabel.RIGHT), small(), kc > 0 ? LIT : DIM), BorderLayout.EAST);
-		String open = board.bossLootSource(b);
+		String open = board.kills.bossLootSource(b);
 		return link(cell, () -> ui.openSourceLoose(open));
 	}
 
@@ -529,23 +529,23 @@ final class StandingScreen extends Screen
 		List<String> lines = new ArrayList<>();
 		if (!period.whole())
 		{
-			long inWin = board.bossKillsInWindow(b.name);
-			lines.addAll(List.of(board.window().label, (inWin < 0 ? "-" : count(inWin, "kill")) + tail(board.sourceInWindow(b.name).value)));
+			long inWin = board.kills.bossKillsInWindow(b.name);
+			lines.addAll(List.of(board.window().label, (inWin < 0 ? "-" : count(inWin, "kill")) + tail(board.loot.sourceInWindow(b.name).value)));
 		}
-		long known = board.bossKills(b.name);
+		long known = board.kills.bossKills(b.name);
 		lines.addAll(List.of("Kills tracked", known > 0 ? fmt(known) : src != null ? fmt(src.loots) : "-"));
-		board.pageLines(b.name, "pb_lines").forEach(ln -> lines.addAll(List.of(ln.getKey(), clock(ln.getValue()))));
-		LootDays.Timing timed = period.whole() && src != null ? LootDays.Timing.of(src.timed, src.timeSum) : board.timesInWindow(b.name);
+		board.kills.pageLines(b.name, "pb_lines").forEach(ln -> lines.addAll(List.of(ln.getKey(), clock(ln.getValue()))));
+		LootDays.Timing timed = period.whole() && src != null ? LootDays.Timing.of(src.timed, src.timeSum) : board.loot.timesInWindow(b.name);
 		if (timed.kills > 0)
 		{
 			lines.addAll(List.of("Average kill", pb(timed.seconds / timed.kills) + " · " + fmt(timed.kills) + " timed"));
 		}
-		long here = board.minutesAt(b.name, period.whole() ? board.counters() : board.periodCounters());
-		if (here > 0 && board.minutesCoverPeriod())
+		long here = board.counts.minutesAt(b.name, period.whole() ? board.counts.counters() : board.counts.periodCounters());
+		if (here > 0 && board.counts.minutesCoverPeriod())
 		{
 			lines.addAll(List.of("Time here", hoursMinutes(here)));
 		}
-		board.logLines(b.name).forEach(ln -> lines.addAll(List.of(ln.getKey(), fmt(ln.getValue()))));
+		board.kills.logLines(b.name).forEach(ln -> lines.addAll(List.of(ln.getKey(), fmt(ln.getValue()))));
 		if (src != null)
 		{
 			lines.addAll(List.of("Drops", paidFigure(src)));
