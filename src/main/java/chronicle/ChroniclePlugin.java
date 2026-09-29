@@ -989,24 +989,19 @@ public class ChroniclePlugin extends Plugin
 		return Math.max(clogCapture.availableCount(), localStore.clogFraction()[1]);
 	}
 
-	List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task, boolean includeOpen)
-	{
-		return localStore.onTaskLoot(fromMs, toMs, task, includeOpen);
-	}
-
 	List<LocalStore.BagItem> allLoot()
 	{
 		return localStore.allLoot();
 	}
 
-	List<String> taskNames()
+	LocalStore.Tasks tasks(long fromMs, long toMs, String onlyTask, boolean includeOpen)
 	{
-		return localStore.taskNames();
+		return localStore.tasks(fromMs, toMs, onlyTask, includeOpen);
 	}
 
-	long[] onTaskTally(long fromMs, long toMs, String onlyTask, boolean includeOpen)
+	LocalStore.Tasks allTasks()
 	{
-		return localStore.onTaskTally(fromMs, toMs, onlyTask, includeOpen);
+		return localStore.allTasks();
 	}
 
 	Map<String, Long> journalFacts()
@@ -1022,46 +1017,6 @@ public class ChroniclePlugin extends Plugin
 	Map<String, Long> anchoredKills()
 	{
 		return localStore.anchoredKills();
-	}
-
-	Map<String, long[]> onTaskItems(long fromMs, long toMs)
-	{
-		return localStore.onTaskItems(fromMs, toMs);
-	}
-
-	Map<String, Long> onTaskKills(long fromMs, long toMs)
-	{
-		return localStore.onTaskKills(fromMs, toMs);
-	}
-
-	List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
-	{
-		return localStore.onTaskItemByTask(itemName, fromMs, toMs);
-	}
-
-	List<LocalStore.Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
-	{
-		return localStore.onTaskAssignments(npc, fromMs, toMs);
-	}
-
-	List<LocalStore.BagItem> untakenItemsOf(String source)
-	{
-		return localStore.untakenItemsOf(source);
-	}
-
-	List<LocalStore.UntakenRow> untakenSourcesOf(String item)
-	{
-		return localStore.untakenSourcesOf(item);
-	}
-
-	List<LocalStore.BagItem> slayerTaskItems(int index)
-	{
-		return localStore.slayerTaskItems(index);
-	}
-
-	List<LocalStore.UntakenRow> slayerTaskMonsters(int index)
-	{
-		return localStore.slayerTaskMonsters(index);
 	}
 
 	List<LocalStore.PetRow> pets()
@@ -1083,14 +1038,9 @@ public class ChroniclePlugin extends Plugin
 		return PaceBook.forSkill(spine, skill.toLowerCase(Locale.ROOT), xp, LocalDate.now());
 	}
 
-	List<LocalStore.UntakenRow> untakenSources()
+	LocalStore.Untaken untaken()
 	{
-		return localStore.untakenSources();
-	}
-
-	List<LocalStore.UntakenRow> untakenItems()
-	{
-		return localStore.untakenItems();
+		return localStore.untaken();
 	}
 
 	Map<String, Long> consumableValues()

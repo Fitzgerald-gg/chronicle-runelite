@@ -53,7 +53,7 @@ public class UntakenReconcileTest
 			+ "\"Swamp tar\":{\"qty\":55,\"value\":550}},"
 			+ "\"untaken_pairs\":{\"Dust devil\":{\"Bones\":{\"qty\":12,\"value\":120}}}}");
 		store.load(dir, "Tester");
-		List<LocalStore.UntakenRow> items = store.untakenItems();
+		List<LocalStore.UntakenRow> items = store.untaken().items;
 		assertEquals(1, items.size());
 		assertEquals(12, qtyOf(items, "Bones"));
 		assertEquals(-1, qtyOf(items, "Swamp tar"));
@@ -70,12 +70,12 @@ public class UntakenReconcileTest
 			+ "\"Nechryael\":{\"Bones\":{\"qty\":5,\"value\":50}}}}");
 		store.load(dir, "Tester");
 		long bySource = 0;
-		for (LocalStore.UntakenRow r : store.untakenSources())
+		for (LocalStore.UntakenRow r : store.untaken().sources)
 		{
 			bySource += r.qty;
 		}
 		long byItem = 0;
-		for (LocalStore.UntakenRow r : store.untakenItems())
+		for (LocalStore.UntakenRow r : store.untaken().items)
 		{
 			byItem += r.qty;
 		}
@@ -90,7 +90,7 @@ public class UntakenReconcileTest
 			+ "\"untaken\":{\"Dust devil\":{\"qty\":12,\"value\":120}},"
 			+ "\"untaken_items\":{\"Bones\":{\"qty\":999,\"value\":9990}}}");
 		store.load(dir, "Tester");
-		assertEquals(999, qtyOf(store.untakenItems(), "Bones"));
+		assertEquals(999, qtyOf(store.untaken().items, "Bones"));
 	}
 
 	@Test
@@ -102,6 +102,6 @@ public class UntakenReconcileTest
 			+ "\"untaken_items\":{\"Bones\":{\"qty\":17,\"value\":170}},"
 			+ "\"untaken_pairs\":{\"Dust devil\":{\"Bones\":{\"qty\":12,\"value\":120}}}}");
 		store.load(dir, "Tester");
-		assertEquals(17, qtyOf(store.untakenItems(), "Bones"));
+		assertEquals(17, qtyOf(store.untaken().items, "Bones"));
 	}
 }

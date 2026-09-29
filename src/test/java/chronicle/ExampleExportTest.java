@@ -300,7 +300,7 @@ public class ExampleExportTest
 
 		private String firstTaskName()
 		{
-			java.util.List<String> names = plugin.taskNames();
+			java.util.List<String> names = plugin.allTasks().names();
 			return names.isEmpty() ? null : names.get(0);
 		}
 
@@ -543,8 +543,7 @@ public class ExampleExportTest
 			corpus.put("feed", feed);
 
 			java.util.Set<String> taskKinds = new java.util.LinkedHashSet<>();
-			for (LocalStore.BagItem b : plugin.onTaskLoot(
-				Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, null, true))
+			for (LocalStore.BagItem b : plugin.tasks(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, null, true).loot())
 			{
 				String k = ItemKinds.kindOf(b.name);
 				taskKinds.add(k == null ? "Everything else" : k);

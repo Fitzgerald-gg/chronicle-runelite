@@ -154,7 +154,7 @@ public class LocalStorePersistenceTest
 
 	private LocalStore.UntakenRow untakenSource(LocalStore store, String name)
 	{
-		for (LocalStore.UntakenRow row : store.untakenSources())
+		for (LocalStore.UntakenRow row : store.untaken().sources)
 		{
 			if (name.equals(row.name))
 			{

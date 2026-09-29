@@ -1783,20 +1783,159 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	List<String> taskNames()
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
+	static final class TaskView
 	{
-		Set<String> names = new LinkedHashSet<>();
-		synchronized (lock)
+		final String task;
+		final double ts;
+		final boolean open;
+		final long kills;
+		final long value;
+		final Map<String, Long> monsters;
+		final List<BagItem> items;
+
+		List<BagItem> bag()
 		{
-			for (JsonObject t : newestFirst(taskArray()))
+			List<BagItem> out = new ArrayList<>(items);
+			out.sort((a, b) -> Long.compare(b.value, a.value));
+			return out;
+		}
+
+		List<UntakenRow> fought()
+		{
+			List<UntakenRow> out = new ArrayList<>();
+			monsters.forEach((name, n) -> out.add(new UntakenRow(name, n, 0)));
+			out.sort((a, b) -> Long.compare(b.qty, a.qty));
+			return out;
+		}
+	}
+
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
+	static final class Tasks
+	{
+		final List<TaskView> all;
+
+		TaskView at(int index)
+		{
+			int at = all.size() - 1 - index;
+			return at >= 0 && at < all.size() ? all.get(at)
+				: new TaskView("", 0, false, 0, 0, new LinkedHashMap<>(), new ArrayList<>());
+		}
+
+		List<String> names()
+		{
+			Set<String> names = new LinkedHashSet<>();
+			for (int i = all.size() - 1; i >= 0; i--)
 			{
-				if (!taskName(t).trim().isEmpty())
+				if (!all.get(i).task.trim().isEmpty())
 				{
-					names.add(taskName(t).trim());
+					names.add(all.get(i).task.trim());
 				}
 			}
+			return new ArrayList<>(names);
 		}
-		return new ArrayList<>(names);
+
+		List<BagItem> loot()
+		{
+			Map<String, long[]> summed = new LinkedHashMap<>();
+			Map<String, Integer> ids = new LinkedHashMap<>();
+			for (TaskView t : all)
+			{
+				for (BagItem b : t.items)
+				{
+					add(summed, b.name, b.qty, b.value);
+					if (b.itemId != -1)
+					{
+						ids.putIfAbsent(b.name, b.itemId);
+					}
+				}
+			}
+			return bagRows(summed, ids, 0);
+		}
+
+		Map<String, long[]> items()
+		{
+			Map<String, long[]> out = new LinkedHashMap<>();
+			for (TaskView t : all)
+			{
+				for (BagItem b : t.items)
+				{
+					add(out, b.name, b.qty, b.value);
+				}
+			}
+			return out;
+		}
+
+		Map<String, Long> kills()
+		{
+			Map<String, Long> out = new LinkedHashMap<>();
+			for (TaskView t : all)
+			{
+				t.monsters.forEach((name, n) -> out.merge(name, n, Long::sum));
+			}
+			return out;
+		}
+
+		long[] tally()
+		{
+			long kills = 0;
+			long superiors = 0;
+			for (TaskView t : all)
+			{
+				kills += t.kills;
+				for (Map.Entry<String, Long> m : t.monsters.entrySet())
+				{
+					if (SUPERIORS.contains(m.getKey().toLowerCase(Locale.ROOT)))
+					{
+						superiors += m.getValue();
+					}
+				}
+			}
+			return new long[]{kills, superiors, all.size()};
+		}
+
+		List<Row> byTask(String item)
+		{
+			Map<String, long[]> by = new LinkedHashMap<>();
+			for (TaskView t : item == null ? new ArrayList<TaskView>() : all)
+			{
+				for (BagItem b : t.items)
+				{
+					if (b.name.equalsIgnoreCase(item))
+					{
+						add(by, t.task, b.qty, b.value);
+					}
+				}
+			}
+			List<Row> out = new ArrayList<>();
+			by.forEach((task, n) -> out.add(new Row(task, n[0], n[1])));
+			out.sort((a, b) -> Long.compare(b.value, a.value));
+			return out;
+		}
+
+		List<Assignment> assignments(String npc)
+		{
+			List<Assignment> out = new ArrayList<>();
+			for (int i = npc == null ? -1 : all.size() - 1; i >= 0; i--)
+			{
+				TaskView t = all.get(i);
+				long here = 0;
+				boolean fought = false;
+				for (Map.Entry<String, Long> m : t.monsters.entrySet())
+				{
+					if (m.getKey().equalsIgnoreCase(npc))
+					{
+						fought = true;
+						here += m.getValue();
+					}
+				}
+				if (fought)
+				{
+					out.add(new Assignment(t.task, (long) (t.ts * 1000), here, t.kills, t.value));
+				}
+			}
+			return out;
+		}
 	}
 
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)
@@ -1820,118 +1959,37 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return str(t, "task", "");
 	}
 
-	private List<JsonObject> tasksIn(long fromMs, long toMs, String onlyTask, boolean includeOpen)
+	Tasks tasks(long fromMs, long toMs, String onlyTask, boolean includeOpen)
 	{
-		List<JsonObject> out = new ArrayList<>();
-		for (JsonObject t : objects(taskArray()))
+		List<TaskView> out = new ArrayList<>();
+		synchronized (lock)
 		{
-			if ((includeOpen || !isOpen(t)) && taskInside(t, fromMs, toMs)
-				&& (onlyTask == null || onlyTask.equalsIgnoreCase(taskName(t))))
+			for (JsonObject t : objects(taskArray()))
 			{
-				out.add(t);
+				if ((includeOpen || !isOpen(t)) && taskInside(t, fromMs, toMs)
+					&& (onlyTask == null || onlyTask.equalsIgnoreCase(taskName(t))))
+				{
+					Map<String, Long> monsters = new LinkedHashMap<>();
+					for (var m : obj(t, "monsters").entrySet())
+					{
+						monsters.put(m.getKey(), asLong(m.getValue()));
+					}
+					out.add(new TaskView(taskName(t), asDouble(t.get("ts")), isOpen(t),
+						asLong(t.get("kills")), asLong(t.get("value")), monsters, bagOf(obj(t, "items"))));
+				}
 			}
 		}
-		return out;
+		return new Tasks(out);
+	}
+
+	Tasks allTasks()
+	{
+		return tasks(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, null, true);
 	}
 
 	private JsonArray taskArray()
 	{
 		return arr(obj(root, "slayer"), "tasks");
-	}
-
-	Map<String, long[]> onTaskItems(long fromMs, long toMs)
-	{
-		Map<String, long[]> out = new LinkedHashMap<>();
-		synchronized (lock)
-		{
-			for (JsonObject t : tasksIn(fromMs, toMs, null, true))
-			{
-				sumItems(obj(t, "items"), out, null, false);
-			}
-		}
-		return out;
-	}
-
-	Map<String, Long> onTaskKills(long fromMs, long toMs)
-	{
-		Map<String, Long> out = new LinkedHashMap<>();
-		synchronized (lock)
-		{
-			for (JsonObject t : tasksIn(fromMs, toMs, null, true))
-			{
-				for (var m : obj(t, "monsters").entrySet())
-				{
-					out.merge(m.getKey(), asLong(m.getValue()), Long::sum);
-				}
-			}
-		}
-		return out;
-	}
-
-	List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
-	{
-		Map<String, long[]> by = new LinkedHashMap<>();
-		if (itemName == null)
-		{
-			return new ArrayList<>();
-		}
-		synchronized (lock)
-		{
-			for (JsonObject t : tasksIn(fromMs, toMs, null, true))
-			{
-				for (var it : objects(obj(t, "items")))
-				{
-					if (it.getKey().equalsIgnoreCase(itemName))
-					{
-						add(by, taskName(t), asLong(it.getValue().get("qty")), asLong(it.getValue().get("value")));
-					}
-				}
-			}
-		}
-		List<Object[]> out = new ArrayList<>();
-		by.forEach((task, t) -> out.add(new Object[]{task, t[0], t[1]}));
-		out.sort((a, b) -> Long.compare((Long) b[2], (Long) a[2]));
-		return out;
-	}
-
-	List<Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
-	{
-		List<Assignment> out = new ArrayList<>();
-		if (npc == null)
-		{
-			return out;
-		}
-		synchronized (lock)
-		{
-			List<JsonObject> ts = tasksIn(fromMs, toMs, null, true);
-			Collections.reverse(ts);
-			for (JsonObject t : ts)
-			{
-				JsonObject mons = obj(t, "monsters");
-				if (mons.keySet().stream().anyMatch(npc::equalsIgnoreCase))
-				{
-					long here = mons.entrySet().stream().filter(m -> m.getKey().equalsIgnoreCase(npc))
-						.mapToLong(m -> asLong(m.getValue())).sum();
-					out.add(new Assignment(taskName(t), (long) (asDouble(t.get("ts")) * 1000), here,
-						asLong(t.get("kills")), asLong(t.get("value"))));
-				}
-			}
-		}
-		return out;
-	}
-
-	List<BagItem> onTaskLoot(long fromMs, long toMs, String onlyTask, boolean includeOpen)
-	{
-		Map<String, long[]> summed = new LinkedHashMap<>();
-		Map<String, Integer> ids = new LinkedHashMap<>();
-		synchronized (lock)
-		{
-			for (JsonObject t : tasksIn(fromMs, toMs, onlyTask, includeOpen))
-			{
-				sumItems(obj(t, "items"), summed, ids, false);
-			}
-		}
-		return bagRows(summed, ids, 0);
 	}
 
 	private static final Set<String> SUPERIORS = new HashSet<>();
@@ -1950,29 +2008,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			log.warn("superiors table unreadable", e);
 		}
-	}
-
-	long[] onTaskTally(long fromMs, long toMs, String onlyTask, boolean includeOpen)
-	{
-		long kills = 0;
-		long superiors = 0;
-		long tasks = 0;
-		synchronized (lock)
-		{
-			for (JsonObject t : tasksIn(fromMs, toMs, onlyTask, includeOpen))
-			{
-				tasks++;
-				kills += asLong(t.get("kills"));
-				for (var m : obj(t, "monsters").entrySet())
-				{
-					if (SUPERIORS.contains(m.getKey().toLowerCase(Locale.ROOT)))
-					{
-						superiors += asLong(m.getValue());
-					}
-				}
-			}
-		}
-		return new long[]{kills, superiors, tasks};
 	}
 
 	SlayerJourney slayerJourney()
@@ -2030,26 +2065,46 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
-	List<UntakenRow> untakenItems()
+	static final class Untaken
 	{
-		return untakenRows("untaken_items", false);
+		final List<UntakenRow> sources = new ArrayList<>();
+		final List<UntakenRow> items = new ArrayList<>();
+		final Map<String, List<BagItem>> pairs = new LinkedHashMap<>();
+
+		List<BagItem> itemsOf(String source)
+		{
+			return pairs.getOrDefault(source, new ArrayList<>());
+		}
+
+		List<UntakenRow> sourcesOf(String item)
+		{
+			List<UntakenRow> out = new ArrayList<>();
+			pairs.forEach((source, bag) -> bag.stream().filter(b -> b.name.equals(item)).findFirst()
+				.ifPresent(b -> out.add(new UntakenRow(source, b.qty, b.value))));
+			out.sort((x, y) -> Long.compare(y.value, x.value));
+			return out;
+		}
 	}
 
-	List<UntakenRow> untakenSources()
+	Untaken untaken()
 	{
-		return untakenRows("untaken", true);
-	}
-
-	private List<UntakenRow> untakenRows(String key, boolean kills)
-	{
-		List<UntakenRow> out = new ArrayList<>();
+		Untaken out = new Untaken();
 		synchronized (lock)
 		{
-			for (var e : objects(obj(root, key)))
+			for (var e : objects(obj(root, "untaken")))
 			{
 				JsonObject it = e.getValue();
-				out.add(new UntakenRow(e.getKey(), asLong(it.get("qty")), asLong(it.get("value")),
-					kills ? asLong(it.get("kills")) : 0));
+				out.sources.add(new UntakenRow(e.getKey(), asLong(it.get("qty")), asLong(it.get("value")),
+					asLong(it.get("kills"))));
+			}
+			for (var e : objects(obj(root, "untaken_items")))
+			{
+				JsonObject it = e.getValue();
+				out.items.add(new UntakenRow(e.getKey(), asLong(it.get("qty")), asLong(it.get("value")), 0));
+			}
+			for (var e : objects(obj(root, "untaken_pairs")))
+			{
+				out.pairs.put(e.getKey(), bagOf(e.getValue()));
 			}
 		}
 		return out;
@@ -2539,40 +2594,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	List<BagItem> untakenItemsOf(String source)
-	{
-		synchronized (lock)
-		{
-			return bagOf(obj(obj(root, "untaken_pairs"), source));
-		}
-	}
-
-	List<UntakenRow> untakenSourcesOf(String item)
-	{
-		List<UntakenRow> out = new ArrayList<>();
-		synchronized (lock)
-		{
-			for (var e : objects(obj(root, "untaken_pairs")))
-			{
-				if (isObject(e.getValue(), item))
-				{
-					JsonObject r = e.getValue().getAsJsonObject(item);
-					out.add(new UntakenRow(e.getKey(), asLong(r.get("qty")), asLong(r.get("value"))));
-				}
-			}
-		}
-		out.sort((a, b) -> Long.compare(b.value, a.value));
-		return out;
-	}
-
-	List<BagItem> slayerTaskItems(int index)
-	{
-		synchronized (lock)
-		{
-			return bagOf(obj(segmentAt(index), "items"));
-		}
-	}
-
 	private static List<BagItem> bagOf(JsonObject bag)
 	{
 		List<BagItem> out = new ArrayList<>();
@@ -2584,31 +2605,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 		out.sort((a, b) -> Long.compare(b.value, a.value));
 		return out;
-	}
-
-	List<UntakenRow> slayerTaskMonsters(int index)
-	{
-		List<UntakenRow> out = new ArrayList<>();
-		synchronized (lock)
-		{
-			for (var e : obj(segmentAt(index), "monsters").entrySet())
-			{
-				out.add(new UntakenRow(e.getKey(), asLong(e.getValue()), 0));
-			}
-		}
-		out.sort((a, b) -> Long.compare(b.qty, a.qty));
-		return out;
-	}
-
-	private JsonObject segmentAt(int index)
-	{
-		synchronized (lock)
-		{
-			JsonArray tasks = taskArray();
-			int at = tasks.size() - 1 - index;
-			return at >= 0 && at < tasks.size() && tasks.get(at).isJsonObject()
-				? tasks.get(at).getAsJsonObject() : null;
-		}
 	}
 
 	List<PetRow> pets()
@@ -2815,7 +2811,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		long left = 0;
 		long leftValue = 0;
 		long leftKills = 0;
-		for (UntakenRow u : untakenSources())
+		for (UntakenRow u : untaken().sources)
 		{
 			left += u.qty;
 			leftValue += u.value;

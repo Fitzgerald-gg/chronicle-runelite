@@ -250,8 +250,9 @@ final class Build
 	{
 		Period w = period();
 		long[] ms = w.ms();
-		long[] tally = Arrays.copyOf(plugin.onTaskTally(ms[0], ms[1], null, w.whole), 4);
-		tally[3] = LocalStore.tallyOf(plugin.onTaskLoot(ms[0], ms[1], null, w.whole))[1];
+		LocalStore.Tasks tasks = plugin.tasks(ms[0], ms[1], null, w.whole);
+		long[] tally = Arrays.copyOf(tasks.tally(), 4);
+		tally[3] = LocalStore.tallyOf(tasks.loot())[1];
 		return tally;
 	}
 }

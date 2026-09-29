@@ -829,7 +829,7 @@ final class Summary
 				out[0] += r.loots;
 				out[1] += r.value;
 			}
-			for (UntakenRow u : build.plugin.untakenSources())
+			for (UntakenRow u : build.plugin.untaken().sources)
 			{
 				out[2] += u.qty;
 				out[3] += u.value;

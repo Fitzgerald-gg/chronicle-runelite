@@ -52,7 +52,7 @@ public class OnTaskSliceTest
 	@Test
 	public void anItemsOnTaskTotalIsExact()
 	{
-		Map<String, long[]> items = store.onTaskItems(LO, HI);
+		Map<String, long[]> items = store.tasks(LO, HI, null, true).items();
 		assertEquals("three distinct items were paid by tasks", 3, items.size());
 		assertEquals(2000, items.get("Fire rune")[0]);
 		assertEquals(10000, items.get("Fire rune")[1]);
@@ -63,7 +63,7 @@ public class OnTaskSliceTest
 	@Test
 	public void aMonstersOnTaskKillsAreExact()
 	{
-		Map<String, Long> kills = store.onTaskKills(LO, HI);
+		Map<String, Long> kills = store.tasks(LO, HI, null, true).kills();
 		assertEquals(Long.valueOf(304), kills.get("Dust devil"));
 		assertEquals(Long.valueOf(45), kills.get("Blue dragon"));
 		assertEquals(Long.valueOf(97), kills.get("Vorkath"));
@@ -74,35 +74,35 @@ public class OnTaskSliceTest
 	@Test
 	public void anItemSplitsByTask()
 	{
-		List<Object[]> split = store.onTaskItemByTask("Fire rune", LO, HI);
+		List<LocalStore.Row> split = store.tasks(LO, HI, null, true).byTask("Fire rune");
 		assertEquals(2, split.size());
-		assertEquals("Dust devils", split.get(0)[0]);
-		assertEquals(1500L, split.get(0)[1]);
-		assertEquals(7500L, split.get(0)[2]);
-		assertEquals("Blue dragons", split.get(1)[0]);
-		assertEquals(500L, split.get(1)[1]);
+		assertEquals("Dust devils", split.get(0).name);
+		assertEquals(1500L, split.get(0).qty);
+		assertEquals(7500L, split.get(0).value);
+		assertEquals("Blue dragons", split.get(1).name);
+		assertEquals(500L, split.get(1).qty);
 		assertTrue("an item no task paid splits into nothing",
-			store.onTaskItemByTask("Zulrah's scales", LO, HI).isEmpty());
+			store.tasks(LO, HI, null, true).byTask("Zulrah's scales").isEmpty());
 	}
 
 	@Test
 	public void aMonsterGetsItsAssignments()
 	{
-		List<LocalStore.Assignment> a = store.onTaskAssignments("Dust devil", LO, HI);
+		List<LocalStore.Assignment> a = store.tasks(LO, HI, null, true).assignments("Dust devil");
 		assertEquals(2, a.size());
 		assertEquals("newest first", 1700200000000L, a.get(0).ts);
 		assertEquals(100, a.get(0).killsHere);
 		assertEquals(204, a.get(1).killsHere);
 		assertEquals("the task's own kills, not this monster's", 206, a.get(1).kills);
 		assertTrue("a monster never assigned has no assignments",
-			store.onTaskAssignments("Zulrah", LO, HI).isEmpty());
+			store.tasks(LO, HI, null, true).assignments("Zulrah").isEmpty());
 	}
 
 	@Test
 	public void aTaskTakeBelongsToTheTaskAndNotToOneMonsterInIt()
 	{
-		List<LocalStore.Assignment> vork = store.onTaskAssignments("Vorkath", LO, HI);
-		List<LocalStore.Assignment> blue = store.onTaskAssignments("Blue dragon", LO, HI);
+		List<LocalStore.Assignment> vork = store.tasks(LO, HI, null, true).assignments("Vorkath");
+		List<LocalStore.Assignment> blue = store.tasks(LO, HI, null, true).assignments("Blue dragon");
 		assertEquals(1, vork.size());
 		assertEquals(1, blue.size());
 		assertEquals("Blue dragons", vork.get(0).task);
@@ -119,17 +119,17 @@ public class OnTaskSliceTest
 	{
 		long from = 1600000000000L;
 		long to = 1600100000000L;
-		assertTrue(store.onTaskItems(from, to).isEmpty());
-		assertTrue(store.onTaskKills(from, to).isEmpty());
-		assertTrue(store.onTaskAssignments("Dust devil", from, to).isEmpty());
-		assertTrue(store.onTaskItemByTask("Fire rune", from, to).isEmpty());
+		assertTrue(store.tasks(from, to, null, true).items().isEmpty());
+		assertTrue(store.tasks(from, to, null, true).kills().isEmpty());
+		assertTrue(store.tasks(from, to, null, true).assignments("Dust devil").isEmpty());
+		assertTrue(store.tasks(from, to, null, true).byTask("Fire rune").isEmpty());
 	}
 
 	@Test
 	public void nullsAnswerEmpty()
 	{
-		assertTrue(store.onTaskItemByTask(null, LO, HI).isEmpty());
-		assertTrue(store.onTaskAssignments(null, LO, HI).isEmpty());
+		assertTrue(store.tasks(LO, HI, null, true).byTask(null).isEmpty());
+		assertTrue(store.tasks(LO, HI, null, true).assignments(null).isEmpty());
 	}
 
 	@Test

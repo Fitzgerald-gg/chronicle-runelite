@@ -134,7 +134,7 @@ public class LocalSlayerJourneyTest
 
 	private static long monsterCount(LocalStore store, int index, String monster)
 	{
-		for (LocalStore.UntakenRow r : store.slayerTaskMonsters(index))
+		for (LocalStore.UntakenRow r : store.allTasks().at(index).fought())
 		{
 			if (r.name.equals(monster))
 			{
@@ -159,7 +159,7 @@ public class LocalSlayerJourneyTest
 		assertEquals(147, t.noLootKills);
 		assertEquals(300, t.totalValue);
 		assertEquals(3, monsterCount(store, 0, "Nechryael"));
-		assertEquals(3, store.slayerTaskItems(0).get(0).qty);
+		assertEquals(3, store.allTasks().at(0).bag().get(0).qty);
 	}
 
 	@Test

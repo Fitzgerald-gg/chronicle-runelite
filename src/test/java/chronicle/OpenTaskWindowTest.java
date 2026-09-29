@@ -72,7 +72,7 @@ public class OpenTaskWindowTest
 	@Test
 	public void aBoundedWindowTakesTheTasksThatClosedInIt()
 	{
-		List<LocalStore.BagItem> bag = store.onTaskLoot(FROM, TO, null, false);
+		List<LocalStore.BagItem> bag = store.tasks(FROM, TO, null, false).loot();
 		assertTrue("the task that closed inside the window was dropped",
 			holds(bag, "Rune bar"));
 		assertTrue("a task that has not closed was counted whole, so days of its"
@@ -84,7 +84,7 @@ public class OpenTaskWindowTest
 	@Test
 	public void theTallyCountsThoseSameTasks()
 	{
-		long[] t = store.onTaskTally(FROM, TO, null, false);
+		long[] t = store.tasks(FROM, TO, null, false).tally();
 		assertEquals("one task closed inside the window", 1, t[2]);
 		assertEquals("five hundred kills from a task still running were counted"
 			+ " into a window that saw a handful of them", 20, t[0]);
@@ -93,11 +93,11 @@ public class OpenTaskWindowTest
 	@Test
 	public void theWholeRecordStillHoldsTheTaskYouAreOn()
 	{
-		List<LocalStore.BagItem> bag = store.onTaskLoot(LO, HI, null, true);
+		List<LocalStore.BagItem> bag = store.tasks(LO, HI, null, true).loot();
 		assertTrue("the task in progress fell out of the lifetime",
 			holds(bag, "Abyssal whip"));
 		assertEquals(905000, worth(bag));
-		long[] t = store.onTaskTally(LO, HI, null, true);
+		long[] t = store.tasks(LO, HI, null, true).tally();
 		assertEquals("the lifetime lost the kills of the task being worked on",
 			520, t[0]);
 	}
@@ -108,12 +108,12 @@ public class OpenTaskWindowTest
 		String src = new String(java.nio.file.Files.readAllBytes(
 			java.nio.file.Paths.get("src/main/java/chronicle/ChroniclePanel.java")),
 			java.nio.charset.StandardCharsets.UTF_8);
-		int at = src.indexOf("plugin.onTaskLoot(ms[0], ms[1], lootTask");
+		int at = src.indexOf("plugin.tasks(ms[0], ms[1], lootTask");
 		assertTrue("the slayer board no longer asks for on-task loot", at > 0);
 		assertTrue("the slayer board asks for open tasks over a bounded window: "
 			+ src.substring(at, Math.min(src.length(), at + 120)),
 			src.substring(at, Math.min(src.length(), at + 120)).contains("wholeRecord()"));
-		int kind = src.indexOf("plugin.onTaskLoot(w[0], w[1], null");
+		int kind = src.indexOf("plugin.tasks(w[0], w[1], null");
 		assertTrue("the kind lens no longer asks for on-task loot", kind > 0);
 		assertTrue("the kind lens asks for open tasks over a bounded window",
 			src.substring(kind, Math.min(src.length(), kind + 90)).contains("wholeRecord()"));

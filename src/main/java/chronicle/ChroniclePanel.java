@@ -1718,7 +1718,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		if (taskItemsEver == null)
 		{
-			taskItemsEver = plugin.onTaskItems(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2);
+			taskItemsEver = plugin.allTasks().items();
 		}
 		return taskItemsEver;
 	}
@@ -1752,7 +1752,7 @@ class ChroniclePanel extends PluginPanel
 		if (canAskOnTask && onTaskOnly)
 		{
 			long[] w = window().ms();
-			List<BagItem> taskBag = plugin.onTaskLoot(w[0], w[1], null, wholeRecord());
+			List<BagItem> taskBag = plugin.tasks(w[0], w[1], null, wholeRecord()).loot();
 			if (taskBag.isEmpty())
 			{
 				return noted(p, window().phrase("No task closed"));
@@ -1895,7 +1895,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel buildLeftBehind(JPanel p)
 	{
-		List<UntakenRow> rows = plugin.untakenSources();
+		List<UntakenRow> rows = plugin.untaken().sources;
 		rows.sort(Comparator.comparingLong((UntakenRow r) -> r.value).reversed());
 		long totalQty = 0;
 		long totalVal = 0;
@@ -1909,7 +1909,7 @@ class ChroniclePanel extends PluginPanel
 			return noted(p, "What you walk past gets counted here, priced at the "
 				+ "moment you declined it.");
 		}
-		List<UntakenRow> items = plugin.untakenItems();
+		List<UntakenRow> items = plugin.untaken().items;
 		items.sort(Comparator.comparingLong((UntakenRow r) -> r.value).reversed());
 		JPanel head = tallyCard("Left behind", "Items", fmt(totalQty), ACCENT_RED, totalVal);
 		head.add(row(dropsByKind ? "Distinct items" : "Sources",
@@ -2112,8 +2112,8 @@ class ChroniclePanel extends PluginPanel
 	private JPanel addOnTaskLoot(JPanel p)
 	{
 		long[] ms = window().ms();
-		final List<BagItem> bag = plugin.onTaskLoot(ms[0], ms[1], lootTask,
-			wholeRecord());
+		final LocalStore.Tasks tasks = plugin.tasks(ms[0], ms[1], lootTask, wholeRecord());
+		final List<BagItem> bag = tasks.loot();
 		if (bag.isEmpty())
 		{
 			p.add(taskPicker());
@@ -2132,7 +2132,7 @@ class ChroniclePanel extends PluginPanel
 			p.add(taskPicker());
 			return kindDrill(p, bag, "task:");
 		}
-		final long[] tally = plugin.onTaskTally(ms[0], ms[1], lootTask, wholeRecord());
+		final long[] tally = tasks.tally();
 		spaced(p, onTaskHead(qty, value, tally));
 		p.add(taskPicker());
 
@@ -2484,7 +2484,8 @@ class ChroniclePanel extends PluginPanel
 		addTaskAgainstRecord(head, j, index, t);
 		spaced(p, head);
 
-		List<UntakenRow> monsters = plugin.slayerTaskMonsters(index);
+		LocalStore.TaskView seg = plugin.allTasks().at(index);
+		List<UntakenRow> monsters = seg.fought();
 		if (!monsters.isEmpty())
 		{
 			p.add(group("Killed"));
@@ -2497,7 +2498,7 @@ class ChroniclePanel extends PluginPanel
 			p.add(vgap(6));
 		}
 
-		List<BagItem> bag = plugin.slayerTaskItems(index);
+		List<BagItem> bag = seg.bag();
 		if (bag.isEmpty())
 		{
 			p.add(note("No loot recorded against this task."));
@@ -2527,13 +2528,14 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildLeftBehindDetail()
 	{
 		JPanel p = column();
+		LocalStore.Untaken untaken = plugin.untaken();
 		p.add(backRow("< Back", "", () -> showLeftBehind(null, null)));
 		p.add(vgap(4));
 
 		if (leftBehindSource != null)
 		{
-			List<BagItem> bag = plugin.untakenItemsOf(leftBehindSource);
-			UntakenRow left = Sources.find(plugin.untakenSources(), u -> u.name, leftBehindSource, true);
+			List<BagItem> bag = untaken.itemsOf(leftBehindSource);
+			UntakenRow left = Sources.find(untaken.sources, u -> u.name, leftBehindSource, true);
 			spaced(p, tallyCard(leftBehindSource.toUpperCase(Locale.ROOT), "Left on the floor",
 				count(left == null ? 0 : left.qty, "item"), ACCENT_RED, left == null ? 0 : left.value));
 			if (bag.isEmpty())
@@ -2552,8 +2554,8 @@ class ChroniclePanel extends PluginPanel
 			return p;
 		}
 
-		List<UntakenRow> sources = plugin.untakenSourcesOf(leftBehindItem);
-		UntakenRow held = Sources.find(plugin.untakenItems(), u -> u.name, leftBehindItem, true);
+		List<UntakenRow> sources = untaken.sourcesOf(leftBehindItem);
+		UntakenRow held = Sources.find(untaken.items, u -> u.name, leftBehindItem, true);
 		spaced(p, tallyCard(leftBehindItem.toUpperCase(Locale.ROOT), "Left behind",
 			"×" + fmt(held == null ? 0 : held.qty), ACCENT_RED, held == null ? 0 : held.value));
 		if (sources.isEmpty())
@@ -3216,7 +3218,7 @@ class ChroniclePanel extends PluginPanel
 		final boolean hasTask = taskItemsEver().containsKey(properName(name));
 		long[] tw = window().ms();
 		long[] mine = inWindow == null ? taskItemsEver().get(properName(name))
-			: plugin.onTaskItems(tw[0], tw[1]).getOrDefault(properName(name), new long[2]);
+			: plugin.tasks(tw[0], tw[1], null, true).items().getOrDefault(properName(name), new long[2]);
 		if (hasTask && onTaskOnly)
 		{
 			head.add(row("Obtained on task", "×" + fmt(mine[0]), accent()));
@@ -3332,16 +3334,16 @@ class ChroniclePanel extends PluginPanel
 	private JPanel byTaskRows(JPanel p, String name)
 	{
 		long[] w = window().ms();
-		List<Object[]> split = plugin.onTaskItemByTask(name, w[0], w[1]);
+		List<LocalStore.Row> split = plugin.tasks(w[0], w[1], null, true).byTask(name);
 		if (split.isEmpty())
 		{
 			return noted(p, window().phrase("No task paid this"));
 		}
 		p.add(group("By task"));
 		final int taskCap = Math.max(drawingCopy ? COPY_MOST : 40, drillShown.getOrDefault("item:task:" + name, 0));
-		for (Object[] t : Sources.firstN(split, taskCap))
+		for (LocalStore.Row t : Sources.firstN(split, taskCap))
 		{
-			p.add(row("Task: " + t[0], "×" + fmt((long) t[1]) + tail((long) t[2])));
+			p.add(row("Task: " + t.name, "×" + fmt(t.qty) + tail(t.value)));
 		}
 		drillMore(p, "item:task:" + name, split.size(), taskCap);
 		return p;
@@ -3378,7 +3380,7 @@ class ChroniclePanel extends PluginPanel
 	private void addAssignments(JPanel p, String npc)
 	{
 		long[] w = window().ms();
-		List<LocalStore.Assignment> was = plugin.onTaskAssignments(npc, w[0], w[1]);
+		List<LocalStore.Assignment> was = plugin.tasks(w[0], w[1], null, true).assignments(npc);
 		if (was.isEmpty())
 		{
 			return;
@@ -3395,7 +3397,7 @@ class ChroniclePanel extends PluginPanel
 
 	private void addFloorRow(JPanel head, String name)
 	{
-		for (UntakenRow u : plugin.untakenSources())
+		for (UntakenRow u : plugin.untaken().sources)
 		{
 			if (u.qty > 0 && u.name.equalsIgnoreCase(name))
 			{
@@ -5930,7 +5932,7 @@ class ChroniclePanel extends PluginPanel
 		JPopupMenu menu = new JPopupMenu();
 		menuItem(menu, "Every task", lootTask == null, () -> pickTask(null));
 		menu.addSeparator();
-		for (String task : plugin.taskNames())
+		for (String task : plugin.allTasks().names())
 		{
 			menuItem(menu, task, task.equals(lootTask), () -> pickTask(task));
 		}
@@ -7864,7 +7866,7 @@ class ChroniclePanel extends PluginPanel
 			items.add(new Hit(itm, "×" + fmt(e.getValue()[0]), null, tip, () -> openItem(itm),
 				matchScore(ql, itm), e.getValue()[1]));
 		}
-		for (UntakenRow u : plugin.untakenItems())
+		for (UntakenRow u : plugin.untaken().items)
 		{
 			if (itemAgg.containsKey(u.name) || matchScore(ql, u.name) < 0)
 			{

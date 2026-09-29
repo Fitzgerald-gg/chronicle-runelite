@@ -120,11 +120,11 @@ public class JournalImportTest
 
 		assertEquals(2, store.slayerJourney().tasks.size());
 		int bloodveld = indexOf("Bloodveld");
-		java.util.List<LocalStore.UntakenRow> mons = store.slayerTaskMonsters(bloodveld);
+		java.util.List<LocalStore.UntakenRow> mons = store.allTasks().at(bloodveld).fought();
 		assertEquals(2, mons.size());
 		assertEquals("Bloodveld", mons.get(0).name);
 		assertEquals(104, mons.get(0).qty);
-		java.util.List<LocalStore.BagItem> bag = store.slayerTaskItems(bloodveld);
+		java.util.List<LocalStore.BagItem> bag = store.allTasks().at(bloodveld).bag();
 		assertEquals(1, bag.size());
 		assertEquals("Dragon boots", bag.get(0).name);
 		assertEquals(200000L, bag.get(0).value);
@@ -152,7 +152,7 @@ public class JournalImportTest
 			+ "{\"task\":\"Bloodveld\",\"ts\":1700000000,\"monsters\":{\"Bloodveld\":99}}]}}",
 			JsonObject.class), "Tester");
 		assertEquals(1, store.slayerJourney().tasks.size());
-		assertTrue(store.slayerTaskMonsters(0).isEmpty());
+		assertTrue(store.allTasks().at(0).fought().isEmpty());
 	}
 
 	@Test

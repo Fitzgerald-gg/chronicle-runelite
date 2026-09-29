@@ -60,12 +60,12 @@ public class SlayerSegmentHealTest
 		store.load(dir, "Tester");
 		LocalStore.SlayerTask t = store.slayerJourney().tasks.get(0);
 		assertEquals(1, t.kills);
-		List<LocalStore.UntakenRow> mons = store.slayerTaskMonsters(0);
+		List<LocalStore.UntakenRow> mons = store.allTasks().at(0).fought();
 		assertEquals(1, mons.size());
 		assertEquals(1, count(mons, "Nechryael"));
 		assertEquals(-1, count(mons, "Man"));
 		assertEquals(900, t.totalValue);
-		assertEquals(4, store.slayerTaskItems(0).get(0).qty);
+		assertEquals(4, store.allTasks().at(0).bag().get(0).qty);
 	}
 
 	@Test
@@ -77,7 +77,7 @@ public class SlayerSegmentHealTest
 		store.load(dir, "Tester");
 		LocalStore.SlayerTask t = store.slayerJourney().tasks.get(0);
 		assertEquals(208, t.kills);
-		List<LocalStore.UntakenRow> mons = store.slayerTaskMonsters(0);
+		List<LocalStore.UntakenRow> mons = store.allTasks().at(0).fought();
 		assertEquals(2, mons.size());
 		assertEquals(206, count(mons, "Dust devil"));
 		assertEquals(2, count(mons, "Choke devil"));
@@ -91,7 +91,7 @@ public class SlayerSegmentHealTest
 			+ "\"monsters\":{\"Guard\":128}}]}}");
 		store.load(dir, "Tester");
 		assertEquals(128, store.slayerJourney().tasks.get(0).kills);
-		assertEquals(128, count(store.slayerTaskMonsters(0), "Guard"));
+		assertEquals(128, count(store.allTasks().at(0).fought(), "Guard"));
 	}
 
 	@Test
@@ -104,6 +104,6 @@ public class SlayerSegmentHealTest
 		LocalStore.SlayerJourney j = store.slayerJourney();
 		assertEquals(1, j.tasks.size());
 		assertEquals(0, j.tasks.get(0).kills);
-		assertEquals(0, store.slayerTaskMonsters(0).size());
+		assertEquals(0, store.allTasks().at(0).fought().size());
 	}
 }

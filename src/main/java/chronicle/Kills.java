@@ -520,7 +520,7 @@ final class Kills
 	{
 		if (taskKillsEver == null)
 		{
-			taskKillsEver = build.plugin.onTaskKills(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2);
+			taskKillsEver = build.plugin.allTasks().kills();
 		}
 		return taskKillsEver;
 	}

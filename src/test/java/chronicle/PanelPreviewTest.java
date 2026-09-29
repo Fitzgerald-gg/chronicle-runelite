@@ -214,14 +214,14 @@ public class PanelPreviewTest
 		set(panel, "detailTask", 0);
 		shoot(panel, out, prefix + "-slayer-task", "SLAYER");
 		set(panel, "detailTask", -1);
-		List<LocalStore.UntakenRow> un = stub.untakenSources();
+		List<LocalStore.UntakenRow> un = stub.untaken().sources;
 		if (!un.isEmpty())
 		{
 			set(panel, "leftBehindSource", un.get(0).name);
 			shoot(panel, out, prefix + "-leftbehind-source", "DROPS");
 			set(panel, "leftBehindSource", null);
 		}
-		List<LocalStore.UntakenRow> ui = stub.untakenItems();
+		List<LocalStore.UntakenRow> ui = stub.untaken().items;
 		if (!ui.isEmpty())
 		{
 			set(panel, "leftBehindItem", ui.get(0).name);
@@ -898,8 +898,8 @@ public class PanelPreviewTest
 		s.spriteManager = mockSprites();
 		s.rsn = rsn;
 		s.sources = store.dropSources();
-		s.untaken = store.untakenSources();
-		s.untakenItems = store.untakenItems();
+		s.untaken = store.untaken().sources;
+		s.untakenItems = store.untaken().items;
 		s.recent = store.recentDrops();
 		s.clog = store.clogSnapshot();
 		s.clogFinished = store.clogFraction()[0];
@@ -945,8 +945,8 @@ public class PanelPreviewTest
 		s.spriteManager = mockSprites();
 		s.rsn = shown != null && !shown.isEmpty() ? shown : rsn;
 		s.sources = store.dropSources();
-		s.untaken = store.untakenSources();
-		s.untakenItems = store.untakenItems();
+		s.untaken = store.untaken().sources;
+		s.untakenItems = store.untaken().items;
 		s.recent = store.recentDrops();
 		s.clog = store.clogSnapshot();
 		s.clogFinished = store.clogFraction()[0];
@@ -1153,34 +1153,37 @@ public class PanelPreviewTest
 			return lifetime;
 		}
 
-		java.time.LocalDate lootRollDay;
-		LocalStore.LootWindow lootWindow;
+		@Override
+		LocalStore.Tasks tasks(long fromMs, long toMs, String onlyTask, boolean includeOpen)
+		{
+			return store != null ? store.tasks(fromMs, toMs, onlyTask, includeOpen)
+				: new LocalStore.Tasks(new ArrayList<>());
+		}
 
 		@Override
-		java.util.List<LocalStore.BagItem> onTaskLoot(long fromMs, long toMs, String task,
-			boolean includeOpen)
+		LocalStore.Tasks allTasks()
 		{
-			return store != null ? store.onTaskLoot(fromMs, toMs, task, includeOpen)
-				: new java.util.ArrayList<>();
+			return tasks(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, null, true);
 		}
+
+		@Override
+		LocalStore.Untaken untaken()
+		{
+			LocalStore.Untaken u = store != null ? store.untaken() : new LocalStore.Untaken();
+			u.sources.clear();
+			u.sources.addAll(untaken);
+			u.items.clear();
+			u.items.addAll(untakenItems);
+			return u;
+		}
+
+		java.time.LocalDate lootRollDay;
+		LocalStore.LootWindow lootWindow;
 
 		@Override
 		java.util.List<LocalStore.BagItem> allLoot()
 		{
 			return store != null ? store.allLoot() : new java.util.ArrayList<>();
-		}
-
-		@Override
-		java.util.List<String> taskNames()
-		{
-			return store != null ? store.taskNames() : new java.util.ArrayList<>();
-		}
-
-		@Override
-		long[] onTaskTally(long fromMs, long toMs, String onlyTask, boolean includeOpen)
-		{
-			return store != null ? store.onTaskTally(fromMs, toMs, onlyTask, includeOpen)
-				: new long[]{0, 0, 0};
 		}
 
 		@Override
@@ -1199,34 +1202,6 @@ public class PanelPreviewTest
 		java.util.Map<String, Long> anchoredKills()
 		{
 			return store != null ? store.anchoredKills() : new java.util.LinkedHashMap<>();
-		}
-
-		@Override
-		java.util.Map<String, long[]> onTaskItems(long fromMs, long toMs)
-		{
-			return store != null ? store.onTaskItems(fromMs, toMs)
-				: new java.util.LinkedHashMap<>();
-		}
-
-		@Override
-		java.util.Map<String, Long> onTaskKills(long fromMs, long toMs)
-		{
-			return store != null ? store.onTaskKills(fromMs, toMs)
-				: new java.util.LinkedHashMap<>();
-		}
-
-		@Override
-		java.util.List<Object[]> onTaskItemByTask(String itemName, long fromMs, long toMs)
-		{
-			return store != null ? store.onTaskItemByTask(itemName, fromMs, toMs)
-				: new java.util.ArrayList<>();
-		}
-
-		@Override
-		java.util.List<LocalStore.Assignment> onTaskAssignments(String npc, long fromMs, long toMs)
-		{
-			return store != null ? store.onTaskAssignments(npc, fromMs, toMs)
-				: new java.util.ArrayList<>();
 		}
 
 		@Override
@@ -1379,18 +1354,6 @@ public class PanelPreviewTest
 			new java.util.LinkedHashMap<>();
 
 		@Override
-		java.util.List<LocalStore.UntakenRow> untakenSources()
-		{
-			return new ArrayList<>(untaken);
-		}
-
-		@Override
-		java.util.List<LocalStore.UntakenRow> untakenItems()
-		{
-			return new ArrayList<>(untakenItems);
-		}
-
-		@Override
 		java.util.List<LocalStore.RecentDrop> recentDrops()
 		{
 			return new ArrayList<>(recent);
@@ -1499,30 +1462,6 @@ public class PanelPreviewTest
 		}
 
 		@Override
-		java.util.List<LocalStore.BagItem> slayerTaskItems(int index)
-		{
-			return store != null ? store.slayerTaskItems(index) : new ArrayList<>();
-		}
-
-		@Override
-		java.util.List<LocalStore.UntakenRow> slayerTaskMonsters(int index)
-		{
-			return store != null ? store.slayerTaskMonsters(index) : taskMonsters;
-		}
-
-		@Override
-		java.util.List<LocalStore.BagItem> untakenItemsOf(String source)
-		{
-			return store != null ? store.untakenItemsOf(source) : untakenBag;
-		}
-
-		@Override
-		java.util.List<LocalStore.UntakenRow> untakenSourcesOf(String item)
-		{
-			return store != null ? store.untakenSourcesOf(item) : new ArrayList<>();
-		}
-
-		@Override
 		PaceBook.Pace pace(String skill)
 		{
 			long xp = 0;
@@ -1534,8 +1473,6 @@ public class PanelPreviewTest
 			return PaceBook.forSkill(history, skill.toLowerCase(Locale.ROOT), xp, java.time.LocalDate.now());
 		}
 
-		java.util.List<LocalStore.UntakenRow> taskMonsters = new ArrayList<>();
-		java.util.List<LocalStore.BagItem> untakenBag = new ArrayList<>();
 
 		@Override
 		String journalWarning()
