@@ -108,21 +108,21 @@ final class HomeScreen
 				mounted++;
 			}
 		}
-		if (store.sessionLoots() > 0)
+		if (store.loot.sessionLoots() > 0)
 		{
 			strip.add(row("Drops received",
-				store.sessionLoots() + " · " + gps(store.sessionLootValue()),
+				store.loot.sessionLoots() + " · " + gps(store.loot.sessionLootValue()),
 				GREEN));
 			mounted++;
-			if (store.sessionUntakenKills() > 0)
+			if (store.loot.sessionUntakenKills() > 0)
 			{
 				strip.add(row("Drops taken",
-					fmt(Math.max(0, store.sessionLoots() - store.sessionUntakenKills())),
+					fmt(Math.max(0, store.loot.sessionLoots() - store.loot.sessionUntakenKills())),
 					GREEN));
 				mounted++;
 			}
 		}
-		long[] untaken = store.sessionUntakenTally();
+		long[] untaken = store.loot.sessionUntakenTally();
 		if (untaken[0] > 0)
 		{
 			strip.add(row("Left behind", qtyGp(untaken[0], untaken[1])));

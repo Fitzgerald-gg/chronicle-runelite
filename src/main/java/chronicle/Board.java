@@ -5,7 +5,7 @@ package chronicle;
 
 import chronicle.HistoryLog.Baseline;
 import chronicle.LocalStore.BagItem;
-import chronicle.LocalStore.SlayerJourney;
+import chronicle.SlayerLog.SlayerJourney;
 import chronicle.LocalStore.SourceRow;
 import chronicle.LocalStore.UntakenRow;
 import chronicle.Period.Window;
@@ -469,19 +469,19 @@ final class Board
 
 	Map<String, long[]> dayTotals()
 	{
-		return memo("dayTotals", store::dayTotals);
+		return memo("dayTotals", store.loot::dayTotals);
 	}
 
-	LocalStore.LootWindow lootWindow()
+	LootDays.LootWindow lootWindow()
 	{
 		Window w = window();
-		return period.session() ? store.sessionLootWindow() : store.lootBetween(w.start, w.end);
+		return period.session() ? store.loot.sessionLootWindow() : store.loot.lootBetween(w.start, w.end);
 	}
 
 	Map<String, List<BagItem>> periodItems()
 	{
 		Window w = window();
-		return period.session() ? store.itemsBySource(null, null) : store.itemsBySource(w.start, w.end);
+		return period.session() ? store.loot.itemsBySource(null, null) : store.loot.itemsBySource(w.start, w.end);
 	}
 
 	double[] sourceTimesInWindow(String name)
@@ -509,12 +509,12 @@ final class Board
 
 	Map<String, long[]> taskItemsEver()
 	{
-		return memo("taskItems", () -> store.onTaskItems(EVER_FROM, EVER_TO));
+		return memo("taskItems", () -> store.slayer.onTaskItems(EVER_FROM, EVER_TO));
 	}
 
 	Map<String, Long> taskKillsEver()
 	{
-		return memo("taskKills", () -> store.onTaskKills(EVER_FROM, EVER_TO));
+		return memo("taskKills", () -> store.slayer.onTaskKills(EVER_FROM, EVER_TO));
 	}
 
 	boolean everOnTask()
@@ -538,8 +538,8 @@ final class Board
 	long[] taskTally()
 	{
 		long[] ms = windowMs();
-		long[] tally = Arrays.copyOf(store.onTaskTally(ms[0], ms[1], null, period.whole()), 4);
-		tally[3] = tallyOf(store.onTaskLoot(ms[0], ms[1], null, period.whole()))[1];
+		long[] tally = Arrays.copyOf(store.slayer.onTaskTally(ms[0], ms[1], null, period.whole()), 4);
+		tally[3] = tallyOf(store.slayer.onTaskLoot(ms[0], ms[1], null, period.whole()))[1];
 		return tally;
 	}
 
@@ -653,7 +653,7 @@ final class Board
 
 	private Long rolledKills(String name)
 	{
-		if (store.lootRollFrom() <= 0)
+		if (store.loot.lootRollFrom() <= 0)
 		{
 			return null;
 		}
@@ -675,7 +675,7 @@ final class Board
 
 	LocalDate rollShortOf()
 	{
-		long from = store.lootRollFrom();
+		long from = store.loot.lootRollFrom();
 		if (from <= 0)
 		{
 			return null;
@@ -1406,7 +1406,7 @@ final class Board
 	{
 		if (!period.whole())
 		{
-			LocalStore.LootWindow win = lootWindow();
+			LootDays.LootWindow win = lootWindow();
 			return new long[]{win.loots, win.value, win.left, win.leftValue};
 		}
 		long[] out = new long[4];
@@ -1429,7 +1429,7 @@ final class Board
 		{
 			return null;
 		}
-		LocalStore.LootWindow win = lootWindow();
+		LootDays.LootWindow win = lootWindow();
 		return win.items.isEmpty() ? null : new String[]{win.items.get(0)[0], win.items.get(0)[2]};
 	}
 
@@ -1449,7 +1449,7 @@ final class Board
 		}
 		if (period.session())
 		{
-			String[] top = most(store.sessionLootWindow().sources, r -> safeParse(r[1]));
+			String[] top = most(store.loot.sessionLootWindow().sources, r -> safeParse(r[1]));
 			return top == null ? null : new String[]{top[0], fmt(safeParse(top[1]))};
 		}
 		Span s = span();
@@ -1472,7 +1472,7 @@ final class Board
 		}
 		else
 		{
-			store.lootBetween(from, to).sources.forEach(r -> out.merge(r[0], safeParse(r[2]), Long::sum));
+			store.loot.lootBetween(from, to).sources.forEach(r -> out.merge(r[0], safeParse(r[2]), Long::sum));
 		}
 		return out;
 	}

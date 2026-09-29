@@ -297,7 +297,7 @@ final class RecapScreen
 		}
 		else if (f.session)
 		{
-			for (String[] r : store.sessionLootWindow().sources)
+			for (String[] r : store.loot.sessionLootWindow().sources)
 			{
 				by.merge(r[0], safeParse(r[1]), Long::sum);
 				worth.merge(r[0], safeParse(r[2]), Long::sum);
@@ -340,7 +340,7 @@ final class RecapScreen
 	{
 		if (!f.whole && !f.session)
 		{
-			long from = store.lootRollFrom();
+			long from = store.loot.lootRollFrom();
 			if (from <= 0 || from > board.windowMs()[0])
 			{
 				f.lootNote = "Loot is not dated this far back, so this period's cannot be told from the rest.";
@@ -378,7 +378,7 @@ final class RecapScreen
 			}
 			return;
 		}
-		LocalStore.LootWindow win = board.lootWindow();
+		LootDays.LootWindow win = board.lootWindow();
 		for (String[] r : firstN(win.sources, 8))
 		{
 			long v = safeParse(r[2]);

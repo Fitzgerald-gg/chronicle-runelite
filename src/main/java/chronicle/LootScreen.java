@@ -74,7 +74,7 @@ final class LootScreen
 		if (canAskOnTask && onTaskOnly)
 		{
 			long[] w = board.windowMs();
-			List<BagItem> taskBag = store.onTaskLoot(w[0], w[1], null, period.whole());
+			List<BagItem> taskBag = store.slayer.onTaskLoot(w[0], w[1], null, period.whole());
 			if (taskBag.isEmpty())
 			{
 				return noted(p, board.inside("No task closed"));
@@ -126,8 +126,8 @@ final class LootScreen
 	JPanel dropsInWindow(JPanel p)
 	{
 		Window win = board.window();
-		LocalStore.LootWindow sitting = period.session() ? store.sessionLootWindow() : null;
-		long rollFrom = store.lootRollFrom();
+		LootDays.LootWindow sitting = period.session() ? store.loot.sessionLootWindow() : null;
+		long rollFrom = store.loot.lootRollFrom();
 		long fromMs = startMs(win.start);
 		if (sitting == null && rollFrom <= 0)
 		{
@@ -140,8 +140,8 @@ final class LootScreen
 				+ ", which is inside " + board.periodInSentence() + ". Naming the part it can see "
 				+ "as the whole period would be worse than saying nothing.");
 		}
-		LocalStore.LootWindow w = sitting != null ? sitting
-			: store.lootBetween(win.start, win.end);
+		LootDays.LootWindow w = sitting != null ? sitting
+			: store.loot.lootBetween(win.start, win.end);
 		if (!dropsLeftBehind && dropsByKind)
 		{
 			if (w.items.isEmpty())
@@ -517,7 +517,7 @@ final class LootScreen
 		final boolean hasTask = board.taskItemsEver().containsKey(properName(name));
 		long[] tw = board.windowMs();
 		long[] mine = inWindow == null ? board.taskItemsEver().get(properName(name))
-			: store.onTaskItems(tw[0], tw[1]).getOrDefault(properName(name), new long[2]);
+			: store.slayer.onTaskItems(tw[0], tw[1]).getOrDefault(properName(name), new long[2]);
 		if (hasTask && onTaskOnly)
 		{
 			head.add(row("Obtained on task", "×" + fmt(mine[0]), ACCENT));
@@ -540,7 +540,7 @@ final class LootScreen
 		}
 		if (inWindow == null && !ui.drawingCopy)
 		{
-			long[] days = store.itemDays(name);
+			long[] days = store.loot.itemDays(name);
 			days[2] = days.length > 3 && days[3] < got ? 0 : days[2];
 			if (days[2] == 1)
 			{
@@ -594,7 +594,7 @@ final class LootScreen
 
 	String lootSince()
 	{
-		long from = store.lootDetailFrom();
+		long from = store.loot.lootDetailFrom();
 		Window w = board.window();
 		return period.session() || from > 0 && from <= startMs(w.start) ? null
 			: from <= 0 ? Board.UNDATED
@@ -633,7 +633,7 @@ final class LootScreen
 	JPanel byTaskRows(JPanel p, String name)
 	{
 		long[] w = board.windowMs();
-		List<Object[]> split = store.onTaskItemByTask(name, w[0], w[1]);
+		List<Object[]> split = store.slayer.onTaskItemByTask(name, w[0], w[1]);
 		if (split.isEmpty())
 		{
 			return noted(p, board.inside("No task paid this"));
@@ -706,14 +706,14 @@ final class LootScreen
 	void addAssignments(JPanel p, String npc)
 	{
 		long[] w = board.windowMs();
-		List<LocalStore.Assignment> was = store.onTaskAssignments(npc, w[0], w[1]);
+		List<SlayerLog.Assignment> was = store.slayer.onTaskAssignments(npc, w[0], w[1]);
 		if (was.isEmpty())
 		{
 			return;
 		}
 		p.add(group("Killed on task"));
 		int cap = ui.cap("ontask:src:" + npc, ROW_CAP);
-		for (LocalStore.Assignment a : firstN(was, cap))
+		for (SlayerLog.Assignment a : firstN(was, cap))
 		{
 			p.add(row("Task: " + a.task, fmt(a.killsHere)));
 		}
@@ -750,7 +750,7 @@ final class LootScreen
 		bag.sort(Comparator.comparingLong((BagItem b) -> b.value).reversed());
 		final long other = inWindow == null ? 0 : inWindow[1] - board.tallyOf(bag)[1];
 		final boolean unfiled = other > 0 || inWindow != null && !period.session()
-			&& store.unfiledSources(board.window().start, board.window().end).contains(own);
+			&& store.loot.unfiledSources(board.window().start, board.window().end).contains(own);
 		spaced(p, ui.backRow(() -> ui.copyPage(() -> buildSourceDetail(name))), 4);
 		JPanel head = card(name);
 		if (sr != null)

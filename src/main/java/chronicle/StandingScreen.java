@@ -505,7 +505,7 @@ final class StandingScreen
 				: HistoryLog.levels(opening, stand.keys);
 			periodTip = periodTip(played, gains);
 			LocalDate lootSince = null;
-			long lootFromTs = earliestDatedLoot(board.historyFeed, store.lootRollFrom());
+			long lootFromTs = earliestDatedLoot(board.historyFeed, store.loot.lootRollFrom());
 			if (lootFromTs > 0)
 			{
 				LocalDate sat = dayOf(lootFromTs);

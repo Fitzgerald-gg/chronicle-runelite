@@ -5,8 +5,8 @@ package chronicle;
 
 import chronicle.Board.Obtained;
 import chronicle.LocalStore.BagItem;
-import chronicle.LocalStore.SlayerJourney;
-import chronicle.LocalStore.SlayerTask;
+import chronicle.SlayerLog.SlayerJourney;
+import chronicle.SlayerLog.SlayerTask;
 import chronicle.LocalStore.SourceRow;
 import chronicle.LocalStore.UntakenRow;
 import chronicle.panel.StatRegistry;

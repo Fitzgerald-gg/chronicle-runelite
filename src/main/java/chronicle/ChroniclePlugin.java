@@ -805,19 +805,19 @@ public class ChroniclePlugin extends Plugin
 		return c == null ? Collections.emptyList() : c.sessionSkillXp();
 	}
 
-	void fetchSlayerJourney(Consumer<LocalStore.SlayerJourney> onDone)
+	void fetchSlayerJourney(Consumer<SlayerLog.SlayerJourney> onDone)
 	{
 		if (!ready())
 		{
 			onDone.accept(null);
 			return;
 		}
-		executor.submit(() -> onDone.accept(localStore.slayerJourney()));
+		executor.submit(() -> onDone.accept(localStore.slayer.slayerJourney()));
 	}
 
-	LocalStore.SlayerJourney slayerJourney()
+	SlayerLog.SlayerJourney slayerJourney()
 	{
-		return ready() ? localStore.slayerJourney() : null;
+		return ready() ? localStore.slayer.slayerJourney() : null;
 	}
 
 	List<JsonObject> feedWithSitting(int n)
@@ -991,8 +991,8 @@ public class ChroniclePlugin extends Plugin
 			? Math.max(0, (System.currentTimeMillis() - sessionStartMs) / 60_000) : 0;
 		Map<String, Integer> sess = sessionView();
 		long xp = sess.getOrDefault("totalXpGained", 0);
-		int drops = localStore.sessionLoots();
-		long dropsGp = localStore.sessionLootValue();
+		int drops = localStore.loot.sessionLoots();
+		long dropsGp = localStore.loot.sessionLootValue();
 		if (mins < 5 && xp == 0 && drops == 0)
 		{
 			return;
@@ -1002,7 +1002,7 @@ public class ChroniclePlugin extends Plugin
 
 	private JsonObject sessionData(long mins, long xp, int drops, long dropsGp)
 	{
-		long[] left = localStore.sessionUntakenTally();
+		long[] left = localStore.loot.sessionUntakenTally();
 		JsonObject data = new JsonObject();
 		data.addProperty("minutes", mins);
 		if (sessionStartMs > 0)
@@ -1014,7 +1014,7 @@ public class ChroniclePlugin extends Plugin
 		data.addProperty("dropsGp", dropsGp);
 		data.addProperty("left", left[0]);
 		data.addProperty("leftGp", left[1]);
-		data.addProperty("leftKills", localStore.sessionUntakenKills());
+		data.addProperty("leftKills", localStore.loot.sessionUntakenKills());
 		JsonObject skills = new JsonObject();
 		for (SkillGain g : sessionSkillXp())
 		{
@@ -1043,7 +1043,7 @@ public class ChroniclePlugin extends Plugin
 		}
 		Map<String, Integer> sess = sessionView();
 		long xp = sess.getOrDefault("totalXpGained", 0);
-		int drops = localStore.sessionLoots();
+		int drops = localStore.loot.sessionLoots();
 		if (mins == 0 && xp == 0 && drops == 0)
 		{
 			return null;
@@ -1052,7 +1052,7 @@ public class ChroniclePlugin extends Plugin
 		line.addProperty("type", "SESSION");
 		line.addProperty("ts", System.currentTimeMillis());
 		line.addProperty("live", true);
-		line.add("data", sessionData(mins, xp, drops, localStore.sessionLootValue()));
+		line.add("data", sessionData(mins, xp, drops, localStore.loot.sessionLootValue()));
 		return line;
 	}
 
