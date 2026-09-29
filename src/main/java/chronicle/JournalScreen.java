@@ -199,9 +199,9 @@ final class JournalScreen extends Screen
 
 	String frontispieceNote()
 	{
-		if (ui.loot.grindsCache != null)
+		if (ui.detail.grinds() != null)
 		{
-			for (GrindBook.GrindRow g : ui.loot.grindsCache)
+			for (GrindBook.GrindRow g : ui.detail.grinds())
 			{
 				if (g.percentileDry >= 90)
 				{

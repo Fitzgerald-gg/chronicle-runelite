@@ -130,6 +130,7 @@ class ChroniclePanel extends PluginPanel
 	final StandingScreen standing;
 	final SlayerScreen slayer;
 	final LootScreen loot;
+	final DetailScreen detail;
 	final TrackersScreen trackers;
 	final SearchScreen search;
 	final JournalScreen journal;
@@ -176,6 +177,7 @@ class ChroniclePanel extends PluginPanel
 		standing = new StandingScreen(this, board);
 		slayer = new SlayerScreen(this, board);
 		loot = new LootScreen(this, board);
+		detail = new DetailScreen(this, board);
 		trackers = new TrackersScreen(this, board);
 		search = new SearchScreen(this, board);
 		journal = new JournalScreen(this, board);
@@ -293,7 +295,7 @@ class ChroniclePanel extends PluginPanel
 	void resetAccountCaches()
 	{
 		slayer.forget();
-		loot.forget();
+		detail.forget();
 		board.forget();
 		place = null;
 		back.clear();
@@ -685,9 +687,9 @@ class ChroniclePanel extends PluginPanel
 		switch (at.page)
 		{
 			case ITEM:
-				return loot.buildItemDetail(at.name);
+				return detail.buildItemDetail(at.name);
 			case SOURCE:
-				return loot.buildSourceDetail(at.name);
+				return detail.buildSourceDetail(at.name);
 			case SKILL:
 				return trackers.buildSkillDetail(at.name);
 			case TRACKERS:
@@ -701,9 +703,9 @@ class ChroniclePanel extends PluginPanel
 			case TASK:
 				return slayer.buildTaskDetail(at.index);
 			case LEFT_SOURCE:
-				return loot.buildLeftBehindDetail(at.name, null);
+				return detail.buildLeftBehindDetail(at.name, null);
 			case LEFT_ITEM:
-				return loot.buildLeftBehindDetail(null, at.name);
+				return detail.buildLeftBehindDetail(null, at.name);
 			default:
 				return standing.buildSheetPage(at.name);
 		}
