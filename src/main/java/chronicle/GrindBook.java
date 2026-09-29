@@ -281,7 +281,7 @@ class GrindBook
 		{
 			for (Map.Entry<String, JsonElement> e : kcs.entrySet())
 			{
-				long v = safeLong(e.getValue());
+				long v = asLong(e.getValue());
 				if (v > 0)
 				{
 					kcByNorm.merge(norm(e.getKey()), v, Math::max);
@@ -507,7 +507,7 @@ class GrindBook
 		return out;
 	}
 
-	private static long safeLong(JsonElement e)
+	private static long asLong(JsonElement e)
 	{
 		try
 		{

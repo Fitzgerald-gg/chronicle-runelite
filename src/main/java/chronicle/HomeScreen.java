@@ -21,6 +21,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import javax.swing.JPanel;
 import static chronicle.Feed.*;
+import static chronicle.Json.*;
 import static chronicle.Pictures.*;
 import static chronicle.Reference.*;
 import static chronicle.Ui.*;
@@ -236,7 +237,7 @@ final class HomeScreen
 		List<String> pets = new ArrayList<>();
 		for (JsonObject e : plugin.feedNewest(Board.FEED_SCAN_DEEP))
 		{
-			if (safeLong(e.get("ts")) < since)
+			if (asLong(e.get("ts")) < since)
 			{
 				continue;
 			}
@@ -248,7 +249,7 @@ final class HomeScreen
 					{
 						levels.merge(prettify(
 							low(d.get("skill").getAsString())),
-							safeLong(d.get("level")), Math::max);
+							asLong(d.get("level")), Math::max);
 					}
 					break;
 				case "COLLECTION":

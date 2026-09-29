@@ -26,6 +26,7 @@ import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import net.runelite.client.util.AsyncBufferedImage;
 import static chronicle.Feed.*;
+import static chronicle.Json.*;
 import static chronicle.LocalStore.kindOf;
 import static chronicle.Pictures.*;
 import static chronicle.Reference.*;
@@ -778,7 +779,7 @@ final class LootScreen
 				JsonObject rec = board.records().get(low(sr.name));
 				JsonObject recData = rec != null ? rec.getAsJsonObject("data") : null;
 				JPanel best = row("Personal best", pb(sr.pb) + (rec != null
-					? " · set " + day(safeLong(rec.get("ts"))) : ""));
+					? " · set " + day(asLong(rec.get("ts"))) : ""));
 				if (recData != null && recData.has("was"))
 				{
 					best.setToolTipText("Was " + pb(recData.get("was").getAsDouble()));

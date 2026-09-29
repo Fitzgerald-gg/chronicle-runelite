@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import javax.swing.JPanel;
 import static chronicle.Feed.*;
+import static chronicle.Json.*;
 import static chronicle.Pictures.*;
 import static chronicle.Reference.*;
 import static chronicle.Ui.*;
@@ -324,7 +325,7 @@ final class TrackersScreen
 		Map<String, long[]> killers = new LinkedHashMap<>();
 		for (JsonObject e : plugin.feedNewest(Board.FEED_SCAN_DEEP))
 		{
-			long ts = safeLong(e.get("ts"));
+			long ts = asLong(e.get("ts"));
 			if (!"DEATH".equals(typeOf(e)) || !board.insideWindow(ts))
 			{
 				continue;

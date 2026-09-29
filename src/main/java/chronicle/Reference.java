@@ -25,6 +25,7 @@ import net.runelite.api.Experience;
 import net.runelite.api.Skill;
 import net.runelite.client.hiscore.HiscoreSkill;
 import net.runelite.client.hiscore.HiscoreSkillType;
+import static chronicle.Json.*;
 import static chronicle.LocalStore.kindOf;
 import static chronicle.Ui.*;
 
@@ -239,7 +240,7 @@ final class Reference
 
 	static final JsonObject CA_TASKS = obj(COMBAT_BUNDLE, "tasks");
 
-	static final long CA_POINTS = safeLong(obj(obj(COMBAT_BUNDLE, "_meta"), "totals").get("points"));
+	static final long CA_POINTS = asLong(obj(obj(COMBAT_BUNDLE, "_meta"), "totals").get("points"));
 
 	static final JsonObject DIARY_TASKS = obj(table("osrs_achievement_diaries.json"), "diaries");
 

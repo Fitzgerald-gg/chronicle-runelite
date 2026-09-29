@@ -35,6 +35,7 @@ import javax.swing.SwingWorker;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Skill;
 import static chronicle.Feed.*;
+import static chronicle.Json.*;
 import static chronicle.LocalStore.kindOf;
 import static chronicle.Reference.*;
 import static chronicle.Ui.*;
@@ -144,7 +145,7 @@ final class Board
 			return -1;
 		}
 		JsonElement v = getIgnoreCase(obj(clog, map), key);
-		return v == null ? -1 : safeLong(v);
+		return v == null ? -1 : asLong(v);
 	}
 
 	long bossKillsInWindow(String name)
@@ -251,7 +252,7 @@ final class Board
 		for (Entry<String, JsonElement> ln
 			: found.getAsJsonObject().entrySet())
 		{
-			long n = safeLong(ln.getValue());
+			long n = asLong(ln.getValue());
 			if (n > 0 && lineBelongsTo(boss, ln.getKey()))
 			{
 				out.add(new AbstractMap.SimpleEntry<>(ln.getKey(), n));
@@ -808,7 +809,7 @@ final class Board
 			movedTypes = new LinkedHashMap<>();
 			for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
 			{
-				if (insideWindow(safeLong(e.get("ts"))))
+				if (insideWindow(asLong(e.get("ts"))))
 				{
 					movedTypes.merge(typeOf(e), 1L, Long::sum);
 				}
@@ -1181,9 +1182,9 @@ final class Board
 		boolean liveHead = !feed.isEmpty() && feed.get(0).has("live");
 		for (int i = 0; i < feed.size(); i++)
 		{
-			long ts = safeLong(feed.get(i).get("ts"));
+			long ts = asLong(feed.get(i).get("ts"));
 			while ((i > 0 || !liveHead) && m < marks.size()
-				&& safeLong(marks.get(m).get("ts")) > ts)
+				&& asLong(marks.get(m).get("ts")) > ts)
 			{
 				out.add(marks.get(m++));
 			}
@@ -1213,7 +1214,7 @@ final class Board
 				if (has(d, "itemName"))
 				{
 					landedSlots.put(low(d.get("itemName").getAsString()),
-						safeLong(e.get("ts")));
+						asLong(e.get("ts")));
 				}
 			}
 		}
@@ -1260,7 +1261,7 @@ final class Board
 				}
 				JsonObject d = obj(e, "data");
 				LocalDate day = dayOf(sittingStart(e));
-				long ended = safeLong(e.get("ts"));
+				long ended = asLong(e.get("ts"));
 				if (ended > 0)
 				{
 					LocalDate last = dayOf(ended);
@@ -1274,16 +1275,16 @@ final class Board
 				t[1]++;
 				if (d.has("xp"))
 				{
-					t[2] += safeLong(d.get("xp"));
+					t[2] += asLong(d.get("xp"));
 					t[3]++;
 				}
 				if (d.has("drops"))
 				{
-					t[4] += safeLong(d.get("drops"));
-					t[5] += safeLong(d.get("dropsGp"));
+					t[4] += asLong(d.get("drops"));
+					t[5] += asLong(d.get("dropsGp"));
 					t[6]++;
 				}
-				if (d.has("xp") && safeLong(d.get("xp")) == 0 && !d.has("skills"))
+				if (d.has("xp") && asLong(d.get("xp")) == 0 && !d.has("skills"))
 				{
 					t[7]++;
 				}
@@ -1293,7 +1294,7 @@ final class Board
 					Map<String, Long> by = daySkills.computeIfAbsent(day, k -> new LinkedHashMap<>());
 					for (Entry<String, JsonElement> sk : d.getAsJsonObject("skills").entrySet())
 					{
-						by.merge(sk.getKey(), safeLong(sk.getValue()), Long::sum);
+						by.merge(sk.getKey(), asLong(sk.getValue()), Long::sum);
 					}
 				}
 			}
@@ -1719,7 +1720,7 @@ final class Board
 		for (Entry<String, JsonElement> e
 			: obj(cl, "clog_items").entrySet())
 		{
-			o.all.merge(low(e.getKey()), safeLong(e.getValue()), Math::max);
+			o.all.merge(low(e.getKey()), asLong(e.getValue()), Math::max);
 		}
 		for (Entry<String, JsonElement> pg
 			: obj(cl, "by_cat").entrySet())
@@ -1733,7 +1734,7 @@ final class Board
 				: pg.getValue().getAsJsonObject().entrySet())
 			{
 				items.merge(low(it.getKey()),
-					safeLong(it.getValue()), Math::max);
+					asLong(it.getValue()), Math::max);
 			}
 			o.byPage.put(low(pg.getKey()), items);
 		}
@@ -1796,7 +1797,7 @@ final class Board
 			String key = low(e.getKey());
 			if (!lined.contains(key))
 			{
-				out.merge(key, safeLong(e.getValue()), Math::max);
+				out.merge(key, asLong(e.getValue()), Math::max);
 			}
 		}
 		for (Entry<String, Long> e : LocalStore.pageKillLines(cl).entrySet())
@@ -1821,7 +1822,7 @@ final class Board
 		for (Entry<String, JsonElement> ln : found.getAsJsonObject().entrySet())
 		{
 			lines.add(ln.getKey());
-			lines.add(fmt(safeLong(ln.getValue())));
+			lines.add(fmt(asLong(ln.getValue())));
 		}
 		return tip(page, lines);
 	}
@@ -1834,13 +1835,13 @@ final class Board
 		}
 		JsonObject counts = obj(cl, "cat_counts");
 		String key = low(tab);
-		long total = counts.has(key + "_total") ? safeLong(counts.get(key + "_total")) : 0;
+		long total = counts.has(key + "_total") ? asLong(counts.get(key + "_total")) : 0;
 		if (total <= 0)
 		{
 			return null;
 		}
 		long got = counts.has(key + "_obtained")
-			? safeLong(counts.get(key + "_obtained")) : 0;
+			? asLong(counts.get(key + "_obtained")) : 0;
 		return tip(tab,
 			"Obtained", fmt(got),
 			"Available", fmt(total),

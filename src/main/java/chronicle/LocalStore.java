@@ -39,13 +39,13 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.game.ItemManager;
+import static chronicle.Json.*;
 
 @Singleton
 @Slf4j
@@ -445,30 +445,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				d.getValue().remove("leftItems");
 			}
 		}
-	}
-
-	private static boolean present(JsonObject o, String key)
-	{
-		return o.has(key) && !o.get(key).isJsonNull();
-	}
-
-	private static void bump(JsonObject o, String key, long by)
-	{
-		o.addProperty(key, asLong(o.get(key)) + by);
-	}
-
-	private static JsonObject sub(JsonObject parent, String key)
-	{
-		if (!isObject(parent, key))
-		{
-			parent.add(key, new JsonObject());
-		}
-		return parent.getAsJsonObject(key);
-	}
-
-	private static JsonObject obj(JsonObject o, String key)
-	{
-		return o != null && isObject(o, key) ? o.getAsJsonObject(key) : new JsonObject();
 	}
 
 	private void rollTaken(String source, long value, List<BagItem> priced, Double killTime)
@@ -1894,7 +1870,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		{
 			if (root != null)
 			{
-				HistoryLog.fill(root, "consumable_values", out);
+				fill(root, "consumable_values", out);
 			}
 		}
 		return out;
@@ -2020,66 +1996,11 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return all;
 	}
 
-	private static List<Map.Entry<String, JsonObject>> objects(JsonObject o)
-	{
-		List<Map.Entry<String, JsonObject>> out = new ArrayList<>();
-		for (var e : o.entrySet())
-		{
-			if (e.getValue().isJsonObject())
-			{
-				out.add(Map.entry(e.getKey(), e.getValue().getAsJsonObject()));
-			}
-		}
-		return out;
-	}
-
-	private static List<JsonObject> objects(JsonArray a)
-	{
-		List<JsonObject> out = new ArrayList<>();
-		for (JsonElement e : a)
-		{
-			if (e.isJsonObject())
-			{
-				out.add(e.getAsJsonObject());
-			}
-		}
-		return out;
-	}
-
 	private static List<JsonObject> newestFirst(JsonArray a)
 	{
 		List<JsonObject> out = objects(a);
 		Collections.reverse(out);
 		return out;
-	}
-
-	private static long asLong(JsonElement e)
-	{
-		try
-		{
-			return e != null && !e.isJsonNull() ? e.getAsLong() : 0;
-		}
-		catch (RuntimeException ex)
-		{
-			return 0;
-		}
-	}
-
-	private static double asDouble(JsonElement e)
-	{
-		try
-		{
-			return e != null && !e.isJsonNull() ? e.getAsDouble() : 0;
-		}
-		catch (RuntimeException ex)
-		{
-			return 0;
-		}
-	}
-
-	private static String str(JsonObject o, String key, String def)
-	{
-		return present(o, key) ? o.get(key).getAsString() : def;
 	}
 
 	String importJournal(JsonObject in, String rsn)
@@ -2373,14 +2294,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		if (present(inc, key))
 		{
 			raise(cur, key, asLong(inc.get(key)));
-		}
-	}
-
-	private static void raise(JsonObject cur, String key, long v)
-	{
-		if (v > asLong(cur.get(key)))
-		{
-			cur.addProperty(key, v);
 		}
 	}
 
@@ -3041,16 +2954,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			: new File(mountedDir, slug(currentRsn) + HistoryLog.SPINE_SUFFIX);
 		out.put("spineBytes", spine != null && spine.isFile() ? spine.length() : 0L);
 		return out;
-	}
-
-	private static JsonArray arr(JsonObject o, String key)
-	{
-		return o != null && o.has(key) && o.get(key).isJsonArray() ? o.getAsJsonArray(key) : new JsonArray();
-	}
-
-	private static boolean isObject(JsonObject o, String key)
-	{
-		return o.has(key) && o.get(key).isJsonObject();
 	}
 
 	private static File jsonPath(File dir, String rsn)

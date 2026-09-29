@@ -42,6 +42,7 @@ import net.runelite.api.Skill;
 import net.runelite.api.SpriteID;
 import net.runelite.client.hiscore.HiscoreSkill;
 import static chronicle.Feed.*;
+import static chronicle.Json.*;
 import static chronicle.LocalStore.kindOf;
 import static chronicle.Pictures.*;
 import static chronicle.Reference.*;
@@ -1356,7 +1357,7 @@ final class StandingScreen
 		List<JsonObject> got = new ArrayList<>();
 		for (JsonObject e : plugin.feedNewest(Board.FEED_SCAN_DEEP))
 		{
-			if ("COLLECTION".equals(typeOf(e)) && board.insideWindow(safeLong(e.get("ts"))))
+			if ("COLLECTION".equals(typeOf(e)) && board.insideWindow(asLong(e.get("ts"))))
 			{
 				got.add(e);
 			}

@@ -11,11 +11,12 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import static chronicle.panel.StatRegistry.prettify;
 import java.util.Map.Entry;
 import java.util.function.LongFunction;
+import static chronicle.Json.*;
 import static chronicle.Reference.*;
 import static chronicle.Ui.*;
+import static chronicle.panel.StatRegistry.prettify;
 
 final class Feed
 {
@@ -64,10 +65,10 @@ final class Feed
 			}
 			case "SESSION":
 			{
-				long mins = safeLong(d.get("minutes"));
-				long xp = safeLong(d.get("xp"));
-				long drops = safeLong(d.get("drops"));
-				long dropsGp = safeLong(d.get("dropsGp"));
+				long mins = asLong(d.get("minutes"));
+				long xp = asLong(d.get("xp"));
+				long drops = asLong(d.get("drops"));
+				long dropsGp = asLong(d.get("dropsGp"));
 				StringBuilder line = new StringBuilder("Session: ");
 				line.append(hoursMinutes(mins));
 				if (xp > 0)
@@ -137,8 +138,8 @@ final class Feed
 	static String[] sessionParts(JsonObject e)
 	{
 		JsonObject d = obj(e, "data");
-		long xp = safeLong(d.get("xp"));
-		long drops = safeLong(d.get("drops"));
+		long xp = asLong(d.get("xp"));
+		long drops = asLong(d.get("drops"));
 		StringBuilder right = new StringBuilder();
 		if (xp > 0)
 		{
@@ -148,43 +149,43 @@ final class Feed
 		{
 			right.append(right.length() > 0 ? " · " : "").append(count(drops, "drop"));
 		}
-		return new String[]{"Session · " + hoursMinutes(safeLong(d.get("minutes"))),
+		return new String[]{"Session · " + hoursMinutes(asLong(d.get("minutes"))),
 			right.toString(), feedLine(e)};
 	}
 
 	static String mostOf(JsonObject d)
 	{
-		Entry<String, JsonElement> top = most(obj(d, "skills").entrySet(), e -> safeLong(e.getValue()));
+		Entry<String, JsonElement> top = most(obj(d, "skills").entrySet(), e -> asLong(e.getValue()));
 		return top == null ? null : prettify(top.getKey());
 	}
 
 	static String stamp(JsonObject e)
 	{
-		long ts = safeLong(e.get("ts"));
+		long ts = asLong(e.get("ts"));
 		return ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "";
 	}
 
 	static long sittingStart(JsonObject e)
 	{
 		JsonObject d = obj(e, "data");
-		long start = safeLong(d.get("start"));
+		long start = asLong(d.get("start"));
 		if (start > 0)
 		{
 			return start;
 		}
-		long ts = safeLong(e.get("ts"));
+		long ts = asLong(e.get("ts"));
 		return ts > 0 ? ts - sessionMinutes(e) * 60_000L : ts;
 	}
 
 	static long filedAt(JsonObject e)
 	{
-		return "SESSION".equals(typeOf(e)) ? sittingStart(e) : safeLong(e.get("ts"));
+		return "SESSION".equals(typeOf(e)) ? sittingStart(e) : asLong(e.get("ts"));
 	}
 
 	static long sessionMinutes(JsonObject e)
 	{
 		JsonObject d = obj(e, "data");
-		return Math.max(0, safeLong(d.get("minutes")));
+		return Math.max(0, asLong(d.get("minutes")));
 	}
 
 	static String questName(String raw)
@@ -207,7 +208,7 @@ final class Feed
 		long oldest = 0;
 		for (JsonObject e : feed)
 		{
-			long ts = !sittings ? safeLong(e.get("ts"))
+			long ts = !sittings ? asLong(e.get("ts"))
 				: "SESSION".equals(typeOf(e)) ? sittingStart(e) : 0;
 			if (ts > 0 && (oldest == 0 || ts < oldest))
 			{
@@ -219,7 +220,7 @@ final class Feed
 
 	static long newestTs(List<JsonObject> feed)
 	{
-		return feed.isEmpty() ? 0 : safeLong(feed.get(0).get("ts"));
+		return feed.isEmpty() ? 0 : asLong(feed.get(0).get("ts"));
 	}
 
 	static long earliestDatedLoot(List<JsonObject> feed, long rollFrom)

@@ -31,6 +31,7 @@ import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import net.runelite.api.Skill;
 import static chronicle.Feed.*;
+import static chronicle.Json.*;
 import static chronicle.LocalStore.kindOf;
 import static chronicle.Pictures.*;
 import static chronicle.Reference.*;
@@ -155,7 +156,7 @@ final class SearchScreen
 			{
 				continue;
 			}
-			long n = safeLong(e.getValue());
+			long n = asLong(e.getValue());
 			fights.add(new Hit(e.getKey(), fmt(n) + " kc", null, "In the Kill Log", () -> ui.openSlayer("Monsters"), sc, n));
 		}
 		total += searchGroup(p, "Bosses and monsters", fights);

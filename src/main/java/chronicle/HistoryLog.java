@@ -32,6 +32,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import static chronicle.Json.*;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -600,23 +601,6 @@ class HistoryLog
 			counters.forEach((k, d) -> b.counters.computeIfPresent(k, (key, v) -> v + d));
 			b.adj.kcs.forEach((k, d) -> kcs.merge(k, d, Long::sum));
 			b.adj.counters.forEach((k, d) -> counters.merge(k, d, Long::sum));
-		}
-	}
-
-	static void fill(JsonObject o, String key, Map<String, Long> into)
-	{
-		if (o.has(key) && o.get(key).isJsonObject())
-		{
-			for (var e : o.getAsJsonObject(key).entrySet())
-			{
-				try
-				{
-					into.put(e.getKey(), e.getValue().getAsLong());
-				}
-				catch (RuntimeException ignored)
-				{
-				}
-			}
 		}
 	}
 

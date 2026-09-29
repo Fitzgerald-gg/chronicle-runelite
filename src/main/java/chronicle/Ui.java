@@ -19,8 +19,6 @@ import java.awt.GridLayout;
 import java.awt.MouseInfo;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -28,7 +26,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -292,28 +289,6 @@ final class Ui
 		return sb.toString();
 	}
 
-	static JsonObject obj(JsonObject o, String key)
-	{
-		return o.has(key) && o.get(key).isJsonObject() ? o.getAsJsonObject(key) : new JsonObject();
-	}
-
-	static String str(JsonObject o, String key, String fallback)
-	{
-		return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : fallback;
-	}
-
-	static long safeLong(JsonElement e)
-	{
-		try
-		{
-			return e != null && !e.isJsonNull() ? e.getAsLong() : 0;
-		}
-		catch (RuntimeException ex)
-		{
-			return 0;
-		}
-	}
-
 	static long safeParse(String s)
 	{
 		try
@@ -323,42 +298,6 @@ final class Ui
 		catch (NumberFormatException e)
 		{
 			return 0;
-		}
-	}
-
-	static boolean has(JsonObject o, String key)
-	{
-		return o.has(key) && !o.get(key).isJsonNull()
-			&& !o.get(key).getAsString().trim().isEmpty();
-	}
-
-	static List<String> strs(JsonElement a)
-	{
-		List<String> out = new ArrayList<>();
-		if (a != null)
-		{
-			a.getAsJsonArray().forEach(n -> out.add(n.getAsString()));
-		}
-		return out;
-	}
-
-	static Map<String, String> strMap(JsonObject t, String key)
-	{
-		Map<String, String> out = new LinkedHashMap<>();
-		obj(t, key).entrySet().forEach(e -> out.put(e.getKey(), e.getValue().getAsString()));
-		return out;
-	}
-
-	static JsonObject table(String name)
-	{
-		try (InputStreamReader in = new InputStreamReader(ChroniclePanel.class.getResourceAsStream(
-			name), StandardCharsets.UTF_8))
-		{
-			return new com.google.gson.JsonParser().parse(in).getAsJsonObject();
-		}
-		catch (Exception ex)
-		{
-			return new JsonObject();
 		}
 	}
 

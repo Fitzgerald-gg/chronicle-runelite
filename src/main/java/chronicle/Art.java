@@ -17,6 +17,7 @@ import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
 import net.runelite.api.Skill;
 import net.runelite.client.game.SpriteManager;
+import static chronicle.Json.*;
 import static chronicle.Ui.link;
 import static chronicle.Ui.named;
 

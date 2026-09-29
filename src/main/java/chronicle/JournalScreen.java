@@ -28,6 +28,7 @@ import javax.swing.JPanel;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import static chronicle.Feed.*;
+import static chronicle.Json.*;
 import static chronicle.Pictures.*;
 import static chronicle.Reference.*;
 import static chronicle.Ui.*;
@@ -191,7 +192,7 @@ final class JournalScreen
 		{
 			JsonObject last = marks.get(0);
 			plate.add(row("Last milestone", str(last.getAsJsonObject("data"), "text", "")
-				+ " · " + day(safeLong(last.get("ts")))));
+				+ " · " + day(asLong(last.get("ts")))));
 		}
 		plate.add(moreRow("what the journal holds", ui::openInfo));
 		p.add(plate);
@@ -220,7 +221,7 @@ final class JournalScreen
 		List<JsonObject> recent = plugin.feedNewest(2);
 		if (recent.size() == 2)
 		{
-			long days = (safeLong(recent.get(0).get("ts")) - safeLong(recent.get(1).get("ts"))) / 86_400_000L;
+			long days = (asLong(recent.get(0).get("ts")) - asLong(recent.get(1).get("ts"))) / 86_400_000L;
 			if (days >= 30)
 			{
 				return "resumed after " + days + " days away";

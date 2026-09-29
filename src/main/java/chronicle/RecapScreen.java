@@ -26,6 +26,7 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 import net.runelite.api.Skill;
 import static chronicle.Feed.*;
+import static chronicle.Json.*;
 import static chronicle.Pictures.*;
 import static chronicle.Reference.*;
 import static chronicle.Ui.*;
@@ -503,7 +504,7 @@ final class RecapScreen
 		}
 		for (JsonObject m : board.milestones())
 		{
-			if (board.insideWindow(safeLong(m.get("ts"))) && m.has("data"))
+			if (board.insideWindow(asLong(m.get("ts"))) && m.has("data"))
 			{
 				named.get("Milestones").add(m.getAsJsonObject("data").get("text").getAsString());
 			}
@@ -511,7 +512,7 @@ final class RecapScreen
 		Set<String> bests = new HashSet<>();
 		for (JsonObject e : plugin.feedNewest(20_000))
 		{
-			if (!board.insideWindow(safeLong(e.get("ts"))))
+			if (!board.insideWindow(asLong(e.get("ts"))))
 			{
 				continue;
 			}
@@ -778,7 +779,7 @@ final class RecapScreen
 		for (JsonObject e : plugin.feedNewest(Board.FEED_SCAN_DEEP))
 		{
 			String name = feedName(e);
-			if (name != null && board.insideWindow(safeLong(e.get("ts"))))
+			if (name != null && board.insideWindow(asLong(e.get("ts"))))
 			{
 				firstNamed.putIfAbsent(typeOf(e), name);
 			}
