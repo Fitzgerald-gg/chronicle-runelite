@@ -34,6 +34,16 @@ public class TrackerTest
 			{"You fail to pick the Master Farmer's pocket.", "masterFarmerFailedPickpockets", 1},
 			{"Rooftop lap count: 42.", "rooftopAgilityLaps", 1},
 			{"Oh dear, you are dead!", "deaths", 1},
+			{"You put the grimy ranarr weed into your herb sack.", "ranarrWeedSacked", 1},
+			{"You gently shoo the letvek away.", "letveksShooed", 1},
+			{"The glowing fish scatter as you harpoon one.", "spiritPoolsHarpooned", 1},
+			{"You resurrect a greater ghostly thrall.", "greaterGhostlyThrallsSummoned", 1},
+			{"You resurrect a thrall.", "thrallsSummoned", 1},
+			{"The tanner tans 5 green dragonhides for you.", "greenDragonhideTanned", 5},
+			{"The tanner tans your cowhide.", "hidesTanned", 1},
+			{"You put the ranarr weed into the vial of water.", "unfinishedPotionsMade", 1},
+			{"You plant a ranarr seed in the herb patch.", "ranarrPlanted", 1},
+			{"Your Gnome Stronghold Agility Course lap count is: 5.", "normalAgilityLaps", 1},
 		};
 		for (Object[] c : cases)
 		{
@@ -173,5 +183,116 @@ public class TrackerTest
 		assertEquals(1, h.tracker("gemsCut"));
 		assertEquals(1, h.tracker("ardougneLaps"));
 		assertEquals(1, h.tracker("masterFarmerPickpockets"));
+	}
+
+	private static Harness stocked()
+	{
+		return new Harness().login()
+			.item(2353, "Steel bar", 500).item(2, "Cannonball", 200).item(1127, "Rune platebody", 38000)
+			.item(554, "Fire rune", 5).item(7936, "Pure essence", 2).item(1511, "Logs", 50)
+			.item(532, "Big bones", 300).item(383, "Raw shark", 800).item(440, "Iron ore", 100)
+			.item(453, "Coal", 150).item(8007, "Varrock teleport", 500).item(4251, "Ectophial", 0)
+			.item(9790, "Construct. cape", 99000).item(19564, "Royal seed pod", 0)
+			.item(3853, "Games necklace(8)", 800);
+	}
+
+	@Test
+	public void theBloodwoodSapCountsOnlyAtABloodwoodTree()
+	{
+		h.click("Fill", "Maple tree", 0, MenuAction.GAME_OBJECT_FIRST_OPTION, 0, 0).chat("You fill the bucket with sap.");
+		assertEquals(0, h.tracker("bloodwoodSapBucketsFilled"));
+		h.click("Fill", "Bloodwood tree", 0, MenuAction.GAME_OBJECT_FIRST_OPTION, 0, 0).chat("You fill the bucket with sap.");
+		assertEquals(1, h.tracker("bloodwoodSapBucketsFilled"));
+	}
+
+	@Test
+	public void anXpDropIsNamedByWhatItMadeOrUsedUp()
+	{
+		Harness bar = stocked();
+		bar.pack(440, 1, 453, 2).xp(Skill.SMITHING, 1).pack(2353, 1).xp(Skill.SMITHING, 17).tick();
+		assertEquals(1, bar.tracker("steelBarsSmelted"));
+
+		Harness balls = stocked();
+		balls.pack(2353, 1).xp(Skill.SMITHING, 1).pack(2, 4).xp(Skill.SMITHING, 25).tick();
+		assertEquals(4, balls.tracker("cannonballsSmithed"));
+
+		Harness plate = stocked();
+		plate.pack(2353, 5).xp(Skill.SMITHING, 1).pack(1127, 1).xp(Skill.SMITHING, 375).tick();
+		assertEquals(1, plate.tracker("runiteItemsSmithed"));
+
+		Harness runes = stocked();
+		runes.pack(7936, 20).xp(Skill.RUNECRAFT, 1).pack(554, 20).xp(Skill.RUNECRAFT, 140).tick();
+		assertEquals(20, runes.tracker("fireRunecrafted"));
+		assertEquals(20, runes.tracker("essenceCrafted"));
+
+		Harness fire = stocked();
+		fire.pack(1511, 1).xp(Skill.FIREMAKING, 1).pack().xp(Skill.FIREMAKING, 40).tick();
+		assertEquals(1, fire.tracker("normalLogsBurned"));
+
+		Harness buried = stocked();
+		buried.pack(532, 1).xp(Skill.PRAYER, 1).pack().xp(Skill.PRAYER, 15).tick();
+		assertEquals(1, buried.tracker("bigBonesBuried"));
+
+		Harness offered = stocked();
+		offered.pack(532, 1).xp(Skill.PRAYER, 1).pack().xp(Skill.PRAYER, 45).tick();
+		assertEquals(1, offered.tracker("bigBonesSacrificed"));
+		assertEquals(0, offered.tracker("bonesBuried"));
+
+		Harness ore = stocked();
+		ore.click("Mine", "Iron rocks", 0, MenuAction.GAME_OBJECT_FIRST_OPTION, 0, 0)
+			.xp(Skill.MINING, 1).pack(440, 1).xp(Skill.MINING, 35).tick();
+		assertEquals(1, ore.tracker("ironOreMined"));
+
+		Harness fish = stocked();
+		fish.click("Harpoon", "Fishing spot", 0, MenuAction.NPC_FIRST_OPTION, 0, 0)
+			.xp(Skill.FISHING, 1).pack(383, 1).xp(Skill.FISHING, 110).tick();
+		assertEquals(1, fish.tracker("sharkCaught"));
+
+		Harness build = stocked();
+		build.xp(Skill.CONSTRUCTION, 1).xp(Skill.CONSTRUCTION, 480).tick();
+		assertEquals(1, build.tracker("constructionBuilds"));
+
+		Harness stall = stocked();
+		stall.click("Steal-from", "Silk stall", 0, MenuAction.GAME_OBJECT_SECOND_OPTION, 0, 0)
+			.xp(Skill.THIEVING, 1).xp(Skill.THIEVING, 24).tick();
+		assertEquals(1, stall.tracker("silkStallsThieved"));
+	}
+
+	@Test
+	public void aTeleportIsNamedByWhereItLandsAndHowItWasTaken()
+	{
+		Harness tablet = stocked();
+		tablet.click("Break", "Varrock teleport", 8007).teleport(new WorldPoint(3212, 3424, 0));
+		assertEquals(1, tablet.tracker("teleportsVarrock"));
+		assertEquals(1, tablet.tracker("teleportsViaTablet"));
+
+		Harness phial = stocked();
+		phial.click("Empty", "Ectophial", 4251).teleport(new WorldPoint(3660, 3522, 0));
+		assertEquals(1, phial.tracker("teleportsEctofuntus"));
+
+		Harness cape = stocked();
+		cape.click("Tele to POH", "Construct. cape", 9790).teleport(new WorldPoint(2954, 3224, 0));
+		assertEquals(1, cape.tracker("teleportsHouse"));
+		assertEquals(1, cape.tracker("teleportsViaCape"));
+
+		Harness portal = stocked();
+		portal.click("Home", "Portal", 0, MenuAction.GAME_OBJECT_FIRST_OPTION, 0, 0).teleport(new WorldPoint(1900, 5700, 0));
+		assertEquals(1, portal.tracker("teleportsHouse"));
+
+		Harness pod = stocked();
+		pod.click("Commune", "Royal seed pod", 19564).teleport(new WorldPoint(3165, 3480, 0));
+		assertEquals(1, pod.tracker("teleportsGrandTree"));
+
+		Harness tree = stocked();
+		tree.click("Travel", "Spirit tree", 0, MenuAction.GAME_OBJECT_FIRST_OPTION, 0, 0).teleport(new WorldPoint(2461, 3444, 0));
+		assertEquals(1, tree.tracker("teleportsSpiritTree"));
+
+		Harness rub = stocked();
+		rub.click("Rub", "Games necklace(8)", 3853).teleport(new WorldPoint(2898, 3553, 0));
+		assertEquals(1, rub.tracker("teleportsViaJewellery"));
+
+		Harness jump = stocked();
+		jump.teleport(new WorldPoint(3400, 3400, 0));
+		assertEquals(0, jump.tracker("teleportsTotal"));
 	}
 }

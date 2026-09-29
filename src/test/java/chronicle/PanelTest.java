@@ -203,4 +203,42 @@ public class PanelTest
 		assertTrue(after(recap, "Xp gained").startsWith("+200k xp, most in Hunter"));
 		assertEquals("2 · 3.0M gp", after(h.period("Session", TODAY).screen("Loot"), "Vorkath"));
 	}
+
+	@Test
+	public void theRecapBoardAndItsPictureTellTheSameStory()
+	{
+		List<String> recap = screen("Recap");
+		assertEquals("1h 35m · 1 sitting", after(recap, "Played"));
+		assertEquals("6 · 4.5M gp", after(recap, "Drops"));
+		assertEquals("Vorkath · 51", after(recap, "Killed most"));
+		List<String> tiles = h.recapTiles("Recap");
+		assertTrue(tiles.toString(), tiles.contains("Boss kills 52"));
+		assertTrue(tiles.toString(), tiles.contains("Loot 4.5M gp"));
+		java.awt.image.BufferedImage img = h.recapPicture("Recap");
+		assertEquals(1920, img.getWidth());
+		assertTrue(img.getHeight() > 400 && img.getHeight() <= 1080);
+		int ground = img.getRGB(0, 0);
+		long drawn = 0;
+		for (int x = 0; x < img.getWidth(); x++)
+		{
+			for (int y = 0; y < img.getHeight(); y++)
+			{
+				drawn += img.getRGB(x, y) != ground ? 1 : 0;
+			}
+		}
+		assertTrue("drawn " + drawn, drawn > 20_000);
+		List<String> week = h.period("Week", TODAY).recapTiles("Recap");
+		h.period("Lifetime", TODAY);
+		assertTrue(week.toString(), week.contains("Levels +253"));
+		assertTrue(week.toString(), week.contains("Boss kills +3"));
+	}
+
+	@Test
+	public void theSheetPagesCountAgainstTheGamesOwnLists()
+	{
+		assertEquals("0 / 213", after(screen("Standing", "quests"), "Complete"));
+		assertEquals("0 / 48", after(screen("Standing", "diaries"), "Tiers done"));
+		assertEquals("0 / 2,697", after(screen("Standing", "combat"), "Points"));
+		assertEquals("0 / 6", after(screen("Standing", "clues"), "Tiers seen"));
+	}
 }

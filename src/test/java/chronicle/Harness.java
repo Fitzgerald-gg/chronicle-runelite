@@ -998,6 +998,30 @@ final class Harness
 		return img[0];
 	}
 
+	BufferedImage recapPicture(String... path)
+	{
+		screen(path);
+		ChroniclePanel p = (ChroniclePanel) get(plugin, "panel");
+		BufferedImage[] img = new BufferedImage[1];
+		edt(() -> img[0] = (BufferedImage) call(p.recap, "picture", call(p.recap, "facts")));
+		return img[0];
+	}
+
+	List<String> recapTiles(String... path)
+	{
+		screen(path);
+		ChroniclePanel p = (ChroniclePanel) get(plugin, "panel");
+		List<String> out = new ArrayList<>();
+		edt(() ->
+		{
+			for (Object t : (List<?>) get(call(p.recap, "facts"), "tiles"))
+			{
+				out.add(get(t, "label") + " " + get(t, "figure"));
+			}
+		});
+		return out;
+	}
+
 	private static void lay(Component c)
 	{
 		c.doLayout();
