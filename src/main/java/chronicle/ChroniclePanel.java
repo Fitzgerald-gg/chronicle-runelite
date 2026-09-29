@@ -81,6 +81,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
@@ -917,8 +918,8 @@ class ChroniclePanel extends PluginPanel
 		return searchField.getText() == null ? "" : searchField.getText().trim();
 	}
 
-	private final AtomicBoolean queued =
-		new AtomicBoolean();
+	private final AtomicBoolean queued = new AtomicBoolean();
+	private final AtomicInteger movedMask = new AtomicInteger();
 
 	private boolean everShown;
 
@@ -967,6 +968,7 @@ class ChroniclePanel extends PluginPanel
 
 	void update(int moved)
 	{
+		movedMask.accumulateAndGet(moved, (x, y) -> x | y);
 		if (!queued.compareAndSet(false, true))
 		{
 			return;
@@ -974,6 +976,7 @@ class ChroniclePanel extends PluginPanel
 		SwingUtilities.invokeLater(() ->
 		{
 			queued.set(false);
+			int mask = movedMask.getAndSet(0);
 			if (everShown && !getWrappedPanel().isShowing())
 			{
 				staleWhileHidden = true;
@@ -984,7 +987,7 @@ class ChroniclePanel extends PluginPanel
 				staleWhileHidden = true;
 				return;
 			}
-			if (!viewCares(moved))
+			if (!viewCares(mask))
 			{
 				return;
 			}
