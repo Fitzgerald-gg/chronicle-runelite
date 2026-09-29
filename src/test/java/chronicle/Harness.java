@@ -1205,11 +1205,41 @@ final class Harness
 		throw new NoSuchFieldException(name);
 	}
 
+	private static Object owner(Object o, String name) throws ReflectiveOperationException
+	{
+		try
+		{
+			field(o.getClass(), name);
+			return o;
+		}
+		catch (NoSuchFieldException e)
+		{
+			for (Field f : o.getClass().getDeclaredFields())
+			{
+				if (f.getType().getSimpleName().endsWith("Screen"))
+				{
+					f.setAccessible(true);
+					Object screen = f.get(o);
+					try
+					{
+						field(screen.getClass(), name);
+						return screen;
+					}
+					catch (NoSuchFieldException ignored)
+					{
+					}
+				}
+			}
+			throw e;
+		}
+	}
+
 	private static Object get(Object o, String name)
 	{
 		try
 		{
-			return field(o.getClass(), name).get(o);
+			Object at = owner(o, name);
+			return field(at.getClass(), name).get(at);
 		}
 		catch (ReflectiveOperationException e)
 		{
@@ -1221,7 +1251,8 @@ final class Harness
 	{
 		try
 		{
-			field(o.getClass(), name).set(o, value);
+			Object at = owner(o, name);
+			field(at.getClass(), name).set(at, value);
 		}
 		catch (ReflectiveOperationException e)
 		{
