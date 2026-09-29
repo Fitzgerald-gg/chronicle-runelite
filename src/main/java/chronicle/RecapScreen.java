@@ -601,11 +601,7 @@ final class RecapScreen extends Screen
 				f.tiles.add(new RecapPicture.Tile("Loot", n.gp, n.figure + " drops"));
 			}
 		}
-		long bossKills = 0;
-		for (RecapPicture.BossLine b : f.bosses)
-		{
-			bossKills += b.gained;
-		}
+		long bossKills = f.bosses.stream().mapToLong(b -> b.gained).sum();
 		RecapPicture.BossLine top = most(f.bosses, b -> b.gained);
 		if (bossKills > 0)
 		{

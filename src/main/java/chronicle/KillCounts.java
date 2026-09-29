@@ -37,12 +37,7 @@ final class KillCounts
 	static long spineKills(JsonObject clog, List<SourceRow> sources,
 		Map<String, Long> reconciled)
 	{
-		long kills = 0;
-		for (String key : spineKillKeys(clog, sources, reconciled))
-		{
-			kills += reconciled.getOrDefault(key, 0L);
-		}
-		return kills;
+		return spineKillKeys(clog, sources, reconciled).stream().mapToLong(k -> reconciled.getOrDefault(k, 0L)).sum();
 	}
 
 	static Set<String> spineKillKeys(JsonObject clog, List<SourceRow> sources,

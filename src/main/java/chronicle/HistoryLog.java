@@ -216,12 +216,8 @@ class HistoryLog
 		{
 			return false;
 		}
-		long sum = 0;
-		for (var e : skills.entrySet())
-		{
-			sum += "overall".equals(e.getKey()) || e.getValue() == null ? 0 : e.getValue();
-		}
-		return sum == overall;
+		return skills.entrySet().stream().filter(e -> !"overall".equals(e.getKey()) && e.getValue() != null)
+			.mapToLong(Map.Entry::getValue).sum() == overall;
 	}
 
 	static Baseline stateAt(TreeMap<LocalDate, Baseline> spine, LocalDate on)

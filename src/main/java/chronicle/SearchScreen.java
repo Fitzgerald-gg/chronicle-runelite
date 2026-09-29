@@ -270,12 +270,7 @@ final class SearchScreen extends Screen
 				int ps = matchScore(ql, page);
 				if (ps >= 0)
 				{
-					int held = 0;
-					for (boolean l : lit)
-					{
-						held += l ? 1 : 0;
-					}
-					log.add(new Hit(page, held + " / " + slots.size(), null, "The page", () -> ui.openLogPage(page), Math.max(0, ps - 1), 2));
+					log.add(new Hit(page, Board.lit(lit) + " / " + slots.size(), null, "The page", () -> ui.openLogPage(page), Math.max(0, ps - 1), 2));
 				}
 				for (String slot : slots)
 				{

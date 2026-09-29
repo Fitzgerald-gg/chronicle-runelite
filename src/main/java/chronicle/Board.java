@@ -1506,6 +1506,16 @@ final class Board
 		return o;
 	}
 
+	static int lit(boolean[] slots)
+	{
+		int n = 0;
+		for (boolean b : slots)
+		{
+			n += b ? 1 : 0;
+		}
+		return n;
+	}
+
 	static boolean[] lightSlots(List<String> slots, Map<String, Long> pageItems, Map<String, Long> owned,
 		Set<String> sharedNames)
 	{

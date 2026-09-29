@@ -367,11 +367,7 @@ final class PagesScreen extends Screen
 	private void logPage(JPanel p, JsonObject cl, Obtained ob, Map<String, Long> kcs, String page, List<String> slots)
 	{
 		boolean[] lit = Board.lightSlots(slots, ob.byPage.get(low(page)), ob.all, sharedSlotNames(plugin.gson()));
-		int got = 0;
-		for (boolean b : lit)
-		{
-			got += b ? 1 : 0;
-		}
+		int got = Board.lit(lit);
 		Long kc = kcs.get(low(page));
 		boolean open = page.equals(clogPageSel);
 		boolean complete = got == slots.size() && !slots.isEmpty();
