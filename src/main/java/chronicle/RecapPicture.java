@@ -21,8 +21,8 @@ import lombok.RequiredArgsConstructor;
 import net.runelite.api.Skill;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
-import static chronicle.ChroniclePanel.fmt;
-import static chronicle.ChroniclePanel.small;
+import static chronicle.Ui.fmt;
+import static chronicle.Ui.small;
 
 final class RecapPicture
 {
@@ -42,12 +42,12 @@ final class RecapPicture
 	private static final int NOTE_ROW = 15;
 	private static final int MIN_BODY = 260;
 
-	private static final Color GROUND = ChroniclePanel.DARK;
-	private static final Color CARD = ChroniclePanel.DARKER;
-	private static final Color TEXT = ChroniclePanel.TILE_LIT;
+	private static final Color GROUND = Ui.DARK;
+	private static final Color CARD = Ui.DARKER;
+	private static final Color TEXT = Ui.LIT;
 	private static final Color VALUE = ColorScheme.LIGHT_GRAY_COLOR;
-	private static final Color DIM = ChroniclePanel.dim();
-	private static final Color ACCENT = ChroniclePanel.ACCENT_LIFETIME;
+	private static final Color DIM = Ui.DIM;
+	private static final Color ACCENT = Ui.ACCENT;
 
 	private static final String ARROW = " to ";
 
