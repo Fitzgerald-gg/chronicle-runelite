@@ -105,7 +105,7 @@ public class JournalSessionRowTest
 		skills.addProperty("magic", 32_000);
 		d.add("skills", skills);
 		e.add("data", d);
-		Method fl = ChroniclePanel.class.getDeclaredMethod("feedLine", JsonObject.class);
+		Method fl = Feed.class.getDeclaredMethod("line", JsonObject.class);
 		fl.setAccessible(true);
 		assertEquals("Session: 1h 22m · +412k xp, most in Runecraft", fl.invoke(null, e));
 		d.remove("skills");

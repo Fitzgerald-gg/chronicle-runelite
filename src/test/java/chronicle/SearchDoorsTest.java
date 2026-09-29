@@ -441,13 +441,13 @@ public class SearchDoorsTest
 	@Test
 	public void initialsFindAFight()
 	{
-		assertEquals(2, ChroniclePanel.matchScore("cox", "Chambers of Xeric"));
-		assertEquals(2, ChroniclePanel.matchScore("tob", "Theatre of Blood"));
-		assertEquals(2, ChroniclePanel.matchScore("kbd", "King Black Dragon"));
-		assertEquals(2, ChroniclePanel.matchScore("cg", "The Corrupted Gauntlet"));
-		assertEquals(2, ChroniclePanel.matchScore("gg", "Grotesque Guardians"));
-		assertEquals(-1, ChroniclePanel.matchScore("gg", "Zulrah"));
-		assertEquals(-1, ChroniclePanel.matchScore("''", "Zulrah"));
+		assertEquals(2, Search.matchScore("cox", "Chambers of Xeric"));
+		assertEquals(2, Search.matchScore("tob", "Theatre of Blood"));
+		assertEquals(2, Search.matchScore("kbd", "King Black Dragon"));
+		assertEquals(2, Search.matchScore("cg", "The Corrupted Gauntlet"));
+		assertEquals(2, Search.matchScore("gg", "Grotesque Guardians"));
+		assertEquals(-1, Search.matchScore("gg", "Zulrah"));
+		assertEquals(-1, Search.matchScore("''", "Zulrah"));
 	}
 
 	@Test
@@ -491,12 +491,12 @@ public class SearchDoorsTest
 	public void aDiaryTaskIsNotCutAtAnAbbreviation()
 	{
 		assertEquals("Enter the Combat Training Camp north of W. Ardougne.",
-			ChroniclePanel.firstSentence("Enter the Combat Training Camp north of W. Ardougne."));
-		assertEquals("Enter the H.A.M. Hideout.", ChroniclePanel.firstSentence("Enter the H.A.M. Hideout."));
+			Search.firstSentence("Enter the Combat Training Camp north of W. Ardougne."));
+		assertEquals("Enter the H.A.M. Hideout.", Search.firstSentence("Enter the H.A.M. Hideout."));
 		assertEquals("Kill the Crazy Arc. [sic], Chaos Fanatic & Scorpia.",
-			ChroniclePanel.firstSentence("Kill the Crazy Arc. [sic], Chaos Fanatic & Scorpia. "
+			Search.firstSentence("Kill the Crazy Arc. [sic], Chaos Fanatic & Scorpia. "
 				+ "Note: While these bosses can be killed in any order."));
-		assertEquals("Mine some iron.", ChroniclePanel.firstSentence("Mine some iron. Then smelt it."));
+		assertEquals("Mine some iron.", Search.firstSentence("Mine some iron. Then smelt it."));
 	}
 
 	@Test

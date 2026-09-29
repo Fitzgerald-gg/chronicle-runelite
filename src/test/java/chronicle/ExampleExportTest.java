@@ -81,8 +81,7 @@ public class ExampleExportTest
 		for (String n : new String[]{"build", "aboveBoard", "bandFixes",
 			"grindsCache", "journeyCache", "consumVals",
 			"resourcesDropped", "historySpine", "historyFeed", "historyJourney",
-			"historyDay", "historyFeedTs", "historyEpoch", "periodFrom", "periodTo", "searchFirst", "searchFeed", "searchFeedTs", "searchFeedSpine",
-			"taskItemsEver", "periodTip", "measuredSince"})
+			"historyDay", "historyFeedTs", "historyEpoch", "periodFrom", "periodTo", "searchFirst", "taskItemsEver", "periodTip", "measuredSince"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
 		}
@@ -529,16 +528,10 @@ public class ExampleExportTest
 			}
 			corpus.put("slots", slots);
 
-			Method feedLine = ChroniclePanel.class.getDeclaredMethod("feedLine",
-				com.google.gson.JsonObject.class);
-			Method stamp = ChroniclePanel.class.getDeclaredMethod("stamp",
-				com.google.gson.JsonObject.class);
-			feedLine.setAccessible(true);
-			stamp.setAccessible(true);
 			List<Object> feed = new ArrayList<>();
 			for (com.google.gson.JsonObject e : plugin.feedNewest(500))
 			{
-				feed.add(java.util.Arrays.asList(feedLine.invoke(null, e), stamp.invoke(null, e)));
+				feed.add(java.util.Arrays.asList(Feed.line(e), Feed.stamp(e)));
 			}
 			corpus.put("feed", feed);
 

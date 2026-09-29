@@ -10,6 +10,7 @@ package chronicle;
 
 import chronicle.LocalStore.SourceRow;
 import com.google.gson.JsonObject;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -204,4 +205,26 @@ final class Sources
 		}
 		return false;
 	}
+
+	static List<Skill> skillOrder()
+	{
+		List<Skill> out = new ArrayList<>();
+		for (String name : SKILL_ORDER_NAMES)
+		{
+			if (Sources.skill(name) != null)
+			{
+				out.add(Sources.skill(name));
+			}
+		}
+		for (Skill sk : Skill.values())
+		{
+			if (!out.contains(sk))
+			{
+				out.add(sk);
+			}
+		}
+		return out;
+	}
+
+	private static final List<String> SKILL_ORDER_NAMES = strs(KINDS.get("skillOrder"));
 }

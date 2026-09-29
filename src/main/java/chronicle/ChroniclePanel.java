@@ -139,7 +139,6 @@ import static chronicle.Feed.most;
 import static chronicle.Feed.newestTs;
 import static chronicle.Feed.oldestTs;
 import static chronicle.Feed.sessionMinutes;
-import static chronicle.Feed.sittingStart;
 import static chronicle.Feed.sittingsCover;
 import static chronicle.Feed.typeOf;
 import static chronicle.Json.getIgnoreCase;
@@ -150,7 +149,6 @@ import static chronicle.Json.obj;
 import static chronicle.Json.safeLong;
 import static chronicle.Json.str;
 import static chronicle.Json.strMap;
-import static chronicle.Json.strs;
 import static chronicle.LocalStore.kindOf;
 import static chronicle.Period.DAY;
 import static chronicle.Period.FULL_DAY;
@@ -216,6 +214,7 @@ class ChroniclePanel extends PluginPanel
 	private final ChroniclePlugin plugin;
 	private Build build;
 	private final ItemNames itemNames;
+	private final Search search;
 
 	private final JPanel display = new JPanel(new BorderLayout());
 
@@ -258,6 +257,7 @@ class ChroniclePanel extends PluginPanel
 		this.plugin = plugin;
 		freshBuild();
 		itemNames = new ItemNames(plugin, n -> build.names().named(n));
+		search = new Search(plugin);
 
 		watchForReturn();
 		setLayout(new BorderLayout());
@@ -1946,8 +1946,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		journeyCache = null;
 		journeyFetching = false;
-		searchFeed = null;
-		searchFeedSpine = null;
+		search.forget();
 		detailTask = -1;
 		leftBehindSource = null;
 		leftBehindItem = null;
@@ -3585,7 +3584,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			JsonObject d = obj(e, "data");
 			final String name = str(d, "itemName", "new item");
-			JPanel line = row(name, stamp(e));
+			JPanel line = row(name, Feed.stamp(e));
 			link(line, () -> openItem(name));
 			p.add(line);
 		}
@@ -5089,28 +5088,6 @@ class ChroniclePanel extends PluginPanel
 		return Sources.SKILLING.equals(kind) ? 775 : 774;
 	}
 
-	private static final List<String> SKILL_ORDER_NAMES = strs(Sources.KINDS.get("skillOrder"));
-
-	private static List<Skill> skillOrder()
-	{
-		List<Skill> out = new ArrayList<>();
-		for (String name : SKILL_ORDER_NAMES)
-		{
-			if (Sources.skill(name) != null)
-			{
-				out.add(Sources.skill(name));
-			}
-		}
-		for (Skill sk : Skill.values())
-		{
-			if (!out.contains(sk))
-			{
-				out.add(sk);
-			}
-		}
-		return out;
-	}
-
 	@RequiredArgsConstructor
 	private static final class SkillStand
 	{
@@ -5132,7 +5109,7 @@ class ChroniclePanel extends PluginPanel
 	private SkillStand skillStand(Baseline closing, boolean live)
 	{
 		Map<String, long[]> sheet = live ? plugin.skillSheet() : Collections.emptyMap();
-		List<Skill> order = skillOrder();
+		List<Skill> order = Sources.skillOrder();
 		List<String> keys = new ArrayList<>();
 		for (Skill sk : order)
 		{
@@ -6891,118 +6868,17 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel p = backPage();
 		JPanel book = card("Records");
-		int held = book.getComponentCount();
-
-		long[][] best = {{0, 0}, {0, 0}};
-		for (JsonObject e : build.feed.deep())
+		List<Records.Line> lines = Records.of(build);
+		for (Records.Line r : lines)
 		{
-			if ("SESSION".equals(typeOf(e)))
+			JPanel line = row(r.left, r.ts != Records.UNDATED ? r.figure + " · " + dated(r.ts) : r.figure);
+			if (r.hover != null && !r.hover.isEmpty())
 			{
-				rank(best, sessionMinutes(e), sittingStart(e));
+				line.setToolTipText(r.hover);
 			}
+			book.add(line);
 		}
-		if (best[0][0] > 0)
-		{
-			recordRow(book, "Longest sitting", hoursMinutes(best[0][0]), best[0][1],
-				best[1][0] > 0 ? "Was " + hoursMinutes(best[1][0]) + " · " + dated(best[1][1]) : null);
-		}
-
-		TreeMap<LocalDate, Baseline> spine = historySpine;
-		if (spine != null && spine.size() > 1)
-		{
-			long[][] bigXp = {{0, 0}, {0, 0}};
-			String bigSkill = null;
-			long[][] bigKills = {{0, 0}, {0, 0}};
-			int run = 0;
-			int longest = 0;
-			LocalDate runEnd = null;
-			LocalDate prevDay = null;
-			Entry<LocalDate, Baseline> before = null;
-			for (Entry<LocalDate, Baseline> day : spine.entrySet())
-			{
-				run = prevDay != null && prevDay.plusDays(1).equals(day.getKey()) ? run + 1 : 1;
-				if (run > longest)
-				{
-					longest = run;
-					runEnd = day.getKey();
-				}
-				prevDay = day.getKey();
-				if (before != null)
-				{
-					long ts = noon(day.getKey());
-					Object[] xp = build.feed.dayXp(day.getKey());
-					if (rank(bigXp, xp == null ? 0 : (Long) xp[0], ts))
-					{
-						bigSkill = (String) xp[1];
-					}
-					long kills = 0;
-					for (Entry<String, Long> k : day.getValue().kcs.entrySet())
-					{
-						Long was = before.getValue().kcs.get(k.getKey());
-						if (was != null && k.getValue() > was)
-						{
-							kills += k.getValue() - was;
-						}
-					}
-					rank(bigKills, kills, ts);
-				}
-				before = day;
-			}
-			if (bigXp[0][0] > 0)
-			{
-				recordRow(book, "Biggest day", "+" + gp(bigXp[0][0]) + " xp", bigXp[0][1],
-					(bigSkill != null ? "Most in " + bigSkill : "")
-						+ (bigXp[1][0] > 0 ? (bigSkill != null ? " · " : "") + "was +" + gp(bigXp[1][0])
-						+ " · " + dated(bigXp[1][1]) : ""));
-			}
-			if (bigKills[0][0] > 0)
-			{
-				recordRow(book, "Most kills in a day", fmt(bigKills[0][0]), bigKills[0][1],
-					bigKills[1][0] > 0 ? "Was " + fmt(bigKills[1][0]) + " · " + dated(bigKills[1][1]) : null);
-			}
-			if (longest > 1 && runEnd != null)
-			{
-				recordRow(book, "Longest run of days written",
-					fmt(longest) + " days", noon(runEnd), null);
-			}
-		}
-
-		long[][] rich = {{0, 0}, {0, 0}};
-		long[][] busy = {{0, 0}, {0, 0}};
-		for (Entry<String, long[]> d : build.lootDays().totals().entrySet())
-		{
-			long ts;
-			try
-			{
-				ts = noon(LocalDate.parse(d.getKey(), Feed.ROLL_DAY));
-			}
-			catch (RuntimeException e)
-			{
-				continue;
-			}
-			long[] t = d.getValue();
-			rank(rich, t[1], ts, t[0]);
-			rank(busy, t[0], ts, t[1]);
-		}
-		if (rich[0][0] > 0)
-		{
-			recordRow(book, "Richest day", gps(rich[0][0]), rich[0][1],
-				count(rich[0][2], "drop") + (rich[1][0] > 0 ? " · was " + gp(rich[1][0]) + " · "
-					+ dated(rich[1][1]) : ""));
-		}
-		if (busy[0][0] > 0)
-		{
-			recordRow(book, "Most drops in a day", fmt(busy[0][0]), busy[0][1],
-				gps(busy[0][2]) + (busy[1][0] > 0 ? " · was " + fmt(busy[1][0]) + " · "
-					+ dated(busy[1][1]) : ""));
-		}
-
-		long hit = plugin.lifetimeCounters().getOrDefault("highestHit", 0L);
-		if (hit > 0)
-		{
-			book.add(row("Highest hit", fmt(hit)));
-		}
-		if (book.getComponentCount() == held)
+		if (lines.isEmpty())
 		{
 			book.add(note("No record set yet."));
 		}
@@ -7013,31 +6889,6 @@ class ChroniclePanel extends PluginPanel
 	private static String day(long ms)
 	{
 		return TASK_DAY.format(Instant.ofEpochMilli(ms));
-	}
-
-	private void recordRow(JPanel book, String left, String figure, long ts, String hover)
-	{
-		JPanel r = row(left, figure + " · " + dated(ts));
-		if (hover != null && !hover.isEmpty())
-		{
-			r.setToolTipText(hover);
-		}
-		book.add(r);
-	}
-
-	private static boolean rank(long[][] top, long... e)
-	{
-		if (e[0] > top[0][0])
-		{
-			top[1] = top[0];
-			top[0] = e;
-			return true;
-		}
-		if (e[0] > top[1][0])
-		{
-			top[1] = e;
-		}
-		return false;
 	}
 
 	private JPanel buildCalendar()
@@ -7178,7 +7029,7 @@ class ChroniclePanel extends PluginPanel
 		List<JsonObject> all = plugin.feedWithSitting(4000);
 		if (all.size() >= 4000 && !wholeRecord() && window().ms()[0] < oldestTs(all, false))
 		{
-			all = plugin.feedWithSitting(JOURNAL_DEEP);
+			all = plugin.feedWithSitting(Search.JOURNAL_DEEP);
 		}
 		all = build.feed.withMilestones(all);
 		List<JsonObject> feed = new ArrayList<>();
@@ -7227,14 +7078,14 @@ class ChroniclePanel extends PluginPanel
 			}
 			if ("SESSION".equals(typeOf(e)))
 			{
-				String[] parts = sessionParts(e);
+				String[] parts = Feed.sessionParts(e);
 				JPanel sr = row(parts[0], parts[1]);
 				sr.setToolTipText(parts[2]);
 				p.add(sr);
 			}
 			else
 			{
-				p.add(row(feedLine(e), ""));
+				p.add(row(Feed.line(e), ""));
 			}
 		}
 		if (feed.size() > journalShown)
@@ -7343,100 +7194,6 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private String nearestName(String ql)
-	{
-		if (ql.length() < 4)
-		{
-			return null;
-		}
-		List<String> names = new ArrayList<>();
-		for (SourceRow r : build.sources())
-		{
-			names.add(r.name);
-			for (BagItem b : plugin.sourceItems(r.name))
-			{
-				names.add(b.name);
-			}
-		}
-		for (Map<String, List<String>> tab : ClogBook.taxonomy(plugin.gson()).values())
-		{
-			names.addAll(tab.keySet());
-			for (List<String> slots : tab.values())
-			{
-				names.addAll(slots);
-			}
-		}
-		for (Kills.Boss b : Kills.bossRoster(plugin.gson()))
-		{
-			names.add(b.name);
-		}
-		JsonObject cl = build.clog();
-		names.addAll(obj(cl, "slayer_kcs").keySet());
-		names.addAll(obj(build.standings.achievements(), "quests").keySet());
-		for (Skill sk : skillOrder())
-		{
-			names.add(prettify(low(sk.name())));
-		}
-		names.addAll(Arrays.asList("Quests", "Collection log", "Achievement diaries",
-			"Combat achievements", "Clues", "Records", "Calendar", "Recap", "All trackers",
-			"Kill log", "Left behind"));
-		String best = null;
-		int nearest = 3;
-		for (String name : names)
-		{
-			String low = low(name);
-			int d = editsBetween(ql, low, nearest);
-			for (String word : NEAR_WORDS.split(low))
-			{
-				if (word.length() >= 4)
-				{
-					d = Math.min(d, editsBetween(ql, word, nearest));
-				}
-			}
-			if (d < nearest)
-			{
-				nearest = d;
-				best = name;
-			}
-		}
-		return best;
-	}
-
-	private static final Pattern NEAR_WORDS = Pattern.compile("[^a-z0-9']+");
-
-	private static int editsBetween(String a, String b, int cap)
-	{
-		if (Math.abs(a.length() - b.length()) >= cap)
-		{
-			return cap;
-		}
-		int[] prev = new int[b.length() + 1];
-		int[] cur = new int[b.length() + 1];
-		for (int j = 0; j <= b.length(); j++)
-		{
-			prev[j] = j;
-		}
-		for (int i = 1; i <= a.length(); i++)
-		{
-			cur[0] = i;
-			int rowMin = i;
-			for (int j = 1; j <= b.length(); j++)
-			{
-				int swap = prev[j - 1] + (a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1);
-				cur[j] = Math.min(swap, Math.min(prev[j] + 1, cur[j - 1] + 1));
-				rowMin = Math.min(rowMin, cur[j]);
-			}
-			if (rowMin >= cap)
-			{
-				return cap;
-			}
-			int[] t = prev;
-			prev = cur;
-			cur = t;
-		}
-		return Math.min(cap, prev[b.length()]);
-	}
-
 	private static final class Hit
 	{
 		final String name;
@@ -7461,95 +7218,10 @@ class ChroniclePanel extends PluginPanel
 
 	private static final int SEARCH_CAP = 4;
 
-	private static final Map<String, String[]> SKILL_ALIASES = new LinkedHashMap<>();
-
-	static
-	{
-		SKILL_ALIASES.put("runecraft", new String[]{"runecrafting", "rc"});
-		SKILL_ALIASES.put("hitpoints", new String[]{"hp"});
-		SKILL_ALIASES.put("woodcutting", new String[]{"wc"});
-		SKILL_ALIASES.put("firemaking", new String[]{"fm"});
-		SKILL_ALIASES.put("construction", new String[]{"con"});
-	}
-
-	static int matchScore(String ql, String name)
-	{
-		if (name == null || ql.isEmpty())
-		{
-			return -1;
-		}
-		String raw = low(name);
-		if (raw.equals(ql) || (ql.endsWith("s") && raw.equals(ql.substring(0, ql.length() - 1)))
-			|| (raw.endsWith("s") && raw.substring(0, raw.length() - 1).equals(ql)))
-		{
-			return 0;
-		}
-		String n = raw.replace("'", "");
-		String q = ql.replace("'", "");
-		if (q.trim().isEmpty())
-		{
-			return -1;
-		}
-		if (n.equals(q))
-		{
-			return 0;
-		}
-		if (n.startsWith(q))
-		{
-			return 1;
-		}
-		String[] words = NAME_WORDS.split(n);
-		boolean every = true;
-		for (String w : QUERY_WORDS.split(q))
-		{
-			if (w.isEmpty())
-			{
-				continue;
-			}
-			boolean begins = false;
-			for (String x : words)
-			{
-				begins |= x.startsWith(w);
-			}
-			every &= begins;
-		}
-		if (every || initials(q, words))
-		{
-			return 2;
-		}
-		return n.contains(q) ? 3 : -1;
-	}
-
-	private static final Pattern NAME_WORDS = Pattern.compile("[^a-z0-9]+");
-	private static final Pattern QUERY_WORDS = Pattern.compile("\\s+");
-
-	private static boolean initials(String q, String[] words)
-	{
-		if (q.length() < 2 || q.indexOf(' ') >= 0 || words.length < 2)
-		{
-			return false;
-		}
-		StringBuilder all = new StringBuilder();
-		StringBuilder lean = new StringBuilder();
-		for (String w : words)
-		{
-			if (w.isEmpty())
-			{
-				continue;
-			}
-			all.append(w.charAt(0));
-			if (!w.equals("the") && !w.equals("of"))
-			{
-				lean.append(w.charAt(0));
-			}
-		}
-		return q.contentEquals(all) || q.contentEquals(lean);
-	}
-
 	private static void goTo(List<Hit> go, String ql, String name, String figure, Runnable to,
 		long weight, String... also)
 	{
-		int sc = matchScore(ql, name);
+		int sc = Search.matchScore(ql, name);
 		sc = sc > 2 ? -1 : sc;
 		for (String a : also)
 		{
@@ -7562,20 +7234,6 @@ class ChroniclePanel extends PluginPanel
 		{
 			go.add(new Hit(name, figure, null, null, to, sc, weight));
 		}
-	}
-
-	private static int bestScore(String ql, String... names)
-	{
-		int best = -1;
-		for (String n : names)
-		{
-			int s = matchScore(ql, n);
-			if (s >= 0 && (best < 0 || s < best))
-			{
-				best = s;
-			}
-		}
-		return best;
 	}
 
 	private int searchGroup(JPanel p, String title, List<Hit> hits)
@@ -7637,8 +7295,6 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	private static final int JOURNAL_DEEP = 20_000;
-
 	private void fetchJourneyForSearch()
 	{
 		if (journeyFetching)
@@ -7662,33 +7318,6 @@ class ChroniclePanel extends PluginPanel
 		}));
 	}
 
-	private List<Object[]> searchFeed;
-	private long searchFeedTs = -1;
-	private Object searchFeedSpine;
-
-	private List<Object[]> searchFeed()
-	{
-		long newest = newestTs(plugin.feedNewest(1));
-		if (searchFeed == null || newest != searchFeedTs || historySpine != searchFeedSpine)
-		{
-			List<Object[]> out = new ArrayList<>();
-			List<JsonObject> all = new ArrayList<>(plugin.feedNewest(JOURNAL_DEEP));
-			all.addAll(build.feed.milestones());
-			for (JsonObject e : all)
-			{
-				String line = feedLine(e);
-				if (line != null && !line.isEmpty())
-				{
-					out.add(new Object[]{low(line).replace("'", ""), line, filedAt(e)});
-				}
-			}
-			searchFeed = out;
-			searchFeedTs = newest;
-			searchFeedSpine = historySpine;
-		}
-		return searchFeed;
-	}
-
 	private JPanel buildSearch(String q)
 	{
 		JPanel p = column();
@@ -7698,14 +7327,14 @@ class ChroniclePanel extends PluginPanel
 
 		List<Hit> go = new ArrayList<>();
 		Map<String, long[]> sheet = plugin.skillSheet();
-		for (Skill sk : skillOrder())
+		for (Skill sk : Sources.skillOrder())
 		{
 			String key = low(sk.name());
 			String name = prettify(key);
 			long[] cur = sheet.get(key);
 			Runnable to = sk == Skill.SLAYER ? () -> openSlayer("Tasks") : () -> openSkill(name);
 			goTo(go, ql, name, cur != null && cur[0] > 0 ? "level " + cur[0] : "", to, 2,
-				SKILL_ALIASES.getOrDefault(key, new String[0]));
+				Search.SKILL_ALIASES.getOrDefault(key, new String[0]));
 		}
 		Standings.Quests quests = build.standings.quests();
 		goTo(go, ql, "Quests", quests.known > 0 ? fmt(quests.done.size()) + " / " + fmt(quests.known) : "",
@@ -7741,7 +7370,7 @@ class ChroniclePanel extends PluginPanel
 		if (kind != null && !ql.isEmpty())
 		{
 			final String pick = kind;
-			int ks = matchScore(ql, kind);
+			int ks = Search.matchScore(ql, kind);
 			ks = ks < 0 || ks > 2 ? 2 : ks;
 			go.add(new Hit(kind, "every one you have had", null, null,
 				() -> openLootKind(pick, false), ks, 0));
@@ -7761,7 +7390,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		for (Kills.Boss b : Kills.bossRoster(plugin.gson()))
 		{
-			int sc = matchScore(ql, b.name);
+			int sc = Search.matchScore(ql, b.name);
 			if (sc < 0 || !kinds.add(kindOf(b.name)))
 			{
 				continue;
@@ -7778,7 +7407,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		for (SourceRow r : build.sources())
 		{
-			int sc = matchScore(ql, r.name);
+			int sc = Search.matchScore(ql, r.name);
 			if (sc < 0 || !kinds.add(kindOf(r.name)))
 			{
 				continue;
@@ -7792,7 +7421,7 @@ class ChroniclePanel extends PluginPanel
 		JsonObject cl = build.clog();
 		for (Entry<String, JsonElement> e : obj(cl, "slayer_kcs").entrySet())
 		{
-			int sc = matchScore(ql, e.getKey());
+			int sc = Search.matchScore(ql, e.getKey());
 			if (sc < 0 || !kinds.add(kindOf(e.getKey())))
 			{
 				continue;
@@ -7811,7 +7440,7 @@ class ChroniclePanel extends PluginPanel
 			for (int i = 0; i < journey.tasks.size(); i++)
 			{
 				SlayerTask t = journey.tasks.get(i);
-				if (t.task == null || matchScore(ql, t.task) < 0)
+				if (t.task == null || Search.matchScore(ql, t.task) < 0)
 				{
 					continue;
 				}
@@ -7834,7 +7463,7 @@ class ChroniclePanel extends PluginPanel
 					}
 					applyTab(View.SLAYER);
 					showTask(at);
-				}, matchScore(ql, name), seen[0]));
+				}, Search.matchScore(ql, name), seen[0]));
 			}
 		}
 		total += searchGroup(p, "Slayer tasks", tasks);
@@ -7845,7 +7474,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			for (BagItem b : plugin.sourceItems(src.name))
 			{
-				if (matchScore(ql, b.name) < 0)
+				if (Search.matchScore(ql, b.name) < 0)
 				{
 					continue;
 				}
@@ -7864,11 +7493,11 @@ class ChroniclePanel extends PluginPanel
 				+ String.join(", ", from.subList(0, Math.min(4, from.size())))
 				+ (from.size() > 4 ? " and " + (from.size() - 4) + " more" : "");
 			items.add(new Hit(itm, "×" + fmt(e.getValue()[0]), null, tip, () -> openItem(itm),
-				matchScore(ql, itm), e.getValue()[1]));
+				Search.matchScore(ql, itm), e.getValue()[1]));
 		}
 		for (UntakenRow u : plugin.untaken().items)
 		{
-			if (itemAgg.containsKey(u.name) || matchScore(ql, u.name) < 0)
+			if (itemAgg.containsKey(u.name) || Search.matchScore(ql, u.name) < 0)
 			{
 				continue;
 			}
@@ -7878,7 +7507,7 @@ class ChroniclePanel extends PluginPanel
 				dropsLeftBehind = true;
 				leftBehindItem = u.name;
 				rebuild();
-			}, matchScore(ql, u.name), u.value));
+			}, Search.matchScore(ql, u.name), u.value));
 		}
 		total += searchGroup(p, "Items", items);
 
@@ -7890,7 +7519,7 @@ class ChroniclePanel extends PluginPanel
 			for (Entry<String, List<String>> pg : tab.entrySet())
 			{
 				final String page = pg.getKey();
-				int ps = matchScore(ql, page);
+				int ps = Search.matchScore(ql, page);
 				boolean[] lit = null;
 				if (ps >= 0)
 				{
@@ -7900,7 +7529,7 @@ class ChroniclePanel extends PluginPanel
 				}
 				for (String slot : pg.getValue())
 				{
-					int sc = matchScore(ql, slot);
+					int sc = Search.matchScore(ql, slot);
 					if (sc < 0 || !slotSeen.add(slot))
 					{
 						continue;
@@ -7925,7 +7554,7 @@ class ChroniclePanel extends PluginPanel
 		JsonObject states = obj(build.standings.achievements(), "quests");
 		for (String name : states.keySet())
 		{
-			int sc = matchScore(ql, name);
+			int sc = Search.matchScore(ql, name);
 			if (sc < 0)
 			{
 				continue;
@@ -7948,7 +7577,7 @@ class ChroniclePanel extends PluginPanel
 				JsonObject t = cas.getAsJsonObject(id);
 				String name = t.get("name").getAsString();
 				String task = t.get("task").getAsString();
-				int sc = matchScore(ql, name);
+				int sc = Search.matchScore(ql, name);
 				if (sc < 0 && low(task).contains(ql))
 				{
 					sc = 3;
@@ -7981,7 +7610,7 @@ class ChroniclePanel extends PluginPanel
 							continue;
 						}
 						String needs = t.has("requirements") ? t.get("requirements").getAsString() : "";
-						diaryHits.add(new Hit(firstSentence(task), low(tier), null,
+						diaryHits.add(new Hit(Search.firstSentence(task), low(tier), null,
 							region + " " + low(tier) + ": " + task
 								+ (needs.isEmpty() || "None".equalsIgnoreCase(needs) ? "" : " Needs: " + needs),
 							() -> openSheetPage("diaries"), 3, 0));
@@ -7999,7 +7628,7 @@ class ChroniclePanel extends PluginPanel
 				continue;
 			}
 			String label = StatRegistry.label(e.getKey());
-			int sc = bestScore(ql, label, e.getKey());
+			int sc = Search.bestScore(ql, label, e.getKey());
 			if (sc < 0)
 			{
 				continue;
@@ -8012,23 +7641,23 @@ class ChroniclePanel extends PluginPanel
 		List<Hit> journal = new ArrayList<>();
 		int thisYear = LocalDate.now().getYear();
 		String qj = ql.replace("'", "");
-		for (Object[] line : searchFeed())
+		for (Search.Line line : search.feed(build))
 		{
-			if (qj.trim().isEmpty() || !((String) line[0]).contains(qj))
+			if (qj.trim().isEmpty() || !line.key.contains(qj))
 			{
 				continue;
 			}
-			final long at = (Long) line[2];
+			final long at = line.at;
 			String day = at <= 0 ? "" : (dayOf(at).getYear() == thisYear ? DAY : TASK_DAY)
 				.format(Instant.ofEpochMilli(at));
-			journal.add(new Hit((String) line[1], day, null, null, () -> openJournalOn(at), 0, at));
+			journal.add(new Hit(line.text, day, null, null, () -> openJournalOn(at), 0, at));
 		}
 		total += searchGroup(p, "Journal", journal);
 
 		if (total == 0)
 		{
 			p.add(note("Nothing matches \"" + q + "\" yet."));
-			final String near = nearestName(ql);
+			final String near = Search.nearest(build, ql);
 			if (near != null)
 			{
 				JPanel r = row("Did you mean", near, accent());
@@ -8044,21 +7673,6 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	static String firstSentence(String task)
-	{
-		int note = task.indexOf(" Note:");
-		String s = note > 0 ? task.substring(0, note) : task;
-		for (int stop = s.indexOf(". "); stop > 0; stop = s.indexOf(". ", stop + 1))
-		{
-			if (Character.isLowerCase(s.charAt(stop - 1)) && stop + 2 < s.length()
-				&& Character.isUpperCase(s.charAt(stop + 2)))
-			{
-				return s.substring(0, stop + 1);
-			}
-		}
-		return s;
-	}
-
 	private Runnable searchFirst;
 
 	private void door(JPanel r, Runnable go)
@@ -8067,109 +7681,6 @@ class ChroniclePanel extends PluginPanel
 		if (searchFirst == null)
 		{
 			searchFirst = go;
-		}
-	}
-
-	private static String stamp(JsonObject e)
-	{
-		long ts = safeLong(e.get("ts"));
-		return ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "";
-	}
-
-	private static String[] sessionParts(JsonObject e)
-	{
-		JsonObject d = obj(e, "data");
-		long xp = safeLong(d.get("xp"));
-		long drops = safeLong(d.get("drops"));
-		StringBuilder right = new StringBuilder();
-		if (xp > 0)
-		{
-			right.append('+').append(gp(xp)).append(" xp");
-		}
-		if (drops > 0)
-		{
-			right.append(right.length() > 0 ? " · " : "").append(count(drops, "drop"));
-		}
-		return new String[]{"Session · " + hoursMinutes(safeLong(d.get("minutes"))),
-			right.toString(), feedLine(e)};
-	}
-
-	private static String mostOf(JsonObject d)
-	{
-		Entry<String, JsonElement> top = most(obj(d, "skills").entrySet(), e -> safeLong(e.getValue()));
-		return top == null ? null : prettify(top.getKey());
-	}
-
-	private static String feedLine(JsonObject e)
-	{
-		String type = typeOf(e);
-		JsonObject d = obj(e, "data");
-		switch (type)
-		{
-			case "PET":
-				return "Pet: " + str(d, "petName", "a new companion");
-			case "COLLECTION":
-				return "Log slot: " + str(d, "itemName", "new item");
-			case "RECORD":
-			{
-				double time = d.has("time") ? d.get("time").getAsDouble() : 0;
-				double was = d.has("was") ? d.get("was").getAsDouble() : 0;
-				return "Record: " + str(d, "source", "") + " " + pb(time)
-					+ (was > 0 ? ", was " + pb(was) : "");
-			}
-			case "MILESTONE":
-				return "Milestone: " + str(d, "text", "");
-			case "COMBAT_ACHIEVEMENT":
-				return "CA " + str(d, "tier", "") + ": " + str(d, "task", "task");
-			case "QUEST":
-				return "Quest: " + str(d, "questName", str(d, "quest", "complete"));
-			case "DIARY":
-				return "Diary: " + str(d, "area", "") + " " + str(d, "difficulty", "");
-			case "CLUE":
-				return "Clue: " + str(d, "clueType", "casket opened");
-			case "LEVEL":
-				return "Level: " + str(d, "skill", "a skill") + " " + str(d, "level", "");
-			case "DEATH":
-			{
-				String k = str(d, "killerName", "");
-				return k.isEmpty() ? "Died" : "Died to " + k;
-			}
-			case "SESSION":
-			{
-				long mins = safeLong(d.get("minutes"));
-				long xp = safeLong(d.get("xp"));
-				long drops = safeLong(d.get("drops"));
-				long dropsGp = safeLong(d.get("dropsGp"));
-				StringBuilder line = new StringBuilder("Session: ");
-				line.append(hoursMinutes(mins));
-				if (xp > 0)
-				{
-					line.append(" · +").append(gp(xp)).append(" xp");
-					String most = mostOf(d);
-					if (most != null)
-					{
-						line.append(", most in ").append(most);
-					}
-				}
-				if (drops > 0)
-				{
-					line.append(" · ").append(count(drops, "drop"));
-					if (dropsGp > 0)
-					{
-						line.append(" (").append(gp(dropsGp)).append(" gp)");
-					}
-				}
-				return line.toString();
-			}
-			case "SLAYER":
-			{
-				String t = str(d, "slayerTask", str(d, "task", ""));
-				String kc = str(d, "killCount", "");
-				return "Task complete" + (t.isEmpty() ? "" : ": " + t)
-					+ (kc.isEmpty() ? "" : ", " + kc + " killed");
-			}
-			default:
-				return type.isEmpty() ? "Milestone" : prettify(low(type));
 		}
 	}
 

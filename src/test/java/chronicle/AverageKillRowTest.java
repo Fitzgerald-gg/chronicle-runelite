@@ -85,7 +85,7 @@ public class AverageKillRowTest
 		assertNotNull(best);
 		assertTrue(best, best.startsWith("1:10 · set "));
 		assertEquals("Was 1:12", rowNamed(page[0], "Personal best").getToolTipText());
-		Method fl = ChroniclePanel.class.getDeclaredMethod("feedLine", JsonObject.class);
+		Method fl = Feed.class.getDeclaredMethod("line", JsonObject.class);
 		fl.setAccessible(true);
 		assertEquals("Record: Vorkath 1:10, was 1:12", fl.invoke(null, record(set, "Vorkath", 70.0, 72.0)));
 		assertEquals("Record: Vorkath 1:10", fl.invoke(null, record(set, "Vorkath", 70.0, 0)));

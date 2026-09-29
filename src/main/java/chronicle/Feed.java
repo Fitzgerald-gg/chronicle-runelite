@@ -11,6 +11,7 @@ package chronicle;
 import chronicle.HistoryLog.Baseline;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -26,6 +27,9 @@ import java.util.function.LongFunction;
 import java.util.function.ToLongFunction;
 import lombok.RequiredArgsConstructor;
 import static chronicle.Json.has;
+import static chronicle.Period.DAY;
+import static chronicle.Text.pb;
+import static chronicle.Json.str;
 import static chronicle.Json.low;
 import static chronicle.Json.obj;
 import static chronicle.Json.safeLong;
@@ -546,5 +550,108 @@ final class Feed
 			}
 		}
 		return top;
+	}
+
+	static String stamp(JsonObject e)
+	{
+		long ts = safeLong(e.get("ts"));
+		return ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "";
+	}
+
+	static String[] sessionParts(JsonObject e)
+	{
+		JsonObject d = obj(e, "data");
+		long xp = safeLong(d.get("xp"));
+		long drops = safeLong(d.get("drops"));
+		StringBuilder right = new StringBuilder();
+		if (xp > 0)
+		{
+			right.append('+').append(gp(xp)).append(" xp");
+		}
+		if (drops > 0)
+		{
+			right.append(right.length() > 0 ? " · " : "").append(count(drops, "drop"));
+		}
+		return new String[]{"Session · " + hoursMinutes(safeLong(d.get("minutes"))),
+			right.toString(), line(e)};
+	}
+
+	private static String mostOf(JsonObject d)
+	{
+		Entry<String, JsonElement> top = most(obj(d, "skills").entrySet(), e -> safeLong(e.getValue()));
+		return top == null ? null : prettify(top.getKey());
+	}
+
+	static String line(JsonObject e)
+	{
+		String type = typeOf(e);
+		JsonObject d = obj(e, "data");
+		switch (type)
+		{
+			case "PET":
+				return "Pet: " + str(d, "petName", "a new companion");
+			case "COLLECTION":
+				return "Log slot: " + str(d, "itemName", "new item");
+			case "RECORD":
+			{
+				double time = d.has("time") ? d.get("time").getAsDouble() : 0;
+				double was = d.has("was") ? d.get("was").getAsDouble() : 0;
+				return "Record: " + str(d, "source", "") + " " + pb(time)
+					+ (was > 0 ? ", was " + pb(was) : "");
+			}
+			case "MILESTONE":
+				return "Milestone: " + str(d, "text", "");
+			case "COMBAT_ACHIEVEMENT":
+				return "CA " + str(d, "tier", "") + ": " + str(d, "task", "task");
+			case "QUEST":
+				return "Quest: " + str(d, "questName", str(d, "quest", "complete"));
+			case "DIARY":
+				return "Diary: " + str(d, "area", "") + " " + str(d, "difficulty", "");
+			case "CLUE":
+				return "Clue: " + str(d, "clueType", "casket opened");
+			case "LEVEL":
+				return "Level: " + str(d, "skill", "a skill") + " " + str(d, "level", "");
+			case "DEATH":
+			{
+				String k = str(d, "killerName", "");
+				return k.isEmpty() ? "Died" : "Died to " + k;
+			}
+			case "SESSION":
+			{
+				long mins = safeLong(d.get("minutes"));
+				long xp = safeLong(d.get("xp"));
+				long drops = safeLong(d.get("drops"));
+				long dropsGp = safeLong(d.get("dropsGp"));
+				StringBuilder line = new StringBuilder("Session: ");
+				line.append(hoursMinutes(mins));
+				if (xp > 0)
+				{
+					line.append(" · +").append(gp(xp)).append(" xp");
+					String most = mostOf(d);
+					if (most != null)
+					{
+						line.append(", most in ").append(most);
+					}
+				}
+				if (drops > 0)
+				{
+					line.append(" · ").append(count(drops, "drop"));
+					if (dropsGp > 0)
+					{
+						line.append(" (").append(gp(dropsGp)).append(" gp)");
+					}
+				}
+				return line.toString();
+			}
+			case "SLAYER":
+			{
+				String t = str(d, "slayerTask", str(d, "task", ""));
+				String kc = str(d, "killCount", "");
+				return "Task complete" + (t.isEmpty() ? "" : ": " + t)
+					+ (kc.isEmpty() ? "" : ", " + kc + " killed");
+			}
+			default:
+				return type.isEmpty() ? "Milestone" : prettify(low(type));
+		}
 	}
 }
