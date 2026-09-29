@@ -10,6 +10,7 @@ import chronicle.panel.StatRegistry;
 import com.google.gson.JsonObject;
 import java.awt.GridLayout;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -281,24 +282,22 @@ final class TrackersScreen extends Screen
 		{
 			return;
 		}
-		Map<String, long[]> killers = new LinkedHashMap<>();
+		Map<String, List<Long>> killers = new LinkedHashMap<>();
 		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))
 		{
 			long ts = asLong(e.get("ts"));
 			if ("DEATH".equals(typeOf(e)) && board.insideWindow(ts))
 			{
 				JsonObject d = obj(e, "data");
-				long[] t = killers.computeIfAbsent(has(d, "killerName") ? d.get("killerName").getAsString() : "Unknown",
-					k -> new long[2]);
-				t[0]++;
-				t[1] = Math.max(t[1], ts);
+				killers.computeIfAbsent(has(d, "killerName") ? d.get("killerName").getAsString() : "Unknown", k -> new ArrayList<>())
+					.add(ts);
 			}
 		}
-		List<Entry<String, long[]>> ranked = new ArrayList<>(killers.entrySet());
-		ranked.sort((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0]));
-		for (Entry<String, long[]> k : ranked)
+		List<Entry<String, List<Long>>> ranked = new ArrayList<>(killers.entrySet());
+		ranked.sort((a, b) -> Integer.compare(b.getValue().size(), a.getValue().size()));
+		for (Entry<String, List<Long>> k : ranked)
 		{
-			JPanel r = row(k.getKey(), fmt(k.getValue()[0]) + " · last " + day(k.getValue()[1]));
+			JPanel r = row(k.getKey(), fmt(k.getValue().size()) + " · last " + day(Collections.max(k.getValue())));
 			p.add("Unknown".equals(k.getKey()) ? r : link(r, () -> ui.openSourceLoose(k.getKey())));
 		}
 	}

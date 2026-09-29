@@ -188,35 +188,35 @@ final class SearchScreen extends Screen
 		{
 			return tasks;
 		}
-		Map<String, int[]> byTask = new LinkedHashMap<>();
+		Map<String, List<Integer>> byTask = new LinkedHashMap<>();
 		for (int i = 0; i < journey.tasks.size(); i++)
 		{
 			String task = journey.tasks.get(i).task;
 			if (task != null && matchScore(ql, task) >= 0)
 			{
-				int at = i;
-				byTask.computeIfAbsent(low(task), k -> new int[]{0, at})[0]++;
+				byTask.computeIfAbsent(low(task), k -> new ArrayList<>()).add(i);
 			}
 		}
-		for (int[] seen : byTask.values())
+		for (List<Integer> seen : byTask.values())
 		{
-			String name = journey.tasks.get(seen[1]).task;
-			tasks.add(new Hit(name, count(seen[0], "task"), null, "Opens the newest", () ->
+			int newest = seen.get(0);
+			String name = journey.tasks.get(newest).task;
+			tasks.add(new Hit(name, count(seen.size(), "task"), null, "Opens the newest", () ->
 			{
 				if (ui.slayer.journeyCache == null)
 				{
 					ui.slayer.journeyCache = journey;
 				}
 				ui.show(ChroniclePanel.View.SLAYER);
-				ui.showTask(seen[1]);
-			}, matchScore(ql, name), seen[0]));
+				ui.showTask(newest);
+			}, matchScore(ql, name), seen.size()));
 		}
 		return tasks;
 	}
 
 	private List<Hit> items(String ql)
 	{
-		Map<String, long[]> agg = new LinkedHashMap<>();
+		Map<String, Tally> agg = new LinkedHashMap<>();
 		Map<String, List<String>> from = new LinkedHashMap<>();
 		for (SourceRow src : board.sources())
 		{
@@ -224,9 +224,7 @@ final class SearchScreen extends Screen
 			{
 				if (matchScore(ql, b.name) >= 0)
 				{
-					long[] a = agg.computeIfAbsent(b.name, k -> new long[2]);
-					a[0] += b.qty;
-					a[1] += b.value;
+					Tally.add(agg, b.name, b.qty, b.value);
 					from.computeIfAbsent(b.name, k -> new ArrayList<>()).add(src.name);
 				}
 			}
@@ -235,9 +233,9 @@ final class SearchScreen extends Screen
 		agg.forEach((item, a) ->
 		{
 			List<String> srcs = from.get(item);
-			String tip = (a[1] > 0 ? gp(a[1]) + " gp · " : "") + "from " + String.join(", ", firstN(srcs, 4))
+			String tip = (a.value > 0 ? gp(a.value) + " gp · " : "") + "from " + String.join(", ", firstN(srcs, 4))
 				+ (srcs.size() > 4 ? " and " + (srcs.size() - 4) + " more" : "");
-			items.add(new Hit(item, "×" + fmt(a[0]), null, tip, () -> ui.openItem(item), matchScore(ql, item), a[1]));
+			items.add(new Hit(item, "×" + fmt(a.qty), null, tip, () -> ui.openItem(item), matchScore(ql, item), a.value));
 		});
 		for (UntakenRow u : store.untakenItems())
 		{
