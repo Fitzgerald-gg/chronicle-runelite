@@ -414,10 +414,7 @@ final class SearchScreen extends Screen
 				part(r, BorderLayout.CENTER).setForeground(h.color);
 			}
 			String tip = shown.equals(h.name) ? h.tip : h.tip == null ? h.name : h.name + ": " + h.tip;
-			if (tip != null)
-			{
-				r.setToolTipText(wrappedTip(tip));
-			}
+			r.setToolTipText(wrappedTip(tip));
 			p.add(door(r, h.go));
 		}
 		ui.addMore(p, key, hits.size(), cap, false);

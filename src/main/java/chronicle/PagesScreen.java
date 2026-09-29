@@ -368,11 +368,7 @@ final class PagesScreen extends Screen
 		boolean complete = got == slots.size() && !slots.isEmpty();
 		JPanel head = row(page, got + "/" + slots.size() + (kc != null && kc > 0 ? " · " + fmt(kc) + " kc" : ""),
 			complete ? GREEN : null, complete);
-		String lines = Board.pageHeaderTip(cl, page);
-		if (lines != null)
-		{
-			head.setToolTipText(lines);
-		}
+		head.setToolTipText(Board.pageHeaderTip(cl, page));
 		link(head, () ->
 		{
 			clogPageSel = open ? null : page;

@@ -786,10 +786,7 @@ final class Ui
 		pill.setFont(small());
 		pill.setBackground(DARKER);
 		pill.setForeground(on ? ACCENT : DIM);
-		if (tip != null)
-		{
-			pill.setToolTipText(tip);
-		}
+		pill.setToolTipText(tip);
 		link(pill, pick);
 		return pill;
 	}
