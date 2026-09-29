@@ -1469,8 +1469,8 @@ public class ChroniclePlugin extends Plugin
 		final HistoryLog.Adjust adj = localStore.takePendingAdjust();
 		executor.submit(() ->
 		{
-			HistoryLog.Adjust unwritten = historyLog.append(localDir(), rsn, skills, counters, kcs,
-				LocalStore.KILLS_VERSION, adj, LocalDate.now());
+			HistoryLog.Adjust unwritten = historyLog.append(localDir(), rsn, skills, counters, kcs, adj,
+				LocalDate.now());
 			if (unwritten != null)
 			{
 				localStore.restorePendingAdjust(rsn, unwritten);

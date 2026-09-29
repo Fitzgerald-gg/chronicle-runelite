@@ -166,19 +166,4 @@ public class KillCountTest
 		h.tick();
 		assertEquals(155, lastSpine().getAsJsonObject("adj").getAsJsonObject("kcs").get("Vorkath").getAsLong());
 	}
-
-	@Test
-	public void aJournalFromAnOlderReckoningGetsItsStepOnLoad()
-	{
-		h.logout();
-		Harness.write(h.file(), "{\"schema\":1,\"rsn\":\"Tester\",\"drops\":{\"Wintertodt\":{\"kc\":0,"
-			+ "\"loots\":15,\"value\":0,\"items\":{}}},\"collection_log\":"
-			+ "{\"kcs\":{\"Wintertodt\":50},\"slayer_kcs\":{\"Wintertodt\":20}},"
-			+ "\"trackers\":{},\"skills\":{},\"feed\":[]}");
-		Harness.write(h.spineFile(), "{\"date\":\"2026-09-20\",\"kcs\":{\"Wintertodt\":50},\"counters\":{\"kills\":50}}\n");
-		h.login().tick();
-		JsonObject adj = lastSpine().getAsJsonObject("adj");
-		assertEquals(-30, adj.getAsJsonObject("kcs").get("Wintertodt").getAsLong());
-		assertEquals(Long.valueOf(20), kc("Wintertodt"));
-	}
 }

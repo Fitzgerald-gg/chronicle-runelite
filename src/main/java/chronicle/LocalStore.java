@@ -52,7 +52,6 @@ import net.runelite.client.game.ItemManager;
 class LocalStore implements chronicle.counters.GatheredLedger
 {
 	static final int SCHEMA = 1;
-	static final int KILLS_VERSION = 1;
 	private static final int FEED_CAP = 20000;
 	static final Set<String> MAX_KEYS = new HashSet<>(
 		Arrays.asList("highestHit", "highestHitTaken"));
@@ -66,7 +65,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	private final Object lock = new Object();
 	static final String SPINE_ADJ = "spine_adj";
-	static final String SPINE_ADJ_KV = "spine_adj_kv";
 	private volatile boolean freshAdjust;
 	private JsonObject root;
 	private JsonObject trackersBase;
@@ -148,15 +146,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		synchronized (lock)
 		{
 			root = loaded;
-			int healed = repairTrackerKeys();
 			trackersBase = loaded.getAsJsonObject("trackers").deepCopy();
 			currentRsn = rsn;
-			healed += dedupeSourceBags() + dedupeFeed() + reconcileUntaken()
-				+ purgeOffTaskMonsters() + splitDays();
-			if (healed > 0)
-			{
-				log.debug("repaired {} journal entries on load", healed);
-			}
 			gatheredItems.clear();
 			for (JsonElement g : arr(loaded, "gathered_items"))
 			{
@@ -166,7 +157,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					gatheredItems.add((int) id);
 				}
 			}
-			settleKillsVersion(dir, rsn);
 			ready = true;
 		}
 		journalWarning = null;
@@ -234,7 +224,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 			HistoryLog.Adjust out = HistoryLog.Adjust.from(root.get(SPINE_ADJ));
 			root.remove(SPINE_ADJ);
-			root.remove(SPINE_ADJ_KV);
 			return out;
 		}
 	}
@@ -734,121 +723,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 			return first == null ? 0 : dayMs(first);
 		}
-	}
-
-	private int splitDays()
-	{
-		int split = 0;
-		JsonObject drops = obj(root, "drops");
-		JsonObject all = obj(root, "loot_days");
-		days:
-		for (String day : all.keySet())
-		{
-			JsonObject srcs = obj(obj(all, day), "sources");
-			JsonObject heap = obj(obj(all, day), "items");
-			Map<String, long[]> rest = new LinkedHashMap<>();
-			for (String id : heap.keySet())
-			{
-				rest.put(id, new long[]{asLong(obj(heap, id).get("q")), asLong(obj(heap, id).get("v"))});
-			}
-			Map<String, Long> owed = new HashMap<>();
-			for (String source : srcs.keySet())
-			{
-				JsonObject its = obj(obj(srcs, source), "items");
-				long v = asLong(obj(srcs, source).get("value"));
-				for (String id : its.keySet())
-				{
-					long[] r = rest.get(id);
-					if (r == null)
-					{
-						continue days;
-					}
-					r[0] -= asLong(obj(its, id).get("q"));
-					r[1] -= asLong(obj(its, id).get("v"));
-					v -= asLong(obj(its, id).get("v"));
-				}
-				if (v < 0)
-				{
-					continue days;
-				}
-				if (asLong(obj(srcs, source).get("loots")) > asLong(obj(srcs, source).get("filed")))
-				{
-					owed.put(source, v);
-				}
-			}
-			rest.values().removeIf(r -> r[0] == 0 && r[1] == 0);
-			if (owed.isEmpty() && rest.isEmpty())
-			{
-				continue;
-			}
-			Map<String, JsonObject> rows = new HashMap<>();
-			for (Map.Entry<String, long[]> r : rest.entrySet())
-			{
-				String id = r.getKey();
-				String name = str(obj(heap, id), "n", "");
-				String owner = owed.size() == 1 ? owed.keySet().iterator().next() : null;
-				for (String source : owner != null ? new HashSet<String>() : srcs.keySet())
-				{
-					JsonObject bag = obj(obj(drops, source), "items");
-					if (bag.has(id) || dropped(bag, name))
-					{
-						if (owner != null || r.getValue()[1] == 0)
-						{
-							continue days;
-						}
-						owner = source;
-					}
-				}
-				if (owner == null || !owed.containsKey(owner) || r.getValue()[0] < 0 || r.getValue()[1] < 0)
-				{
-					continue days;
-				}
-				JsonObject row = new JsonObject();
-				row.addProperty("n", name);
-				row.addProperty("q", r.getValue()[0]);
-				row.addProperty("v", r.getValue()[1]);
-				rows.computeIfAbsent(owner, k -> new JsonObject()).add(id, row);
-			}
-			for (Map.Entry<String, Long> o : owed.entrySet())
-			{
-				long v = 0;
-				for (String id : rows.getOrDefault(o.getKey(), new JsonObject()).keySet())
-				{
-					v += asLong(obj(rows.get(o.getKey()), id).get("v"));
-				}
-				if (v != o.getValue())
-				{
-					continue days;
-				}
-			}
-			for (String source : owed.keySet())
-			{
-				obj(srcs, source).addProperty("filed", asLong(obj(srcs, source).get("loots")));
-				JsonObject its = sub(obj(srcs, source), "items");
-				JsonObject add = rows.getOrDefault(source, new JsonObject());
-				for (String id : add.keySet())
-				{
-					JsonObject own = sub(its, id);
-					own.addProperty("n", str(obj(add, id), "n", ""));
-					bump(own, "q", asLong(obj(add, id).get("q")));
-					bump(own, "v", asLong(obj(add, id).get("v")));
-				}
-			}
-			split++;
-		}
-		return split;
-	}
-
-	private static boolean dropped(JsonObject bag, String name)
-	{
-		for (String key : bag.keySet())
-		{
-			if (name.equalsIgnoreCase(str(obj(bag, key), "name", key)))
-			{
-				return true;
-			}
-		}
-		return false;
 	}
 
 	private static void gather(JsonObject day, String key,
@@ -2314,8 +2188,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				importSlayer(in.getAsJsonObject("slayer"));
 			}
-			dedupeSourceBags();
-			dedupeFeed();
 			touch();
 		}
 		return sources + " sources · " + String.format(Locale.UK, "%,d", events)
@@ -2485,29 +2357,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return bare.toString();
 	}
 
-	private int dedupeFeed()
-	{
-		Map<String, JsonObject> best = new LinkedHashMap<>();
-		int absorbed = 0;
-		for (JsonObject o : objects(arr(root, "feed")))
-		{
-			JsonObject held = best.putIfAbsent(feedKey(o), o);
-			if (held != null)
-			{
-				absorbed++;
-				if (obj(o, "data").size() > obj(held, "data").size())
-				{
-					best.put(feedKey(o), o);
-				}
-			}
-		}
-		if (absorbed > 0)
-		{
-			setFeed(new ArrayList<>(best.values()), Integer.MAX_VALUE);
-		}
-		return absorbed;
-	}
-
 	private void setFeed(List<JsonObject> all, int cap)
 	{
 		all.sort(Comparator.comparingLong(o -> asLong(o.get("ts"))));
@@ -2637,134 +2486,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		final long ts;
 	}
 
-	private int reconcileUntaken()
-	{
-		JsonObject pairs = obj(root, "untaken_pairs");
-		if (pairs.size() == 0 || !isObject(root, "untaken_items")
-			|| !pairs.keySet().containsAll(obj(root, "untaken").keySet()))
-		{
-			return 0;
-		}
-		JsonObject rebuilt = new JsonObject();
-		for (var pe : objects(pairs))
-		{
-			for (var ie : objects(pe.getValue()))
-			{
-				JsonObject cur = sub(rebuilt, ie.getKey());
-				bump(cur, "qty", asLong(ie.getValue().get("qty")));
-				bump(cur, "value", asLong(ie.getValue().get("value")));
-			}
-		}
-		JsonObject was = root.getAsJsonObject("untaken_items");
-		int corrected = (int) (rebuilt.entrySet().stream().filter(e -> !Objects.equals(was.get(e.getKey()), e.getValue())).count()
-			+ was.keySet().stream().filter(k -> !rebuilt.has(k)).count());
-		if (corrected > 0)
-		{
-			root.add("untaken_items", rebuilt);
-		}
-		return corrected;
-	}
-
-	private int purgeOffTaskMonsters()
-	{
-		int changed = 0;
-		for (JsonElement te : taskArray())
-		{
-			JsonObject seg = te.isJsonObject() ? te.getAsJsonObject() : new JsonObject();
-			if (!isOpen(seg) || !present(seg, "task") || !isObject(seg, "monsters"))
-			{
-				continue;
-			}
-			String task = seg.get("task").getAsString();
-			JsonObject mons = seg.getAsJsonObject("monsters");
-			int before = mons.size();
-			long offTask = 0;
-			for (String name : new ArrayList<>(mons.keySet()))
-			{
-				if (!SlayerTaskBook.onTask(name, SlayerTaskBook.UNKNOWN_ID, task))
-				{
-					offTask += asLong(mons.remove(name));
-				}
-			}
-			if (mons.size() < before)
-			{
-				seg.addProperty("kills", Math.max(0, asLong(seg.get("kills")) - offTask));
-				changed++;
-			}
-		}
-		return changed;
-	}
-
-	private int dedupeSourceBags()
-	{
-		int absorbed = 0;
-		for (var src : objects(obj(root, "drops")))
-		{
-			JsonObject bag = obj(src.getValue(), "items");
-			Map<String, String> keep = new HashMap<>();
-			List<String> drop = new ArrayList<>();
-			for (var ie : objects(bag))
-			{
-				String name = str(ie.getValue(), "name", ie.getKey()).toLowerCase(Locale.ROOT);
-				String winner = keep.putIfAbsent(name, ie.getKey());
-				if (winner == null)
-				{
-					continue;
-				}
-				String loser = ie.getKey();
-				if (!isNumeric(winner) && isNumeric(loser))
-				{
-					loser = winner;
-					winner = ie.getKey();
-					keep.put(name, winner);
-				}
-				JsonObject w = bag.getAsJsonObject(winner);
-				JsonObject l = bag.getAsJsonObject(loser);
-				floorNumber(w, l, "qty");
-				floorNumber(w, l, "value");
-				if (!w.has("name") && l.has("name"))
-				{
-					w.add("name", l.get("name"));
-				}
-				drop.add(loser);
-			}
-			drop.forEach(bag::remove);
-			absorbed += drop.size();
-		}
-		return absorbed;
-	}
-
-	private static final Pattern KEY_LEVEL =
-		Pattern.compile("\\(level[\\s-]*\\d*\\)?",
-			Pattern.CASE_INSENSITIVE);
-
-	private int repairTrackerKeys()
-	{
-		JsonObject tr = obj(root, "trackers");
-		int folded = 0;
-		for (String key : new ArrayList<>(tr.keySet()))
-		{
-			String into = key.startsWith("__") ? "" : key.equals("logsLogsChopped") ? "normalLogsChopped"
-				: key.contains("(level") ? KEY_LEVEL.matcher(key).replaceAll("") : null;
-			if (into == null)
-			{
-				continue;
-			}
-			long v = asLong(tr.remove(key));
-			if (!into.isEmpty() && !into.equals(key))
-			{
-				tr.addProperty(into, asLong(tr.get(into)) + v);
-			}
-			folded++;
-		}
-		return folded;
-	}
-
-	private static boolean isNumeric(String s)
-	{
-		return s != null && !s.isEmpty() && s.chars().allMatch(Character::isDigit);
-	}
-
 	int combatLevel()
 	{
 		synchronized (lock)
@@ -2807,7 +2528,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		JsonObject cl = clogSnapshot();
 		Map<String, Long> reconciled =
 			reconciledKills(cl, sources, chatKillCounts(), anchoredKills());
-		long kills = spineKills(cl, sources, reconciled, KILLS_VERSION);
+		long kills = spineKills(cl, sources, reconciled);
 		long left = 0;
 		long leftValue = 0;
 		long leftKills = 0;
@@ -2842,47 +2563,20 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		List<SourceRow> sources, Map<String, Long> chat,
 		Map<String, Long> anchored)
 	{
-		return reconciledKills(clog, sources, chat, anchored, KILLS_VERSION);
-	}
-
-	static Map<String, Long> reconciledKills(JsonObject clog,
-		List<SourceRow> sources, Map<String, Long> chat,
-		Map<String, Long> anchored, int version)
-	{
 		Map<String, Long> out = clogKillCounts(clog);
 		Map<String, Long> stated = killLogCounts(clog);
 		foldChatCounts(stated, chat, out.keySet());
 		placeByKind(out, stated, false);
-		if (version < 1)
-		{
-			placeByKind(out, sourceKills(clog, sources), true);
-			placeByKind(out, respelled(anchored, out.keySet()), false);
-			return out;
-		}
 		placeByKind(out, pageKillLines(clog), true);
 		placeByKind(out, ledgerKills(clog, sources), true);
 		placeByKind(out, respelled(anchored, out.keySet()), false);
 		return out;
 	}
 
-	static Map<String, Long> sourceKills(JsonObject clog,
-		List<SourceRow> sources)
-	{
-		return sourceKills(clog, sources, true);
-	}
-
 	static long spineKills(JsonObject clog, List<SourceRow> sources,
-		Map<String, Long> reconciled, int version)
+		Map<String, Long> reconciled)
 	{
 		long kills = 0;
-		if (version < 1)
-		{
-			for (long k : sourceKills(clog, sources).values())
-			{
-				kills += k;
-			}
-			return kills;
-		}
 		for (String key : spineKillKeys(clog, sources, reconciled))
 		{
 			kills += reconciled.getOrDefault(key, 0L);
@@ -2899,7 +2593,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			byKind.putIfAbsent(chatKind(key), key);
 		}
 		Set<String> out = new LinkedHashSet<>();
-		for (String name : sourceKills(clog, sources).keySet())
+		for (String name : sourceKills(clog, sources, true).keySet())
 		{
 			String key = reconciled.containsKey(name) ? name : byKind.get(chatKind(name));
 			if (key != null)
@@ -2908,62 +2602,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			}
 		}
 		return out;
-	}
-
-	HistoryLog.Adjust definitionShift(int from)
-	{
-		HistoryLog.Adjust adj = new HistoryLog.Adjust();
-		if (from >= KILLS_VERSION)
-		{
-			return adj;
-		}
-		JsonObject cl = clogSnapshot();
-		List<SourceRow> sources = dropSources();
-		Map<String, Long> chat = chatKillCounts();
-		Map<String, Long> anchored = anchoredKills();
-		Map<String, Long> was = reconciledKills(cl, sources, chat, anchored, from);
-		Map<String, Long> now = reconciledKills(cl, sources, chat, anchored, KILLS_VERSION);
-		for (var e : now.entrySet())
-		{
-			Long w = was.get(e.getKey());
-			if (w != null && w.longValue() != e.getValue())
-			{
-				adj.kcs.put(e.getKey(), e.getValue() - w);
-			}
-		}
-		long sum = spineKills(cl, sources, now, KILLS_VERSION) - spineKills(cl, sources, was, from);
-		if (sum != 0)
-		{
-			adj.counters.put("kills", sum);
-		}
-		return adj;
-	}
-
-	private void settleKillsVersion(File dir, String rsn)
-	{
-		Integer newest = HistoryLog.newestKv(gson, dir, rsn);
-		if (newest == null)
-		{
-			return;
-		}
-		int from = newest;
-		synchronized (lock)
-		{
-			if (root.has(SPINE_ADJ_KV) && root.has(SPINE_ADJ))
-			{
-				from = Math.max(from, (int) asLong(root.get(SPINE_ADJ_KV)));
-			}
-			if (from >= KILLS_VERSION)
-			{
-				return;
-			}
-			addPendingAdjust(definitionShift(from));
-			if (hasPendingAdjust())
-			{
-				root.addProperty(SPINE_ADJ_KV, KILLS_VERSION);
-			}
-			freshAdjust = false;
-		}
 	}
 
 	static Map<String, Long> ledgerKills(JsonObject clog,

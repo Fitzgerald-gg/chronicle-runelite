@@ -43,7 +43,7 @@ class HistoryLog
 	private final Map<String, String> lastAppendedDate = new ConcurrentHashMap<>();
 
 	synchronized Adjust append(File dir, String rsn, Map<String, Long> skills,
-		Map<String, Long> counters, Map<String, Long> kcs, int kv, Adjust adj, LocalDate today)
+		Map<String, Long> counters, Map<String, Long> kcs, Adjust adj, LocalDate today)
 	{
 		Adjust unwritten = new Adjust();
 		unwritten.add(adj);
@@ -57,7 +57,6 @@ class HistoryLog
 		state.add("skills", tree(skills));
 		state.add("counters", tree(counters));
 		state.add("kcs", tree(kcs));
-		state.addProperty("kv", kv);
 		try
 		{
 			if (!dir.isDirectory() && !dir.mkdirs())
@@ -155,7 +154,6 @@ class HistoryLog
 		final Map<String, Long> counters = new HashMap<>();
 		final Map<String, Long> kcs = new HashMap<>();
 		boolean complete;
-		int kv = -1;
 		final Adjust adj = new Adjust();
 	}
 
@@ -448,40 +446,6 @@ class HistoryLog
 		return 0;
 	}
 
-	static Integer newestKv(Gson gson, File dir, String rsn)
-	{
-		File f = new File(dir, LocalStore.slug(rsn) + SPINE_SUFFIX);
-		if (!f.isFile())
-		{
-			return null;
-		}
-		Integer[] kv = new Integer[1];
-		try (RandomAccessFile raf = new RandomAccessFile(f, "r"))
-		{
-			fromEnd(raf, line ->
-			{
-				try
-				{
-					JsonObject o = line.isEmpty() ? null : gson.fromJson(line, JsonObject.class);
-					if (o != null && o.has("date"))
-					{
-						kv[0] = o.has("kv") ? o.get("kv").getAsInt() : 0;
-						return false;
-					}
-				}
-				catch (RuntimeException torn)
-				{
-				}
-				return true;
-			});
-		}
-		catch (IOException e)
-		{
-			log.debug("history tail unreadable", e);
-		}
-		return kv[0];
-	}
-
 	private static List<String> lines(File f) throws IOException
 	{
 		try (BufferedReader r = new BufferedReader(new InputStreamReader(
@@ -606,10 +570,6 @@ class HistoryLog
 					fill(o, "counters", b.counters);
 					fill(o, "kcs", b.kcs);
 					b.complete = whole(b.skills);
-					if (o.has("kv"))
-					{
-						b.kv = o.get("kv").getAsInt();
-					}
 					b.adj.add(Adjust.from(o.get("adj")));
 					out.put(date, b);
 				}

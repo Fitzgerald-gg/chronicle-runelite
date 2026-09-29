@@ -113,29 +113,6 @@ public class StoreTest
 	}
 
 	@Test
-	public void duplicatesAndMisspeltKeysHealOnLoad()
-	{
-		write(h.file(), "{\"schema\":1,\"rsn\":\"Tester\",\"feed\":["
-			+ "{\"ts\":1700000000000,\"type\":\"LEVEL\",\"data\":{\"skill\":\"Attack\",\"level\":99}},"
-			+ "{\"ts\":1700000000400,\"type\":\"LEVEL\",\"data\":{\"skill\":\"Attack\",\"level\":99,\"source\":\"import\"}},"
-			+ "{\"ts\":1700000000500,\"type\":\"LEVEL\",\"data\":{\"skill\":\"Strength\",\"level\":70}}],"
-			+ "\"drops\":{\"Herbiboar\":{\"kc\":27,\"loots\":27,\"value\":1,\"items\":{"
-			+ "\"207\":{\"id\":207,\"name\":\"Grimy ranarr weed\",\"qty\":6,\"value\":34000},"
-			+ "\"Grimy ranarr weed\":{\"qty\":6,\"value\":35000}}}},"
-			+ "\"trackers\":{\"logsLogsChopped\":1,\"normalLogsChopped\":4,\"guard(level21)Pickpockets\":2,"
-			+ "\"guardPickpockets\":3,\"__probe\":1,\"deaths\":7}}");
-		JsonObject j = h.login().journal();
-		assertEquals(2, j.getAsJsonArray("feed").size());
-		JsonObject bag = j.getAsJsonObject("drops").getAsJsonObject("Herbiboar").getAsJsonObject("items");
-		assertEquals(bag.toString(), 1, bag.size());
-		JsonObject t = j.getAsJsonObject("trackers");
-		assertEquals(5, t.get("normalLogsChopped").getAsInt());
-		assertEquals(5, t.get("guardPickpockets").getAsInt());
-		assertEquals(7, t.get("deaths").getAsInt());
-		assertFalse(t.has("__probe") || t.has("logsLogsChopped"));
-	}
-
-	@Test
 	public void anImportFloorsWhatIsHeldAndTwiceIsOnce()
 	{
 		h.login().kill("Nechryael", 11, 526, 1).save();

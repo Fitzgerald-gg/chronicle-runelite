@@ -839,7 +839,7 @@ final class Harness
 
 	Harness spine(LocalDate day, Map<String, Long> skills, Map<String, Long> counters, Map<String, Long> kcs)
 	{
-		history().append(DIR, rsn, skills, counters, kcs, LocalStore.KILLS_VERSION, null, day);
+		history().append(DIR, rsn, skills, counters, kcs, null, day);
 		call(plugin, "reloadHistory", rsn);
 		return this;
 	}
