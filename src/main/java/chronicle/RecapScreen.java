@@ -252,7 +252,7 @@ final class RecapScreen
 			}
 			Long start = null;
 			Long end = null;
-			String key = closing == null || board.movedKcs == null ? null : keyOf(board.movedKcs.keySet(), b.name);
+			String key = closing == null ? null : keyOf(board.movedKcs(s).keySet(), b.name);
 			if (key != null)
 			{
 				end = closing.get(key);

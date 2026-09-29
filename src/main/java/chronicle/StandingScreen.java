@@ -215,8 +215,6 @@ final class StandingScreen
 	JPanel buildKills()
 	{
 		JPanel p = column();
-		board.movedKcs = null;
-		board.rolledKcs = null;
 		board.rollUsed = false;
 		List<Boss> roster = bossRoster(plugin.gson());
 		if (roster.isEmpty())
