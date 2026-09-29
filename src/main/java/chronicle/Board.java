@@ -1321,30 +1321,14 @@ final class Board
 		return out;
 	}
 
-	long[] periodXp()
+	private Map<String, Long> xpBySkill()
 	{
-		if (period.whole())
-		{
-			long[] overall = plugin.skillSheet().get("overall");
-			return overall != null && overall.length > 1 ? new long[]{overall[1]} : null;
-		}
-		if (period.session())
-		{
-			return new long[]{plugin.sessionSkillXp().stream().mapToLong(g -> Math.max(0, g.xp)).sum()};
-		}
-		Map<String, Long> gains = periodSkillGains();
-		return gains == null ? null : new long[]{gains.values().stream().mapToLong(g -> Math.max(0, g)).sum()};
-	}
-
-	String periodXpMost()
-	{
-		if (period.session())
-		{
-			SkillGain top = most(plugin.sessionSkillXp(), g -> g.xp);
-			return top == null ? null : prettify(low(top.skill.name()));
-		}
 		Map<String, Long> by = new LinkedHashMap<>();
-		if (period.whole())
+		if (period.session())
+		{
+			plugin.sessionSkillXp().forEach(g -> by.put(low(g.skill.name()), (long) Math.max(0, g.xp)));
+		}
+		else if (period.whole())
 		{
 			plugin.skillSheet().forEach((k, v) ->
 			{
@@ -1361,9 +1345,26 @@ final class Board
 			{
 				return null;
 			}
-			by.putAll(gains);
+			gains.forEach((k, v) -> by.put(k, Math.max(0, v)));
 		}
-		String top = topOf(by);
+		return by;
+	}
+
+	long[] periodXp()
+	{
+		if (period.whole())
+		{
+			long[] overall = plugin.skillSheet().get("overall");
+			return overall != null && overall.length > 1 ? new long[]{overall[1]} : null;
+		}
+		Map<String, Long> by = xpBySkill();
+		return by == null ? null : new long[]{by.values().stream().mapToLong(Long::longValue).sum()};
+	}
+
+	String periodXpMost()
+	{
+		Map<String, Long> by = xpBySkill();
+		String top = by == null ? null : topOf(by);
 		return top == null ? null : prettify(top);
 	}
 
