@@ -100,7 +100,7 @@ final class RecapScreen extends Screen
 
 	private void skills(RecapPicture.Facts f, Span s)
 	{
-		Map<String, long[]> sheet = plugin.skillSheet();
+		Map<String, SkillRow> sheet = plugin.skillSheet();
 		Map<String, Long> closing = null;
 		if (!f.whole && !f.session)
 		{
@@ -135,8 +135,8 @@ final class RecapScreen extends Screen
 			}
 			else
 			{
-				long[] cur = sheet.get(key);
-				end = cur != null && cur.length > 1 ? cur[1] : null;
+				SkillRow cur = sheet.get(key);
+				end = cur != null ? Long.valueOf(cur.xp) : null;
 				if (f.session && end != null)
 				{
 					start = Math.max(0, end - board.sessionXp(key));
@@ -170,11 +170,11 @@ final class RecapScreen extends Screen
 		{
 			return;
 		}
-		long[] overall = sheet.get("overall");
-		long totalEnd = f.whole && overall != null && overall[0] > 0 ? overall[0] : sum(endLevels);
+		SkillRow overall = sheet.get("overall");
+		long totalEnd = f.whole && overall != null && overall.level > 0 ? overall.level : sum(endLevels);
 		f.totalLevel = new Long[]{startsKnown ? sum(startLevels) : null, totalEnd};
 		f.totalXp = new Long[]{startsKnown ? startXp : null,
-			f.whole && overall != null && overall.length > 1 && overall[1] > 0 ? overall[1] : endXp};
+			f.whole && overall != null && overall.xp > 0 ? overall.xp : endXp};
 		Integer cEnd = combatOf(endLevels);
 		if (f.whole && store.combatLevel() > 0)
 		{

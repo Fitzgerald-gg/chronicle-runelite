@@ -1275,13 +1275,13 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	Map<String, long[]> skillSheet()
+	Map<String, SkillRow> skillSheet()
 	{
-		Map<String, long[]> out = new LinkedHashMap<>();
+		Map<String, SkillRow> out = new LinkedHashMap<>();
 		synchronized (lock)
 		{
 			objects(obj(root, "skills")).forEach(e ->
-				out.put(e.getKey(), new long[]{asLong(e.getValue().get("level")), asLong(e.getValue().get("xp"))}));
+				out.put(e.getKey(), new SkillRow(asLong(e.getValue().get("level")), asLong(e.getValue().get("xp")))));
 		}
 		return out;
 	}

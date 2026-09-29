@@ -91,13 +91,13 @@ final class SearchScreen extends Screen
 	private List<Hit> places(String q, String ql)
 	{
 		List<Hit> go = new ArrayList<>();
-		Map<String, long[]> sheet = plugin.skillSheet();
+		Map<String, SkillRow> sheet = plugin.skillSheet();
 		for (Skill sk : skillOrder())
 		{
 			String key = low(sk.name());
 			String name = prettify(key);
-			long[] cur = sheet.get(key);
-			goTo(go, ql, name, cur != null && cur[0] > 0 ? "level " + cur[0] : "",
+			SkillRow cur = sheet.get(key);
+			goTo(go, ql, name, cur != null && cur.level > 0 ? "level " + cur.level : "",
 				sk == Skill.SLAYER ? () -> ui.openSlayer("Tasks") : () -> ui.openSkill(name), 2,
 				SKILL_ALIASES.getOrDefault(key, new String[0]));
 		}

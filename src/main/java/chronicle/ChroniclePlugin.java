@@ -161,7 +161,7 @@ public class ChroniclePlugin extends Plugin
 	private volatile long sessionStartMs;
 	private long lastRollAttempt;
 	private final long[] lastRevision = new long[4];
-	private volatile Map<String, long[]> liveSkills = Collections.emptyMap();
+	private volatile Map<String, SkillRow> liveSkills = Collections.emptyMap();
 	private volatile long skillRevision;
 
 	@Provides
@@ -525,27 +525,27 @@ public class ChroniclePlugin extends Plugin
 		statStore.clear();
 	}
 
-	private Map<String, long[]> readSkills()
+	private Map<String, SkillRow> readSkills()
 	{
-		Map<String, long[]> out = new LinkedHashMap<>();
+		Map<String, SkillRow> out = new LinkedHashMap<>();
 		for (Skill s : Skill.values())
 		{
 			if (s != Skill.OVERALL)
 			{
 				out.put(s.name().toLowerCase(Locale.ROOT),
-					new long[]{client.getRealSkillLevel(s), client.getSkillExperience(s)});
+					new SkillRow(client.getRealSkillLevel(s), client.getSkillExperience(s)));
 			}
 		}
-		out.put("overall", new long[]{client.getTotalLevel(), client.getOverallExperience()});
+		out.put("overall", new SkillRow(client.getTotalLevel(), client.getOverallExperience()));
 		return out;
 	}
 
 	JsonObject skillsJson()
 	{
 		JsonObject skills = new JsonObject();
-		for (Map.Entry<String, long[]> e : readSkills().entrySet())
+		for (Map.Entry<String, SkillRow> e : readSkills().entrySet())
 		{
-			JsonObject o = Json.of("level", e.getValue()[0], "xp", e.getValue()[1]);
+			JsonObject o = Json.of("level", e.getValue().level, "xp", e.getValue().xp);
 			skills.add(e.getKey(), o);
 		}
 		return skills;
@@ -736,9 +736,9 @@ public class ChroniclePlugin extends Plugin
 			localStore.anchoredKills());
 	}
 
-	Map<String, long[]> skillSheet()
+	Map<String, SkillRow> skillSheet()
 	{
-		Map<String, long[]> now = liveSkills;
+		Map<String, SkillRow> now = liveSkills;
 		return now.isEmpty() ? localStore.skillSheet() : now;
 	}
 
@@ -906,7 +906,7 @@ public class ChroniclePlugin extends Plugin
 			return;
 		}
 		final Map<String, Long> skills = new HashMap<>();
-		readSkills().entrySet().forEach(e -> skills.put(e.getKey(), e.getValue()[1]));
+		readSkills().entrySet().forEach(e -> skills.put(e.getKey(), e.getValue().xp));
 		final Map<String, Long> counters = localStore.spineCounters();
 		final Map<String, Long> kcs = killCounts();
 		final HistoryLog.Adjust adj = localStore.takePendingAdjust();
@@ -976,11 +976,11 @@ public class ChroniclePlugin extends Plugin
 
 	private void takeLiveSkills()
 	{
-		Map<String, long[]> out = readSkills();
-		Map<String, long[]> was = liveSkills;
-		long[] wasOverall = was.get("overall");
+		Map<String, SkillRow> out = readSkills();
+		Map<String, SkillRow> was = liveSkills;
+		SkillRow wasOverall = was.get("overall");
 		liveSkills = out;
-		if (wasOverall == null || wasOverall[1] != out.get("overall")[1] || was.size() != out.size())
+		if (wasOverall == null || wasOverall.xp != out.get("overall").xp || was.size() != out.size())
 		{
 			skillRevision++;
 		}

@@ -137,11 +137,11 @@ final class JournalScreen extends Screen
 			days.setToolTipText("The days, as a calendar");
 			plate.add(link(days, ui::openCalendar));
 		}
-		long[] overall = plugin.skillSheet().get("overall");
+		SkillRow overall = plugin.skillSheet().get("overall");
 		int combat = store.combatLevel();
-		if (overall != null && overall[0] > 0)
+		if (overall != null && overall.level > 0)
 		{
-			plate.add(row("Total level", fmt(overall[0]) + (combat > 0 ? " · combat " + combat : "")));
+			plate.add(row("Total level", fmt(overall.level) + (combat > 0 ? " · combat " + combat : "")));
 		}
 		Fraction log = board.clogStanding();
 		int fin = plugin.clogFinished();

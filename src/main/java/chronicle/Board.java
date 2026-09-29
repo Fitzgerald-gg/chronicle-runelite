@@ -374,9 +374,9 @@ final class Board
 		{
 			plugin.skillSheet().forEach((k, v) ->
 			{
-				if (v != null && v.length > 1 && v[1] > 0)
+				if (v != null && v.xp > 0)
 				{
-					close.merge(k, v[1], Math::max);
+					close.merge(k, v.xp, Math::max);
 				}
 			});
 		}
@@ -937,8 +937,8 @@ final class Board
 
 	Long liveXp(String key)
 	{
-		long[] cur = plugin.skillSheet().get(key);
-		return cur != null && cur.length > 1 && cur[1] > 0 ? cur[1] : null;
+		SkillRow cur = plugin.skillSheet().get(key);
+		return cur != null && cur.xp > 0 ? cur.xp : null;
 	}
 
 	long sessionXp(String key)
@@ -955,7 +955,7 @@ final class Board
 
 	SkillStand skillStand(Baseline closing, boolean live)
 	{
-		Map<String, long[]> sheet = live ? plugin.skillSheet() : Collections.emptyMap();
+		Map<String, SkillRow> sheet = live ? plugin.skillSheet() : Collections.emptyMap();
 		List<Skill> order = skillOrder();
 		List<String> keys = new ArrayList<>();
 		order.forEach(sk -> keys.add(low(sk.name())));
@@ -964,15 +964,14 @@ final class Board
 		long total = 0;
 		for (Skill sk : order)
 		{
-			long[] cur = sheet.get(low(sk.name()));
-			long level = cur != null && cur[0] > 0 ? cur[0] : closed.of.get(low(sk.name()));
+			SkillRow cur = sheet.get(low(sk.name()));
+			long level = cur != null && cur.level > 0 ? cur.level : closed.of.get(low(sk.name()));
 			total += level;
-			long shown = period.whole() && cur != null && cur.length > 1 && cur[1] > 0
-				? PaceBook.virtualLevelAt(cur[1]) : level;
+			long shown = period.whole() && cur != null && cur.xp > 0 ? PaceBook.virtualLevelAt(cur.xp) : level;
 			levels.put(sk, Math.max(level, shown));
 		}
-		long[] ov = sheet.get("overall");
-		return new SkillStand(order, keys, levels, ov != null && ov[0] > 0 ? ov[0] : total, closed);
+		SkillRow ov = sheet.get("overall");
+		return new SkillStand(order, keys, levels, ov != null && ov.level > 0 ? ov.level : total, closed);
 	}
 
 	static Baseline baselineAt(Map<String, Long> xp)
@@ -1355,9 +1354,9 @@ final class Board
 		{
 			plugin.skillSheet().forEach((k, v) ->
 			{
-				if (!"overall".equals(k) && v.length > 1)
+				if (!"overall".equals(k))
 				{
-					by.put(k, v[1]);
+					by.put(k, v.xp);
 				}
 			});
 		}
@@ -1377,8 +1376,8 @@ final class Board
 	{
 		if (period.whole())
 		{
-			long[] overall = plugin.skillSheet().get("overall");
-			return overall != null && overall.length > 1 ? Long.valueOf(overall[1]) : null;
+			SkillRow overall = plugin.skillSheet().get("overall");
+			return overall != null ? Long.valueOf(overall.xp) : null;
 		}
 		Map<String, Long> by = xpBySkill();
 		return by == null ? null : by.values().stream().mapToLong(Long::longValue).sum();
@@ -1393,15 +1392,15 @@ final class Board
 
 	Climb periodLevels()
 	{
-		long[] overall = plugin.skillSheet().get("overall");
+		SkillRow overall = plugin.skillSheet().get("overall");
 		if (period.whole())
 		{
-			return overall != null && overall[0] > 0 ? new Climb(overall[0], overall[0]) : null;
+			return overall != null && overall.level > 0 ? new Climb(overall.level, overall.level) : null;
 		}
 		if (period.session())
 		{
 			long gained = stirred("LEVEL");
-			return gained > 0 && overall != null ? new Climb(gained, overall[0]) : null;
+			return gained > 0 && overall != null ? new Climb(gained, overall.level) : null;
 		}
 		Span s = span();
 		if (s == null || !s.opening.complete || !s.closing.complete)
