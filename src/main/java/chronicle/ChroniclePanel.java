@@ -150,7 +150,7 @@ class ChroniclePanel extends PluginPanel
 	private final Timer searchDebounce;
 	private final Timer homeTicker;
 
-	private View view = View.HOME;
+	View view = View.HOME;
 	Tab tab = Tab.RECORD;
 	private String detailItem;
 	String detailSource;
@@ -167,6 +167,7 @@ class ChroniclePanel extends PluginPanel
 	private final JLabel bandText = new JLabel();
 	private final Period period = new Period();
 	private final Board board;
+	final SlayerScreen slayer;
 	final LootScreen loot;
 	final TrackersScreen trackers;
 	private final SearchScreen search;
@@ -178,6 +179,7 @@ class ChroniclePanel extends PluginPanel
 		super(false);
 		this.plugin = plugin;
 		board = new Board(plugin, period, this::rebuildInPlace);
+		slayer = new SlayerScreen(this, board);
 		loot = new LootScreen(this, board);
 		trackers = new TrackersScreen(this, board);
 		search = new SearchScreen(this, board);
@@ -440,7 +442,7 @@ class ChroniclePanel extends PluginPanel
 			trackers.statsFamily = "Ledger & Roads";
 		}
 		loot.dropsShown = ROW_CAP;
-		slayerShown = ROW_CAP;
+		slayer.slayerShown = ROW_CAP;
 		loot.lootKind = null;
 		loot.lootTask = null;
 		drillShown.clear();
@@ -997,7 +999,7 @@ class ChroniclePanel extends PluginPanel
 			: showRecords ? journal.buildRecords()
 			: showCalendar ? journal.buildCalendar()
 			: showInfo ? journal.buildInfo()
-			: detailTask >= 0 ? buildTaskDetail(detailTask)
+			: detailTask >= 0 ? slayer.buildTaskDetail(detailTask)
 			: leftBehindSource != null || leftBehindItem != null ? loot.buildLeftBehindDetail()
 			: sheetPage != null ? buildSheetPage()
 			: buildView();
@@ -1037,7 +1039,7 @@ class ChroniclePanel extends PluginPanel
 			case DROPS:
 				return loot.buildDrops();
 			case SLAYER:
-				return buildSlayer();
+				return slayer.buildSlayer();
 			case STATS:
 				return trackers.buildStats();
 			case JOURNAL:
@@ -1163,7 +1165,7 @@ class ChroniclePanel extends PluginPanel
 		ChronicleEventCapture.SlayerView task = plugin.slayerView();
 		if (task != null && plugin.slayerSeenThisSession())
 		{
-			addTaskCard(p, task, "Slayer task", GREEN);
+			slayer.addTaskCard(p, task, "Slayer task", GREEN);
 		}
 
 		long began = plugin.sessionStart();
@@ -1470,17 +1472,14 @@ class ChroniclePanel extends PluginPanel
 		return row(StatRegistry.label(key),
 			StatRegistry.isGp(key) ? gps(v) : fmt(v));
 	}
-
-	SlayerJourney journeyCache;
-	boolean journeyFetching;
-	private int detailTask = -1;
+	int detailTask = -1;
 	String leftBehindSource;
 	String leftBehindItem;
 
 	void resetAccountCaches()
 	{
-		journeyCache = null;
-		journeyFetching = false;
+		slayer.journeyCache = null;
+		slayer.journeyFetching = false;
 		detailTask = -1;
 		leftBehindSource = null;
 		leftBehindItem = null;
@@ -1505,59 +1504,6 @@ class ChroniclePanel extends PluginPanel
 		searchDebounce.stop();
 	}
 
-	private String slayerLens = "Tasks";
-	private int slayerShown = ROW_CAP;
-
-	private void addTaskCard(JPanel p, ChronicleEventCapture.SlayerView task, String title, Color ink)
-	{
-		JPanel card = card(title);
-		card.add(row(task.task, task.remaining + " left", ink));
-		if (task.initial > 0)
-		{
-			card.add(progress(1f - (float) task.remaining / task.initial));
-		}
-		card.setToolTipText("Open this task's page");
-		link(card, this::openCurrentTask);
-		spaced(p, card);
-	}
-
-	private void openCurrentTask()
-	{
-		ChronicleEventCapture.SlayerView live = plugin.slayerView();
-		if (live == null)
-		{
-			return;
-		}
-		SlayerJourney journey = journeyCache;
-		if (journey == null)
-		{
-			plugin.fetchSlayerJourney(read -> SwingUtilities.invokeLater(() ->
-			{
-				if (read != null)
-				{
-					journeyCache = read;
-					openCurrentTask();
-				}
-			}));
-			return;
-		}
-		int at = -1;
-		for (int i = 0; i < journey.tasks.size(); i++)
-		{
-			SlayerTask t = journey.tasks.get(i);
-			if (t.inProgress && t.task.equalsIgnoreCase(live.task))
-			{
-				at = i;
-				break;
-			}
-		}
-		applyTab(View.SLAYER);
-		if (at >= 0)
-		{
-			showTask(at);
-		}
-	}
-
 	void showTask(int at)
 	{
 		detailTask = at;
@@ -1573,118 +1519,8 @@ class ChroniclePanel extends PluginPanel
 
 	void openSlayer(String lens)
 	{
-		slayerLens = lens;
+		slayer.slayerLens = lens;
 		applyTab(View.SLAYER);
-	}
-
-	private JPanel buildSlayer()
-	{
-		JPanel p = column();
-		ChronicleEventCapture.SlayerView task = plugin.slayerView();
-		if (task != null)
-		{
-			addTaskCard(p, task, "Current task", ACCENT);
-		}
-
-		JPanel lens = new JPanel(new GridLayout(1, 3, 3, 3));
-		lens.setBackground(DARK);
-		for (String l : new String[]{"Tasks", "Monsters", "Drops"})
-		{
-			lens.add(pill(l, l.equals(slayerLens), 4, null, () ->
-			{
-				slayerLens = l;
-				rebuildInPlace();
-			}));
-		}
-		spaced(p, lens);
-
-		if (!journeyFetching)
-		{
-			journeyFetching = true;
-			plugin.fetchSlayerJourney(j -> SwingUtilities.invokeLater(() ->
-			{
-				journeyFetching = false;
-				if (j == null)
-				{
-					return;
-				}
-				boolean moved = Board.journeyMoved(journeyCache, j);
-				journeyCache = j;
-				if (moved && view == View.SLAYER && "Tasks".equals(slayerLens))
-				{
-					rebuildInPlace();
-				}
-			}));
-		}
-		if ("Monsters".equals(slayerLens))
-		{
-			return addKillLog(p);
-		}
-		if ("Drops".equals(slayerLens))
-		{
-			return addOnTaskLoot(p);
-		}
-
-		if (journeyCache != null)
-		{
-			addJourney(p, journeyCache);
-		}
-		else
-		{
-			p.add(note("Reading the task journey from the journal…"));
-		}
-		return p;
-	}
-
-	private JPanel addOnTaskLoot(JPanel p)
-	{
-		long[] ms = board.windowMs();
-		final List<BagItem> bag = plugin.onTaskLoot(ms[0], ms[1], loot.lootTask,
-			period.whole());
-		if (bag.isEmpty())
-		{
-			p.add(taskPicker());
-			return noted(p, loot.lootTask != null
-				? board.inside("No loot logged on " + loot.lootTask)
-				: period.whole()
-					? "No task loot in the journal yet. It collects as tasks close."
-					: board.inside("No task loot"));
-		}
-		final long[] sum = board.tallyOf(bag);
-		final long qty = sum[0];
-		final long value = sum[1];
-
-		if (loot.lootKind != null)
-		{
-			p.add(taskPicker());
-			return loot.kindDrill(p, bag, "task:");
-		}
-		final long[] tally = plugin.onTaskTally(ms[0], ms[1], loot.lootTask, period.whole());
-		spaced(p, onTaskHead(qty, value, tally));
-		p.add(taskPicker());
-
-		LinkedHashMap<String, BooleanSupplier> ways =
-			new LinkedHashMap<>();
-		ways.put("These kinds", () -> copyPicture(kindsPicture(bag, qty, value, tally)));
-		ways.put("Every item", () -> copyPicture(
-			loot.lootPicture(loot.lootTask == null ? "On-task loot" : loot.lootTask, bag,
-				new long[]{qty, value}, false), true));
-		p.add(copyHeader("Drops", ways));
-		loot.addKindRows(p, bag);
-		return p;
-	}
-
-	private JPanel kindsPicture(List<BagItem> bag, long qty, long value,
-		long[] tally)
-	{
-		JPanel page = column();
-		spaced(page, onTaskHead(qty, value, tally));
-		if (loot.lootTask != null)
-		{
-			spaced(page, row("Task", loot.lootTask, ACCENT), 4);
-		}
-		loot.addKindRows(page, bag);
-		return page;
 	}
 
 	JPanel moreRow(long remaining, Runnable reveal)
@@ -1713,21 +1549,6 @@ class ChroniclePanel extends PluginPanel
 		link(slot, () -> openItem(name));
 		plugin.items().getImage(itemId, (int) Math.min(Integer.MAX_VALUE, qty), qty > 1).addTo(slot);
 		return slot;
-	}
-
-	private JPanel onTaskHead(long qty, long value, long[] tally)
-	{
-		JPanel head = tallyCard("On-task loot", "Items", fmt(qty), ACCENT, value);
-		head.add(row("Tasks", fmt(tally[2])));
-		if (tally[0] > 0)
-		{
-			head.add(row("Kills logged", fmt(tally[0])));
-		}
-		if (tally[1] > 0)
-		{
-			head.add(row("Superiors", fmt(tally[1])));
-		}
-		return head;
 	}
 
 	private static JLabel copyLabel(JPanel r, String tip)
@@ -1778,210 +1599,6 @@ class ChroniclePanel extends PluginPanel
 	JPanel copyHeader(String title, BooleanSupplier copy)
 	{
 		return copyHeaderLater(title, take -> reportCopy(take, copy.getAsBoolean()));
-	}
-
-	private JPanel addKillLog(JPanel p)
-	{
-		List<Entry<String, Long>> kcs = new ArrayList<>(LocalStore.killLogCounts(board.clogNow()).entrySet());
-		if (kcs.isEmpty())
-		{
-			return noted(p, "No kill log yet. It copies itself the next time you open "
-				+ "the Slayer Kill Log in game.");
-		}
-		kcs.sort(Entry.<String, Long>comparingByValue().reversed());
-		JPanel card = card("Kill log");
-		final int cap = drillShown.getOrDefault("killlog", ROW_CAP);
-		for (Entry<String, Long> e : firstN(kcs, cap))
-		{
-			JPanel r = row(e.getKey(), fmt(e.getValue()));
-			final String mob = e.getKey();
-			link(r, () -> openSourceLoose(mob));
-			card.add(r);
-		}
-		drillMore(card, "killlog", kcs.size(), cap);
-		p.add(card);
-		return p;
-	}
-
-	private void addTaskAgainstRecord(JPanel head, SlayerJourney j, int index,
-		SlayerTask t)
-	{
-		int earlier = 0;
-		long sumValue = 0;
-		long sumKills = 0;
-		int bestAt = -1;
-		for (int i = 0; i < j.tasks.size(); i++)
-		{
-			SlayerTask o = j.tasks.get(i);
-			if (i == index || o.inProgress || o.ts >= t.ts || !o.task.equalsIgnoreCase(t.task))
-			{
-				continue;
-			}
-			earlier++;
-			sumValue += o.totalValue;
-			sumKills += o.kills;
-			if (bestAt < 0 || o.totalValue > j.tasks.get(bestAt).totalValue)
-			{
-				bestAt = i;
-			}
-		}
-		if (earlier < 2)
-		{
-			return;
-		}
-		head.add(row("Usual", gp(sumValue / earlier) + " gp · " + fmt(sumKills / earlier)
-			+ " kills · over " + earlier + " tasks"));
-		SlayerTask best = j.tasks.get(bestAt);
-		JPanel bestRow = row("Best", gp(best.totalValue) + " gp · "
-			+ day((long) (best.ts * 1000)));
-		final int at = bestAt;
-		link(bestRow, () -> showTask(at));
-		head.add(bestRow);
-	}
-
-	private JPanel buildTaskDetail(int index)
-	{
-		JPanel p = column();
-		p.add(backRow("< Back", "", () ->
-		{
-			detailTask = -1;
-			rebuild();
-		}));
-		p.add(vgap(4));
-		SlayerJourney j = journeyCache;
-		SlayerTask t = j != null && index >= 0 && index < j.tasks.size()
-			? j.tasks.get(index) : null;
-		if (t == null)
-		{
-			return noted(p, "That task is no longer in the journal.");
-		}
-		JPanel head = card(t.task.toUpperCase(Locale.ROOT));
-		String kills = t.inProgress && t.assignment > t.kills
-			? fmt(t.kills) + " / " + fmt(t.assignment) : fmt(t.kills);
-		head.add(row("Kills logged", kills, ACCENT));
-		if (t.noLootKills > 0)
-		{
-			head.add(row("Killed without loot", fmt(t.noLootKills)));
-		}
-		head.add(worthRow(t.totalValue));
-		if (t.ts > 0)
-		{
-			head.add(row(t.inProgress ? "Started" : "Finished",
-				day((long) (t.ts * 1000))));
-		}
-		addTaskAgainstRecord(head, j, index, t);
-		spaced(p, head);
-
-		List<UntakenRow> monsters = plugin.slayerTaskMonsters(index);
-		if (!monsters.isEmpty())
-		{
-			p.add(group("Killed"));
-			for (UntakenRow m : monsters)
-			{
-				JPanel r = row(m.name, "×" + fmt(m.qty));
-				link(r, () -> openSourceLoose(m.name));
-				p.add(r);
-			}
-			p.add(vgap(6));
-		}
-
-		List<BagItem> bag = plugin.slayerTaskItems(index);
-		if (bag.isEmpty())
-		{
-			p.add(note("No loot recorded against this task."));
-		}
-		else
-		{
-			p.add(group("Loot from this task"));
-			for (BagItem it : bag)
-			{
-				JPanel r = row(named(it.name, it.qty),
-					gps(it.value));
-				link(r, () -> openItem(it.name));
-				p.add(r);
-			}
-		}
-		p.add(vgap(8));
-		JPanel all = row("All kills of " + t.task, "", ACCENT, true);
-		link(all, () ->
-		{
-			detailTask = -1;
-			openSourceLoose(t.task);
-		});
-		p.add(all);
-		return p;
-	}
-
-	private void addJourney(JPanel p, SlayerJourney j)
-	{
-		if (j.tasks.isEmpty() && j.completedTasks == 0)
-		{
-			p.add(note("No tasks in the journal yet. They collect as "
-				+ "you play with the Slayer plugin on."));
-			return;
-		}
-		List<SlayerTask> shown = new ArrayList<>();
-		List<Integer> where = new ArrayList<>();
-		for (int i = 0; i < j.tasks.size(); i++)
-		{
-			SlayerTask t = j.tasks.get(i);
-			if (board.insideWindow((long) (t.ts * 1000)) && (period.whole() || !t.inProgress))
-			{
-				shown.add(t);
-				where.add(i);
-			}
-		}
-		if (shown.isEmpty() && !period.whole())
-		{
-			p.add(note(board.inside("No tasks closed")));
-			return;
-		}
-		long tasksDone = j.completedTasks;
-		long killsOnTask = j.totalKills;
-		long onTaskLoot = j.totalValueGp;
-		if (!period.whole())
-		{
-			tasksDone = 0;
-			killsOnTask = 0;
-			onTaskLoot = 0;
-			for (SlayerTask t : shown)
-			{
-				if (!t.inProgress)
-				{
-					tasksDone++;
-				}
-				killsOnTask += t.kills;
-				onTaskLoot += t.totalValue;
-			}
-		}
-		JPanel head = card("The journey");
-		head.add(row("Tasks done", fmt(tasksDone), ACCENT));
-		head.add(row("Kills on task", fmt(killsOnTask)));
-		head.add(row("On-task loot", gps(onTaskLoot)));
-		if (j.totalXpEst > 0)
-		{
-			head.add(row("Slayer xp (est.)", gp(j.totalXpEst)));
-		}
-		spaced(p, head);
-		for (int k = 0; k < Math.min(shown.size(), slayerShown); k++)
-		{
-			SlayerTask t = shown.get(k);
-			final int at = where.get(k);
-			String kills = t.inProgress && t.assignment > t.kills
-				? fmt(t.kills) + " / " + fmt(t.assignment)
-				: count(t.kills, "kill");
-			if (t.noLootKills > 0)
-			{
-				kills += " · " + fmt(t.noLootKills) + " no-drop";
-			}
-			listCard(p, row(t.task, t.totalValue > 0 ? gps(t.totalValue) : "", ACCENT, t.inProgress),
-				kills, t.ts > 0 ? day((long) (t.ts * 1000)) : "", () -> showTask(at));
-		}
-		if (shown.size() > slayerShown)
-		{
-			loot.more(p, shown.size(), slayerShown, false, n -> slayerShown = n);
-			p.add(vgap(4));
-		}
 	}
 
 	final Map<String, Integer> drillShown = new LinkedHashMap<>();
@@ -3252,7 +2869,7 @@ class ChroniclePanel extends PluginPanel
 		return menu;
 	}
 
-	private void menuItem(JPopupMenu menu, String text, boolean on, Runnable go)
+	void menuItem(JPopupMenu menu, String text, boolean on, Runnable go)
 	{
 		JMenuItem item = new JMenuItem(text);
 		item.setFont(small());
@@ -3262,37 +2879,6 @@ class ChroniclePanel extends PluginPanel
 		}
 		item.addActionListener(e -> go.run());
 		menu.add(item);
-	}
-
-	private JPopupMenu taskMenu()
-	{
-		JPopupMenu menu = new JPopupMenu();
-		menuItem(menu, "Every task", loot.lootTask == null, () -> pickTask(null));
-		menu.addSeparator();
-		for (String task : plugin.taskNames())
-		{
-			menuItem(menu, task, task.equals(loot.lootTask), () -> pickTask(task));
-		}
-		return menu;
-	}
-
-	private void pickTask(String task)
-	{
-		loot.lootTask = task;
-		loot.lootKind = null;
-		rebuildInPlace();
-	}
-
-	private JPanel taskPicker()
-	{
-		JPanel r = row("Task", loot.lootTask == null ? "Every task" : loot.lootTask, ACCENT);
-		styled(part(r, BorderLayout.CENTER), small(), DIM);
-		JLabel pick = part(r, BorderLayout.EAST);
-		pick.setFont(small());
-		pick.setToolTipText("Narrow this board to one task");
-		link(pick, () -> taskMenu().show(r, 0, r.getHeight()));
-		link(r, () -> taskMenu().show(r, 0, r.getHeight()));
-		return r;
 	}
 
 	JPanel noPeriod()

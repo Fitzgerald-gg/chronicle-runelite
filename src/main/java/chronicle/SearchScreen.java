@@ -171,7 +171,7 @@ final class SearchScreen
 		total += searchGroup(p, "Bosses and monsters", fights);
 
 		List<Hit> tasks = new ArrayList<>();
-		final SlayerJourney journey = ui.journeyCache != null ? ui.journeyCache : board.historyJourney;
+		final SlayerJourney journey = ui.slayer.journeyCache != null ? ui.slayer.journeyCache : board.historyJourney;
 		fetchJourneyForSearch();
 		if (journey != null)
 		{
@@ -196,9 +196,9 @@ final class SearchScreen
 				String name = journey.tasks.get(at).task;
 				tasks.add(new Hit(name, count(seen[0], "task"), null, "Opens the newest", () ->
 				{
-					if (ui.journeyCache == null)
+					if (ui.slayer.journeyCache == null)
 					{
-						ui.journeyCache = journey;
+						ui.slayer.journeyCache = journey;
 					}
 					ui.applyTab(ChroniclePanel.View.SLAYER);
 					ui.showTask(at);
@@ -698,20 +698,20 @@ final class SearchScreen
 
 	void fetchJourneyForSearch()
 	{
-		if (ui.journeyFetching)
+		if (ui.slayer.journeyFetching)
 		{
 			return;
 		}
-		ui.journeyFetching = true;
+		ui.slayer.journeyFetching = true;
 		plugin.fetchSlayerJourney(j -> SwingUtilities.invokeLater(() ->
 		{
-			ui.journeyFetching = false;
+			ui.slayer.journeyFetching = false;
 			if (j == null)
 			{
 				return;
 			}
-			boolean moved = Board.journeyMoved(ui.journeyCache != null ? ui.journeyCache : board.historyJourney, j);
-			ui.journeyCache = j;
+			boolean moved = Board.journeyMoved(ui.slayer.journeyCache != null ? ui.slayer.journeyCache : board.historyJourney, j);
+			ui.slayer.journeyCache = j;
 			if (moved && !ui.searchQuery().isEmpty())
 			{
 				ui.rebuildInPlace();
