@@ -99,9 +99,9 @@ public class CombatAchievementsTest
 		System.setProperty("java.awt.headless", "true");
 		final ChroniclePanel[] hold = new ChroniclePanel[1];
 		javax.swing.SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
-		java.lang.reflect.Method m = ChroniclePanel.class.getDeclaredMethod("combatStanding");
-		m.setAccessible(true);
-		return (long[]) m.invoke(hold[0]);
+		java.lang.reflect.Field f = ChroniclePanel.class.getDeclaredField("build");
+		f.setAccessible(true);
+		return ((Build) f.get(hold[0])).standings.combat();
 	}
 
 	@Test

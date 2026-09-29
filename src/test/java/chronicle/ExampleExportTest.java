@@ -82,7 +82,7 @@ public class ExampleExportTest
 			"grindsCache", "journeyCache", "consumVals",
 			"resourcesDropped", "historySpine", "historyFeed", "historyJourney",
 			"historyDay", "historyFeedTs", "historyEpoch", "periodFrom", "periodTo", "searchFirst", "searchFeed", "searchFeedTs", "searchFeedSpine",
-			"taskItemsEver", "periodTip", "measuredSince", "buildAchievements"})
+			"taskItemsEver", "periodTip", "measuredSince"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
 		}

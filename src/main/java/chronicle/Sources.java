@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Skill;
 import static chronicle.Json.low;
@@ -139,6 +140,21 @@ final class Sources
 			}
 		}
 		return best != null ? best.name : name;
+	}
+
+	static <T> T find(List<T> rows, Function<T, String> named, String name,
+		boolean exact)
+	{
+		T loose = null;
+		for (T r : rows)
+		{
+			if (named.apply(r).equals(name))
+			{
+				return r;
+			}
+			loose = loose == null && !exact && named.apply(r).equalsIgnoreCase(name) ? r : loose;
+		}
+		return loose;
 	}
 
 	static Skill skillOf(String name)

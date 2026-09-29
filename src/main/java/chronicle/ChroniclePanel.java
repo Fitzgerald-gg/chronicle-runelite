@@ -643,14 +643,6 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private static final String[] CLUE_TIERS = {
-		"Beginner", "Easy", "Medium", "Hard", "Elite", "Master"};
-
-	private SourceRow clue(String tier)
-	{
-		return find(build.sources(), r -> r.name, "Clue Scroll (" + tier + ")", false);
-	}
-
 	private JPanel activitySheet()
 	{
 		JPanel p = column();
@@ -696,16 +688,16 @@ class ChroniclePanel extends PluginPanel
 		String hover;
 		if ("Clues".equals(label))
 		{
-			long[] each = new long[CLUE_TIERS.length];
-			long[] worth = new long[CLUE_TIERS.length];
+			long[] each = new long[Standings.CLUE_TIERS.length];
+			long[] worth = new long[Standings.CLUE_TIERS.length];
 			long all = 0;
 			long allWorth = 0;
-			for (int i = 0; i < CLUE_TIERS.length; i++)
+			for (int i = 0; i < Standings.CLUE_TIERS.length; i++)
 			{
-				SourceRow r = clue(CLUE_TIERS[i]);
+				SourceRow r = build.standings.clue(Standings.CLUE_TIERS[i]);
 				if (r != null)
 				{
-					each[i] = Math.max(r.kc, r.loots);
+					each[i] = Standings.caskets(r);
 					worth[i] = r.value;
 					all += each[i];
 					allWorth += r.value;
@@ -713,9 +705,9 @@ class ChroniclePanel extends PluginPanel
 			}
 			figure = all;
 			List<String> lines = new ArrayList<>(Arrays.asList("All", fmt(all) + tail(allWorth)));
-			for (int i = 0; i < CLUE_TIERS.length; i++)
+			for (int i = 0; i < Standings.CLUE_TIERS.length; i++)
 			{
-				lines.add(CLUE_TIERS[i]);
+				lines.add(Standings.CLUE_TIERS[i]);
 				lines.add(each[i] == 0 ? "0" : fmt(each[i]) + tail(worth[i]));
 			}
 			hover = tip("Clues", lines);
@@ -731,30 +723,16 @@ class ChroniclePanel extends PluginPanel
 		}
 		else if ("Quests".equals(label))
 		{
-			JsonObject q = obj(achievements(), "quests");
-			long done = 0;
-			long started = 0;
-			for (String k : q.keySet())
-			{
-				String state = q.get(k).getAsString();
-				if ("FINISHED".equals(state))
-				{
-					done++;
-				}
-				else if ("IN_PROGRESS".equals(state))
-				{
-					started++;
-				}
-			}
-			figure = done;
+			Standings.Quests q = build.standings.quests();
+			figure = q.done.size();
 			hover = tip("Quests",
-				"Complete", fmt(done),
-				"In progress", fmt(started),
-				"Known", fmt(q.size()));
+				"Complete", fmt(q.done.size()),
+				"In progress", fmt(q.going.size()),
+				"Known", fmt(q.known));
 		}
 		else if ("Diaries".equals(label))
 		{
-			long[] d = diaryStanding();
+			long[] d = build.standings.diaries();
 			figure = d[0];
 			hover = tip("Achievement diaries",
 				"Tiers done", d[0] + " / " + d[1],
@@ -1170,7 +1148,6 @@ class ChroniclePanel extends PluginPanel
 		buildsRun++;
 		freshBuild();
 		taskItemsEver = null;
-		buildAchievements = null;
 		resourcesDropped = 0;
 		buildPeriodCounters = null;
 		periodCountersAsked = false;
@@ -2616,7 +2593,7 @@ class ChroniclePanel extends PluginPanel
 		if (leftBehindSource != null)
 		{
 			List<BagItem> bag = plugin.untakenItemsOf(leftBehindSource);
-			UntakenRow left = find(plugin.untakenSources(), u -> u.name, leftBehindSource, true);
+			UntakenRow left = Sources.find(plugin.untakenSources(), u -> u.name, leftBehindSource, true);
 			spaced(p, tallyCard(leftBehindSource.toUpperCase(Locale.ROOT), "Left on the floor",
 				count(left == null ? 0 : left.qty, "item"), ACCENT_RED, left == null ? 0 : left.value));
 			if (bag.isEmpty())
@@ -2636,7 +2613,7 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		List<UntakenRow> sources = plugin.untakenSourcesOf(leftBehindItem);
-		UntakenRow held = find(plugin.untakenItems(), u -> u.name, leftBehindItem, true);
+		UntakenRow held = Sources.find(plugin.untakenItems(), u -> u.name, leftBehindItem, true);
 		spaced(p, tallyCard(leftBehindItem.toUpperCase(Locale.ROOT), "Left behind",
 			"×" + fmt(held == null ? 0 : held.qty), ACCENT_RED, held == null ? 0 : held.value));
 		if (sources.isEmpty())
@@ -2887,22 +2864,7 @@ class ChroniclePanel extends PluginPanel
 
 	private static String[] rowFor(List<String[]> rows, String name, boolean exact)
 	{
-		return find(rows, r -> r[0], name, exact);
-	}
-
-	private static <T> T find(List<T> rows, Function<T, String> named, String name,
-		boolean exact)
-	{
-		T loose = null;
-		for (T r : rows)
-		{
-			if (named.apply(r).equals(name))
-			{
-				return r;
-			}
-			loose = loose == null && !exact && named.apply(r).equalsIgnoreCase(name) ? r : loose;
-		}
-		return loose;
+		return Sources.find(rows, r -> r[0], name, exact);
 	}
 
 	void openSourceLoose(String name)
@@ -3542,7 +3504,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildSourceDetail(String name)
 	{
 		JPanel p = column();
-		final SourceRow sr = find(build.sources(), r -> r.name, name, false);
+		final SourceRow sr = Sources.find(build.sources(), r -> r.name, name, false);
 		String[] row = wholeRecord() ? null : rowFor(build.lootWindow().sources, sr != null ? sr.name : name, sr != null);
 		long[] inWindow = wholeRecord() ? null
 			: row == null ? new long[2] : new long[]{safeParse(row[1]), safeParse(row[2])};
@@ -5493,7 +5455,7 @@ class ChroniclePanel extends PluginPanel
 			? TILE_LIT : dim());
 		cell.add(fig, BorderLayout.EAST);
 		Map<String, Long> c = counters();
-		long[] ca = combatStanding();
+		long[] ca = build.standings.combat();
 		cell.setToolTipText(tip("Combat",
 			"Achievement points", ca[1] > 0 ? fmt(ca[0]) + " / " + fmt(ca[1]) : fmt(ca[0]),
 			"Tiers unlocked", fmt(ca[2]) + " / 6",
@@ -5528,7 +5490,7 @@ class ChroniclePanel extends PluginPanel
 		if ("Clues".equals(label))
 		{
 			long all = 0;
-			for (String tier : CLUE_TIERS)
+			for (String tier : Standings.CLUE_TIERS)
 			{
 				all += build.kills.rolled("Clue Scroll (" + tier + ")");
 			}
@@ -5626,73 +5588,6 @@ class ChroniclePanel extends PluginPanel
 		return false;
 	}
 
-	private JsonObject buildAchievements;
-
-	private JsonObject achievements()
-	{
-		if (buildAchievements == null)
-		{
-			buildAchievements = plugin.achievements();
-		}
-		return buildAchievements;
-	}
-
-	private long[] diaryStanding()
-	{
-		JsonObject d = obj(achievements(), "diaries");
-		long done = 0;
-		long all = 0;
-		long whole = 0;
-		for (String region : d.keySet())
-		{
-			JsonObject tiers = d.getAsJsonObject(region);
-			long here = 0;
-			for (String tier : tiers.keySet())
-			{
-				all++;
-				if (tiers.get(tier).getAsBoolean())
-				{
-					done++;
-					here++;
-				}
-			}
-			if (here > 0 && here == tiers.size())
-			{
-				whole++;
-			}
-		}
-		return new long[]{done, all, whole, d.size()};
-	}
-
-	private long[] combatStanding()
-	{
-		JsonObject c = obj(achievements(), "combat");
-		long points = c.has("points") ? c.get("points").getAsLong() : 0;
-		long tiers = 0;
-		JsonObject t = obj(c, "tiers");
-		for (String k : t.keySet())
-		{
-			if (t.get(k).getAsLong() > 0)
-			{
-				tiers++;
-			}
-		}
-		long possible = 0;
-		for (JsonObject e : build.feed.deep())
-		{
-			JsonObject data = obj(e, "data");
-			if (possible == 0 && "COMBAT_ACHIEVEMENT".equals(typeOf(e)) && data.has("totalPossiblePoints"))
-			{
-				possible = data.get("totalPossiblePoints").getAsLong();
-			}
-		}
-		if (possible == 0)
-		{
-			possible = CA_POINTS;
-		}
-		return new long[]{points, possible, tiers};
-	}
-
 	private JPanel buildSheetPage()
 	{
 		JPanel p = backPage();
@@ -5719,30 +5614,25 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private static final JsonObject COMBAT_BUNDLE = table("osrs_combat_achievements.json");
-	private static final JsonObject CA_TASKS = obj(COMBAT_BUNDLE, "tasks");
-	private static final long CA_POINTS = safeLong(obj(obj(COMBAT_BUNDLE, "_meta"), "totals").get("points"));
-	private static final JsonObject DIARY_TASKS = obj(table("osrs_achievement_diaries.json"), "diaries");
-
 	private void buildClues(JPanel p)
 	{
 		long all = 0;
 		long allWorth = 0;
 		List<SourceRow> mine = new ArrayList<>();
-		for (String tier : CLUE_TIERS)
+		for (String tier : Standings.CLUE_TIERS)
 		{
-			SourceRow r = clue(tier);
+			SourceRow r = build.standings.clue(tier);
 			if (r != null)
 			{
 				mine.add(r);
-				all += Math.max(r.kc, r.loots);
+				all += Standings.caskets(r);
 				allWorth += r.value;
 			}
 		}
 		JPanel head = card("Clues");
 		head.add(row("Caskets opened", fmt(all), accent()));
 		head.add(row("Worth", gps(allWorth), accent()));
-		head.add(row("Tiers seen", fmt(mine.size()) + " / " + CLUE_TIERS.length));
+		head.add(row("Tiers seen", fmt(mine.size()) + " / " + Standings.CLUE_TIERS.length));
 		spaced(p, head);
 		if (mine.isEmpty())
 		{
@@ -5750,15 +5640,15 @@ class ChroniclePanel extends PluginPanel
 			return;
 		}
 		p.add(group("BY TIER"));
-		for (String tier : CLUE_TIERS)
+		for (String tier : Standings.CLUE_TIERS)
 		{
-			SourceRow r = clue(tier);
+			SourceRow r = build.standings.clue(tier);
 			if (r == null)
 			{
 				p.add(row(tier, "-", dim(), true));
 				continue;
 			}
-			long n = Math.max(r.kc, r.loots);
+			long n = Standings.caskets(r);
 			JPanel line = row(tier, qtyGp(n, r.value), accent());
 			final String open = r.name;
 			link(line, () -> openSource(open));
@@ -5770,52 +5660,22 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private Set<Integer> caDone()
-	{
-		Set<Integer> out = new HashSet<>();
-		JsonObject c = obj(achievements(), "combat");
-		if (!c.has("tasksDone") || !c.get("tasksDone").isJsonArray())
-		{
-			return out;
-		}
-		for (JsonElement e : c.getAsJsonArray("tasksDone"))
-		{
-			try
-			{
-				out.add(e.getAsInt());
-			}
-			catch (RuntimeException ignored)
-			{
-			}
-		}
-		return out;
-	}
-
 	private void buildQuests(JPanel p)
 	{
-		JsonObject q = obj(achievements(), "quests");
-		if (q.size() == 0)
+		Standings.Quests q = build.standings.quests();
+		if (q.known == 0)
 		{
 			p.add(note("The quest list arrives when you next log in."));
 			return;
 		}
-		List<String> done = new ArrayList<>();
-		List<String> going = new ArrayList<>();
-		List<String> not = new ArrayList<>();
-		for (String name : q.keySet())
-		{
-			String state = q.get(name).getAsString();
-			("FINISHED".equals(state) ? done : "IN_PROGRESS".equals(state) ? going : not)
-				.add(name);
-		}
 		JPanel head = card("Quests");
-		head.add(row("Complete", fmt(done.size()) + " / " + fmt(q.size()), accent()));
-		head.add(row("In progress", fmt(going.size())));
-		head.add(row("Not started", fmt(not.size())));
+		head.add(row("Complete", fmt(q.done.size()) + " / " + fmt(q.known), accent()));
+		head.add(row("In progress", fmt(q.going.size())));
+		head.add(row("Not started", fmt(q.not.size())));
 		spaced(p, head);
-		addNames(p, "IN PROGRESS", going, true, true);
-		addNames(p, "COMPLETE", done, true, false);
-		addNames(p, "NOT STARTED", not, false, false);
+		addNames(p, "IN PROGRESS", q.going, true, true);
+		addNames(p, "COMPLETE", q.done, true, false);
+		addNames(p, "NOT STARTED", q.not, false, false);
 	}
 
 	private void addNames(JPanel p, String heading, List<String> names, boolean held,
@@ -5843,13 +5703,13 @@ class ChroniclePanel extends PluginPanel
 
 	private void buildDiaries(JPanel p)
 	{
-		JsonObject tasks = DIARY_TASKS;
-		JsonObject mine = obj(achievements(), "diaries");
+		JsonObject tasks = Standings.DIARY_TASKS;
+		JsonObject mine = obj(build.standings.achievements(), "diaries");
 		boolean known = mine.size() > 0;
 		JPanel head = card("Achievement diaries");
 		if (known)
 		{
-			long[] d = diaryStanding();
+			long[] d = build.standings.diaries();
 			head.add(row("Tiers done", d[0] + " / " + d[1], accent()));
 			head.add(row("Regions finished", fmt(d[2]) + " / " + fmt(d[3])));
 		}
@@ -5862,16 +5722,7 @@ class ChroniclePanel extends PluginPanel
 		for (String region : tasks.keySet())
 		{
 			JsonObject tiers = tasks.getAsJsonObject(region);
-			String key = low(region);
-			JsonObject held = null;
-			for (String k : mine.keySet())
-			{
-				if (k.equalsIgnoreCase(key) || key.startsWith(low(k)))
-				{
-					held = mine.getAsJsonObject(k);
-					break;
-				}
-			}
+			JsonObject held = build.standings.diaryHeld(region);
 			p.add(group(region.toUpperCase(Locale.ROOT)));
 			for (String tier : new String[]{"easy", "medium", "hard", "elite"})
 			{
@@ -5922,13 +5773,13 @@ class ChroniclePanel extends PluginPanel
 
 	private void buildCombatAchievements(JPanel p)
 	{
-		JsonObject all = CA_TASKS;
-		long[] c = combatStanding();
+		JsonObject all = Standings.CA_TASKS;
+		long[] c = build.standings.combat();
 		JPanel head = card("Combat achievements");
 		head.add(row("Points", c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]),
 			accent()));
 		head.add(row("Tiers unlocked", fmt(c[2]) + " / 6"));
-		Set<Integer> headDone = caDone();
+		Set<Integer> headDone = build.standings.caDone();
 		long named = 0;
 		for (int id : headDone)
 		{
@@ -5957,16 +5808,7 @@ class ChroniclePanel extends PluginPanel
 			spaced(p, note("Which tasks you have done arrives when you next log in. "
 				+ "Until then this is what each tier asks for."), 4);
 		}
-		Map<String, List<JsonObject>> bySource = new TreeMap<>(
-			String.CASE_INSENSITIVE_ORDER);
-		for (String id : all.keySet())
-		{
-			JsonObject task = all.getAsJsonObject(id).deepCopy();
-			task.addProperty("id", Integer.parseInt(id));
-			bySource.computeIfAbsent(caSource(task.get("monster").getAsString()),
-				k -> new ArrayList<>()).add(task);
-		}
-		for (Entry<String, List<JsonObject>> e : bySource.entrySet())
+		for (Entry<String, List<JsonObject>> e : Standings.caBySource().entrySet())
 		{
 			long got = 0;
 			for (JsonObject task : e.getValue())
@@ -5994,7 +5836,7 @@ class ChroniclePanel extends PluginPanel
 					known ? (has ? ACCENT_SESSION : ACCENT_RED) : null, known);
 				line.setToolTipText(tip(task.get("name").getAsString(),
 					"Tier", task.get("tier").getAsString(),
-					"Where", caSource(task.get("monster").getAsString()),
+					"Where", Standings.caSource(task.get("monster").getAsString()),
 					"Task", task.get("task").getAsString()));
 				p.add(line);
 			}
@@ -6011,12 +5853,6 @@ class ChroniclePanel extends PluginPanel
 		}
 		String rest = name.substring(source.length()).trim();
 		return rest.isEmpty() ? name : rest;
-	}
-
-	private static String caSource(String monster)
-	{
-		return monster == null || monster.trim().isEmpty()
-			|| "N/A".equalsIgnoreCase(monster.trim()) ? "Anywhere" : monster;
 	}
 
 	private String periodTip(long[] played, List<Entry<String, Long>> gains)
@@ -7448,15 +7284,15 @@ class ChroniclePanel extends PluginPanel
 				f.slayer.add(new RecapPicture.Named("On-task loot", null, gps(paid)));
 			}
 		}
-		for (String tier : CLUE_TIERS)
+		for (String tier : Standings.CLUE_TIERS)
 		{
 			String source = "Clue Scroll (" + tier + ")";
 			long n = 0;
 			long v = 0;
-			SourceRow r = clue(tier);
+			SourceRow r = build.standings.clue(tier);
 			if (f.whole && r != null)
 			{
-				n = Math.max(r.kc, r.loots);
+				n = Standings.caskets(r);
 				v = r.value;
 			}
 			else if (!f.whole)
@@ -8616,7 +8452,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		JsonObject cl = build.clog();
 		names.addAll(obj(cl, "slayer_kcs").keySet());
-		names.addAll(obj(achievements(), "quests").keySet());
+		names.addAll(obj(build.standings.achievements(), "quests").keySet());
 		for (Skill sk : skillOrder())
 		{
 			names.add(prettify(low(sk.name())));
@@ -8951,13 +8787,8 @@ class ChroniclePanel extends PluginPanel
 			goTo(go, ql, name, cur != null && cur[0] > 0 ? "level " + cur[0] : "", to, 2,
 				SKILL_ALIASES.getOrDefault(key, new String[0]));
 		}
-		JsonObject quests = obj(achievements(), "quests");
-		long questsDone = 0;
-		for (String name : quests.keySet())
-		{
-			questsDone += "FINISHED".equals(quests.get(name).getAsString()) ? 1 : 0;
-		}
-		goTo(go, ql, "Quests", quests.size() > 0 ? fmt(questsDone) + " / " + fmt(quests.size()) : "",
+		Standings.Quests quests = build.standings.quests();
+		goTo(go, ql, "Quests", quests.known > 0 ? fmt(quests.done.size()) + " / " + fmt(quests.known) : "",
 			() -> openSheetPage("quests"), 1, "quest");
 		goTo(go, ql, "Collection log", plugin.clogAvailable() > 0
 			? fmt(plugin.clogFinished()) + " / " + fmt(plugin.clogAvailable()) : "",
@@ -9171,14 +9002,15 @@ class ChroniclePanel extends PluginPanel
 		total += searchGroup(p, "Collection log", log);
 
 		List<Hit> questHits = new ArrayList<>();
-		for (String name : quests.keySet())
+		JsonObject states = obj(build.standings.achievements(), "quests");
+		for (String name : states.keySet())
 		{
 			int sc = matchScore(ql, name);
 			if (sc < 0)
 			{
 				continue;
 			}
-			String state = quests.get(name).getAsString();
+			String state = states.get(name).getAsString();
 			boolean done = "FINISHED".equals(state);
 			questHits.add(new Hit(name, done ? "complete" : "IN_PROGRESS".equals(state)
 				? "in progress" : "not started", done ? ACCENT_SESSION : ACCENT_RED, null,
@@ -9188,8 +9020,8 @@ class ChroniclePanel extends PluginPanel
 
 		if (ql.length() >= 3)
 		{
-			Set<Integer> done = caDone();
-			JsonObject cas = CA_TASKS;
+			Set<Integer> done = build.standings.caDone();
+			JsonObject cas = Standings.CA_TASKS;
 			List<Hit> caHits = new ArrayList<>();
 			for (String id : cas.keySet())
 			{
@@ -9213,7 +9045,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			total += searchGroup(p, "Combat achievements", caHits);
 
-			JsonObject diaries = DIARY_TASKS;
+			JsonObject diaries = Standings.DIARY_TASKS;
 			List<Hit> diaryHits = new ArrayList<>();
 			for (String region : diaries.keySet())
 			{
