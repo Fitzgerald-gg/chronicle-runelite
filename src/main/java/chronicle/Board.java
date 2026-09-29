@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import javax.swing.JPanel;
 import javax.swing.SwingWorker;
@@ -781,40 +782,29 @@ final class Board
 	String bossLootSource(Boss b)
 	{
 		String kind = kindOf(b.name);
-		SourceRow best = null;
-		for (SourceRow r : sources())
-		{
-			if (kindOf(r.name).equals(kind))
-			{
-				return r.name;
-			}
-			if ((namesInBrackets(r.name, b.name) || paysOutThrough(b.name, r.name))
-				&& (best == null || r.value > best.value))
-			{
-				best = r;
-			}
-		}
-		return best != null ? best.name : b.name;
+		SourceRow same = find(sources(), r -> kindOf(r.name), kind, true);
+		return same != null ? same.name
+			: richest(r -> namesInBrackets(r.name, b.name) || paysOutThrough(b.name, r.name), b.name);
 	}
 
 	String resolveSource(String name)
 	{
 		String named = resolveSourceNamed(name);
-		if (named != null)
-		{
-			return named;
-		}
 		String kind = kindOf(name);
+		return named != null ? named : richest(r -> kindOf(r.name).equals(kind) || namesInBrackets(r.name, name), name);
+	}
+
+	private String richest(Predicate<SourceRow> fits, String otherwise)
+	{
 		SourceRow best = null;
 		for (SourceRow r : sources())
 		{
-			if ((kindOf(r.name).equals(kind) || namesInBrackets(r.name, name))
-				&& (best == null || r.value > best.value))
+			if (fits.test(r) && (best == null || r.value > best.value))
 			{
 				best = r;
 			}
 		}
-		return best != null ? best.name : name;
+		return best != null ? best.name : otherwise;
 	}
 
 	String resolveSourceNamed(String name)
@@ -909,13 +899,7 @@ final class Board
 	List<SourceRow> skillGround(String craft)
 	{
 		Set<String> ownTile = new HashSet<>();
-		for (String[] a : ACTIVITIES)
-		{
-			if (!a[1].isEmpty())
-			{
-				ownTile.add(low(a[1]));
-			}
-		}
+		Arrays.stream(ACTIVITIES).filter(a -> !a[1].isEmpty()).forEach(a -> ownTile.add(low(a[1])));
 		List<SourceRow> out = new ArrayList<>();
 		for (SourceRow r : sources())
 		{
