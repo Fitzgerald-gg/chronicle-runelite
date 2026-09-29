@@ -23,13 +23,6 @@ import lombok.RequiredArgsConstructor;
 
 final class ItemKinds
 {
-	@RequiredArgsConstructor
-	private static final class Rule
-	{
-		final String kind;
-		final Predicate<String> matches;
-	}
-
 	private static final List<Rule> RULES = new ArrayList<>();
 	private static final List<String> KINDS = new ArrayList<>();
 	private static final Map<String, String> answered = new HashMap<>();
@@ -49,6 +42,13 @@ final class ItemKinds
 		catch (Exception ignored)
 		{
 		}
+	}
+
+	@RequiredArgsConstructor
+	private static final class Rule
+	{
+		final String kind;
+		final Predicate<String> matches;
 	}
 
 	private ItemKinds()

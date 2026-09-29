@@ -11,6 +11,8 @@ import static chronicle.Json.*;
 
 final class Merge
 {
+	private static final long SEGMENT_MATCH_SECONDS = 60;
+
 	private Merge()
 	{
 	}
@@ -131,8 +133,6 @@ final class Merge
 		}
 		return best;
 	}
-
-	private static final long SEGMENT_MATCH_SECONDS = 60;
 
 	static void mergeSegmentDetail(JsonObject seg, JsonObject inc, String key)
 	{

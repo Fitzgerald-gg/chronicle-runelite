@@ -37,7 +37,6 @@ class CloudSync
 	private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 	private static final Set<String> PRIVATE = Set.of("untakenLootValue", "untakenLootCount", "resourcesGatheredValue");
 	private static final String[] ACCOUNT_TYPES = {"", "ironman", "uim", "hcim", "gim", "hcgim", "ugim"};
-
 	private final OkHttpClient http;
 	private final Gson gson;
 	private final Client client;
@@ -47,7 +46,6 @@ class CloudSync
 	private final ClogCapture clog;
 	private final AchievementSync achievements;
 	private final LocalStore store;
-
 	private ChroniclePlugin plugin;
 	private volatile long hash = -1L;
 	private volatile String rsn;

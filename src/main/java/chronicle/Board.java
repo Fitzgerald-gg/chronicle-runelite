@@ -34,7 +34,6 @@ final class Board
 	private static final int HISTORY_FEED_SCAN = 2000;
 	static final long EVER_FROM = Long.MIN_VALUE / 2;
 	static final long EVER_TO = Long.MAX_VALUE / 2;
-
 	final ChroniclePlugin plugin;
 	final Period period;
 	final LocalStore store;

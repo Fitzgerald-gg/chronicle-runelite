@@ -18,10 +18,8 @@ import net.runelite.api.events.ItemContainerChanged;
 public class RangedStatTracker implements StatTracker
 {
 	private static final int MAX_PER_TICK = 20;
-
 	private final StatStore store;
 	private final Client client;
-
 	private int wornAmmoId = -1;
 	private int wornAmmoQty;
 	private int pendingConsume;

@@ -21,6 +21,11 @@ import net.runelite.api.events.StatChanged;
 public class ExperienceStatTracker implements StatTracker
 {
 	private static final long RATE_FLOOR_MS = 60_000L;
+	private final StatStore store;
+	private final LongSupplier clock;
+	private final XpSeen xpSeen = new XpSeen();
+	private final Map<Skill, Long> sessionXp = new EnumMap<>(Skill.class);
+	private long windowStartMs;
 
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	public static final class SkillGain
@@ -29,12 +34,6 @@ public class ExperienceStatTracker implements StatTracker
 		public final long xp;
 		public final long perHour;
 	}
-
-	private final StatStore store;
-	private final LongSupplier clock;
-	private final XpSeen xpSeen = new XpSeen();
-	private final Map<Skill, Long> sessionXp = new EnumMap<>(Skill.class);
-	private long windowStartMs;
 
 	public ExperienceStatTracker(StatStore store)
 	{

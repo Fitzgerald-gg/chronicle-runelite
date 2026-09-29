@@ -24,7 +24,6 @@ final class OverlayScrollBarUI extends BasicScrollBarUI
 	private static final int STEP_MS = 40;
 	private static final float STEP = 0.12f;
 	private static final Color THUMB = new Color(0xB0, 0xB0, 0xB0);
-
 	private float alpha;
 	private long lastMove;
 	private Timer fader;

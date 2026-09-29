@@ -25,7 +25,6 @@ public final class StatRegistry
 	};
 
 	static final JsonObject TABLES = Tables.load("stat_registry.json");
-
 	private static final Set<String> COMBAT = Tables.set(TABLES, "combat");
 	private static final String THRALL_SUFFIX = "ThrallsSummoned";
 	private static final Set<String> LIVING_FLAT = Tables.set(TABLES, "livingFlat");
@@ -33,18 +32,7 @@ public final class StatRegistry
 	private static final Set<String> HIDE = Tables.set(TABLES, "hide");
 	private static final Set<String> SUMMARY = Tables.set(TABLES, "summary");
 	private static final Set<String> PEAK = Tables.set(TABLES, "peak");
-
-	@AllArgsConstructor
-	private static final class SkillSpec
-	{
-		final String name;
-		final String[] suffixes;
-		final String[] floors;
-		final String[] keys;
-	}
-
 	private static final List<SkillSpec> SKILLS = new ArrayList<>();
-
 	private static final Map<String, String> KEY_SKILL = new HashMap<>();
 	private static final Set<String> FLOORS = new HashSet<>();
 
@@ -75,6 +63,15 @@ public final class StatRegistry
 	private static final Map<String, String> TELE_NAMES = Tables.map(TABLES, "teleNames");
 	private static final Map<String, String> SUFFIX_LABELS = Tables.map(TABLES, "suffixLabels");
 	private static final Map<String, String> SUFFIX_FLOORS = Tables.map(TABLES, "suffixFloors");
+
+	@AllArgsConstructor
+	private static final class SkillSpec
+	{
+		final String name;
+		final String[] suffixes;
+		final String[] floors;
+		final String[] keys;
+	}
 
 	private StatRegistry()
 	{

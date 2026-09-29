@@ -35,13 +35,9 @@ public class ChronicleCounters
 	private final StatStore store;
 	private final ItemManager itemManager;
 	private final SkillDeriver skillDeriver;
-
 	private volatile BiConsumer<String, Integer> consumableSink;
-
 	private volatile GatheredLedger gatheredLedger;
-
 	private volatile StatTracker[] trackers;
-
 	private volatile ExperienceStatTracker experience;
 
 	public void setConsumableSink(BiConsumer<String, Integer> sink)

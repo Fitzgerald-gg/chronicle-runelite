@@ -26,30 +26,24 @@ import net.runelite.client.util.Text;
 public class MovementStatTracker implements StatTracker
 {
 	private static final int RUN_STEP_TILES = 2;
-
 	private static final int FAIRY_RING_ANIM = 3265;
-
 	private static final int TELEPORT_PENDING_WINDOW_TICKS = 10;
 	private static final int MENU_PENDING_WINDOW_TICKS = 50;
-
 	private static final int TELEPORT_MIN_JUMP = 15;
-
 	private static final JsonObject TELEPORTS = Tables.load("counters_teleports.json");
 	private static final Map<String, String> DESTINATIONS = Tables.map(TELEPORTS, "destinations");
 	private static final String[] JEWELLERY = Tables.strings(TELEPORTS.get("jewellery"));
-
 	private final StatStore statStore;
 	private final Client client;
 	private final ItemManager itemManager;
-
 	private WorldPoint lastPlayerPos;
-
 	private String pendingLabel;
 	private int pendingTick = -1;
 	private boolean pendingFromNexus;
 	private String pendingMethod;
 	private static final int RUB_MENU_WINDOW_TICKS = 25;
 	private int rubTick = -1;
+	private static final int MENU_CHILD_SCAN = 24;
 
 	@Override
 	public void onMenuOptionClicked(MenuOptionClicked event)
@@ -299,8 +293,6 @@ public class MovementStatTracker implements StatTracker
 		String row = menuRowText(event.getWidgetId(), event.getParam0()).toLowerCase(Locale.ROOT);
 		return (row + " " + optLow + " " + tgtLow).trim();
 	}
-
-	private static final int MENU_CHILD_SCAN = 24;
 
 	private String menuRowText(int componentId, int index)
 	{

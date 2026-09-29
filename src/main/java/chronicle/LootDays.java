@@ -23,6 +23,10 @@ import static chronicle.Json.*;
 final class LootDays
 {
 	private final LocalStore store;
+	private static final int DETAIL_DAYS = 400;
+	private static final DateTimeFormatter DAY_KEY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+	JsonObject sessionRoll = new JsonObject();
 
 	private JsonObject dayRoll()
 	{
@@ -49,10 +53,6 @@ final class LootDays
 			}
 		}
 	}
-
-	private static final int DETAIL_DAYS = 400;
-
-	private static final DateTimeFormatter DAY_KEY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
 	void rollTaken(String source, long value, List<BagItem> priced, Double killTime)
 	{
@@ -332,7 +332,4 @@ final class LootDays
 			}
 		}
 	}
-
-	JsonObject sessionRoll = new JsonObject();
-
 }

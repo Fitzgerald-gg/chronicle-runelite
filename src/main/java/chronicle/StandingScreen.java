@@ -43,7 +43,6 @@ final class StandingScreen extends Screen
 {
 	private static final int ICON_W = 22;
 	private static final int ICON_H = 18;
-
 	private String periodTip;
 
 	StandingScreen(ChroniclePanel ui, Board board)

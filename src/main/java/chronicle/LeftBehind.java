@@ -40,7 +40,6 @@ class LeftBehind
 	private final List<RecentDeath> recentDeaths = new ArrayList<>();
 	private static final int DROP_WINDOW_TICKS = 2;
 	private final List<RecentDrop> recentDrops = new ArrayList<>();
-
 	private final Client client;
 
 	void reset()

@@ -132,20 +132,15 @@ public class ChroniclePlugin extends Plugin
 	@Getter(AccessLevel.PACKAGE)
 	@Inject
 	private Gson gson;
-
 	private HistoryLog historyLog;
-
 	private volatile String historyCacheRsn;
 	private volatile TreeMap<LocalDate, HistoryLog.Baseline> historyCache;
 	private volatile boolean historyLoading;
-
 	private ChroniclePanel panel;
 	private NavigationButton navButton;
-
 	private ScheduledFuture<?> pushTask;
 	private volatile boolean pendingLoginSetup;
 	private volatile boolean wasLoggedIn;
-
 	private static final String KEY_PLAYTIME = "gamePlaytime";
 	private static final String KEY_PLAYTIME_AT = "gamePlaytimeAt";
 

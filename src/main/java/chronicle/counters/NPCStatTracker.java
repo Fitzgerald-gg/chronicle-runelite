@@ -11,7 +11,6 @@ import net.runelite.api.events.MenuOptionClicked;
 public class NPCStatTracker implements StatTracker
 {
 	private final StatStore statStore;
-
 	private boolean evenTick = false;
 	private boolean pendingPet = false;
 

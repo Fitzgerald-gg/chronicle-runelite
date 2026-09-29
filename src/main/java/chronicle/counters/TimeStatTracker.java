@@ -26,7 +26,6 @@ public class TimeStatTracker implements StatTracker
 	private static final int TICKS_A_MINUTE = 100;
 	private static final int FIGHT_GRACE = 50;
 	private static final int SKILL_GRACE = 300;
-
 	private final StatStore store;
 	private final Client client;
 	private final XpSeen xpSeen = new XpSeen();

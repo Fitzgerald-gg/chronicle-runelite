@@ -28,7 +28,6 @@ final class RecapPicture
 {
 	static final int WIDTH = 1920;
 	private static final int MAX_HEIGHT = 1080;
-
 	private static final int COLUMNS = 6;
 	private static final int GAP = 16;
 	private static final int COL = 290;
@@ -41,15 +40,14 @@ final class RecapPicture
 	private static final int TILE_H = 84;
 	private static final int NOTE_ROW = 15;
 	private static final int MIN_BODY = 260;
-
 	private static final Color GROUND = Ui.DARK;
 	private static final Color CARD = Ui.DARKER;
 	private static final Color TEXT = Ui.LIT;
 	private static final Color VALUE = ColorScheme.LIGHT_GRAY_COLOR;
 	private static final Color DIM = Ui.DIM;
 	private static final Color ACCENT = Ui.ACCENT;
-
 	private static final String ARROW = " to ";
+	private static final Graphics2D MEASURE = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB).createGraphics();
 
 	static final class Facts
 	{
@@ -156,8 +154,6 @@ final class RecapPicture
 	{
 		return FontManager.getRunescapeBoldFont().deriveFont(32f);
 	}
-
-	private static final Graphics2D MEASURE = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB).createGraphics();
 
 	private static FontMetrics fm(Font f)
 	{

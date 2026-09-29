@@ -34,11 +34,6 @@ final class JournalScreen extends Screen
 	private static final int FEED_SCAN = 4000;
 	private static final Map<String, List<String>> LENSES = new java.util.LinkedHashMap<>();
 
-	JournalScreen(ChroniclePanel ui, Board board)
-	{
-		super(ui, board);
-	}
-
 	static
 	{
 		LENSES.put("All", List.of());
@@ -51,6 +46,12 @@ final class JournalScreen extends Screen
 
 	private String journalLens = "All";
 	private YearMonth calendarMonth = YearMonth.now();
+	private int journalShown = PAGE;
+
+	JournalScreen(ChroniclePanel ui, Board board)
+	{
+		super(ui, board);
+	}
 
 	void lens(String lens)
 	{
@@ -61,7 +62,6 @@ final class JournalScreen extends Screen
 	{
 		calendarMonth = month;
 	}
-	private int journalShown = PAGE;
 
 	JPanel buildJournal()
 	{

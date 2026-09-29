@@ -53,7 +53,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	private final ItemManager itemManager;
 	private final Gson gson;
-
 	final Object lock = new Object();
 	final LootDays loot = new LootDays(this);
 	final SlayerLog slayer = new SlayerLog(this);
@@ -66,11 +65,28 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private volatile boolean ready;
 	@Getter(AccessLevel.PACKAGE)
 	private volatile String journalWarning;
-
 	private final ArrayDeque<RecentDrop> recentDrops = new ArrayDeque<>();
-
 	private static final int GATHERED_CAP = 1024;
 	private final Set<Integer> gatheredItems = ConcurrentHashMap.newKeySet();
+
+	@Getter(AccessLevel.PACKAGE)
+	private volatile long revision;
+
+	static
+	{
+		try (InputStream in = LocalStore.class.getResourceAsStream("/chronicle/store_superiors.json"))
+		{
+			for (JsonElement e : new com.google.gson.JsonParser().parse(
+				new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonArray())
+			{
+				SlayerLog.SUPERIORS.add(e.getAsString());
+			}
+		}
+		catch (Exception e)
+		{
+			log.warn("superiors table unreadable", e);
+		}
+	}
 
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class RecentDrop
@@ -229,9 +245,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	{
 		return ready && rsn != null && rsn.equals(currentRsn);
 	}
-
-	@Getter(AccessLevel.PACKAGE)
-	private volatile long revision;
 
 	void record(String type, JsonObject data, String rsn)
 	{
@@ -988,22 +1001,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		summed.values().forEach(t -> out.add(new BagItem(ids.getOrDefault(t.name, noId), t.name, t.qty, t.value)));
 		out.sort((a, b) -> Long.compare(b.value, a.value));
 		return out;
-	}
-
-	static
-	{
-		try (InputStream in = LocalStore.class.getResourceAsStream("/chronicle/store_superiors.json"))
-		{
-			for (JsonElement e : new com.google.gson.JsonParser().parse(
-				new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonArray())
-			{
-				SlayerLog.SUPERIORS.add(e.getAsString());
-			}
-		}
-		catch (Exception e)
-		{
-			log.warn("superiors table unreadable", e);
-		}
 	}
 
 	Map<String, Long> consumableValues()

@@ -38,7 +38,6 @@ public class AchievementSync
 	};
 
 	private static final int[] CA_TIER_STATUS = {12863, 12864, 12865, 12866, 12867, 12868};
-
 	private final Client client;
 	private final Gson gson;
 	private JsonObject bundledDiaries;

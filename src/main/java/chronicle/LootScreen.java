@@ -24,7 +24,6 @@ import static chronicle.Ui.*;
 final class LootScreen extends Screen
 {
 	private static final String NOTHING_YET = "Drops appear here as you play: every kill, priced as it lands.";
-
 	private boolean dropsLeftBehind;
 	private boolean dropsByKind;
 	@Getter(AccessLevel.PACKAGE)

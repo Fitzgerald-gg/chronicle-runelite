@@ -41,12 +41,10 @@ public class FoodStatTracker implements StatTracker
 	private static final int MAX_PENDING_EATS = 8;
 	private static final int DRINK_PAIR_TICKS = 2;
 	private static final int MAX_PENDING_DRINKS = 4;
-
 	private final StatStore store;
 	private final Client client;
 	private final ItemManager itemManager;
 	private final BiConsumer<String, Integer> consumableSink;
-
 	private String lastConsumed;
 	private int previousHitpoints = -1;
 	private Map<Integer, Integer> inventorySnapshot;

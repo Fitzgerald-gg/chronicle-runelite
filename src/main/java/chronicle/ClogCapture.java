@@ -50,10 +50,8 @@ public class ClogCapture
 	private static final int COLLECTION_LOG_SETUP = 7797;
 	private static final int COLLECTION_DELAYED_TRANSMIT = 4100;
 	private static final int COLLECTION_INIT_SCRIPT = 2240;
-
 	private final Client client;
 	private final ItemManager itemManager;
-
 	private final Map<String, Map<String, Integer>> byCat = new HashMap<>();
 	private final Map<String, Integer> kcs = new HashMap<>();
 	private final Map<String, Map<String, Integer>> kcLines = new HashMap<>();

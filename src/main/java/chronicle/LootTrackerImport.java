@@ -41,7 +41,6 @@ class LootTrackerImport
 
 	@Inject
 	private LocalStore store;
-
 	private volatile boolean running;
 
 	void run(ChroniclePlugin plugin)

@@ -57,10 +57,6 @@ final class Ui
 	static final Color LIT = new Color(198, 198, 198);
 	static final Color DIM = ColorScheme.LIGHT_GRAY_COLOR.darker();
 
-	private Ui()
-	{
-	}
-
 	static final DateTimeFormatter DAY =
 		DateTimeFormatter.ofPattern("d MMM", Locale.UK).withZone(ZoneId.systemDefault());
 
@@ -76,16 +72,23 @@ final class Ui
 		DateTimeFormatter.ofPattern("MMMM yyyy", Locale.UK).withZone(ZoneId.systemDefault());
 
 	static final DateTimeFormatter ROLL_DAY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-
 	static final int ROW_CAP = 30;
-
 	static final int PANEL_INSET = 8;
-
 	private static final int CARD_INSET = 8;
-
 	private static final int ROW_INSET = 2;
-
 	static final int ROW_GAP = 8;
+	static final String TIP_OPEN = "<html><body style='padding:2px'>";
+	static final String TIP_CLOSE = "</body></html>";
+	private static final int NOTE_WIDTH = 190;
+	private static final int HOVER_LIFT = 15;
+	private static Runnable litNow;
+	static final JLabel MEASURE = new JLabel();
+	private static final String ELLIPSIS = "…";
+	static final int NAME_FLOOR = 3;
+
+	private Ui()
+	{
+	}
 
 	static String fmt(long n)
 	{
@@ -347,10 +350,6 @@ final class Ui
 		return k == null ? null : o.get(k);
 	}
 
-	static final String TIP_OPEN = "<html><body style='padding:2px'>";
-
-	static final String TIP_CLOSE = "</body></html>";
-
 	static String tip(String title, String... lines)
 	{
 		return tip(title, Arrays.asList(lines));
@@ -526,8 +525,6 @@ final class Ui
 		return g;
 	}
 
-	private static final int NOTE_WIDTH = 190;
-
 	static JPanel note(String text)
 	{
 		JPanel p = new JPanel();
@@ -607,8 +604,6 @@ final class Ui
 		return p;
 	}
 
-	private static final int HOVER_LIFT = 15;
-
 	private static Color behind(Component c)
 	{
 		for (Component p = c.getParent(); p != null; p = p.getParent())
@@ -658,8 +653,6 @@ final class Ui
 			return e.getComponent().contains(e.getPoint());
 		}
 	}
-
-	private static Runnable litNow;
 
 	static void unlight()
 	{
@@ -921,8 +914,6 @@ final class Ui
 		return wrap(text, " · ", rowMetrics(), room);
 	}
 
-	static final JLabel MEASURE = new JLabel();
-
 	static FontMetrics rowMetrics()
 	{
 		return MEASURE.getFontMetrics(FontManager.getRunescapeFont());
@@ -940,10 +931,6 @@ final class Ui
 			- 2 * PANEL_INSET - OverlayScrollBarUI.WIDTH - 2 * CARD_INSET
 			- 2 * ROW_INSET - ROW_GAP - fm.stringWidth(share);
 	}
-
-	private static final String ELLIPSIS = "…";
-
-	static final int NAME_FLOOR = 3;
 
 	static long noon(LocalDate d)
 	{

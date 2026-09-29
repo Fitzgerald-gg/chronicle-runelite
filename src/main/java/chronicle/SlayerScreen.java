@@ -26,7 +26,6 @@ import static chronicle.Ui.*;
 final class SlayerScreen extends Screen
 {
 	private static final String[] LENSES = {"Tasks", "Monsters", "Drops"};
-
 	private String slayerLens = LENSES[0];
 	private int slayerShown = ROW_CAP;
 	private String taskFilter;

@@ -34,6 +34,9 @@ import static chronicle.panel.StatRegistry.prettify;
 
 final class RecapScreen extends Screen
 {
+	private static final String[] FAMILIES = {"Combat", "Skilling", "Living", "Ledger & Roads"};
+	private static final int[] ROWS = {8, 10, 6, 10};
+
 	RecapScreen(ChroniclePanel ui, Board board)
 	{
 		super(ui, board);
@@ -390,10 +393,6 @@ final class RecapScreen extends Screen
 			}
 		}
 	}
-
-	private static final String[] FAMILIES = {"Combat", "Skilling", "Living", "Ledger & Roads"};
-
-	private static final int[] ROWS = {8, 10, 6, 10};
 
 	private void trackers(RecapPicture.Facts f)
 	{

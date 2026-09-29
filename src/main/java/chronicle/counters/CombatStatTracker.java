@@ -31,7 +31,6 @@ public class CombatStatTracker implements StatTracker
 
 	private final StatStore store;
 	private final Client client;
-
 	private int prevSpecEnergy = -1;
 	private String lastStyleKey;
 	private int lastStyleTick = -1;

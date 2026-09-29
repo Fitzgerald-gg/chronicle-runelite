@@ -31,6 +31,66 @@ import static chronicle.Ui.*;
 
 final class Reference
 {
+	static List<Boss> bossRoster;
+	private static final JsonObject FIGHTS = table("panel_fights.json");
+	static final Map<String, String> LOG_PAGE_FOR = strMap(FIGHTS, "logPage");
+	private static final Map<String, List<String>> PAYS_OUT = lists(obj(FIGHTS, "paysOut"), false);
+	static final Map<String, List<String>> FOUGHT_AS = lists(obj(FIGHTS, "foughtAs"), true);
+	static final JsonObject KINDS = table("panel_kinds.json");
+	static final Set<String> PICKPOCKETED = new HashSet<>(strs(KINDS.get("pickpocketed")));
+	static final Set<String> MONSTER_PAGES = new HashSet<>(strs(KINDS.get("monsterPages")));
+	static final List<String> OPENED = strs(KINDS.get("opened"));
+	static final List<String> GATHERED = strs(KINDS.get("gathered"));
+	static final Map<String, String> PAGE_SKILL = strMap(KINDS, "pageSkills");
+	private static final List<String> SKILL_ORDER_NAMES = strs(KINDS.get("skillOrder"));
+	static final List<Skill> SKILLS = Arrays.asList(Skill.values());
+	static final List<String> SKILL_KEYS = SKILLS.stream().map(sk -> low(sk.name())).collect(Collectors.toList());
+	static Map<String, Map<String, List<String>>> taxonomy;
+	static Set<String> sharedSlotNames;
+	private static final JsonObject COMBAT_BUNDLE = table("osrs_combat_achievements.json");
+	static final JsonObject CA_TASKS = obj(COMBAT_BUNDLE, "tasks");
+	static final long CA_POINTS = asLong(obj(obj(COMBAT_BUNDLE, "_meta"), "totals").get("points"));
+	static final JsonObject DIARY_TASKS = obj(table("osrs_achievement_diaries.json"), "diaries");
+
+	static final String[] CLUE_TIERS = {
+		"Beginner", "Easy", "Medium", "Hard", "Elite", "Master"};
+
+	static final Skill[] COMBAT_SKILLS = {
+		Skill.ATTACK, Skill.STRENGTH,
+		Skill.DEFENCE, Skill.HITPOINTS,
+		Skill.RANGED, Skill.MAGIC,
+		Skill.PRAYER};
+
+	static final Map<String, String[]> SKILL_ALIASES = Map.of("runecraft", new String[]{"runecrafting", "rc"},
+		"hitpoints", new String[]{"hp"},
+		"woodcutting", new String[]{"wc"},
+		"firemaking", new String[]{"fm"},
+		"construction", new String[]{"con"});
+
+	static boolean paysOutThrough(String fight, String source)
+	{
+		return PAYS_OUT.getOrDefault(fight, Collections.emptyList()).stream().anyMatch(source::equalsIgnoreCase);
+	}
+
+	static final String[][] SKILLED = {
+		{"Pickpockets", "THIEVING"}, {"Trapped", "HUNTER"},
+		{"Caught", "HUNTER"}, {"Harvested", "HUNTER"},
+	};
+
+	static final String KIND_BOSS = "Bosses";
+	static final String KIND_ACTIVITY = "Activities";
+	static final String KIND_SKILLING = "Skilling";
+	static final String KIND_MONSTER = "Monsters";
+
+	static final String[][] ACTIVITIES = {
+		{"Clues", "", "clues"},
+		{"Rifts closed", "Guardians of the Rift", ""},
+		{"Soul Wars", "Soul Wars", ""},
+		{"Collections", "", "log"},
+		{"Quests", "", "quests"},
+		{"Diaries", "", "diaries"},
+	};
+
 	private Reference()
 	{
 	}
@@ -41,8 +101,6 @@ final class Reference
 		final String name;
 		final int sprite;
 	}
-
-	static List<Boss> bossRoster;
 
 	static synchronized List<Boss> bossRoster(Gson gson)
 	{
@@ -89,38 +147,12 @@ final class Reference
 		return out;
 	}
 
-	private static final JsonObject FIGHTS = table("panel_fights.json");
-
-	static final Map<String, String> LOG_PAGE_FOR = strMap(FIGHTS, "logPage");
-
-	private static final Map<String, List<String>> PAYS_OUT = lists(obj(FIGHTS, "paysOut"), false);
-
-	static final Map<String, List<String>> FOUGHT_AS = lists(obj(FIGHTS, "foughtAs"), true);
-
 	private static Map<String, List<String>> lists(JsonObject o, boolean byKind)
 	{
 		Map<String, List<String>> out = new LinkedHashMap<>();
 		o.entrySet().forEach(e -> out.put(byKind ? kindOf(e.getKey()) : e.getKey(), strs(e.getValue())));
 		return out;
 	}
-
-	static final JsonObject KINDS = table("panel_kinds.json");
-
-	static final Set<String> PICKPOCKETED = new HashSet<>(strs(KINDS.get("pickpocketed")));
-
-	static final Set<String> MONSTER_PAGES = new HashSet<>(strs(KINDS.get("monsterPages")));
-
-	static final List<String> OPENED = strs(KINDS.get("opened"));
-
-	static final List<String> GATHERED = strs(KINDS.get("gathered"));
-
-	static final Map<String, String> PAGE_SKILL = strMap(KINDS, "pageSkills");
-
-	private static final List<String> SKILL_ORDER_NAMES = strs(KINDS.get("skillOrder"));
-
-	static final List<Skill> SKILLS = Arrays.asList(Skill.values());
-
-	static final List<String> SKILL_KEYS = SKILLS.stream().map(sk -> low(sk.name())).collect(Collectors.toList());
 
 	static Skill skill(String name)
 	{
@@ -141,8 +173,6 @@ final class Reference
 		SKILLS.stream().filter(sk -> !out.contains(sk)).forEach(out::add);
 		return out;
 	}
-
-	static Map<String, Map<String, List<String>>> taxonomy;
 
 	static synchronized Map<String, Map<String, List<String>>> taxonomy(Gson gson)
 	{
@@ -176,8 +206,6 @@ final class Reference
 		return out;
 	}
 
-	static Set<String> sharedSlotNames;
-
 	static synchronized Set<String> sharedSlotNames(Gson gson)
 	{
 		if (sharedSlotNames != null)
@@ -199,23 +227,6 @@ final class Reference
 		sharedSlotNames = shared;
 		return shared;
 	}
-
-	private static final JsonObject COMBAT_BUNDLE = table("osrs_combat_achievements.json");
-
-	static final JsonObject CA_TASKS = obj(COMBAT_BUNDLE, "tasks");
-
-	static final long CA_POINTS = asLong(obj(obj(COMBAT_BUNDLE, "_meta"), "totals").get("points"));
-
-	static final JsonObject DIARY_TASKS = obj(table("osrs_achievement_diaries.json"), "diaries");
-
-	static final String[] CLUE_TIERS = {
-		"Beginner", "Easy", "Medium", "Hard", "Elite", "Master"};
-
-	static final Skill[] COMBAT_SKILLS = {
-		Skill.ATTACK, Skill.STRENGTH,
-		Skill.DEFENCE, Skill.HITPOINTS,
-		Skill.RANGED, Skill.MAGIC,
-		Skill.PRAYER};
 
 	static Integer openingCombat(HistoryLog.Levels opened)
 	{
@@ -241,17 +252,6 @@ final class Reference
 		HistoryLog.Levels l = new HistoryLog.Levels();
 		l.of.putAll(levels);
 		return openingCombat(l);
-	}
-
-	static final Map<String, String[]> SKILL_ALIASES = Map.of("runecraft", new String[]{"runecrafting", "rc"},
-		"hitpoints", new String[]{"hp"},
-		"woodcutting", new String[]{"wc"},
-		"firemaking", new String[]{"fm"},
-		"construction", new String[]{"con"});
-
-	static boolean paysOutThrough(String fight, String source)
-	{
-		return PAYS_OUT.getOrDefault(fight, Collections.emptyList()).stream().anyMatch(source::equalsIgnoreCase);
 	}
 
 	static boolean namesInBrackets(String source, String boss)
@@ -318,26 +318,4 @@ final class Reference
 		int end = out.length();
 		return end > 1 && out.charAt(end - 1) == 's' ? out.substring(0, end - 1) : out.toString();
 	}
-
-	static final String[][] SKILLED = {
-		{"Pickpockets", "THIEVING"}, {"Trapped", "HUNTER"},
-		{"Caught", "HUNTER"}, {"Harvested", "HUNTER"},
-	};
-
-	static final String KIND_BOSS = "Bosses";
-
-	static final String KIND_ACTIVITY = "Activities";
-
-	static final String KIND_SKILLING = "Skilling";
-
-	static final String KIND_MONSTER = "Monsters";
-
-	static final String[][] ACTIVITIES = {
-		{"Clues", "", "clues"},
-		{"Rifts closed", "Guardians of the Rift", ""},
-		{"Soul Wars", "Soul Wars", ""},
-		{"Collections", "", "log"},
-		{"Quests", "", "quests"},
-		{"Diaries", "", "diaries"},
-	};
 }

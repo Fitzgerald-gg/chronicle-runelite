@@ -95,9 +95,7 @@ public class ChronicleEventCapture
 	private static final Pattern PERSONAL_BEST = Pattern.compile(
 		"[Pp]ersonal best[:!]? (?<pb>\\d+(?::\\d{2})+(?:\\.\\d{1,2})?)");
 	private static final String NEW_PB_MARK = "(new personal best)";
-
 	private static final Pattern PICKPOCKET = Pattern.compile("You pick (the )?(?<target>.+)'s? pocket.*");
-
 	private final Client client;
 	private final ClientThread clientThread;
 	private final CloudSync cloud;
@@ -106,7 +104,6 @@ public class ChronicleEventCapture
 
 	@com.google.inject.Inject(optional = true)
 	private SlayerPluginService slayerService;
-
 	private final Map<Skill, Integer> knownLevels = new EnumMap<>(Skill.class);
 	private final Set<Skill> pendingLevels = new HashSet<>();
 	private final Map<String, Integer> recentKc = new HashMap<>();
@@ -119,11 +116,9 @@ public class ChronicleEventCapture
 	private String lastAttackerName;
 	private int lastAttackerTick = -1;
 	private int pickpocketTick = -1;
-
 	private boolean groupStorageOpen;
 	private Map<Integer, Integer> groupStorageBaseline;
 	private Map<Integer, Integer> groupStorageCurrent;
-
 	private int petPendingTicks = -1;
 	private String pendingSlayerTask;
 	private String pendingSlayerMonster;
@@ -134,7 +129,6 @@ public class ChronicleEventCapture
 	private long lastSlayerCompletionAtMs = -1;
 	@Getter(AccessLevel.PACKAGE)
 	private volatile boolean slayerSeenThisSession;
-
 	private static final long SLAYER_FINAL_KILL_GRACE_MS = SlayerLog.SLAYER_FINAL_KILL_GRACE * 1000L;
 
 	@Inject

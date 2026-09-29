@@ -27,6 +27,9 @@ import static chronicle.Merge.*;
 final class SlayerLog
 {
 	private final LocalStore store;
+	private static final int SLAYER_TASK_CAP = 1000;
+	static final long SLAYER_FINAL_KILL_GRACE = 30;
+	static final Set<String> SUPERIORS = new HashSet<>();
 
 	private static JsonObject openSegment(JsonArray tasks, String task)
 	{
@@ -139,10 +142,6 @@ final class SlayerLog
 			seg.remove("noLootKills");
 		}
 	}
-
-	private static final int SLAYER_TASK_CAP = 1000;
-
-	static final long SLAYER_FINAL_KILL_GRACE = 30;
 
 	private JsonObject slayerRoot()
 	{
@@ -380,8 +379,6 @@ final class SlayerLog
 		}
 		return LocalStore.bagRows(summed, ids, 0);
 	}
-
-	static final Set<String> SUPERIORS = new HashSet<>();
 
 	static final class TaskTally
 	{

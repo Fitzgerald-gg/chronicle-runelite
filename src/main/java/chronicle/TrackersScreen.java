@@ -28,8 +28,9 @@ final class TrackersScreen extends Screen
 	private static final List<String> LEDGER_FAMILIES = List.of("Ledger & Roads", "Living");
 	private static final Set<String> FOLDING = Set.of("Food", "Potions", "Teleports", "Destinations", "Thralls");
 	private static final String FOLD_DEATHS = "Combat:deaths";
-
 	private String statsFamily = StatRegistry.FAMILIES[0];
+	private Map<String, Long> consumables = Map.of();
+	private long resourcesDropped;
 
 	TrackersScreen(ChroniclePanel ui, Board board)
 	{
@@ -40,8 +41,6 @@ final class TrackersScreen extends Screen
 	{
 		statsFamily = family;
 	}
-	private Map<String, Long> consumables = Map.of();
-	private long resourcesDropped;
 
 	void reset(ChroniclePanel.View v)
 	{

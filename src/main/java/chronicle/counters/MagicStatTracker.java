@@ -22,7 +22,6 @@ public class MagicStatTracker implements StatTracker
 {
 	private static final int HIGH_ALCH_ANIM = 713;
 	private static final int LOW_ALCH_ANIM = 712;
-
 	private static final int OFFERING_CAST_ANIM = 8975;
 	private static final int GFX_DEMONIC = 1871;
 	private static final int GFX_SINISTER = 1872;
@@ -35,7 +34,6 @@ public class MagicStatTracker implements StatTracker
 
 	private final StatStore store;
 	private final Client client;
-
 	private int lastCoins = -1;
 	private int bufferedCoinGain;
 	private int alchSeenTick = -1;

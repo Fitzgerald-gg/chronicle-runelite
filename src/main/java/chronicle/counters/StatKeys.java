@@ -5,15 +5,14 @@ package chronicle.counters;
 
 public final class StatKeys
 {
+	public static final String DAMAGE_DEALT = "damageDealt";
+	public static final String HIGHEST_HIT = "highestHit";
+	public static final String TIME_PREFIX = "time";
+	public static final String TIME_IDLE = "timeIdle";
+
 	private StatKeys()
 	{
 	}
-
-	public static final String DAMAGE_DEALT = "damageDealt";
-	public static final String HIGHEST_HIT = "highestHit";
-
-	public static final String TIME_PREFIX = "time";
-	public static final String TIME_IDLE = "timeIdle";
 
 	public static String timeKey(String name)
 	{

@@ -39,9 +39,10 @@ import static chronicle.Json.*;
 class HistoryLog
 {
 	static final String SPINE_SUFFIX = ".history.jsonl";
-
 	private final Gson gson;
 	private final Map<String, String> lastAppendedDate = new ConcurrentHashMap<>();
+	private static final String HITPOINTS = "hitpoints";
+	private static final int HITPOINTS_FLOOR = 10;
 
 	synchronized Adjust append(File dir, String rsn, Map<String, Long> skills,
 		Map<String, Long> counters, Map<String, Long> kcs, Adjust adj, LocalDate today)
@@ -325,9 +326,6 @@ class HistoryLog
 		int drawn;
 		int nines;
 	}
-
-	private static final String HITPOINTS = "hitpoints";
-	private static final int HITPOINTS_FLOOR = 10;
 
 	static Levels levels(Baseline state, List<String> skills)
 	{

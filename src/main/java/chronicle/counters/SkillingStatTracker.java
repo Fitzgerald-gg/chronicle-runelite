@@ -58,11 +58,9 @@ public class SkillingStatTracker implements StatTracker
 	private int lastConsumedQty = 0;
 	private int consumedTtl = 0;
 	private Map<Integer, Integer> invSnapshot = null;
-
 	private static final int RAKE_TTL_TICKS = 30;
 	private static final int RAKE_MAX_PER_EVENT = 3;
 	private int rakeTtl = 0;
-
 	private String lastObjectTarget = "";
 
 	@Override

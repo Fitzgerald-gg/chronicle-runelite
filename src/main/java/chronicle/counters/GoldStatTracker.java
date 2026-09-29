@@ -19,10 +19,8 @@ import net.runelite.api.widgets.InterfaceID;
 public class GoldStatTracker implements StatTracker
 {
 	private static final int IDLE = -1;
-
 	private final StatStore statStore;
 	private final Client client;
-
 	private int coinsLastTick = IDLE;
 
 	@Override

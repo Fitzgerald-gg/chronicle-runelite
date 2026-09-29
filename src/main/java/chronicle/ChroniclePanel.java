@@ -74,6 +74,51 @@ class ChroniclePanel extends PluginPanel
 	private static final int MOVED_SKILLS = 4;
 	private static final int MOVED_CLOG = 8;
 	private static final int MOVED_ANY = MOVED_RECORD | MOVED_COUNTERS | MOVED_SKILLS | MOVED_CLOG;
+	private final ChroniclePlugin plugin;
+	private final Period period = new Period();
+	private final Board board;
+	final Art art;
+	final HomeScreen home;
+	final StandingScreen standing;
+	final PagesScreen pages;
+	final SlayerScreen slayer;
+	final LootScreen loot;
+	final DetailScreen detail;
+	final TrackersScreen trackers;
+	final SearchScreen search;
+	final JournalScreen journal;
+	final RecapScreen recap;
+
+	View view = View.NOW;
+	Place place;
+	private final ArrayDeque<Place> back = new ArrayDeque<>();
+	private final Map<Tab, View> lastView = new EnumMap<>(Tab.class);
+	private final Set<String> openFolds = new HashSet<>();
+	private final Map<String, Integer> shown = new HashMap<>();
+	@Setter(AccessLevel.PACKAGE)
+	private String measuredSince;
+	@Getter(AccessLevel.PACKAGE)
+	private boolean drawingCopy;
+	private final JPanel north = new JPanel();
+	private final JPanel periodHolder = new JPanel(new BorderLayout());
+	private final MaterialTabGroup tabGroup = new MaterialTabGroup();
+	final IconTextField searchField = new IconTextField();
+	private final JPanel band = new JPanel(new BorderLayout());
+	private final JLabel bandText = new JLabel();
+	private final JPanel display = new JPanel(new BorderLayout());
+	private final ScrollColumn canvas = new ScrollColumn();
+	private final JScrollPane scrollPane = new JScrollPane(canvas,
+		ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+	private JPanel subStrip;
+	private final Timer searchDebounce;
+	private final Timer ticker;
+	private final AtomicBoolean queued = new AtomicBoolean();
+	private boolean everShown;
+	private boolean stale;
+	private boolean keepScroll;
+	private Point lastPointer;
+	private long lastBuildNanos;
+	private long lastBuildAt;
 
 	@RequiredArgsConstructor
 	enum Tab
@@ -117,54 +162,6 @@ class ChroniclePanel extends PluginPanel
 		final String name;
 		final int index;
 	}
-
-	private final ChroniclePlugin plugin;
-	private final Period period = new Period();
-	private final Board board;
-	final Art art;
-	final HomeScreen home;
-	final StandingScreen standing;
-	final PagesScreen pages;
-	final SlayerScreen slayer;
-	final LootScreen loot;
-	final DetailScreen detail;
-	final TrackersScreen trackers;
-	final SearchScreen search;
-	final JournalScreen journal;
-	final RecapScreen recap;
-
-	View view = View.NOW;
-	Place place;
-	private final ArrayDeque<Place> back = new ArrayDeque<>();
-	private final Map<Tab, View> lastView = new EnumMap<>(Tab.class);
-	private final Set<String> openFolds = new HashSet<>();
-	private final Map<String, Integer> shown = new HashMap<>();
-	@Setter(AccessLevel.PACKAGE)
-	private String measuredSince;
-	@Getter(AccessLevel.PACKAGE)
-	private boolean drawingCopy;
-
-	private final JPanel north = new JPanel();
-	private final JPanel periodHolder = new JPanel(new BorderLayout());
-	private final MaterialTabGroup tabGroup = new MaterialTabGroup();
-	final IconTextField searchField = new IconTextField();
-	private final JPanel band = new JPanel(new BorderLayout());
-	private final JLabel bandText = new JLabel();
-	private final JPanel display = new JPanel(new BorderLayout());
-	private final ScrollColumn canvas = new ScrollColumn();
-	private final JScrollPane scrollPane = new JScrollPane(canvas,
-		ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-	private JPanel subStrip;
-	private final Timer searchDebounce;
-	private final Timer ticker;
-
-	private final AtomicBoolean queued = new AtomicBoolean();
-	private boolean everShown;
-	private boolean stale;
-	private boolean keepScroll;
-	private Point lastPointer;
-	private long lastBuildNanos;
-	private long lastBuildAt;
 
 	ChroniclePanel(ChroniclePlugin plugin)
 	{
@@ -285,7 +282,6 @@ class ChroniclePanel extends PluginPanel
 		board.gatherHistory();
 		rebuild();
 	}
-
 
 	void shutdown()
 	{

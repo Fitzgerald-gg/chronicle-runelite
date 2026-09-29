@@ -20,6 +20,13 @@ import static chronicle.panel.StatRegistry.prettify;
 
 final class Feed
 {
+	private static final long[] TOTAL_LEVELS = {1000, 1500, 2000, 2200, 2277, 2376};
+	private static final long[] NINETY_NINES = {5, 10, 15, 20};
+	private static final long[] COMBAT_LEVELS = {100, 126};
+	private static final long[] SKILL_XP = {10_000_000L, 50_000_000L, 100_000_000L, 200_000_000L};
+	private static final long[] OVERALL_XP = {100_000_000L, 250_000_000L, 500_000_000L, 1_000_000_000L};
+	private static final long[] LOG_SLOTS = {500, 1000, 1500};
+
 	private Feed()
 	{
 	}
@@ -236,18 +243,6 @@ final class Feed
 		}
 		return rollFrom <= 0 ? sittings : Math.min(sittings, rollFrom);
 	}
-
-	private static final long[] TOTAL_LEVELS = {1000, 1500, 2000, 2200, 2277, 2376};
-
-	private static final long[] NINETY_NINES = {5, 10, 15, 20};
-
-	private static final long[] COMBAT_LEVELS = {100, 126};
-
-	private static final long[] SKILL_XP = {10_000_000L, 50_000_000L, 100_000_000L, 200_000_000L};
-
-	private static final long[] OVERALL_XP = {100_000_000L, 250_000_000L, 500_000_000L, 1_000_000_000L};
-
-	private static final long[] LOG_SLOTS = {500, 1000, 1500};
 
 	static Map<String, Long> standings(Baseline b, List<String> keys)
 	{
