@@ -112,20 +112,22 @@ public final class StatRegistry
 		{
 			return null;
 		}
-		String[] hit = matchedSuffix(key);
-		return hit != null ? hit[0] : null;
+		SkillSpec s = specBySuffix(key);
+		return s != null ? s.name : null;
 	}
 
-	private static String[] matchedSuffix(String key)
+	private static SkillSpec specBySuffix(String key)
 	{
-		for (SkillSpec s : SKILLS)
+		return SKILLS.stream().filter(s -> suffixIn(s, key) != null).findFirst().orElse(null);
+	}
+
+	private static String suffixIn(SkillSpec s, String key)
+	{
+		for (String suf : s.suffixes)
 		{
-			for (String suf : s.suffixes)
+			if (key.endsWith(suf) && !key.equals(suf))
 			{
-				if (key.endsWith(suf) && !key.equals(suf))
-				{
-					return new String[]{s.name, suf};
-				}
+				return suf;
 			}
 		}
 		return null;
@@ -303,8 +305,8 @@ public final class StatRegistry
 		{
 			return null;
 		}
-		String[] hit = matchedSuffix(key);
-		return hit != null ? hit[1] : null;
+		SkillSpec s = specBySuffix(key);
+		return s != null ? suffixIn(s, key) : null;
 	}
 
 	public static String suffixLabel(String suffix)

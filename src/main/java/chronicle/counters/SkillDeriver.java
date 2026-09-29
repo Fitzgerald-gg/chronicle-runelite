@@ -526,49 +526,63 @@ public class SkillDeriver
 		if (low.endsWith(" ashes") || low.equals("ashes"))
 		{
 			String tok = stripCamel(low, new String[]{" ashes"}, "");
-			int[] verb = prayerVerb(xp, PRAYER_BASE_XP.get(tok));
-			if (verb[0] == 2)
+			Rite rite = rite(xp, PRAYER_BASE_XP.get(tok));
+			if (rite.kind == Act.SACRIFICED)
 			{
-				return tok.isEmpty() ? new ArrayList<>() : pairs(tok + "AshesSacrificed", verb[1]);
+				return tok.isEmpty() ? new ArrayList<>() : pairs(tok + "AshesSacrificed", rite.count);
 			}
-			return verb[0] == 1 || xp == 0 ? typed("ashesScattered", 1, tok, "AshesScattered") : null;
+			return rite.kind == Act.PLAIN || xp == 0 ? typed("ashesScattered", 1, tok, "AshesScattered") : null;
 		}
 		if (low.endsWith(" bones") || low.equals("bones"))
 		{
 			String tok = stripCamel(low, new String[]{" bones"}, "normal");
-			int[] verb = prayerVerb(xp, PRAYER_BASE_XP.get(tok));
-			if (verb[0] == 2)
+			Rite rite = rite(xp, PRAYER_BASE_XP.get(tok));
+			if (rite.kind == Act.SACRIFICED)
 			{
-				return pairs(tok + "BonesSacrificed", verb[1]);
+				return pairs(tok + "BonesSacrificed", rite.count);
 			}
-			if (verb[0] == 3)
+			if (rite.kind == Act.OFFERED)
 			{
 				return pairs("bonesOffered", 1, tok + "BonesOffered", 1);
 			}
-			return verb[0] == 1 || xp == 0 ? pairs("bonesBuried", 1, tok + "BonesBuried", 1) : null;
+			return rite.kind == Act.PLAIN || xp == 0 ? pairs("bonesBuried", 1, tok + "BonesBuried", 1) : null;
 		}
 		return null;
 	}
 
-	private static int[] prayerVerb(int xp, String baseXp)
+	private enum Act
+	{
+		UNKNOWN, PLAIN, SACRIFICED, OFFERED
+	}
+
+	@RequiredArgsConstructor
+	private static final class Rite
+	{
+		static final Rite NONE = new Rite(Act.UNKNOWN, 0);
+
+		final Act kind;
+		final int count;
+	}
+
+	private static Rite rite(int xp, String baseXp)
 	{
 		if (baseXp == null || xp <= 0)
 		{
-			return new int[]{0, 0};
+			return Rite.NONE;
 		}
 		double base = Double.parseDouble(baseXp);
 		if (near(xp, base))
 		{
-			return new int[]{1, 1};
+			return new Rite(Act.PLAIN, 1);
 		}
 		for (int n = 1; n <= 3; n++)
 		{
 			if (near(xp, 3 * base * n))
 			{
-				return new int[]{2, n};
+				return new Rite(Act.SACRIFICED, n);
 			}
 		}
-		return near(xp, 3.5 * base) ? new int[]{3, 1} : new int[]{0, 0};
+		return near(xp, 3.5 * base) ? new Rite(Act.OFFERED, 1) : Rite.NONE;
 	}
 
 	private static boolean near(int xp, double v)

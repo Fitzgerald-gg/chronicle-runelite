@@ -6,6 +6,7 @@ package chronicle.counters;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Actor;
@@ -30,7 +31,7 @@ public class TimeStatTracker implements StatTracker
 	private final Client client;
 	private final XpSeen xpSeen = new XpSeen();
 	private final Map<String, Integer> pending = new HashMap<>();
-	private final Deque<int[]> drops = new ArrayDeque<>();
+	private final Deque<XpDrop> drops = new ArrayDeque<>();
 	private String lastNpc;
 	private int lastNpcTick = Integer.MIN_VALUE / 2;
 
@@ -40,13 +41,13 @@ public class TimeStatTracker implements StatTracker
 		int gain = xpSeen.gain(event);
 		if (gain > 0 && !fighting())
 		{
-			drops.addLast(new int[]{client.getTickCount(), event.getSkill().ordinal(), gain});
+			drops.addLast(new XpDrop(client.getTickCount(), event.getSkill(), gain));
 		}
 	}
 
 	private Skill leading(int now)
 	{
-		while (!drops.isEmpty() && now - drops.peekFirst()[0] > SKILL_GRACE)
+		while (!drops.isEmpty() && now - drops.peekFirst().tick > SKILL_GRACE)
 		{
 			drops.removeFirst();
 		}
@@ -54,17 +55,25 @@ public class TimeStatTracker implements StatTracker
 		{
 			return null;
 		}
-		long[] by = new long[Skill.values().length];
-		int top = -1;
-		for (int[] d : drops)
+		Map<Skill, Long> by = new EnumMap<>(Skill.class);
+		Skill top = null;
+		for (XpDrop d : drops)
 		{
-			by[d[1]] += d[2];
-			if (top < 0 || by[d[1]] > by[top])
+			long sum = by.merge(d.skill, (long) d.gain, Long::sum);
+			if (top == null || sum > by.get(top))
 			{
-				top = d[1];
+				top = d.skill;
 			}
 		}
-		return Skill.values()[top];
+		return top;
+	}
+
+	@RequiredArgsConstructor
+	private static final class XpDrop
+	{
+		final int tick;
+		final Skill skill;
+		final int gain;
 	}
 
 	private boolean fighting()
