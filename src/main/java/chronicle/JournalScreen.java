@@ -15,13 +15,10 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.TreeMap;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -29,12 +26,28 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import static chronicle.Feed.*;
 import static chronicle.Json.*;
-import static chronicle.Pictures.*;
-import static chronicle.Reference.*;
 import static chronicle.Ui.*;
 
 final class JournalScreen extends Screen
 {
+	private static final int PAGE = 60;
+	private static final int FEED_SCAN = 4000;
+	private static final Map<String, List<String>> LENSES = new java.util.LinkedHashMap<>();
+
+	static
+	{
+		LENSES.put("All", List.of());
+		LENSES.put("Log", List.of("COLLECTION"));
+		LENSES.put("Slayer", List.of("SLAYER"));
+		LENSES.put("Feats", List.of("COMBAT_ACHIEVEMENT", "QUEST", "DIARY", "CLUE", "PET", "LEVEL", "RECORD", "MILESTONE"));
+		LENSES.put("Deaths", List.of("DEATH"));
+		LENSES.put("Sessions", List.of("SESSION"));
+	}
+
+	String journalLens = "All";
+	YearMonth calendarMonth = YearMonth.now();
+	private int journalShown = PAGE;
+
 	JournalScreen(ChroniclePanel ui, Board board)
 	{
 		super(ui, board);
@@ -44,57 +57,39 @@ final class JournalScreen extends Screen
 	{
 		JPanel p = column();
 		addFrontispiece(p);
-
 		JPanel lenses = new JPanel(new GridLayout(0, 3, 3, 3));
 		lenses.setBackground(DARK);
-		for (String[] lens : JOURNAL_LENSES)
+		for (String lens : LENSES.keySet())
 		{
-			lenses.add(pill(lens[0], lens[0].equals(journalLens), 4, null, () ->
+			lenses.add(pill(lens, lens.equals(journalLens), 4, null, () ->
 			{
-				journalLens = lens[0];
-				journalShown = 60;
+				journalLens = lens;
+				journalShown = PAGE;
 				ui.rebuild();
 			}));
 		}
 		spaced(p, lenses);
-
-		Set<String> wanted = new HashSet<>();
-		for (String[] lens : JOURNAL_LENSES)
-		{
-			if (lens[0].equals(journalLens))
-			{
-				wanted.addAll(Arrays.asList(lens).subList(1, lens.length));
-			}
-		}
-		List<JsonObject> all = plugin.feedWithSitting(4000);
-		if (all.size() >= 4000 && !period.whole() && board.windowMs()[0] < oldestTs(all, false))
+		List<String> wanted = LENSES.getOrDefault(journalLens, List.of());
+		List<JsonObject> all = plugin.feedWithSitting(FEED_SCAN);
+		if (all.size() >= FEED_SCAN && !period.whole() && board.windowMs()[0] < oldestTs(all, false))
 		{
 			all = plugin.feedWithSitting(Board.JOURNAL_DEEP);
 		}
-		all = board.withMilestones(all);
 		List<JsonObject> feed = new ArrayList<>();
-		for (JsonObject e : all)
+		for (JsonObject e : board.withMilestones(all))
 		{
-			boolean kind = wanted.isEmpty() || wanted.contains(typeOf(e));
-			if (kind && board.insideWindow(filedAt(e)))
+			if ((wanted.isEmpty() || wanted.contains(typeOf(e))) && board.insideWindow(filedAt(e)))
 			{
 				feed.add(e);
 			}
 		}
 		feed.sort((a, b) -> dayOf(filedAt(b)).compareTo(dayOf(filedAt(a))));
-		if (feed.isEmpty() && !period.whole())
-		{
-			p.add(note(board.inside("No " + ("All".equals(journalLens) ? "milestones" : low(journalLens)))));
-			return p;
-		}
 		if (feed.isEmpty())
 		{
-			return noted(p, "All".equals(journalLens)
-				? "Milestones (pets, log slots, tasks, quests, deaths) are noted "
-					+ "here as they happen."
+			return noted(p, !period.whole() ? board.inside("No " + ("All".equals(journalLens) ? "milestones" : low(journalLens)))
+				: "All".equals(journalLens) ? "Milestones (pets, log slots, tasks, quests, deaths) are noted here as they happen."
 				: "Nothing of that kind on the record yet.");
 		}
-
 		String lastDay = null;
 		for (JsonObject e : firstN(feed, journalShown))
 		{
@@ -110,10 +105,7 @@ final class JournalScreen extends Screen
 				String entry = board.dayEntry(dayOf(ts));
 				if (entry != null)
 				{
-					for (String line : wrapClauses(entry, boardRowRoom()))
-					{
-						p.add(ghostRow(line, ""));
-					}
+					wrapClauses(entry, boardRowRoom()).forEach(line -> p.add(ghostRow(line, "")));
 				}
 			}
 			if ("SESSION".equals(typeOf(e)))
@@ -133,47 +125,40 @@ final class JournalScreen extends Screen
 			p.add(vgap(6));
 			p.add(moreRow("Read further back", () ->
 			{
-				journalShown += 60;
+				journalShown += PAGE;
 				ui.rebuildInPlace();
 			}));
 		}
 		return p;
 	}
 
-	void addFrontispiece(JPanel p)
+	private void addFrontispiece(JPanel p)
 	{
 		String rsn = plugin.displayRsn();
-		JPanel plate = card(rsn != null && !rsn.isEmpty()
-			? "The journal of " + rsn : "The journal");
-
+		JPanel plate = card(rsn != null && !rsn.isEmpty() ? "The journal of " + rsn : "The journal");
 		long since = plugin.keptSince();
-		TreeMap<LocalDate, Baseline> spine = board.historySpine;
 		if (since > 0)
 		{
-			plate.add(row("Kept since",
-				day(since), ACCENT));
+			plate.add(row("Kept since", day(since), ACCENT));
 		}
+		TreeMap<LocalDate, Baseline> spine = board.historySpine;
 		if (spine != null && !spine.isEmpty())
 		{
 			JPanel days = row("Days written", fmt(spine.size()));
 			days.setToolTipText("The days, as a calendar");
-			link(days, ui::openCalendar);
-			plate.add(days);
+			plate.add(link(days, ui::openCalendar));
 		}
-		Map<String, long[]> sheet = plugin.skillSheet();
-		long[] overall = sheet.get("overall");
+		long[] overall = plugin.skillSheet().get("overall");
 		int combat = store.combatLevel();
 		if (overall != null && overall[0] > 0)
 		{
-			plate.add(row("Total level", fmt(overall[0])
-				+ (combat > 0 ? " · combat " + combat : "")));
+			plate.add(row("Total level", fmt(overall[0]) + (combat > 0 ? " · combat " + combat : "")));
 		}
-		int[] logStanding = board.clogStanding();
+		int[] log = board.clogStanding();
 		int fin = plugin.clogFinished();
-		if (logStanding != null)
+		if (log != null)
 		{
-			plate.add(row("Collection log",
-				fmt(logStanding[0]) + " / " + fmt(logStanding[1])));
+			plate.add(row("Collection log", fmt(log[0]) + " / " + fmt(log[1])));
 		}
 		else if (fin > 0)
 		{
@@ -183,12 +168,10 @@ final class JournalScreen extends Screen
 		if (!marks.isEmpty())
 		{
 			JsonObject last = marks.get(0);
-			plate.add(row("Last milestone", str(last.getAsJsonObject("data"), "text", "")
-				+ " · " + day(asLong(last.get("ts")))));
+			plate.add(row("Last milestone", str(obj(last, "data"), "text", "") + " · " + day(asLong(last.get("ts")))));
 		}
 		plate.add(moreRow("what the journal holds", ui::openInfo));
 		p.add(plate);
-
 		String note = frontispieceNote();
 		if (note != null)
 		{
@@ -197,63 +180,28 @@ final class JournalScreen extends Screen
 		p.add(vgap(6));
 	}
 
-	String frontispieceNote()
+	private String frontispieceNote()
 	{
-		if (ui.detail.grinds() != null)
+		for (GrindBook.GrindRow g : ui.detail.grinds() == null ? List.<GrindBook.GrindRow>of() : ui.detail.grinds())
 		{
-			for (GrindBook.GrindRow g : ui.detail.grinds())
+			if (g.percentileDry >= 90)
 			{
-				if (g.percentileDry >= 90)
-				{
-					return "still owed a " + low(g.item)
-						+ " at " + fmt(g.kc) + " " + low(g.boss);
-				}
+				return "still owed a " + low(g.item) + " at " + fmt(g.kc) + " " + low(g.boss);
 			}
 		}
 		List<JsonObject> recent = store.feedNewest(2);
-		if (recent.size() == 2)
-		{
-			long days = (asLong(recent.get(0).get("ts")) - asLong(recent.get(1).get("ts"))) / 86_400_000L;
-			if (days >= 30)
-			{
-				return "resumed after " + days + " days away";
-			}
-		}
-		return null;
+		long days = recent.size() < 2 ? 0 : (asLong(recent.get(0).get("ts")) - asLong(recent.get(1).get("ts"))) / 86_400_000L;
+		return days >= 30 ? "resumed after " + days + " days away" : null;
 	}
-
-	static final String[][] JOURNAL_LENSES = {
-		{"All"},
-		{"Log", "COLLECTION"},
-		{"Slayer", "SLAYER"},
-		{"Feats", "COMBAT_ACHIEVEMENT", "QUEST", "DIARY", "CLUE", "PET", "LEVEL", "RECORD",
-			"MILESTONE"},
-		{"Deaths", "DEATH"},
-		{"Sessions", "SESSION"},
-	};
-
-	String journalLens = "All";
-
-	int journalShown = 60;
 
 	JPanel buildCalendar()
 	{
 		JPanel p = ui.backPage();
 		JPanel head = stepStrip();
-		JLabel title = styled(new JLabel(MONTH_YEAR.format(calendarMonth.atDay(1)
-			.atStartOfDay(ZoneId.systemDefault()).toInstant()).toUpperCase(Locale.ROOT), JLabel.CENTER),
-			FontManager.getRunescapeFont(), ACCENT);
-		arrows(head, () ->
-		{
-			calendarMonth = calendarMonth.minusMonths(1);
-			ui.rebuildInPlace();
-		}, calendarMonth.isBefore(YearMonth.now()), () ->
-		{
-			calendarMonth = calendarMonth.plusMonths(1);
-			ui.rebuildInPlace();
-		}, title);
+		JLabel title = styled(new JLabel(MONTH_YEAR.format(calendarMonth.atDay(1).atStartOfDay(ZoneId.systemDefault()).toInstant())
+			.toUpperCase(Locale.ROOT), JLabel.CENTER), FontManager.getRunescapeFont(), ACCENT);
+		arrows(head, () -> stepMonth(-1), calendarMonth.isBefore(YearMonth.now()), () -> stepMonth(1), title);
 		spaced(p, head, 4);
-
 		JPanel grid = new JPanel(new GridLayout(0, 7, 2, 2));
 		grid.setBackground(DARK);
 		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -262,60 +210,25 @@ final class JournalScreen extends Screen
 			grid.add(styled(new JLabel(d, JLabel.CENTER), small(), DIM));
 		}
 		Map<LocalDate, long[]> played = board.daysPlayed();
-		TreeMap<LocalDate, Baseline> spine = board.historySpine;
 		long most = 1;
 		for (int d = 1; d <= calendarMonth.lengthOfMonth(); d++)
 		{
-			long[] t = played.get(calendarMonth.atDay(d));
-			most = Math.max(most, t == null ? 0 : t[0]);
+			most = Math.max(most, played.getOrDefault(calendarMonth.atDay(d), new long[1])[0]);
 		}
-		int lead = calendarMonth.atDay(1).getDayOfWeek().getValue() - 1;
-		for (int i = 0; i < lead; i++)
+		for (int i = 1; i < calendarMonth.atDay(1).getDayOfWeek().getValue(); i++)
 		{
 			grid.add(blankCell());
 		}
-		long monthMinutes = 0;
+		long minutes = 0;
 		int written = 0;
-		LocalDate today = LocalDate.now();
 		for (int d = 1; d <= calendarMonth.lengthOfMonth(); d++)
 		{
 			LocalDate day = calendarMonth.atDay(d);
 			long[] t = played.get(day);
-			boolean onSpine = spine != null && spine.containsKey(day);
-			boolean future = day.isAfter(today);
-			JPanel cell = new JPanel(new BorderLayout());
-			cell.setPreferredSize(new Dimension(26, 24));
-			JLabel n = new JLabel(String.valueOf(d), JLabel.CENTER);
-			n.setFont(small());
-			if (t != null && t[0] > 0)
-			{
-				monthMinutes += t[0];
-				written++;
-				float weight = 0.25f + 0.75f * Math.min(1f, (float) t[0] / most);
-				cell.setBackground(wash(ACCENT, weight));
-				n.setForeground(Color.WHITE);
-				cell.setToolTipText(hoursMinutes(t[0]) + " · " + count(t[1], "sitting"));
-			}
-			else if (onSpine || (t != null && t[1] > 0))
-			{
-				written++;
-				cell.setBackground(wash(ACCENT, 0.18f));
-				n.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-				cell.setToolTipText("Written");
-			}
-			else
-			{
-				cell.setBackground(DARKER);
-				n.setForeground(future ? DARK.brighter()
-					: DIM);
-			}
-			if (!future && (onSpine || t != null))
-			{
-				final long ts = noon(day);
-				link(cell, () -> ui.openJournalOn(ts));
-			}
-			cell.add(n, BorderLayout.CENTER);
-			grid.add(cell);
+			boolean onSpine = board.historySpine != null && board.historySpine.containsKey(day);
+			minutes += t != null ? t[0] : 0;
+			written += t != null && t[0] > 0 || onSpine || t != null && t[1] > 0 ? 1 : 0;
+			grid.add(dayCell(day, t, onSpine, most));
 		}
 		while (grid.getComponentCount() % 7 != 0)
 		{
@@ -323,12 +236,49 @@ final class JournalScreen extends Screen
 		}
 		spaced(p, grid, 4);
 		p.add(ghostRow(written == 0 ? "nothing written this month"
-			: count(written, "day") + " written"
-			+ (monthMinutes > 0 ? " · " + hoursMinutes(monthMinutes) : ""), ""));
+			: count(written, "day") + " written" + (minutes > 0 ? " · " + hoursMinutes(minutes) : ""), ""));
 		return p;
 	}
 
-	static JPanel blankCell()
+	private void stepMonth(int by)
+	{
+		calendarMonth = calendarMonth.plusMonths(by);
+		ui.rebuildInPlace();
+	}
+
+	private JPanel dayCell(LocalDate day, long[] t, boolean onSpine, long most)
+	{
+		boolean future = day.isAfter(LocalDate.now());
+		JPanel cell = new JPanel(new BorderLayout());
+		cell.setPreferredSize(new Dimension(26, 24));
+		JLabel n = new JLabel(String.valueOf(day.getDayOfMonth()), JLabel.CENTER);
+		n.setFont(small());
+		if (t != null && t[0] > 0)
+		{
+			cell.setBackground(wash(ACCENT, 0.25f + 0.75f * Math.min(1f, (float) t[0] / most)));
+			n.setForeground(Color.WHITE);
+			cell.setToolTipText(hoursMinutes(t[0]) + " · " + count(t[1], "sitting"));
+		}
+		else if (onSpine || t != null && t[1] > 0)
+		{
+			cell.setBackground(wash(ACCENT, 0.18f));
+			n.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+			cell.setToolTipText("Written");
+		}
+		else
+		{
+			cell.setBackground(DARKER);
+			n.setForeground(future ? DARK.brighter() : DIM);
+		}
+		if (!future && (onSpine || t != null))
+		{
+			link(cell, () -> ui.openJournalOn(noon(day)));
+		}
+		cell.add(n, BorderLayout.CENTER);
+		return cell;
+	}
+
+	private static JPanel blankCell()
 	{
 		JPanel c = new JPanel();
 		c.setBackground(DARK);
@@ -336,88 +286,28 @@ final class JournalScreen extends Screen
 		return c;
 	}
 
-	YearMonth calendarMonth = YearMonth.now();
-
 	JPanel buildRecords()
 	{
 		JPanel p = ui.backPage();
 		JPanel book = card("Records");
 		int held = book.getComponentCount();
-
-		long[][] best = {{0, 0}, {0, 0}};
+		long[][] sitting = {{0, 0}, {0, 0}};
 		for (JsonObject e : store.feedNewest(Board.FEED_SCAN_DEEP))
 		{
 			if ("SESSION".equals(typeOf(e)))
 			{
-				rank(best, sessionMinutes(e), sittingStart(e));
+				rank(sitting, sessionMinutes(e), sittingStart(e));
 			}
 		}
-		if (best[0][0] > 0)
+		if (sitting[0][0] > 0)
 		{
-			recordRow(book, "Longest sitting", hoursMinutes(best[0][0]), best[0][1],
-				best[1][0] > 0 ? "Was " + hoursMinutes(best[1][0]) + " · " + dated(best[1][1]) : null);
+			record(book, "Longest sitting", hoursMinutes(sitting[0][0]), sitting[0][1],
+				sitting[1][0] > 0 ? "Was " + hoursMinutes(sitting[1][0]) + " · " + dated(sitting[1][1]) : null);
 		}
-
-		TreeMap<LocalDate, Baseline> spine = board.historySpine;
-		if (spine != null && spine.size() > 1)
+		if (board.historySpine != null && board.historySpine.size() > 1)
 		{
-			long[][] bigXp = {{0, 0}, {0, 0}};
-			String bigSkill = null;
-			long[][] bigKills = {{0, 0}, {0, 0}};
-			int run = 0;
-			int longest = 0;
-			LocalDate runEnd = null;
-			LocalDate prevDay = null;
-			Entry<LocalDate, Baseline> before = null;
-			for (Entry<LocalDate, Baseline> day : spine.entrySet())
-			{
-				run = prevDay != null && prevDay.plusDays(1).equals(day.getKey()) ? run + 1 : 1;
-				if (run > longest)
-				{
-					longest = run;
-					runEnd = day.getKey();
-				}
-				prevDay = day.getKey();
-				if (before != null)
-				{
-					long ts = noon(day.getKey());
-					Object[] xp = board.dayXp(day.getKey());
-					if (rank(bigXp, xp == null ? 0 : (Long) xp[0], ts))
-					{
-						bigSkill = (String) xp[1];
-					}
-					long kills = 0;
-					for (Entry<String, Long> k : day.getValue().kcs.entrySet())
-					{
-						Long was = before.getValue().kcs.get(k.getKey());
-						if (was != null && k.getValue() > was)
-						{
-							kills += k.getValue() - was;
-						}
-					}
-					rank(bigKills, kills, ts);
-				}
-				before = day;
-			}
-			if (bigXp[0][0] > 0)
-			{
-				recordRow(book, "Biggest day", "+" + gp(bigXp[0][0]) + " xp", bigXp[0][1],
-					(bigSkill != null ? "Most in " + bigSkill : "")
-						+ (bigXp[1][0] > 0 ? (bigSkill != null ? " · " : "") + "was +" + gp(bigXp[1][0])
-						+ " · " + dated(bigXp[1][1]) : ""));
-			}
-			if (bigKills[0][0] > 0)
-			{
-				recordRow(book, "Most kills in a day", fmt(bigKills[0][0]), bigKills[0][1],
-					bigKills[1][0] > 0 ? "Was " + fmt(bigKills[1][0]) + " · " + dated(bigKills[1][1]) : null);
-			}
-			if (longest > 1 && runEnd != null)
-			{
-				recordRow(book, "Longest run of days written",
-					fmt(longest) + " days", noon(runEnd), null);
-			}
+			spineRecords(book, board.historySpine);
 		}
-
 		long[][] rich = {{0, 0}, {0, 0}};
 		long[][] busy = {{0, 0}, {0, 0}};
 		for (Entry<String, long[]> d : board.dayTotals().entrySet())
@@ -431,23 +321,19 @@ final class JournalScreen extends Screen
 			{
 				continue;
 			}
-			long[] t = d.getValue();
-			rank(rich, t[1], ts, t[0]);
-			rank(busy, t[0], ts, t[1]);
+			rank(rich, d.getValue()[1], ts, d.getValue()[0]);
+			rank(busy, d.getValue()[0], ts, d.getValue()[1]);
 		}
 		if (rich[0][0] > 0)
 		{
-			recordRow(book, "Richest day", gps(rich[0][0]), rich[0][1],
-				count(rich[0][2], "drop") + (rich[1][0] > 0 ? " · was " + gp(rich[1][0]) + " · "
-					+ dated(rich[1][1]) : ""));
+			record(book, "Richest day", gps(rich[0][0]), rich[0][1], count(rich[0][2], "drop")
+				+ (rich[1][0] > 0 ? " · was " + gp(rich[1][0]) + " · " + dated(rich[1][1]) : ""));
 		}
 		if (busy[0][0] > 0)
 		{
-			recordRow(book, "Most drops in a day", fmt(busy[0][0]), busy[0][1],
-				gps(busy[0][2]) + (busy[1][0] > 0 ? " · was " + fmt(busy[1][0]) + " · "
-					+ dated(busy[1][1]) : ""));
+			record(book, "Most drops in a day", fmt(busy[0][0]), busy[0][1], gps(busy[0][2])
+				+ (busy[1][0] > 0 ? " · was " + fmt(busy[1][0]) + " · " + dated(busy[1][1]) : ""));
 		}
-
 		long hit = board.counters().getOrDefault("highestHit", 0L);
 		if (hit > 0)
 		{
@@ -461,7 +347,58 @@ final class JournalScreen extends Screen
 		return p;
 	}
 
-	void recordRow(JPanel book, String left, String figure, long ts, String hover)
+	private void spineRecords(JPanel book, TreeMap<LocalDate, Baseline> spine)
+	{
+		long[][] xp = {{0, 0}, {0, 0}};
+		long[][] kills = {{0, 0}, {0, 0}};
+		String xpSkill = null;
+		int run = 0;
+		int longest = 0;
+		LocalDate runEnd = null;
+		Entry<LocalDate, Baseline> before = null;
+		for (Entry<LocalDate, Baseline> day : spine.entrySet())
+		{
+			run = before != null && before.getKey().plusDays(1).equals(day.getKey()) ? run + 1 : 1;
+			if (run > longest)
+			{
+				longest = run;
+				runEnd = day.getKey();
+			}
+			if (before != null)
+			{
+				long ts = noon(day.getKey());
+				Object[] gained = board.dayXp(day.getKey());
+				if (rank(xp, gained == null ? 0 : (Long) gained[0], ts))
+				{
+					xpSkill = (String) gained[1];
+				}
+				long killed = 0;
+				for (Entry<String, Long> k : day.getValue().kcs.entrySet())
+				{
+					Long was = before.getValue().kcs.get(k.getKey());
+					killed += was != null && k.getValue() > was ? k.getValue() - was : 0;
+				}
+				rank(kills, killed, ts);
+			}
+			before = day;
+		}
+		if (xp[0][0] > 0)
+		{
+			record(book, "Biggest day", "+" + gp(xp[0][0]) + " xp", xp[0][1], (xpSkill != null ? "Most in " + xpSkill : "")
+				+ (xp[1][0] > 0 ? (xpSkill != null ? " · " : "") + "was +" + gp(xp[1][0]) + " · " + dated(xp[1][1]) : ""));
+		}
+		if (kills[0][0] > 0)
+		{
+			record(book, "Most kills in a day", fmt(kills[0][0]), kills[0][1],
+				kills[1][0] > 0 ? "Was " + fmt(kills[1][0]) + " · " + dated(kills[1][1]) : null);
+		}
+		if (longest > 1)
+		{
+			record(book, "Longest run of days written", fmt(longest) + " days", noon(runEnd), null);
+		}
+	}
+
+	private static void record(JPanel book, String left, String figure, long ts, String hover)
 	{
 		JPanel r = row(left, figure + " · " + dated(ts));
 		if (hover != null && !hover.isEmpty())
@@ -471,7 +408,7 @@ final class JournalScreen extends Screen
 		book.add(r);
 	}
 
-	static boolean rank(long[][] top, long... e)
+	private static boolean rank(long[][] top, long... e)
 	{
 		if (e[0] > top[0][0])
 		{
@@ -491,30 +428,20 @@ final class JournalScreen extends Screen
 		JPanel p = column();
 		spaced(p, ui.backRow(() -> ui.copyPage(this::buildInfo)), 4);
 		Map<String, Long> f = store.journalFacts();
-
-		JPanel loot = facts(card("Loot"), f, ACCENT, "Sources", "sources",
-			"Item rows", "itemRows", "Loot events", "lootEvents");
+		JPanel loot = facts(card("Loot"), f, ACCENT, "Sources", "sources", "Item rows", "itemRows", "Loot events", "lootEvents");
 		loot.add(worthRow(f.getOrDefault("lootWorth", 0L)));
 		facts(loot, f, null, "Dated days", "lootDays");
 		loot.add(row("Left behind", fmt(f.getOrDefault("untakenItems", 0L)) + " items, "
 			+ fmt(f.getOrDefault("untakenSources", 0L)) + " sources"));
 		spaced(p, loot);
-
-		spaced(p, facts(card("Slayer"), f, ACCENT, "Assignments", "tasks",
-			"Closed", "tasksClosed"));
-
+		spaced(p, facts(card("Slayer"), f, ACCENT, "Assignments", "tasks", "Closed", "tasksClosed"));
 		JPanel log = card("Collection log");
-		long availKnown = f.getOrDefault("clogAvailable", 0L);
-		log.add(row("Slots filled", fmt(f.getOrDefault("clogSlots", 0L))
-			+ (availKnown > 0 ? " of " + fmt(availKnown) : ""), ACCENT));
-		spaced(p, facts(log, f, null, "Items named", "clogItems",
-			"Pages with a count", "clogPages", "Kill Log lines", "killLogLines",
-			"Labelled kill lines", "pageKillLines"));
-
-		spaced(p, facts(card("Counted"), f, ACCENT, "Trackers", "trackers",
-			"Skills", "skills", "Feed entries", "feed", "Chat kill counts", "chatCounts",
-			"Anchored counts", "anchors"));
-
+		long available = f.getOrDefault("clogAvailable", 0L);
+		log.add(row("Slots filled", fmt(f.getOrDefault("clogSlots", 0L)) + (available > 0 ? " of " + fmt(available) : ""), ACCENT));
+		spaced(p, facts(log, f, null, "Items named", "clogItems", "Pages with a count", "clogPages",
+			"Kill Log lines", "killLogLines", "Labelled kill lines", "pageKillLines"));
+		spaced(p, facts(card("Counted"), f, ACCENT, "Trackers", "trackers", "Skills", "skills", "Feed entries", "feed",
+			"Chat kill counts", "chatCounts", "Anchored counts", "anchors"));
 		JPanel file = card("On disk");
 		file.add(row("Journal", bytes(f.getOrDefault("journalBytes", 0L)), ACCENT));
 		file.add(row("History spine", bytes(f.getOrDefault("spineBytes", 0L))));
