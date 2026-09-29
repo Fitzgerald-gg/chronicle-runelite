@@ -506,7 +506,7 @@ final class Summary
 			}
 		}
 		Set<String> bests = new HashSet<>();
-		for (JsonObject e : build.plugin.feedNewest(20_000))
+		for (JsonObject e : build.feed.all())
 		{
 			if (!build.period().inside(safeLong(e.get("ts"))))
 			{
@@ -981,7 +981,7 @@ final class Summary
 		boolean live = !pEnd.isBefore(LocalDate.now());
 		b.live = live;
 		TreeMap<LocalDate, Baseline> hist = build.spine();
-		List<JsonObject> feed = build.historyFeed();
+		List<JsonObject> feed = build.feed.all();
 		SlayerJourney journey = build.journey();
 
 		Entry<LocalDate, Baseline> before =

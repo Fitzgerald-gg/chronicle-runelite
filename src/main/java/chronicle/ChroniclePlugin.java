@@ -841,20 +841,6 @@ public class ChroniclePlugin extends Plugin
 		return localStore.feedNewest(n);
 	}
 
-	List<JsonObject> feedWithSitting(int n)
-	{
-		List<JsonObject> kept = localStore.feedNewest(n);
-		JsonObject live = liveSessionLine();
-		if (live == null)
-		{
-			return kept;
-		}
-		List<JsonObject> out = new ArrayList<>(kept.size() + 1);
-		out.add(live);
-		out.addAll(kept);
-		return out;
-	}
-
 	int sessionLoots()
 	{
 		return localStore.sessionLoots();

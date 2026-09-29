@@ -132,7 +132,7 @@ final class Standings
 			}
 		}
 		long possible = 0;
-		for (JsonObject e : build.feed.deep())
+		for (JsonObject e : build.feed.all())
 		{
 			JsonObject data = obj(e, "data");
 			if (possible == 0 && "COMBAT_ACHIEVEMENT".equals(Feed.typeOf(e)) && data.has("totalPossiblePoints"))

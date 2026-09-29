@@ -1368,16 +1368,9 @@ public class PanelPreviewTest
 		JsonObject liveSitting;
 
 		@Override
-		java.util.List<JsonObject> feedWithSitting(int n)
+		JsonObject liveSessionLine()
 		{
-			if (liveSitting == null)
-			{
-				return feedNewest(n);
-			}
-			java.util.List<JsonObject> out = new java.util.ArrayList<>();
-			out.add(liveSitting);
-			out.addAll(feedNewest(n));
-			return out;
+			return liveSitting;
 		}
 
 		@Override

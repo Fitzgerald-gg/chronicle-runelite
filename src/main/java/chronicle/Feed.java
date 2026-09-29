@@ -47,18 +47,31 @@ import static chronicle.panel.StatRegistry.prettify;
 @RequiredArgsConstructor
 final class Feed
 {
-	static final int DEEP = 4000;
-
 	private final Build build;
-	private List<JsonObject> deep;
+	private List<JsonObject> all;
+	private List<JsonObject> withSitting;
 
-	List<JsonObject> deep()
+	List<JsonObject> all()
 	{
-		if (deep == null)
+		if (all == null)
 		{
-			deep = build.plugin.feedNewest(DEEP);
+			all = build.plugin.feedNewest(Integer.MAX_VALUE);
 		}
-		return deep;
+		return all;
+	}
+
+	List<JsonObject> withSitting()
+	{
+		if (withSitting == null)
+		{
+			JsonObject live = build.plugin.liveSessionLine();
+			withSitting = live == null ? all() : new ArrayList<>(all());
+			if (live != null)
+			{
+				withSitting.add(0, live);
+			}
+		}
+		return withSitting;
 	}
 
 	static String typeOf(JsonObject e)
@@ -220,7 +233,7 @@ final class Feed
 		if (landed == null)
 		{
 			landed = new LinkedHashMap<>();
-			for (JsonObject e : deep())
+			for (JsonObject e : all())
 			{
 				if (!"COLLECTION".equals(typeOf(e)))
 				{
@@ -244,7 +257,7 @@ final class Feed
 		if (records == null)
 		{
 			records = new LinkedHashMap<>();
-			for (JsonObject e : deep())
+			for (JsonObject e : all())
 			{
 				if (!"RECORD".equals(typeOf(e)))
 				{
@@ -270,7 +283,7 @@ final class Feed
 			days = new LinkedHashMap<>();
 			daySkills = new LinkedHashMap<>();
 			crossedDays = new HashSet<>();
-			for (JsonObject e : build.plugin.feedWithSitting(DEEP))
+			for (JsonObject e : withSitting())
 			{
 				if (!"SESSION".equals(typeOf(e)))
 				{
@@ -411,7 +424,7 @@ final class Feed
 		if (types == null)
 		{
 			types = new LinkedHashMap<>();
-			for (JsonObject e : deep())
+			for (JsonObject e : all())
 			{
 				if (build.period().inside(safeLong(e.get("ts"))))
 				{

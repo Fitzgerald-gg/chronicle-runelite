@@ -302,7 +302,6 @@ public class HistoryProgressCardTest
 		ChroniclePanel p = holder[0];
 		awaitGather(p);
 		set(p, "historySpine", stub.history);
-		set(p, "historyFeed", new ArrayList<>(stub.feed));
 		set(p, "historyFeedTs", stub.feed.isEmpty() ? 0L : stub.feed.get(0).get("ts").getAsLong());
 		set(p, "historyDay", LocalDate.now());
 		set(p, "histGranularity", "Week");

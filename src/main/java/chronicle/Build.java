@@ -27,7 +27,6 @@ final class Build
 	final ChroniclePlugin plugin;
 	private final Supplier<Period> period;
 	private final Supplier<TreeMap<LocalDate, Baseline>> spine;
-	private final Supplier<List<JsonObject>> historyFeed;
 	private final Supplier<LocalStore.SlayerJourney> journey;
 	private final Runnable askHistory;
 	final Kills kills = new Kills(this);
@@ -47,19 +46,13 @@ final class Build
 	private Map<String, long[]> taskItems;
 
 	Build(ChroniclePlugin plugin, Supplier<Period> period, Supplier<TreeMap<LocalDate, Baseline>> spine,
-		Supplier<List<JsonObject>> historyFeed, Supplier<LocalStore.SlayerJourney> journey, Runnable askHistory)
+		Supplier<LocalStore.SlayerJourney> journey, Runnable askHistory)
 	{
 		this.plugin = plugin;
 		this.period = period;
 		this.spine = spine;
-		this.historyFeed = historyFeed;
 		this.journey = journey;
 		this.askHistory = askHistory;
-	}
-
-	List<JsonObject> historyFeed()
-	{
-		return historyFeed.get();
 	}
 
 	LocalStore.SlayerJourney journey()

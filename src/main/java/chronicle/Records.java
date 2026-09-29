@@ -61,7 +61,7 @@ final class Records
 	private void read(Build build)
 	{
 		long[][] best = {{0, 0}, {0, 0}};
-		for (JsonObject e : build.feed.deep())
+		for (JsonObject e : build.feed.all())
 		{
 			if ("SESSION".equals(typeOf(e)))
 			{

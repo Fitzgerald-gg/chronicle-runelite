@@ -136,7 +136,6 @@ import static chronicle.Feed.feedName;
 import static chronicle.Feed.filedAt;
 import static chronicle.Feed.most;
 import static chronicle.Feed.newestTs;
-import static chronicle.Feed.oldestTs;
 import static chronicle.Feed.typeOf;
 import static chronicle.Json.getIgnoreCase;
 import static chronicle.Json.has;
@@ -1445,7 +1444,7 @@ class ChroniclePanel extends PluginPanel
 		Map<String, Long> levels = new LinkedHashMap<>();
 		List<String> slots = new ArrayList<>();
 		List<String> pets = new ArrayList<>();
-		for (JsonObject e : build.feed.deep())
+		for (JsonObject e : build.feed.all())
 		{
 			if (safeLong(e.get("ts")) < since)
 			{
@@ -1940,7 +1939,6 @@ class ChroniclePanel extends PluginPanel
 		grindsCache = null;
 		grindsFetching = false;
 		historySpine = null;
-		historyFeed = new ArrayList<>();
 		historyJourney = null;
 		historyDay = null;
 		historyFeedTs = 0;
@@ -3553,7 +3551,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel logInWindow(JPanel p)
 	{
 		List<JsonObject> got = new ArrayList<>();
-		for (JsonObject e : build.feed.deep())
+		for (JsonObject e : build.feed.all())
 		{
 			if ("COLLECTION".equals(typeOf(e)) && window().inside(safeLong(e.get("ts"))))
 			{
@@ -4285,7 +4283,7 @@ class ChroniclePanel extends PluginPanel
 			return;
 		}
 		Map<String, long[]> killers = new LinkedHashMap<>();
-		for (JsonObject e : build.feed.deep())
+		for (JsonObject e : build.feed.all())
 		{
 			long ts = safeLong(e.get("ts"));
 			if (!"DEATH".equals(typeOf(e)) || !window().inside(ts))
@@ -4639,10 +4637,8 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	private static final int HISTORY_FEED_SCAN = 2000;
 
 	private TreeMap<LocalDate, Baseline> historySpine;
-	private List<JsonObject> historyFeed = new ArrayList<>();
 	private SlayerJourney historyJourney;
 	private LocalDate historyDay;
 	private long historyFeedTs;
@@ -4653,7 +4649,7 @@ class ChroniclePanel extends PluginPanel
 	private static final class HistoryData
 	{
 		final TreeMap<LocalDate, Baseline> spine;
-		final List<JsonObject> feed;
+		final long feedTs;
 		final SlayerJourney journey;
 		final LocalDate day;
 	}
@@ -4672,8 +4668,7 @@ class ChroniclePanel extends PluginPanel
 			protected HistoryData doInBackground()
 			{
 				return new HistoryData(plugin.historyBaselines(),
-					plugin.feedNewest(HISTORY_FEED_SCAN), plugin.slayerJourney(),
-					LocalDate.now());
+					newestTs(plugin.feedNewest(1)), plugin.slayerJourney(), LocalDate.now());
 			}
 
 			@Override
@@ -4694,10 +4689,9 @@ class ChroniclePanel extends PluginPanel
 					return;
 				}
 				historySpine = d.spine;
-				historyFeed = d.feed;
 				historyJourney = d.journey;
 				historyDay = d.day;
-				historyFeedTs = newestTs(d.feed);
+				historyFeedTs = d.feedTs;
 				rebuildInPlace();
 			}
 		}.execute();
@@ -5807,7 +5801,7 @@ class ChroniclePanel extends PluginPanel
 
 	private void freshBuild()
 	{
-		build = new Build(plugin, this::window, () -> historySpine, () -> historyFeed, () -> historyJourney,
+		build = new Build(plugin, this::window, () -> historySpine, () -> historyJourney,
 			this::gatherHistory);
 	}
 
@@ -6405,7 +6399,7 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		Map<String, String> firstNamed = new LinkedHashMap<>();
-		for (JsonObject e : build.feed.deep())
+		for (JsonObject e : build.feed.all())
 		{
 			String name = feedName(e);
 			if (name != null && window().inside(safeLong(e.get("ts"))))
@@ -6641,11 +6635,7 @@ class ChroniclePanel extends PluginPanel
 				wanted.addAll(Arrays.asList(lens).subList(1, lens.length));
 			}
 		}
-		List<JsonObject> all = plugin.feedWithSitting(4000);
-		if (all.size() >= 4000 && !wholeRecord() && window().ms()[0] < oldestTs(all, false))
-		{
-			all = plugin.feedWithSitting(Search.JOURNAL_DEEP);
-		}
+		List<JsonObject> all = build.feed.withSitting();
 		all = build.feed.withMilestones(all);
 		List<JsonObject> feed = new ArrayList<>();
 		for (JsonObject e : all)

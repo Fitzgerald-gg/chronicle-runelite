@@ -80,7 +80,7 @@ public class ExampleExportTest
 		Map<String, String> m = new LinkedHashMap<>();
 		for (String n : new String[]{"build", "aboveBoard", "bandFixes",
 			"grindsCache", "journeyCache", "consumVals",
-			"resourcesDropped", "historySpine", "historyFeed", "historyJourney",
+			"resourcesDropped", "historySpine", "historyJourney",
 			"historyDay", "historyFeedTs", "historyEpoch", "periodFrom", "periodTo", "searchFirst", "periodTip", "measuredSince"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
