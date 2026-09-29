@@ -128,6 +128,7 @@ class ChroniclePanel extends PluginPanel
 	final Art art;
 	final HomeScreen home;
 	final StandingScreen standing;
+	final PagesScreen pages;
 	final SlayerScreen slayer;
 	final LootScreen loot;
 	final DetailScreen detail;
@@ -175,6 +176,7 @@ class ChroniclePanel extends PluginPanel
 		art = new Art(plugin);
 		home = new HomeScreen(this, board);
 		standing = new StandingScreen(this, board);
+		pages = new PagesScreen(this, board);
 		slayer = new SlayerScreen(this, board);
 		loot = new LootScreen(this, board);
 		detail = new DetailScreen(this, board);
@@ -431,8 +433,8 @@ class ChroniclePanel extends PluginPanel
 		{
 			if (tab.getValue().containsKey(page))
 			{
-				standing.clogTab = tab.getKey();
-				standing.clogPageSel = page;
+				pages.clogTab = tab.getKey();
+				pages.clogPageSel = page;
 				openSheetPage("log");
 				return;
 			}
@@ -706,7 +708,7 @@ class ChroniclePanel extends PluginPanel
 			case LEFT_ITEM:
 				return detail.buildLeftBehindDetail(null, at.name);
 			default:
-				return standing.buildSheetPage(at.name);
+				return pages.buildSheetPage(at.name);
 		}
 	}
 

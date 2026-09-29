@@ -1040,10 +1040,10 @@ final class Harness
 					p.showTask(Integer.parseInt(val));
 					break;
 				case "clog":
-					p.standing.clogTab = val;
+					p.pages.clogTab = val;
 					break;
 				case "page":
-					p.standing.clogPageSel = val;
+					p.pages.clogPageSel = val;
 					break;
 				case "search":
 					p.searchField.setText(val);
