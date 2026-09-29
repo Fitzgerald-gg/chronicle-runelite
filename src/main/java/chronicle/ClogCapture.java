@@ -11,6 +11,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.AccessLevel;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -59,6 +61,7 @@ public class ClogCapture
 	private final Map<String, Integer> clogItems = new HashMap<>();
 	private volatile int finished;
 	private volatile int available;
+	@Getter(AccessLevel.PACKAGE)
 	private volatile long revision;
 	private boolean dirty;
 	private boolean clogRetrieving;
@@ -120,11 +123,6 @@ public class ClogCapture
 	int availableCount()
 	{
 		return available;
-	}
-
-	long revision()
-	{
-		return revision;
 	}
 
 	boolean isDirty()

@@ -17,6 +17,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import lombok.AccessLevel;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Actor;
 import net.runelite.api.ChatMessageType;
@@ -134,6 +136,7 @@ public class ChronicleEventCapture
 	private String lastSlayerTask;
 	private String lastSlayerCompletionTask;
 	private long lastSlayerCompletionAtMs = -1;
+	@Getter(AccessLevel.PACKAGE)
 	private volatile boolean slayerSeenThisSession;
 
 	private static final long SLAYER_FINAL_KILL_GRACE_MS = SlayerLog.SLAYER_FINAL_KILL_GRACE * 1000L;
@@ -312,11 +315,6 @@ public class ChronicleEventCapture
 		pendingSlayerKills = null;
 		lastSlayerTask = null;
 		slayerPendingTicks = -1;
-	}
-
-	boolean slayerSeenThisSession()
-	{
-		return slayerSeenThisSession;
 	}
 
 	void resetSessionFlags()

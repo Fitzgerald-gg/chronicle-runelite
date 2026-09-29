@@ -29,6 +29,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
+import lombok.AccessLevel;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -119,12 +121,15 @@ public class ChroniclePlugin extends Plugin
 	@Inject
 	private LocalStore localStore;
 
+	@Getter(AccessLevel.PACKAGE)
 	@Inject
 	private SkillIconManager skillIcons;
 
+	@Getter(AccessLevel.PACKAGE)
 	@Inject
 	private SpriteManager sprites;
 
+	@Getter(AccessLevel.PACKAGE)
 	@Inject
 	private Gson gson;
 
@@ -144,8 +149,11 @@ public class ChroniclePlugin extends Plugin
 	private static final String KEY_PLAYTIME = "gamePlaytime";
 	private static final String KEY_PLAYTIME_AT = "gamePlaytimeAt";
 
+	@Getter(AccessLevel.PACKAGE)
 	private volatile String localName;
+	@Getter(AccessLevel.PACKAGE)
 	private volatile String captureWarning;
+	@Getter(AccessLevel.PACKAGE)
 	private volatile String captureWarningWhy;
 	private volatile long playtimeMinutes;
 	private volatile long playtimeAt;
@@ -548,11 +556,6 @@ public class ChroniclePlugin extends Plugin
 		return skills;
 	}
 
-	String localName()
-	{
-		return localName;
-	}
-
 	LocalStore store()
 	{
 		return localStore;
@@ -595,7 +598,6 @@ public class ChroniclePlugin extends Plugin
 			log.debug("the game says this account has played {} minutes", raw);
 		}
 	}
-
 
 	private long readLong(String key)
 	{
@@ -733,16 +735,6 @@ public class ChroniclePlugin extends Plugin
 		return localStore.achievements();
 	}
 
-	SkillIconManager skillIcons()
-	{
-		return skillIcons;
-	}
-
-	SpriteManager sprites()
-	{
-		return sprites;
-	}
-
 	Map<String, Long> killCounts()
 	{
 		return KillCounts.reconciledKills(localStore.clogSnapshot(),
@@ -863,11 +855,6 @@ public class ChroniclePlugin extends Plugin
 		return out;
 	}
 
-	Gson gson()
-	{
-		return gson;
-	}
-
 	ItemManager items()
 	{
 		return localStore.items();
@@ -942,16 +929,6 @@ public class ChroniclePlugin extends Plugin
 			}
 			reloadHistory(rsn);
 		});
-	}
-
-	String captureWarning()
-	{
-		return captureWarning;
-	}
-
-	String captureWarningWhy()
-	{
-		return captureWarningWhy;
 	}
 
 	String journalWarning()

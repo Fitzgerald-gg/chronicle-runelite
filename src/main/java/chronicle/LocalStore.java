@@ -31,6 +31,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.game.ItemManager;
 import static chronicle.JournalFile.*;
@@ -65,6 +66,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private String currentRsn;
 	private File mountedDir;
 	private volatile boolean ready;
+	@Getter(AccessLevel.PACKAGE)
 	private volatile String journalWarning;
 
 	private final ArrayDeque<RecentDrop> recentDrops = new ArrayDeque<>();
@@ -239,12 +241,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return ready && rsn != null && rsn.equals(currentRsn);
 	}
 
+	@Getter(AccessLevel.PACKAGE)
 	private volatile long revision;
-
-	long revision()
-	{
-		return revision;
-	}
 
 	void record(String type, JsonObject data, String rsn)
 	{
@@ -652,11 +650,6 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	ItemManager items()
 	{
 		return itemManager;
-	}
-
-	String journalWarning()
-	{
-		return journalWarning;
 	}
 
 	Map<String, Long> trackersSnapshot()

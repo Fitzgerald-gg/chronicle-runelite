@@ -7,18 +7,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.inject.Singleton;
+import lombok.Getter;
 
 @Singleton
 public class StatStore
 {
 	private final Map<String, Integer> totals = new ConcurrentHashMap<>();
 
+	@Getter
 	private volatile long revision;
-
-	public long revision()
-	{
-		return revision;
-	}
 
 	public void clear()
 	{
