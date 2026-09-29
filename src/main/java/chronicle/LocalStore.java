@@ -1272,7 +1272,19 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		final long value;
 	}
 
-	BagItem price(int id, long qty)
+	static long[] tallyOf(List<BagItem> bag)
+	{
+		long q = 0;
+		long v = 0;
+		for (BagItem b : bag)
+		{
+			q += b.qty;
+			v += b.value;
+		}
+		return new long[]{q, v};
+	}
+
+		BagItem price(int id, long qty)
 	{
 		int canon = itemManager.canonicalize(id);
 		String name;

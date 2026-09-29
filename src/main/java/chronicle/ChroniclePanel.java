@@ -776,27 +776,6 @@ class ChroniclePanel extends PluginPanel
 		return cell;
 	}
 
-	private String notCounting(boolean kills)
-	{
-		TreeMap<LocalDate, Baseline> spine = historySpine;
-		Period w = window();
-		if (wholeRecord() || sessionPeriod() || spine == null || w == null)
-		{
-			return null;
-		}
-		for (Entry<LocalDate, Baseline> e : spine.entrySet())
-		{
-			if (!(kills ? e.getValue().kcs : e.getValue().counters).isEmpty())
-			{
-				return w.end.isBefore(e.getKey())
-					? "The record keeps no " + (kills ? "kill counts" : "counters")
-					+ " before " + e.getKey().format(FULL_DAY) + "."
-					: null;
-			}
-		}
-		return null;
-	}
-
 	private JPanel buildKills()
 	{
 		JPanel p = column();
@@ -823,8 +802,8 @@ class ChroniclePanel extends PluginPanel
 			}
 			if (had.isEmpty())
 			{
-				String unkept = notCounting(true);
-				return noted(p, unkept != null ? unkept : inside("Nothing on the boss sheet was killed"));
+				String unkept = build.notCounting(true);
+				return noted(p, unkept != null ? unkept : window().inside("Nothing on the boss sheet was killed"));
 			}
 			roster = had;
 		}
@@ -910,7 +889,7 @@ class ChroniclePanel extends PluginPanel
 			lines.add("Average kill");
 			lines.add(pb(timed[1] / timed[0]) + " · " + fmt((long) timed[0]) + " timed");
 		}
-		long here = build.kills.minutesAt(b.name, wholeRecord() ? counters() : periodCounters());
+		long here = build.kills.minutesAt(b.name, wholeRecord() ? plugin.lifetimeCounters() : build.periodCounters());
 		if (here > 0 && build.kills.minutesCoverPeriod())
 		{
 			lines.add("Time here");
@@ -941,7 +920,7 @@ class ChroniclePanel extends PluginPanel
 
 	private String paidFigure(SourceRow r)
 	{
-		return qtyGp(tallyOf(plugin.sourceItems(r.name))[0], r.value);
+		return qtyGp(LocalStore.tallyOf(plugin.sourceItems(r.name))[0], r.value);
 	}
 
 	private Color accent()
@@ -958,11 +937,6 @@ class ChroniclePanel extends PluginPanel
 	private String searchQuery()
 	{
 		return searchField.getText() == null ? "" : searchField.getText().trim();
-	}
-
-	private Map<String, Long> counters()
-	{
-		return plugin.lifetimeCounters();
 	}
 
 	private final AtomicBoolean queued =
@@ -1149,8 +1123,6 @@ class ChroniclePanel extends PluginPanel
 		freshBuild();
 		taskItemsEver = null;
 		resourcesDropped = 0;
-		buildPeriodCounters = null;
-		periodCountersAsked = false;
 		artWaiting.clear();
 		paintBand(plugin.journalWarning(), plugin.captureWarning(),
 			plugin.captureWarningWhy());
@@ -1691,14 +1663,14 @@ class ChroniclePanel extends PluginPanel
 		{
 			if (w.items.isEmpty())
 			{
-				return noted(p, inside("Nothing taken"));
+				return noted(p, window().inside("Nothing taken"));
 			}
 			return kindLens(p, win.label, bagOf(w.items), "win:");
 		}
 		List<String[]> ranked = dropsLeftBehind ? w.leftItems : w.sources;
 		if (ranked.isEmpty())
 		{
-			return noted(p, inside("Nothing " + (dropsLeftBehind ? "left behind" : "taken")));
+			return noted(p, window().inside("Nothing " + (dropsLeftBehind ? "left behind" : "taken")));
 		}
 		JPanel head = dropsLeftBehind ? tallyCard("Left behind", "Items", fmt(w.left), ACCENT_RED, w.leftValue)
 			: tallyCard("Drops received", "Drops", fmt(w.loots), accent(), w.value);
@@ -1803,7 +1775,7 @@ class ChroniclePanel extends PluginPanel
 			List<BagItem> taskBag = plugin.onTaskLoot(w[0], w[1], null, wholeRecord());
 			if (taskBag.isEmpty())
 			{
-				return noted(p, inside("No task closed"));
+				return noted(p, window().inside("No task closed"));
 			}
 			return kindLens(p, wholeRecord() ? "On-task loot"
 				: "Tasks closed in " + window().label, taskBag, "ontask:");
@@ -1906,7 +1878,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel kindLens(JPanel p, String title, List<BagItem> bag,
 		String key)
 	{
-		final long[] sum = tallyOf(bag);
+		final long[] sum = LocalStore.tallyOf(bag);
 		if (lootKind != null)
 		{
 			return kindDrill(p, bag, key);
@@ -1926,7 +1898,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel kindDrill(JPanel p, List<BagItem> bag, String key)
 	{
 		final List<BagItem> kept = ofKind(bag);
-		final long[] mine = tallyOf(kept);
+		final long[] mine = LocalStore.tallyOf(kept);
 		spaced(p, bagCard(lootKind, kept, mine));
 		p.add(backToKinds(kept.size()));
 		if (kept.isEmpty())
@@ -2166,12 +2138,12 @@ class ChroniclePanel extends PluginPanel
 		{
 			p.add(taskPicker());
 			return noted(p, lootTask != null
-				? inside("No loot logged on " + lootTask)
+				? window().inside("No loot logged on " + lootTask)
 				: wholeRecord()
 					? "No task loot in the journal yet. It collects as tasks close."
-					: inside("No task loot"));
+					: window().inside("No task loot"));
 		}
-		final long[] sum = tallyOf(bag);
+		final long[] sum = LocalStore.tallyOf(bag);
 		final long qty = sum[0];
 		final long value = sum[1];
 
@@ -2338,18 +2310,6 @@ class ChroniclePanel extends PluginPanel
 			link(r, () -> openItem(b.name));
 			p.add(r);
 		}
-	}
-
-	private long[] tallyOf(List<BagItem> bag)
-	{
-		long q = 0;
-		long v = 0;
-		for (BagItem b : bag)
-		{
-			q += b.qty;
-			v += b.value;
-		}
-		return new long[]{q, v};
 	}
 
 	private List<BagItem> ofKind(List<BagItem> bag)
@@ -2651,7 +2611,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (shown.isEmpty() && !wholeRecord())
 		{
-			p.add(note(inside("No tasks closed")));
+			p.add(note(window().inside("No tasks closed")));
 			return;
 		}
 		long tasksDone = j.completedTasks;
@@ -3397,7 +3357,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel nothing(JPanel p, String what, String since)
 	{
-		return since != null ? p : noted(p, inside("Nothing " + what));
+		return since != null ? p : noted(p, window().inside("Nothing " + what));
 	}
 
 	private static void addOther(JPanel p, String figure, boolean show)
@@ -3422,7 +3382,7 @@ class ChroniclePanel extends PluginPanel
 		List<Object[]> split = plugin.onTaskItemByTask(name, w[0], w[1]);
 		if (split.isEmpty())
 		{
-			return noted(p, inside("No task paid this"));
+			return noted(p, window().inside("No task paid this"));
 		}
 		p.add(group("By task"));
 		final int taskCap = Math.max(drawingCopy ? COPY_MOST : 40, drillShown.getOrDefault("item:task:" + name, 0));
@@ -3512,7 +3472,7 @@ class ChroniclePanel extends PluginPanel
 		final List<BagItem> bag = inWindow == null ? plugin.sourceItems(own)
 			: new ArrayList<>(periodItems().getOrDefault(own, new ArrayList<>()));
 		bag.sort(Comparator.comparingLong((BagItem b) -> b.value).reversed());
-		final long other = inWindow == null ? 0 : inWindow[1] - tallyOf(bag)[1];
+		final long other = inWindow == null ? 0 : inWindow[1] - LocalStore.tallyOf(bag)[1];
 		final boolean unfiled = other > 0 || inWindow != null && !sessionPeriod()
 			&& plugin.unfiledSources(window().start, window().end).contains(own);
 		spaced(p, backRow(() -> copyPage(() -> buildSourceDetail(name))), 4);
@@ -3559,7 +3519,7 @@ class ChroniclePanel extends PluginPanel
 				head.add(row("Average kill", pb(timed[1] / timed[0]) + " · "
 					+ fmt((long) timed[0]) + " timed"));
 			}
-			long here = build.kills.minutesAt(sr.name, inWindow == null ? counters() : periodCounters());
+			long here = build.kills.minutesAt(sr.name, inWindow == null ? plugin.lifetimeCounters() : build.periodCounters());
 			if (here > 0 && build.kills.minutesCoverPeriod())
 			{
 				boolean rate = killed && shown > 0 && here >= 30;
@@ -3662,7 +3622,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (got.isEmpty())
 		{
-			return noted(p, inside("Nothing new was logged"));
+			return noted(p, window().inside("Nothing new was logged"));
 		}
 		JPanel head = card("Collection log");
 		head.add(row("Slots logged", fmt(got.size()), accent()));
@@ -4293,42 +4253,6 @@ class ChroniclePanel extends PluginPanel
 
 	private long resourcesDropped;
 
-	private Map<String, Long> withLedgerSpend(Map<String, Long> base)
-	{
-		Map<String, Long> out = new LinkedHashMap<>(base);
-		long food = 0;
-		long potions = 0;
-		for (Entry<String, Long> e : plugin.consumableValues().entrySet())
-		{
-			long v = e.getValue() == null ? 0 : e.getValue();
-			if (v <= 0)
-			{
-				continue;
-			}
-			if (e.getKey().endsWith("Eaten"))
-			{
-				food += v;
-			}
-			else if (e.getKey().endsWith("Doses"))
-			{
-				potions += v;
-			}
-		}
-		if (food > 0)
-		{
-			out.merge("foodConsumedValue", food, Math::max);
-		}
-		if (potions > 0)
-		{
-			out.merge("potionsConsumedValue", potions, Math::max);
-		}
-		if (food + potions > 0)
-		{
-			out.merge("consumedValue", food + potions, Math::max);
-		}
-		return out;
-	}
-
 	private void statRows(JPanel p, List<Entry<String, Long>> rows)
 	{
 		for (Entry<String, Long> e : rows)
@@ -4352,7 +4276,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel p = backPage();
 		consumVals = plugin.consumableValues();
-		Map<String, Long> counters = countersForPeriod();
+		Map<String, Long> counters = build.countersForPeriod();
 		if (counters == null)
 		{
 			p.add(noPeriod());
@@ -4385,7 +4309,7 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, head);
 		if (kept == 0)
 		{
-			return noted(p, inside("Nothing tracked"));
+			return noted(p, window().inside("Nothing tracked"));
 		}
 		for (Entry<String, Map<String, List<Entry<String, Long>>>> fam : filed.entrySet())
 		{
@@ -4473,7 +4397,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(vgap(4));
 
-		Map<String, Long> counters = countersForPeriod();
+		Map<String, Long> counters = build.countersForPeriod();
 		if (counters == null)
 		{
 			p.add(noPeriod());
@@ -4500,10 +4424,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (rowsBySection.isEmpty() && floorTotals.isEmpty())
 		{
-			String unkept = notCounting(false);
+			String unkept = build.notCounting(false);
 			return noted(p, unkept != null ? unkept : wholeRecord()
 				? "Nothing under " + statsFamily + " yet."
-				: inside("Nothing under " + statsFamily));
+				: window().inside("Nothing under " + statsFamily));
 		}
 
 		List<Entry<String, Long>> destRows = statsFamily.equals("Ledger & Roads")
@@ -5454,7 +5378,7 @@ class ChroniclePanel extends PluginPanel
 		fig.setForeground(cb > 0 && (wholeRecord() || combatSkillsMoved(gain))
 			? TILE_LIT : dim());
 		cell.add(fig, BorderLayout.EAST);
-		Map<String, Long> c = counters();
+		Map<String, Long> c = plugin.lifetimeCounters();
 		long[] ca = build.standings.combat();
 		cell.setToolTipText(tip("Combat",
 			"Achievement points", ca[1] > 0 ? fmt(ca[0]) + " / " + fmt(ca[1]) : fmt(ca[0]),
@@ -5504,23 +5428,9 @@ class ChroniclePanel extends PluginPanel
 		return 0;
 	}
 
-	private Map<String, Long> buildPeriodCounters;
-	private boolean periodCountersAsked;
-
-	private Map<String, Long> periodCounters()
-	{
-		if (!periodCountersAsked)
-		{
-			periodCountersAsked = true;
-			buildPeriodCounters = countersForPeriod();
-		}
-		return buildPeriodCounters == null ? Collections.emptyMap()
-			: buildPeriodCounters;
-	}
-
 	private String skillTip(String craft)
 	{
-		Map<String, Long> now = periodCounters();
+		Map<String, Long> now = build.periodCounters();
 		List<String> floors = new ArrayList<>();
 		List<Entry<String, Long>> named = new ArrayList<>();
 		for (String key : StatRegistry.headlines(craft))
@@ -5560,19 +5470,11 @@ class ChroniclePanel extends PluginPanel
 
 	private String slayerTip()
 	{
-		long[] tally = taskTally();
+		long[] tally = build.taskTally();
 		return tip("Slayer",
 			"Tasks tracked", fmt(tally[2]),
 			"Kills on task", fmt(tally[0]),
 			"On-task loot", gps(tally[3]));
-	}
-
-	private long[] taskTally()
-	{
-		long[] ms = window().ms();
-		long[] tally = Arrays.copyOf(plugin.onTaskTally(ms[0], ms[1], null, wholeRecord()), 4);
-		tally[3] = tallyOf(plugin.onTaskLoot(ms[0], ms[1], null, wholeRecord()))[1];
-		return tally;
 	}
 
 	private static boolean combatSkillsMoved(Map<String, Long> gain)
@@ -6153,38 +6055,6 @@ class ChroniclePanel extends PluginPanel
 		return w;
 	}
 
-	private Map<String, Long> countersForPeriod()
-	{
-		if (wholeRecord())
-		{
-			return withLedgerSpend(counters());
-		}
-		if (sessionPeriod())
-		{
-			Map<String, Long> out = new LinkedHashMap<>();
-			for (Entry<String, Integer> e : plugin.sessionView().entrySet())
-			{
-				if (e.getValue() != null && e.getValue() != 0)
-				{
-					out.put(e.getKey(), e.getValue().longValue());
-				}
-			}
-			return out;
-		}
-		Span s = build.span();
-		if (s == null)
-		{
-			return null;
-		}
-		return peaksNotDeltas(HistoryLog.gained(s.opening.counters,
-			s.earliest.counters, window().closingNow(s.closing.counters, counters())), s);
-	}
-
-	private String inside(String said)
-	{
-		return said + " inside " + window().inSentence() + ".";
-	}
-
 	private List<SourceRow> skillGround(String craft)
 	{
 		Set<String> ownTile = new HashSet<>();
@@ -6260,7 +6130,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			head.add(row("Level", "-"));
 		}
-		long minutes = (wholeRecord() ? counters() : periodCounters())
+		long minutes = (wholeRecord() ? plugin.lifetimeCounters() : build.periodCounters())
 			.getOrDefault(StatKeys.timeKey(craft), 0L);
 		if (minutes > 0 && build.kills.minutesCoverPeriod())
 		{
@@ -6271,7 +6141,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		spaced(p, head);
 
-		Map<String, Long> counters = countersForPeriod();
+		Map<String, Long> counters = build.countersForPeriod();
 		if (counters == null)
 		{
 			p.add(noPeriod());
@@ -6291,7 +6161,7 @@ class ChroniclePanel extends PluginPanel
 		List<SourceRow> ground = skillGround(craft);
 		if (rows.isEmpty() && ground.isEmpty())
 		{
-			String unkept = notCounting(false);
+			String unkept = build.notCounting(false);
 			return noted(p, unkept != null ? unkept : "Nothing is tracked under " + craft
 				+ (wholeRecord() ? "." : " in " + window().inSentence() + "."));
 		}
@@ -6480,7 +6350,7 @@ class ChroniclePanel extends PluginPanel
 			Baseline earliest = HistoryLog.earliest(hist, at.getKey());
 			Baseline closing = HistoryLog.stateAt(hist, at.getKey());
 			Baseline opening = HistoryLog.stateAt(hist, from.getKey());
-			Map<String, Long> closesOn = live ? closingSkills(closing.skills, true) : closing.skills;
+			Map<String, Long> closesOn = live ? build.closingSkills(closing.skills, true) : closing.skills;
 			List<Entry<String, Long>> gains = new ArrayList<>();
 			for (Entry<String, Long> e : HistoryLog.gained(opening.skills,
 				earliest.skills, closesOn, opening.complete).entrySet())
@@ -6660,7 +6530,7 @@ class ChroniclePanel extends PluginPanel
 				: (leftFrom != null && !leftFrom.isAfter(from.getKey()));
 			boolean whole = wholeRecord();
 			HistoryProgress progress = HistoryProgress.of(
-				whole ? withLedgerSpend(closing.counters)
+				whole ? build.withLedgerSpend(closing.counters)
 					: HistoryLog.gained(opening.counters, earliest.counters,
 						closing.counters),
 				null, whole ? new HashMap<>() : retro, leftDated || whole);
@@ -6973,13 +6843,13 @@ class ChroniclePanel extends PluginPanel
 		{
 			if (s == null)
 			{
-				f.skillsNote = notCounting(false) != null
+				f.skillsNote = build.notCounting(false) != null
 					? "The record keeps no experience this far back."
 					: "Nothing closed inside " + window().inSentence()
 						+ ": a period is the distance between two baselines, and this one holds fewer than two.";
 				return;
 			}
-			closing = closingSkills(s.closing.skills, window().reachesToday());
+			closing = build.closingSkills(s.closing.skills, window().reachesToday());
 		}
 		Map<String, Integer> startLevels = new LinkedHashMap<>();
 		Map<String, Integer> endLevels = new LinkedHashMap<>();
@@ -7116,9 +6986,9 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (f.bosses.isEmpty() && !f.whole)
 		{
-			f.bossesNote = notCounting(true) != null
+			f.bossesNote = build.notCounting(true) != null
 				? "The record keeps no kill counts this far back."
-				: inside("No boss was killed");
+				: window().inside("No boss was killed");
 		}
 	}
 
@@ -7264,13 +7134,13 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (f.loot.isEmpty())
 		{
-			f.lootNote = inside("Nothing dropped");
+			f.lootNote = window().inside("Nothing dropped");
 		}
 	}
 
 	private void recapSlayerAndClues(RecapPicture.Facts f)
 	{
-		long[] tally = taskTally();
+		long[] tally = build.taskTally();
 		long paid = tally[3];
 		if (tally[2] > 0)
 		{
@@ -7319,12 +7189,12 @@ class ChroniclePanel extends PluginPanel
 
 	private void recapTrackers(RecapPicture.Facts f)
 	{
-		Map<String, Long> counters = countersForPeriod();
+		Map<String, Long> counters = build.countersForPeriod();
 		if (counters == null)
 		{
-			f.trackersNote = notCounting(false) != null
+			f.trackersNote = build.notCounting(false) != null
 				? "The record keeps no counters this far back."
-				: inside("Nothing closed");
+				: window().inside("Nothing closed");
 			return;
 		}
 		for (Entry<String, Integer> fam : RECAP_TRACKER_ROWS.entrySet())
@@ -7681,7 +7551,7 @@ class ChroniclePanel extends PluginPanel
 			});
 		}
 
-		Map<String, Long> counters = wholeRecord() ? withLedgerSpend(counters()) : periodCounters();
+		Map<String, Long> counters = wholeRecord() ? build.withLedgerSpend(plugin.lifetimeCounters()) : build.periodCounters();
 		Runnable toLiving = () ->
 		{
 			statsFamily = "Living";
@@ -7710,7 +7580,7 @@ class ChroniclePanel extends PluginPanel
 			said.fixed(" · " + killed[1]);
 			plateRow(plate, "Killed most", said, () -> openSourceLoose(who));
 		}
-		long[] tally = taskTally();
+		long[] tally = build.taskTally();
 		if (tally[2] > 0)
 		{
 			plateRow(plate, "Tasks", fmt(tally[2]) + tail(tally[3]), () -> openSlayer("Tasks"));
@@ -7736,7 +7606,7 @@ class ChroniclePanel extends PluginPanel
 		if (plate.getComponentCount() == held)
 		{
 			plate.add(note(wholeRecord() ? "Nothing on the record yet."
-				: inside("Nothing")));
+				: window().inside("Nothing")));
 		}
 		return plate;
 	}
@@ -7870,7 +7740,7 @@ class ChroniclePanel extends PluginPanel
 			return null;
 		}
 		Baseline shut = new Baseline();
-		shut.skills.putAll(closingSkills(s.closing.skills, window().reachesToday()));
+		shut.skills.putAll(build.closingSkills(s.closing.skills, window().reachesToday()));
 		shut.complete = true;
 		HistoryLog.Levels was = HistoryLog.levels(s.opening, HistoryLog.SKILL_KEYS);
 		HistoryLog.Levels now = HistoryLog.levels(shut, HistoryLog.SKILL_KEYS);
@@ -7885,25 +7755,9 @@ class ChroniclePanel extends PluginPanel
 			return null;
 		}
 		Map<String, Long> out = new LinkedHashMap<>(HistoryLog.gained(s.opening.skills,
-			s.earliest.skills, closingSkills(s.closing.skills, window().reachesToday()), s.opening.complete));
+			s.earliest.skills, build.closingSkills(s.closing.skills, window().reachesToday()), s.opening.complete));
 		out.remove("overall");
 		return out;
-	}
-
-	private Map<String, Long> closingSkills(Map<String, Long> skills, boolean live)
-	{
-		Map<String, Long> close = new HashMap<>(skills);
-		if (live)
-		{
-			for (Entry<String, long[]> e : plugin.skillSheet().entrySet())
-			{
-				if (e.getValue() != null && e.getValue().length > 1 && e.getValue()[1] > 0)
-				{
-					close.merge(e.getKey(), e.getValue()[1], Math::max);
-				}
-			}
-		}
-		return close;
 	}
 
 	private long[] periodLoot()
@@ -8077,7 +7931,7 @@ class ChroniclePanel extends PluginPanel
 					+ dated(busy[1][1]) : ""));
 		}
 
-		long hit = counters().getOrDefault("highestHit", 0L);
+		long hit = plugin.lifetimeCounters().getOrDefault("highestHit", 0L);
 		if (hit > 0)
 		{
 			book.add(row("Highest hit", fmt(hit)));
@@ -8273,7 +8127,7 @@ class ChroniclePanel extends PluginPanel
 		feed.sort((a, b) -> dayOf(filedAt(b)).compareTo(dayOf(filedAt(a))));
 		if (feed.isEmpty() && !wholeRecord())
 		{
-			p.add(note(inside("No " + ("All".equals(journalLens) ? "milestones" : low(journalLens)))));
+			p.add(note(window().inside("No " + ("All".equals(journalLens) ? "milestones" : low(journalLens)))));
 			return p;
 		}
 		if (feed.isEmpty())
@@ -9072,7 +8926,7 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		List<Hit> stats = new ArrayList<>();
-		for (Entry<String, Long> e : withLedgerSpend(counters()).entrySet())
+		for (Entry<String, Long> e : build.withLedgerSpend(plugin.lifetimeCounters()).entrySet())
 		{
 			if (e.getValue() == 0 || StatRegistry.hidden(e.getKey()))
 			{

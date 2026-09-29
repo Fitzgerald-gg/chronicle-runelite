@@ -78,7 +78,7 @@ public class ExampleExportTest
 	private static Map<String, String> notState()
 	{
 		Map<String, String> m = new LinkedHashMap<>();
-		for (String n : new String[]{"build", "aboveBoard", "buildPeriodCounters", "periodCountersAsked", "bandFixes",
+		for (String n : new String[]{"build", "aboveBoard", "bandFixes",
 			"grindsCache", "journeyCache", "consumVals",
 			"resourcesDropped", "historySpine", "historyFeed", "historyJourney",
 			"historyDay", "historyFeedTs", "historyEpoch", "periodFrom", "periodTo", "searchFirst", "searchFeed", "searchFeedTs", "searchFeedSpine",

@@ -57,18 +57,6 @@ public class SkillHoverTest
 		Method fresh = ChroniclePanel.class.getDeclaredMethod("freshBuild");
 		fresh.setAccessible(true);
 		fresh.invoke(panel);
-		for (String memo : new String[]{"buildPeriodCounters"})
-		{
-			Field m = ChroniclePanel.class.getDeclaredField(memo);
-			m.setAccessible(true);
-			m.set(panel, null);
-		}
-		for (String flag : new String[]{"periodCountersAsked"})
-		{
-			Field m = ChroniclePanel.class.getDeclaredField(flag);
-			m.setAccessible(true);
-			m.setBoolean(panel, false);
-		}
 	}
 
 	private static String hover(String craft) throws Exception

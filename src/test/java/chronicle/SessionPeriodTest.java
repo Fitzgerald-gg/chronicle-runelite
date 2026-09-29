@@ -55,9 +55,9 @@ public class SessionPeriodTest
 	@SuppressWarnings("unchecked")
 	private static Map<String, Long> countersNow() throws Exception
 	{
-		Method m = ChroniclePanel.class.getDeclaredMethod("countersForPeriod");
-		m.setAccessible(true);
-		return (Map<String, Long>) m.invoke(panel);
+		Field f = ChroniclePanel.class.getDeclaredField("build");
+		f.setAccessible(true);
+		return ((Build) f.get(panel)).countersForPeriod();
 	}
 
 	private static String label() throws Exception

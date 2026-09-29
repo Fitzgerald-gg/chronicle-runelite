@@ -95,9 +95,9 @@ public class PeakCounterTest
 	public void theRuleIsOnThePathEveryBoardTakes() throws Exception
 	{
 		String src = new String(java.nio.file.Files.readAllBytes(
-			java.nio.file.Paths.get("src/main/java/chronicle/ChroniclePanel.java")),
+			java.nio.file.Paths.get("src/main/java/chronicle/Build.java")),
 			java.nio.charset.StandardCharsets.UTF_8);
-		int at = src.indexOf("private Map<String, Long> countersForPeriod()");
+		int at = src.indexOf("Map<String, Long> countersForPeriod()");
 		assertTrue("the boards no longer read their counters through one place", at > 0);
 		String body = src.substring(at, src.indexOf("\n\t}", at));
 		assertTrue("countersForPeriod hands a raw subtraction to the boards, so a "
