@@ -116,11 +116,7 @@ final class SlayerLog
 
 	private static JsonObject newSegment(JsonArray tasks, String task)
 	{
-		JsonObject seg = new JsonObject();
-		seg.addProperty("task", task);
-		seg.addProperty("kills", 0);
-		seg.addProperty("assignment", 0);
-		seg.addProperty("value", 0);
+		JsonObject seg = Json.of("task", task, "kills", 0, "assignment", 0, "value", 0);
 		tasks.add(seg);
 		while (tasks.size() > SLAYER_TASK_CAP)
 		{

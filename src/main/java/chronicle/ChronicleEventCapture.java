@@ -188,11 +188,10 @@ public class ChronicleEventCapture
 		{
 			return;
 		}
-		JsonObject data = new JsonObject();
-		data.addProperty("source", comp.getName());
-		data.addProperty("npcId", comp.getId());
-		data.addProperty("category", "NPC");
-		data.addProperty("lootSource", "server");
+		JsonObject data = Json.of("source", comp.getName(),
+			"npcId", comp.getId(),
+			"category", "NPC",
+			"lootSource", "server");
 		addLoot(data, comp.getName(), event.getItems());
 		stampSlayer(data, comp.getName(), comp.getId());
 		emit("LOOT", data);
@@ -295,9 +294,7 @@ public class ChronicleEventCapture
 	{
 		if (task != null)
 		{
-			JsonObject data = new JsonObject();
-			data.addProperty("task", task);
-			data.addProperty("monster", task);
+			JsonObject data = Json.of("task", task, "monster", task);
 			if (pendingSlayerKills != null)
 			{
 				data.addProperty("killCount", pendingSlayerKills);
@@ -334,9 +331,8 @@ public class ChronicleEventCapture
 		{
 			return;
 		}
-		JsonObject data = new JsonObject();
-		data.addProperty("source", event.getName());
-		data.addProperty("category", event.getType() != null ? event.getType().name() : "EVENT");
+		JsonObject data = Json.of("source", event.getName(),
+			"category", event.getType() != null ? event.getType().name() : "EVENT");
 		addLoot(data, event.getName(), event.getItems());
 		emit("LOOT", data);
 	}
@@ -365,9 +361,7 @@ public class ChronicleEventCapture
 			{
 				if (is != null)
 				{
-					JsonObject o = new JsonObject();
-					o.addProperty("id", is.getId());
-					o.addProperty("quantity", is.getQuantity());
+					JsonObject o = Json.of("id", is.getId(), "quantity", is.getQuantity());
 					arr.add(o);
 				}
 			}
@@ -447,9 +441,7 @@ public class ChronicleEventCapture
 			{
 				continue;
 			}
-			JsonObject o = new JsonObject();
-			o.addProperty("id", id);
-			o.addProperty("quantity", Math.abs(delta));
+			JsonObject o = Json.of("id", id, "quantity", Math.abs(delta));
 			(delta > 0 ? deposits : withdrawals).add(o);
 		}
 		if (deposits.size() == 0 && withdrawals.size() == 0)
@@ -606,9 +598,8 @@ public class ChronicleEventCapture
 		Matcher d = DIARY_COMPLETION.matcher(msg);
 		if (d.find())
 		{
-			JsonObject data = new JsonObject();
-			data.addProperty("area", d.group("region").trim());
-			data.addProperty("difficulty", d.group("grade").trim().toUpperCase(Locale.ROOT));
+			JsonObject data = Json.of("area", d.group("region").trim(),
+				"difficulty", d.group("grade").trim().toUpperCase(Locale.ROOT));
 			emit("DIARY", data);
 			return;
 		}
@@ -671,9 +662,8 @@ public class ChronicleEventCapture
 		Matcher ca = COMBAT_TASK.matcher(msg);
 		if (ca.find())
 		{
-			JsonObject data = new JsonObject();
-			data.addProperty("tier", ca.group("grade").trim().toUpperCase(Locale.ROOT));
-			data.addProperty("task", COMBAT_TASK_POINTS.matcher(ca.group("challenge").trim()).replaceAll(""));
+			JsonObject data = Json.of("tier", ca.group("grade").trim().toUpperCase(Locale.ROOT),
+				"task", COMBAT_TASK_POINTS.matcher(ca.group("challenge").trim()).replaceAll(""));
 			emit("COMBAT_ACHIEVEMENT", data);
 			return;
 		}
@@ -774,9 +764,7 @@ public class ChronicleEventCapture
 		}
 		for (Skill skill : pendingLevels)
 		{
-			JsonObject data = new JsonObject();
-			data.addProperty("skill", skill.getName());
-			data.addProperty("level", knownLevels.getOrDefault(skill, 1));
+			JsonObject data = Json.of("skill", skill.getName(), "level", knownLevels.getOrDefault(skill, 1));
 			emit("LEVEL", data);
 		}
 		pendingLevels.clear();

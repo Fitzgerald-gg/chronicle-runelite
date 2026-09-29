@@ -16,6 +16,28 @@ import java.util.Map;
 
 final class Json
 {
+	static JsonObject of(Object... pairs)
+	{
+		JsonObject o = new JsonObject();
+		for (int i = 0; i + 1 < pairs.length; i += 2)
+		{
+			Object v = pairs[i + 1];
+			if (v instanceof Number)
+			{
+				o.addProperty((String) pairs[i], (Number) v);
+			}
+			else if (v instanceof Boolean)
+			{
+				o.addProperty((String) pairs[i], (Boolean) v);
+			}
+			else
+			{
+				o.addProperty((String) pairs[i], v == null ? null : v.toString());
+			}
+		}
+		return o;
+	}
+
 	private Json()
 	{
 	}

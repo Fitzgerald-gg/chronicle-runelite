@@ -139,9 +139,7 @@ class LeftBehind
 			{
 				continue;
 			}
-			JsonObject o = new JsonObject();
-			o.addProperty("id", it.id);
-			o.addProperty("quantity", it.qty);
+			JsonObject o = Json.of("id", it.id, "quantity", it.qty);
 			String src = it.source == null ? "" : it.source;
 			bySource.computeIfAbsent(src, k -> new JsonArray()).add(o);
 			if (it.killTick >= 0)

@@ -319,9 +319,7 @@ final class Feed
 
 	private static JsonObject milestone(long ts, String text)
 	{
-		JsonObject e = new JsonObject();
-		e.addProperty("ts", ts);
-		e.addProperty("type", "MILESTONE");
+		JsonObject e = Json.of("ts", ts, "type", "MILESTONE");
 		JsonObject d = new JsonObject();
 		d.addProperty("text", text);
 		e.add("data", d);

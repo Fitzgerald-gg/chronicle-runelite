@@ -279,9 +279,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	private void appendFeed(String type, JsonObject data)
 	{
-		JsonObject entry = new JsonObject();
-		entry.addProperty("ts", System.currentTimeMillis());
-		entry.addProperty("type", type);
+		JsonObject entry = Json.of("ts", System.currentTimeMillis(), "type", type);
 		entry.add("data", data);
 		synchronized (lock)
 		{
@@ -342,9 +340,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				src.addProperty("pb", pbCand);
 				if (newRecord)
 				{
-					JsonObject rec = new JsonObject();
-					rec.addProperty("source", source);
-					rec.addProperty("time", pbCand);
+					JsonObject rec = Json.of("source", source, "time", pbCand);
 					if (bestPb > 0)
 					{
 						rec.addProperty("was", bestPb);
@@ -613,21 +609,14 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	private JsonObject skeleton(String rsn)
 	{
-		JsonObject o = new JsonObject();
-		o.addProperty("schema", SCHEMA);
-		o.addProperty("rsn", rsn);
-		o.addProperty("first_seen", nowSec());
-		o.addProperty("updated_at", nowSec());
+		JsonObject o = Json.of("schema", SCHEMA, "rsn", rsn, "first_seen", nowSec(), "updated_at", nowSec());
 		normalise(o, rsn);
 		return o;
 	}
 
 	private static JsonObject newSource()
 	{
-		JsonObject src = new JsonObject();
-		src.addProperty("kc", 0);
-		src.addProperty("loots", 0);
-		src.addProperty("value", 0);
+		JsonObject src = Json.of("kc", 0, "loots", 0, "value", 0);
 		src.add("items", new JsonObject());
 		return src;
 	}
@@ -1395,11 +1384,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					return;
 				}
 			}
-			JsonObject a = new JsonObject();
-			a.addProperty("n", stated);
-			a.addProperty("ts", System.currentTimeMillis());
-			a.addProperty("src", src);
-			a.addProperty("obs", observedFor(name));
+			JsonObject a = Json.of("n", stated, "ts", System.currentTimeMillis(), "src", src, "obs", observedFor(name));
 			all.add(name, a);
 			touch();
 		}

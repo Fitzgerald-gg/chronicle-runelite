@@ -98,11 +98,10 @@ public class AchievementSync
 			}
 			diaries.add(DIARY_REGIONS[r], region);
 		}
-		JsonObject karamja = new JsonObject();
-		karamja.addProperty("easy", client.getVarbitValue(VarbitID.KARAMJA_EASY_COUNT) >= tierSize("easy", 10));
-		karamja.addProperty("medium", client.getVarbitValue(VarbitID.KARAMJA_MED_COUNT) >= tierSize("medium", 19));
-		karamja.addProperty("hard", client.getVarbitValue(VarbitID.KARAMJA_HARD_COUNT) >= tierSize("hard", 10));
-		karamja.addProperty("elite", client.getVarbitValue(VarbitID.KARAMJA_DIARY_ELITE_COMPLETE) != 0);
+		JsonObject karamja = Json.of("easy", client.getVarbitValue(VarbitID.KARAMJA_EASY_COUNT) >= tierSize("easy", 10),
+			"medium", client.getVarbitValue(VarbitID.KARAMJA_MED_COUNT) >= tierSize("medium", 19),
+			"hard", client.getVarbitValue(VarbitID.KARAMJA_HARD_COUNT) >= tierSize("hard", 10),
+			"elite", client.getVarbitValue(VarbitID.KARAMJA_DIARY_ELITE_COMPLETE) != 0);
 		diaries.add("karamja", karamja);
 
 		JsonObject combat = new JsonObject();

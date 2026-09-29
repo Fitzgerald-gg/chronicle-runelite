@@ -542,9 +542,7 @@ public class ChroniclePlugin extends Plugin
 		JsonObject skills = new JsonObject();
 		for (Map.Entry<String, long[]> e : readSkills().entrySet())
 		{
-			JsonObject o = new JsonObject();
-			o.addProperty("level", e.getValue()[0]);
-			o.addProperty("xp", e.getValue()[1]);
+			JsonObject o = Json.of("level", e.getValue()[0], "xp", e.getValue()[1]);
 			skills.add(e.getKey(), o);
 		}
 		return skills;
@@ -846,10 +844,7 @@ public class ChroniclePlugin extends Plugin
 		{
 			return null;
 		}
-		JsonObject line = new JsonObject();
-		line.addProperty("type", "SESSION");
-		line.addProperty("ts", System.currentTimeMillis());
-		line.addProperty("live", true);
+		JsonObject line = Json.of("type", "SESSION", "ts", System.currentTimeMillis(), "live", true);
 		line.add("data", sessionData(mins, xp, drops, localStore.loot.sessionLootValue()));
 		return line;
 	}
