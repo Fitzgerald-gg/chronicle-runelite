@@ -106,10 +106,8 @@ final class Art
 			return;
 		}
 		sprites.put(id, img);
-		for (Object[] want : waiting.getOrDefault(id, List.of()))
-		{
-			dress((JLabel) want[0], id, img, (Integer) want[1], (Integer) want[2]);
-		}
+		waiting.getOrDefault(id, List.of()).forEach(want ->
+			dress((JLabel) want[0], id, img, (Integer) want[1], (Integer) want[2]));
 		waiting.remove(id);
 	}
 

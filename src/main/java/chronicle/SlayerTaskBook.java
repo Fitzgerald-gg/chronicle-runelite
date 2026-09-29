@@ -39,17 +39,12 @@ final class SlayerTaskBook
 		try (InputStream in = SlayerTaskBook.class.getResourceAsStream("/chronicle/osrs_slayer_tasks.json"))
 		{
 			JsonObject root = new JsonParser().parse(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
-			for (Map.Entry<String, JsonElement> e : root.getAsJsonObject("npc_to_task").entrySet())
-			{
-				npcToTask.put(Integer.parseInt(e.getKey()), e.getValue().getAsString().toLowerCase(Locale.ROOT));
-			}
+			root.getAsJsonObject("npc_to_task").entrySet().forEach(e ->
+				npcToTask.put(Integer.parseInt(e.getKey()), e.getValue().getAsString().toLowerCase(Locale.ROOT)));
 			for (Map.Entry<String, JsonElement> e : root.getAsJsonObject("tasks").entrySet())
 			{
 				List<String> vs = new ArrayList<>();
-				for (JsonElement v : e.getValue().getAsJsonArray())
-				{
-					vs.add(v.getAsString().toLowerCase(Locale.ROOT));
-				}
+				e.getValue().getAsJsonArray().forEach(v -> vs.add(v.getAsString().toLowerCase(Locale.ROOT)));
 				variants.put(e.getKey().toLowerCase(Locale.ROOT), vs);
 			}
 		}

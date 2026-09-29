@@ -32,10 +32,7 @@ final class Merge
 			JsonObject merged = new JsonObject();
 			for (JsonObject src : new JsonObject[]{base, inc})
 			{
-				for (var e : obj(src, mapKey).entrySet())
-				{
-					raise(merged, e.getKey(), asLong(e.getValue()));
-				}
+				obj(src, mapKey).entrySet().forEach(e -> raise(merged, e.getKey(), asLong(e.getValue())));
 			}
 			if (merged.size() > 0)
 			{

@@ -139,10 +139,7 @@ class LootTrackerImport
 			for (LootSeed s : raw)
 			{
 				List<BagItem> items = new ArrayList<>(s.items.size());
-				for (BagItem b : s.items)
-				{
-					items.add(store.price(b.itemId, b.qty));
-				}
+				s.items.forEach(b -> items.add(store.price(b.itemId, b.qty)));
 				seeds.add(new LootSeed(s.source, s.kills, s.firstMs, s.lastMs, items));
 				events += s.kills;
 			}

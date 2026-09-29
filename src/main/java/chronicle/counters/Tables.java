@@ -54,10 +54,7 @@ public final class Tables
 	public static Map<String, String> map(JsonObject o, String key)
 	{
 		Map<String, String> out = new LinkedHashMap<>();
-		for (Map.Entry<String, JsonElement> e : o.getAsJsonObject(key).entrySet())
-		{
-			out.put(e.getKey(), e.getValue().getAsString());
-		}
+		o.getAsJsonObject(key).entrySet().forEach(e -> out.put(e.getKey(), e.getValue().getAsString()));
 		return out;
 	}
 }

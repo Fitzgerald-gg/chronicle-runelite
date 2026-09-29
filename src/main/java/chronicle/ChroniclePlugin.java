@@ -937,10 +937,7 @@ public class ChroniclePlugin extends Plugin
 			return;
 		}
 		final Map<String, Long> skills = new HashMap<>();
-		for (Map.Entry<String, long[]> e : readSkills().entrySet())
-		{
-			skills.put(e.getKey(), e.getValue()[1]);
-		}
+		readSkills().entrySet().forEach(e -> skills.put(e.getKey(), e.getValue()[1]));
 		final Map<String, Long> counters = localStore.spineCounters();
 		final Map<String, Long> kcs = killCounts();
 		final HistoryLog.Adjust adj = localStore.takePendingAdjust();

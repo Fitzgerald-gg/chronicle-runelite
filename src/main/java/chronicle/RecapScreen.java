@@ -65,10 +65,7 @@ final class RecapScreen extends Screen
 		}
 		Set<Integer> want = new LinkedHashSet<>();
 		facts.bosses.stream().filter(b -> b.sprite > 0 && !ui.art.has(b.sprite)).forEach(b -> want.add(b.sprite));
-		for (int id : want)
-		{
-			ui.art.wear(new JLabel(), id, 22, 22);
-		}
+		want.forEach(id -> ui.art.wear(new JLabel(), id, 22, 22));
 		long deadline = System.currentTimeMillis() + 1500;
 		Timer wait = new Timer(100, null);
 		wait.addActionListener(e ->
@@ -269,10 +266,7 @@ final class RecapScreen extends Screen
 		if (f.whole)
 		{
 			by.putAll(plugin.killCounts());
-			for (SourceRow r : board.sources())
-			{
-				worth.merge(r.name, r.value, Long::sum);
-			}
+			board.sources().forEach(r -> worth.merge(r.name, r.value, Long::sum));
 		}
 		else if (f.session)
 		{

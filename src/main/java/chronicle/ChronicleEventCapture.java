@@ -755,10 +755,8 @@ public class ChronicleEventCapture
 	public void onGameTick(GameTick tick)
 	{
 		String owner = localName();
-		for (JsonObject data : left.tick(owner != null && localStore.isReadyFor(owner) ? owner : null))
-		{
-			emit("LOOT_UNTAKEN", data);
-		}
+		left.tick(owner != null && localStore.isReadyFor(owner) ? owner : null).forEach(data ->
+			emit("LOOT_UNTAKEN", data));
 
 		if (petPendingTicks >= 0 && ++petPendingTicks > 3)
 		{

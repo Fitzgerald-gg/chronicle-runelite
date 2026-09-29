@@ -235,10 +235,7 @@ final class RecapPicture
 	private static List<Piece> rows(List<String> lines, Font f, Color c, int h, int base)
 	{
 		List<Piece> out = new ArrayList<>();
-		for (String l : lines)
-		{
-			out.add(new Piece(h, false, (g, x, y, w) -> text(g, l, f, c, x, y + base)));
-		}
+		lines.forEach(l -> out.add(new Piece(h, false, (g, x, y, w) -> text(g, l, f, c, x, y + base))));
 		return out;
 	}
 
@@ -326,10 +323,7 @@ final class RecapPicture
 		if (!f.bosses.isEmpty() || f.bossesNote != null)
 		{
 			Block b = new Block("Bosses", true);
-			for (BossLine l : f.bosses)
-			{
-				b.pieces.add(bossLine(l, f.whole, sprites));
-			}
+			f.bosses.forEach(l -> b.pieces.add(bossLine(l, f.whole, sprites)));
 			if (f.bossesNote != null)
 			{
 				b.pieces.addAll(note(f.bossesNote, inner));

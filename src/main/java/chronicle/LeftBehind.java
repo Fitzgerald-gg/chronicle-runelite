@@ -232,10 +232,7 @@ class LeftBehind
 				done.add(e.getKey());
 			}
 		}
-		for (TileItem t : done)
-		{
-			pendingSelf.remove(t);
-		}
+		done.forEach(pendingSelf::remove);
 	}
 
 	private static boolean armedFor(RecentKill k, GroundLoot g)

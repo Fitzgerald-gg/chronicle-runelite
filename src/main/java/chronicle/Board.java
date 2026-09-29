@@ -559,10 +559,7 @@ final class Board
 		return memo("kcByKind", () ->
 		{
 			Map<String, Long> out = new LinkedHashMap<>(chatKcByKind());
-			for (SourceRow r : sources())
-			{
-				out.merge(kindOf(r.name), (long) r.kc, Math::max);
-			}
+			sources().forEach(r -> out.merge(kindOf(r.name), (long) r.kc, Math::max));
 			return out;
 		});
 	}

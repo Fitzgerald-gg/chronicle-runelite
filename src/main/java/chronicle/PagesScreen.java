@@ -147,10 +147,7 @@ final class PagesScreen extends Screen
 			p.add(vgap(4));
 			return;
 		}
-		for (String n : names)
-		{
-			p.add(row(n, "", held ? null : DIM, !held));
-		}
+		names.forEach(n -> p.add(row(n, "", held ? null : DIM, !held)));
 		p.add(vgap(4));
 	}
 
@@ -335,10 +332,8 @@ final class PagesScreen extends Screen
 		JsonObject cl = board.clogNow();
 		Obtained ob = Board.obtained(cl);
 		Map<String, Long> kcs = Board.pageCounts(cl);
-		for (Entry<String, List<String>> pg : tax.getOrDefault(clogTab, new LinkedHashMap<>()).entrySet())
-		{
-			logPage(p, cl, ob, kcs, pg.getKey(), pg.getValue());
-		}
+		tax.getOrDefault(clogTab, new LinkedHashMap<>()).entrySet().forEach(pg ->
+			logPage(p, cl, ob, kcs, pg.getKey(), pg.getValue()));
 		if ("Other".equals(clogTab))
 		{
 			strangers(p, tax, ob, kcs);

@@ -411,10 +411,8 @@ public class FoodStatTracker implements StatTracker
 	private static String consumableKey(String name, String suffix)
 	{
 		StringBuilder key = new StringBuilder();
-		for (String word : words(name))
-		{
-			key.append(key.length() == 0 ? word : Character.toUpperCase(word.charAt(0)) + word.substring(1));
-		}
+		words(name).forEach(word ->
+			key.append(key.length() == 0 ? word : Character.toUpperCase(word.charAt(0)) + word.substring(1)));
 		return key.length() == 0 ? "" : key.append(suffix).toString();
 	}
 

@@ -98,10 +98,7 @@ final class LootDays
 			bump(into, "leftValue", value);
 			bump(into, "leftKills", kills);
 			JsonObject items = sub(into, "leftItems");
-			for (BagItem b : perItem)
-			{
-				tally(sub(items, b.name), null, b.qty, b.value);
-			}
+			perItem.forEach(b -> tally(sub(items, b.name), null, b.qty, b.value));
 		}
 	}
 
@@ -331,10 +328,8 @@ final class LootDays
 	{
 		List<Map.Entry<String, long[]>> rows = new ArrayList<>(from.entrySet());
 		rows.sort((a, b) -> Long.compare(b.getValue()[1], a.getValue()[1]));
-		for (var e : rows)
-		{
-			into.add(new String[]{e.getKey(), String.valueOf(e.getValue()[0]), String.valueOf(e.getValue()[1])});
-		}
+		rows.forEach(e ->
+			into.add(new String[]{e.getKey(), String.valueOf(e.getValue()[0]), String.valueOf(e.getValue()[1])}));
 	}
 
 	JsonObject sessionRoll = new JsonObject();

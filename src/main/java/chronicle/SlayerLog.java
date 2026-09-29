@@ -309,10 +309,7 @@ final class SlayerLog
 		Map<String, long[]> out = new LinkedHashMap<>();
 		synchronized (store.lock)
 		{
-			for (JsonObject t : tasksIn(fromMs, toMs, null, true))
-			{
-				LocalStore.sumItems(obj(t, "items"), out, null, false);
-			}
+			tasksIn(fromMs, toMs, null, true).forEach(t -> LocalStore.sumItems(obj(t, "items"), out, null, false));
 		}
 		return out;
 	}
@@ -324,10 +321,7 @@ final class SlayerLog
 		{
 			for (JsonObject t : tasksIn(fromMs, toMs, null, true))
 			{
-				for (var m : obj(t, "monsters").entrySet())
-				{
-					out.merge(m.getKey(), asLong(m.getValue()), Long::sum);
-				}
+				obj(t, "monsters").entrySet().forEach(m -> out.merge(m.getKey(), asLong(m.getValue()), Long::sum));
 			}
 		}
 		return out;
@@ -391,10 +385,8 @@ final class SlayerLog
 		Map<String, Integer> ids = new LinkedHashMap<>();
 		synchronized (store.lock)
 		{
-			for (JsonObject t : tasksIn(fromMs, toMs, onlyTask, includeOpen))
-			{
-				LocalStore.sumItems(obj(t, "items"), summed, ids, false);
-			}
+			tasksIn(fromMs, toMs, onlyTask, includeOpen).forEach(t ->
+				LocalStore.sumItems(obj(t, "items"), summed, ids, false));
 		}
 		return LocalStore.bagRows(summed, ids, 0);
 	}
@@ -515,10 +507,8 @@ final class SlayerLog
 		List<UntakenRow> out = new ArrayList<>();
 		synchronized (store.lock)
 		{
-			for (var e : obj(segmentAt(index), "monsters").entrySet())
-			{
-				out.add(new UntakenRow(e.getKey(), asLong(e.getValue()), 0));
-			}
+			obj(segmentAt(index), "monsters").entrySet().forEach(e ->
+				out.add(new UntakenRow(e.getKey(), asLong(e.getValue()), 0)));
 		}
 		out.sort((a, b) -> Long.compare(b.qty, a.qty));
 		return out;

@@ -107,10 +107,7 @@ class HistoryLog
 	{
 		JsonObject line = new JsonObject();
 		line.addProperty("date", date);
-		for (var e : state.entrySet())
-		{
-			line.add(e.getKey(), e.getValue());
-		}
+		state.entrySet().forEach(e -> line.add(e.getKey(), e.getValue()));
 		Adjust carried = dropTrailingDate(f, date);
 		carried.add(adj);
 		if (!carried.isEmpty())

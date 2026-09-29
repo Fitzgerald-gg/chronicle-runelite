@@ -49,10 +49,7 @@ final class KillCounts
 		Map<String, Long> reconciled)
 	{
 		Map<String, String> byKind = new HashMap<>();
-		for (String key : reconciled.keySet())
-		{
-			byKind.putIfAbsent(chatKind(key), key);
-		}
+		reconciled.keySet().forEach(key -> byKind.putIfAbsent(chatKind(key), key));
 		Set<String> out = new LinkedHashSet<>();
 		for (String name : sourceKills(clog, sources, true).keySet())
 		{
@@ -76,16 +73,10 @@ final class KillCounts
 	{
 		Map<String, Long> paged = clogKillCounts(clog);
 		Map<String, String> byKind = new HashMap<>();
-		for (String name : paged.keySet())
-		{
-			byKind.put(kindOf(name), name);
-		}
+		paged.keySet().forEach(name -> byKind.put(kindOf(name), name));
 		Map<String, Long> stated = killLogCounts(clog);
 		Map<String, Long> statedByKind = new HashMap<>();
-		for (var e : stated.entrySet())
-		{
-			statedByKind.putIfAbsent(kindOf(e.getKey()), e.getValue());
-		}
+		stated.entrySet().forEach(e -> statedByKind.putIfAbsent(kindOf(e.getKey()), e.getValue()));
 		Map<String, Long> out = new LinkedHashMap<>();
 		for (SourceRow r : sources)
 		{
@@ -173,18 +164,9 @@ final class KillCounts
 			return;
 		}
 		Map<String, String> byKind = new HashMap<>();
-		for (String name : out.keySet())
-		{
-			byKind.putIfAbsent(chatKind(name), name);
-		}
-		for (String name : vocabulary)
-		{
-			byKind.putIfAbsent(chatKind(name), name);
-		}
-		for (var e : chat.entrySet())
-		{
-			out.merge(spokenAs(byKind, e.getKey()), e.getValue(), Math::max);
-		}
+		out.keySet().forEach(name -> byKind.putIfAbsent(chatKind(name), name));
+		vocabulary.forEach(name -> byKind.putIfAbsent(chatKind(name), name));
+		chat.entrySet().forEach(e -> out.merge(spokenAs(byKind, e.getKey()), e.getValue(), Math::max));
 	}
 
 	private static String spokenAs(Map<String, String> byKind, String said)
@@ -205,15 +187,9 @@ final class KillCounts
 	private static Map<String, Long> respelled(Map<String, Long> said, Set<String> names)
 	{
 		Map<String, String> byKind = new HashMap<>();
-		for (String name : names)
-		{
-			byKind.putIfAbsent(chatKind(name), name);
-		}
+		names.forEach(name -> byKind.putIfAbsent(chatKind(name), name));
 		Map<String, Long> out = new LinkedHashMap<>();
-		for (var e : said.entrySet())
-		{
-			out.merge(spokenAs(byKind, e.getKey()), e.getValue(), Math::max);
-		}
+		said.entrySet().forEach(e -> out.merge(spokenAs(byKind, e.getKey()), e.getValue(), Math::max));
 		return out;
 	}
 
@@ -225,10 +201,7 @@ final class KillCounts
 			return;
 		}
 		Map<String, String> byKind = new HashMap<>();
-		for (String name : out.keySet())
-		{
-			byKind.putIfAbsent(chatKind(name), name);
-		}
+		out.keySet().forEach(name -> byKind.putIfAbsent(chatKind(name), name));
 		for (var e : stated.entrySet())
 		{
 			String known = byKind.get(chatKind(e.getKey()));

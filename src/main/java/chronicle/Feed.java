@@ -331,15 +331,9 @@ final class Feed
 	static List<String> counted(List<String> names)
 	{
 		Map<String, Integer> n = new LinkedHashMap<>();
-		for (String s : names)
-		{
-			n.merge(s, 1, Integer::sum);
-		}
+		names.forEach(s -> n.merge(s, 1, Integer::sum));
 		List<String> out = new ArrayList<>();
-		for (Entry<String, Integer> e : n.entrySet())
-		{
-			out.add(e.getKey() + (e.getValue() > 1 ? " ×" + e.getValue() : ""));
-		}
+		n.entrySet().forEach(e -> out.add(e.getKey() + (e.getValue() > 1 ? " ×" + e.getValue() : "")));
 		return out;
 	}
 

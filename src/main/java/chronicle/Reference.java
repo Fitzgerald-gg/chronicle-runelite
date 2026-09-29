@@ -170,10 +170,7 @@ final class Reference
 						: tab.getValue().getAsJsonObject().entrySet())
 					{
 						List<String> slots = new ArrayList<>();
-						for (JsonElement it : pg.getValue().getAsJsonArray())
-						{
-							slots.add(it.getAsString());
-						}
+						pg.getValue().getAsJsonArray().forEach(it -> slots.add(it.getAsString()));
 						pages.put(pg.getKey(), slots);
 					}
 					out.put(tab.getKey(), pages);
@@ -202,14 +199,8 @@ final class Reference
 			for (Entry<String, List<String>> pg : tab.getValue().entrySet())
 			{
 				Set<String> onThisPage = new HashSet<>();
-				for (String slot : pg.getValue())
-				{
-					onThisPage.add(low(slot));
-				}
-				for (String slot : onThisPage)
-				{
-					homes.merge(slot, 1, Integer::sum);
-				}
+				pg.getValue().forEach(slot -> onThisPage.add(low(slot)));
+				onThisPage.forEach(slot -> homes.merge(slot, 1, Integer::sum));
 			}
 		}
 		Set<String> shared = new HashSet<>();

@@ -331,10 +331,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 				src.addProperty("last_seen", nowMs);
 			}
 			loot.rollTaken(source, batchValue, priced, killTime);
-			for (BagItem b : priced)
-			{
-				recentDrops.addFirst(new RecentDrop(b.itemId, (int) b.qty, b.name));
-			}
+			priced.forEach(b -> recentDrops.addFirst(new RecentDrop(b.itemId, (int) b.qty, b.name)));
 			while (recentDrops.size() > 10)
 			{
 				recentDrops.removeLast();
@@ -477,19 +474,13 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			Map<String, Long> anchored = anchoredKills();
 			Map<String, Long> kills = reconciledKills(cl, sources, chat, anchored);
 			Map<String, Integer> rank = new HashMap<>();
-			for (String name : obj(cl, "kcs").keySet())
-			{
-				rank.put(chatKind(name), 1);
-			}
+			obj(cl, "kcs").keySet().forEach(name -> rank.put(chatKind(name), 1));
 			Map<String, Long> said = killLogCounts(cl);
 			said.putAll(pageKillLines(cl));
 			Set<String> vocabulary = clogKillCounts(cl).keySet();
 			foldChatCounts(said, chat, vocabulary);
 			foldChatCounts(said, anchored, vocabulary);
-			for (String name : said.keySet())
-			{
-				rank.put(chatKind(name), 2);
-			}
+			said.keySet().forEach(name -> rank.put(chatKind(name), 2));
 			Set<String> summed = new HashSet<>();
 			long sum = 0;
 			for (String key : spineKillKeys(cl, sources, kills))
@@ -561,10 +552,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		synchronized (lock)
 		{
 			JsonObject tr = new JsonObject();
-			for (var e : lifetimeOf(session).entrySet())
-			{
-				tr.addProperty(e.getKey(), e.getValue());
-			}
+			lifetimeOf(session).entrySet().forEach(e -> tr.addProperty(e.getKey(), e.getValue()));
 			root.add("trackers", tr);
 			touch();
 		}
@@ -1001,10 +989,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		Map<String, Integer> ids = new LinkedHashMap<>();
 		synchronized (lock)
 		{
-			for (var src : objects(obj(root, "drops")))
-			{
-				sumItems(obj(src.getValue(), "items"), summed, ids, true);
-			}
+			objects(obj(root, "drops")).forEach(src -> sumItems(obj(src.getValue(), "items"), summed, ids, true));
 		}
 		return bagRows(summed, ids, -1);
 	}
@@ -1191,10 +1176,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				root.add("collection_log", mergeClog(sub(root, "collection_log"), in.getAsJsonObject("collection_log")));
 			}
-			for (var e : obj(in, "chat_kcs").entrySet())
-			{
-				raise(sub(root, "chat_kcs"), e.getKey(), asLong(e.getValue()));
-			}
+			obj(in, "chat_kcs").entrySet().forEach(e -> raise(sub(root, "chat_kcs"), e.getKey(), asLong(e.getValue())));
 			if (in.has("gathered_items") && in.get("gathered_items").isJsonArray())
 			{
 				JsonArray have = arr(root, "gathered_items");
@@ -1227,10 +1209,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			if (isObject(in, "untaken_pairs"))
 			{
 				JsonObject pairs = sub(root, "untaken_pairs");
-				for (var e : objects(in.getAsJsonObject("untaken_pairs")))
-				{
-					mergeRows(sub(pairs, e.getKey()), e.getValue(), false);
-				}
+				objects(in.getAsJsonObject("untaken_pairs")).forEach(e ->
+					mergeRows(sub(pairs, e.getKey()), e.getValue(), false));
 			}
 			if (isObject(in, "slayer"))
 			{
@@ -1335,10 +1315,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		Map<String, long[]> out = new LinkedHashMap<>();
 		synchronized (lock)
 		{
-			for (var e : objects(obj(root, "skills")))
-			{
-				out.put(e.getKey(), new long[]{asLong(e.getValue().get("level")), asLong(e.getValue().get("xp"))});
-			}
+			objects(obj(root, "skills")).forEach(e ->
+				out.put(e.getKey(), new long[]{asLong(e.getValue().get("level")), asLong(e.getValue().get("xp"))}));
 		}
 		return out;
 	}
@@ -1470,10 +1448,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 
 	private void rebaseAnchors()
 	{
-		for (var e : objects(obj(root, "kc_anchors")))
-		{
-			e.getValue().addProperty("obs", observedFor(e.getKey()));
-		}
+		objects(obj(root, "kc_anchors")).forEach(e -> e.getValue().addProperty("obs", observedFor(e.getKey())));
 	}
 
 	void noteKillCount(String subject, int tally, String rsn)
@@ -1514,10 +1489,8 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	{
 		Set<String> names = new HashSet<>();
 		obj(cl, "clog_items").keySet().forEach(k -> names.add(k.toLowerCase(Locale.ROOT)));
-		for (var pg : objects(obj(cl, "by_cat")))
-		{
-			pg.getValue().keySet().forEach(k -> names.add(k.toLowerCase(Locale.ROOT)));
-		}
+		objects(obj(cl, "by_cat")).forEach(pg ->
+			pg.getValue().keySet().forEach(k -> names.add(k.toLowerCase(Locale.ROOT))));
 		return names.size();
 	}
 
