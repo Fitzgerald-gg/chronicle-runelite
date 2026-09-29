@@ -22,6 +22,7 @@ final class Build
 	final Kills kills = new Kills(this);
 	private List<SourceRow> sources;
 	private JsonObject clog;
+	private ClogBook book;
 	private Span span;
 	private boolean spanAsked;
 
@@ -53,6 +54,15 @@ final class Build
 			clog = plugin.clogSnapshot();
 		}
 		return clog;
+	}
+
+	ClogBook book()
+	{
+		if (book == null)
+		{
+			book = new ClogBook(clog(), plugin.gson());
+		}
+		return book;
 	}
 
 	Span span()

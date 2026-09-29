@@ -16,7 +16,7 @@ public class ClogPageCountTest
 	@SuppressWarnings("unchecked")
 	private static Map<String, Long> counts(JsonObject cl) throws Exception
 	{
-		java.lang.reflect.Method m = ChroniclePanel.class
+		java.lang.reflect.Method m = ClogBook.class
 			.getDeclaredMethod("pageCounts", JsonObject.class);
 		m.setAccessible(true);
 		return (Map<String, Long>) m.invoke(null, cl);

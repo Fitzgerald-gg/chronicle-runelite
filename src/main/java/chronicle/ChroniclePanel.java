@@ -239,7 +239,6 @@ class ChroniclePanel extends PluginPanel
 	private LocalDate histCursor = LocalDate.now();
 	private LocalDate histFrom;
 	private LocalDate histTo;
-	private static Map<String, Map<String, List<String>>> taxonomy;
 
 	ChroniclePanel(ChroniclePlugin plugin)
 	{
@@ -546,55 +545,6 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	private String tabStanding(JsonObject cl, String tab)
-	{
-		if (cl == null)
-		{
-			return null;
-		}
-		JsonObject counts = obj(cl, "cat_counts");
-		String key = low(tab);
-		long total = counts.has(key + "_total") ? safeLong(counts.get(key + "_total")) : 0;
-		if (total <= 0)
-		{
-			return null;
-		}
-		long got = counts.has(key + "_obtained")
-			? safeLong(counts.get(key + "_obtained")) : 0;
-		return tip(tab,
-			"Obtained", fmt(got),
-			"Available", fmt(total),
-			"Share", share(got, total));
-	}
-
-	private static Map<String, Long> pageCounts(JsonObject cl)
-	{
-		Map<String, Long> out = new LinkedHashMap<>();
-		if (cl == null)
-		{
-			return out;
-		}
-		Set<String> lined = new HashSet<>();
-		for (String pageName : obj(cl, "kc_lines").keySet())
-		{
-			lined.add(low(pageName));
-		}
-		for (Entry<String, JsonElement> e
-			: obj(cl, "kcs").entrySet())
-		{
-			String key = low(e.getKey());
-			if (!lined.contains(key))
-			{
-				out.merge(key, safeLong(e.getValue()), Math::max);
-			}
-		}
-		for (Entry<String, Long> e : LocalStore.pageKillLines(cl).entrySet())
-		{
-			out.put(low(e.getKey()), e.getValue());
-		}
-		return out;
-	}
-
 	private static String pageHeaderTip(JsonObject cl, String page)
 	{
 		if (cl == null)
@@ -703,19 +653,17 @@ class ChroniclePanel extends PluginPanel
 
 	private boolean openLogPage(String page)
 	{
-		for (Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
+		String tab = build.book().tabOf(page);
+		if (tab == null)
 		{
-			if (tab.getValue().containsKey(page))
-			{
-				applyTab(Tab.STANDING);
-				sheetPage = "log";
-				clogTab = tab.getKey();
-				clogPageSel = page;
-				rebuild();
-				return true;
-			}
+			return false;
 		}
-		return false;
+		applyTab(Tab.STANDING);
+		sheetPage = "log";
+		clogTab = tab;
+		clogPageSel = page;
+		rebuild();
+		return true;
 	}
 
 	private JPanel activityCell(String label, String source, String page)
@@ -3825,12 +3773,17 @@ class ChroniclePanel extends PluginPanel
 		}
 		spaced(p, head);
 
-		Map<String, Map<String, List<String>>> tax = taxonomy(plugin.gson());
+		ClogBook book = build.book();
 		JPanel pills = new JPanel(new GridLayout(0, 3, 3, 3));
 		pills.setBackground(DARK);
-		for (String tab : tax.keySet())
+		for (String tab : book.tax.keySet())
 		{
-			pills.add(pill(tab, tab.equals(clogTab), 4, tabStanding(build.clog(), tab), () ->
+			long[] of = book.tabStanding(tab);
+			String hover = of == null ? null : tip(tab,
+				"Obtained", fmt(of[0]),
+				"Available", fmt(of[1]),
+				"Share", share(of[0], of[1]));
+			pills.add(pill(tab, tab.equals(clogTab), 4, hover, () ->
 			{
 				clogTab = tab;
 				clogPageSel = null;
@@ -3839,29 +3792,20 @@ class ChroniclePanel extends PluginPanel
 		}
 		spaced(p, pills);
 
-		JsonObject cl = build.clog();
-		Obtained ob = obtained(cl);
-		Map<String, Long> kcs = pageCounts(cl);
-
-		Map<String, List<String>> pages = tax.getOrDefault(clogTab, new LinkedHashMap<>());
+		Map<String, List<String>> pages = book.tax.getOrDefault(clogTab, new LinkedHashMap<>());
 		for (Entry<String, List<String>> pg : pages.entrySet())
 		{
 			String page = pg.getKey();
 			List<String> slots = pg.getValue();
-			boolean[] lit = lightSlots(slots, ob.byPage.get(low(page)), ob.all,
-				sharedSlotNames(plugin.gson()));
-			int got = 0;
-			for (boolean b : lit)
-			{
-				got += b ? 1 : 0;
-			}
-			Long kc = kcs.get(low(page));
+			boolean[] lit = book.lit(page, slots);
+			int got = ClogBook.held(lit);
+			Long kc = book.kcs.get(low(page));
 			boolean open = page.equals(clogPageSel);
 			boolean complete = got == slots.size() && !slots.isEmpty();
 			JPanel rowP = row(page, got + "/" + slots.size()
 				+ (kc != null && kc > 0 ? " · " + fmt(kc) + " kc" : ""),
 				complete ? ACCENT_SESSION : null, complete);
-			String lines = pageHeaderTip(cl, page);
+			String lines = pageHeaderTip(book.clog, page);
 			if (lines != null)
 			{
 				rowP.setToolTipText(lines);
@@ -3928,32 +3872,16 @@ class ChroniclePanel extends PluginPanel
 
 		if ("Other".equals(clogTab))
 		{
-			Set<String> known = new HashSet<>();
-			for (Map<String, List<String>> tabPages : tax.values())
-			{
-				for (String pageName : tabPages.keySet())
-				{
-					known.add(low(pageName));
-				}
-			}
-			List<String> strangers = new ArrayList<>();
-			for (String pageName : ob.byPage.keySet())
-			{
-				if (!known.contains(pageName))
-				{
-					strangers.add(pageName);
-				}
-			}
-			Collections.sort(strangers);
+			List<String> strangers = book.strangers();
 			if (!strangers.isEmpty())
 			{
 				p.add(vgap(6));
 				p.add(group("NEW SINCE THIS RELEASE"));
 				for (String pageName : strangers)
 				{
-					Map<String, Long> held = ob.byPage.get(pageName);
-					Long kc = kcs.get(pageName);
-					p.add(row(prettyPage(pageName),
+					Map<String, Long> held = book.byPage.get(pageName);
+					Long kc = book.kcs.get(pageName);
+					p.add(row(ClogBook.prettyPage(pageName),
 						fmt(held == null ? 0 : held.size()) + " held"
 							+ (kc != null && kc > 0 ? " \u00b7 " + fmt(kc) + " kc" : "")));
 				}
@@ -4346,164 +4274,10 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
-	private static final class Obtained
-	{
-		final Map<String, Long> all = new LinkedHashMap<>();
-		final Map<String, Map<String, Long>> byPage = new LinkedHashMap<>();
-	}
-
-	private static String prettyPage(String key)
-	{
-		StringBuilder sb = new StringBuilder(key.length());
-		boolean head = true;
-		for (int i = 0; i < key.length(); i++)
-		{
-			char c = key.charAt(i);
-			sb.append(head ? Character.toUpperCase(c) : c);
-			head = c == ' ' || c == '(';
-		}
-		return sb.toString();
-	}
-
 	private int[] clogStanding()
 	{
 		int avail = plugin.clogAvailable();
 		return avail > 0 ? new int[]{plugin.clogFinished(), avail} : null;
-	}
-
-	private static Obtained obtained(JsonObject cl)
-	{
-		Obtained o = new Obtained();
-		for (Entry<String, JsonElement> e
-			: obj(cl, "clog_items").entrySet())
-		{
-			o.all.merge(low(e.getKey()), safeLong(e.getValue()), Math::max);
-		}
-		for (Entry<String, JsonElement> pg
-			: obj(cl, "by_cat").entrySet())
-		{
-			if (!pg.getValue().isJsonObject())
-			{
-				continue;
-			}
-			Map<String, Long> items = new LinkedHashMap<>();
-			for (Entry<String, JsonElement> it
-				: pg.getValue().getAsJsonObject().entrySet())
-			{
-				items.merge(low(it.getKey()),
-					safeLong(it.getValue()), Math::max);
-			}
-			o.byPage.put(low(pg.getKey()), items);
-		}
-		return o;
-	}
-
-	private static boolean[] lightSlots(List<String> slots, Map<String, Long> pageItems,
-		Map<String, Long> owned, Set<String> sharedNames)
-	{
-		boolean[] lit = new boolean[slots.size()];
-		Map<String, Integer> dupes = new LinkedHashMap<>();
-		for (String slot : slots)
-		{
-			dupes.merge(low(slot), 1, Integer::sum);
-		}
-		Map<String, Integer> seen = new LinkedHashMap<>();
-		for (int i = 0; i < slots.size(); i++)
-		{
-			String key = low(slots.get(i));
-			long onPage = pageItems != null ? pageItems.getOrDefault(key, 0L) : 0L;
-			boolean globalMaySpeak = pageItems == null || !sharedNames.contains(key);
-			long global = globalMaySpeak ? owned.getOrDefault(key, 0L) : 0L;
-			long have = Math.max(onPage, global);
-			if (dupes.get(key) > 1)
-			{
-				int idx = seen.merge(key, 1, Integer::sum) - 1;
-				lit[i] = idx < have;
-			}
-			else
-			{
-				lit[i] = have > 0
-					|| (pageItems != null && pageItems.containsKey(key))
-					|| (globalMaySpeak && owned.containsKey(key));
-			}
-		}
-		return lit;
-	}
-
-	private static Set<String> sharedSlotNames;
-
-	private static synchronized Set<String> sharedSlotNames(
-		Gson gson)
-	{
-		if (sharedSlotNames != null)
-		{
-			return sharedSlotNames;
-		}
-		Map<String, Integer> homes = new LinkedHashMap<>();
-		for (Entry<String, Map<String, List<String>>> tab : taxonomy(gson).entrySet())
-		{
-			for (Entry<String, List<String>> pg : tab.getValue().entrySet())
-			{
-				Set<String> onThisPage = new HashSet<>();
-				for (String slot : pg.getValue())
-				{
-					onThisPage.add(low(slot));
-				}
-				for (String slot : onThisPage)
-				{
-					homes.merge(slot, 1, Integer::sum);
-				}
-			}
-		}
-		Set<String> shared = new HashSet<>();
-		for (Entry<String, Integer> e : homes.entrySet())
-		{
-			if (e.getValue() > 1)
-			{
-				shared.add(e.getKey());
-			}
-		}
-		sharedSlotNames = shared;
-		return shared;
-	}
-
-	private static synchronized Map<String, Map<String, List<String>>> taxonomy(
-		Gson gson)
-	{
-		if (taxonomy != null)
-		{
-			return taxonomy;
-		}
-		Map<String, Map<String, List<String>>> out = new LinkedHashMap<>();
-		try (InputStream in = ChroniclePanel.class.getResourceAsStream("clog_taxonomy.json"))
-		{
-			if (in != null)
-			{
-				JsonObject rootTax = gson.fromJson(
-					new InputStreamReader(in, StandardCharsets.UTF_8),
-					JsonObject.class);
-				for (Entry<String, JsonElement> tab : rootTax.entrySet())
-				{
-					Map<String, List<String>> pages = new LinkedHashMap<>();
-					for (Entry<String, JsonElement> pg
-						: tab.getValue().getAsJsonObject().entrySet())
-					{
-						List<String> slots = new ArrayList<>();
-						for (JsonElement it : pg.getValue().getAsJsonArray())
-						{
-							slots.add(it.getAsString());
-						}
-						pages.put(pg.getKey(), slots);
-					}
-					out.put(tab.getKey(), pages);
-				}
-			}
-		}
-		catch (Exception e)
-		{
-		}
-		taxonomy = out;
-		return out;
 	}
 
 	private void addPaceLine(JPanel p, String section)
@@ -5621,7 +5395,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return KIND_SKILLING;
 		}
-		for (Entry<String, Map<String, List<String>>> tab : taxonomy(plugin.gson()).entrySet())
+		for (Entry<String, Map<String, List<String>>> tab : ClogBook.taxonomy(plugin.gson()).entrySet())
 		{
 			if (!tab.getValue().containsKey(name))
 			{
@@ -5695,7 +5469,7 @@ class ChroniclePanel extends PluginPanel
 
 	private int pagedItem(String page)
 	{
-		for (Map<String, List<String>> pages : taxonomy(plugin.gson()).values())
+		for (Map<String, List<String>> pages : ClogBook.taxonomy(plugin.gson()).values())
 		{
 			List<String> slots = pages.get(page);
 			if (slots == null)
@@ -9648,7 +9422,7 @@ class ChroniclePanel extends PluginPanel
 				names.add(b.name);
 			}
 		}
-		for (Map<String, List<String>> tab : taxonomy(plugin.gson()).values())
+		for (Map<String, List<String>> tab : ClogBook.taxonomy(plugin.gson()).values())
 		{
 			names.addAll(tab.keySet());
 			for (List<String> slots : tab.values())
@@ -10178,9 +9952,9 @@ class ChroniclePanel extends PluginPanel
 		total += searchGroup(p, "Items", items);
 
 		List<Hit> log = new ArrayList<>();
-		Obtained ob = obtained(build.clog());
+		ClogBook book = build.book();
 		Set<String> slotSeen = new HashSet<>();
-		for (Map<String, List<String>> tab : taxonomy(plugin.gson()).values())
+		for (Map<String, List<String>> tab : book.tax.values())
 		{
 			for (Entry<String, List<String>> pg : tab.entrySet())
 			{
@@ -10189,14 +9963,8 @@ class ChroniclePanel extends PluginPanel
 				boolean[] lit = null;
 				if (ps >= 0)
 				{
-					lit = lightSlots(pg.getValue(), ob.byPage.get(low(page)),
-						ob.all, sharedSlotNames(plugin.gson()));
-					int held = 0;
-					for (boolean l : lit)
-					{
-						held += l ? 1 : 0;
-					}
-					log.add(new Hit(page, held + " / " + pg.getValue().size(), null, "The page",
+					lit = book.lit(page, pg.getValue());
+					log.add(new Hit(page, ClogBook.held(lit) + " / " + pg.getValue().size(), null, "The page",
 						() -> openLogPage(page), Math.max(0, ps - 1), 2));
 				}
 				for (String slot : pg.getValue())
@@ -10208,8 +9976,7 @@ class ChroniclePanel extends PluginPanel
 					}
 					if (lit == null)
 					{
-						lit = lightSlots(pg.getValue(), ob.byPage.get(low(page)),
-							ob.all, sharedSlotNames(plugin.gson()));
+						lit = book.lit(page, pg.getValue());
 					}
 					boolean got = false;
 					for (int i = 0; i < lit.length; i++)

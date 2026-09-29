@@ -248,7 +248,7 @@ public class PetPageFoldTest
 	{
 		try
 		{
-			Method m = ChroniclePanel.class.getDeclaredMethod("taxonomy",
+			Method m = ClogBook.class.getDeclaredMethod("taxonomy",
 				com.google.gson.Gson.class);
 			m.setAccessible(true);
 			@SuppressWarnings("unchecked")

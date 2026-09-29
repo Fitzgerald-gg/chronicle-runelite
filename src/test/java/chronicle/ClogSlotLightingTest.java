@@ -21,7 +21,7 @@ public class ClogSlotLightingTest
 	private static boolean[] light(List<String> slots, Map<String, Long> page,
 		Map<String, Long> all, Set<String> shared) throws Exception
 	{
-		Method m = ChroniclePanel.class.getDeclaredMethod("lightSlots", List.class,
+		Method m = ClogBook.class.getDeclaredMethod("lightSlots", List.class,
 			Map.class, Map.class, Set.class);
 		m.setAccessible(true);
 		return (boolean[]) m.invoke(null, slots, page, all, shared);
@@ -98,7 +98,7 @@ public class ClogSlotLightingTest
 	@Test
 	public void theSharedNamesComeFromTheTaxonomyItself() throws Exception
 	{
-		Method m = ChroniclePanel.class.getDeclaredMethod("sharedSlotNames",
+		Method m = ClogBook.class.getDeclaredMethod("sharedSlotNames",
 			com.google.gson.Gson.class);
 		m.setAccessible(true);
 		Set<String> shared = (Set<String>) m.invoke(null, new com.google.gson.Gson());

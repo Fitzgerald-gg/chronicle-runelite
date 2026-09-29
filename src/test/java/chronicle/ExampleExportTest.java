@@ -509,35 +509,20 @@ public class ExampleExportTest
 			}
 			corpus.put("rows", rows);
 
-			Method obtained = ChroniclePanel.class.getDeclaredMethod("obtained",
-				com.google.gson.JsonObject.class);
-			Method slotHeld = ChroniclePanel.class.getDeclaredMethod("slotHeld", String.class,
-				String.class, List.class, Class.forName("chronicle.ChroniclePanel$Obtained"),
-				java.util.Set.class);
-			Method sharedNames = ChroniclePanel.class.getDeclaredMethod(
-				"sharedSlotNames", Gson.class);
-			sharedNames.setAccessible(true);
-			java.util.Set<String> shared =
-				(java.util.Set<String>) sharedNames.invoke(null, plugin.gson());
-			Method taxonomy = ChroniclePanel.class.getDeclaredMethod("taxonomy", Gson.class);
-			obtained.setAccessible(true);
-			slotHeld.setAccessible(true);
-			taxonomy.setAccessible(true);
-			Object ob = obtained.invoke(null, plugin.clogSnapshot());
-			Map<String, Map<String, List<String>>> tax =
-				(Map<String, Map<String, List<String>>>) taxonomy.invoke(null, plugin.gson());
+			ClogBook book = new ClogBook(plugin.clogSnapshot(), plugin.gson());
 			List<Object> slots = new ArrayList<>();
 			java.util.Set<String> seenSlot = new java.util.LinkedHashSet<>();
-			for (Map<String, List<String>> tab : tax.values())
+			for (Map<String, List<String>> tab : book.tax.values())
 			{
 				for (Map.Entry<String, List<String>> page : tab.entrySet())
 				{
-					for (String slot : page.getValue())
+					boolean[] lit = book.lit(page.getKey(), page.getValue());
+					for (int i = 0; i < page.getValue().size(); i++)
 					{
+						String slot = page.getValue().get(i);
 						if (seenSlot.add(slot))
 						{
-							boolean got = (Boolean) slotHeld.invoke(null, slot, page.getKey(),
-								page.getValue(), ob, shared);
+							boolean got = lit[i];
 							slots.add(java.util.Arrays.asList(slot, page.getKey(), got ? 1 : 0));
 						}
 					}

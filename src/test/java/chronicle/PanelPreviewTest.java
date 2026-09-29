@@ -1641,7 +1641,7 @@ public class PanelPreviewTest
 
 	private String firstFoldablePet(StubPlugin stub, String page) throws Exception
 	{
-		Method m = ChroniclePanel.class.getDeclaredMethod("taxonomy", com.google.gson.Gson.class);
+		Method m = ClogBook.class.getDeclaredMethod("taxonomy", com.google.gson.Gson.class);
 		m.setAccessible(true);
 		@SuppressWarnings("unchecked")
 		Map<String, Map<String, List<String>>> tax =
@@ -1681,7 +1681,7 @@ public class PanelPreviewTest
 
 	private String firstClogPage(ChroniclePanel panel) throws Exception
 	{
-		Method m = ChroniclePanel.class.getDeclaredMethod("taxonomy", com.google.gson.Gson.class);
+		Method m = ClogBook.class.getDeclaredMethod("taxonomy", com.google.gson.Gson.class);
 		m.setAccessible(true);
 		@SuppressWarnings("unchecked")
 		Map<String, Map<String, List<String>>> tax =
