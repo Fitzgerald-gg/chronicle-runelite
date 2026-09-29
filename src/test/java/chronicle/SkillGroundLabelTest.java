@@ -120,7 +120,7 @@ public class SkillGroundLabelTest
 	{
 		ChroniclePanel p = panel();
 		String lifetime = figureFor(drill(p, "Lifetime"));
-		String sitting = figureFor(drill(p, ChroniclePanel.SESSION));
+		String sitting = figureFor(drill(p, Period.SESSION));
 		assertTrue("the fixture drew no figure to compare", lifetime != null);
 		assertTrue("the block now answers the period, so its heading must stop "
 			+ "claiming to be the lifetime: " + lifetime + " vs " + sitting,

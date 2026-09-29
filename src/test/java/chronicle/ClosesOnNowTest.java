@@ -49,9 +49,9 @@ public class ClosesOnNowTest
 		Field from = ChroniclePanel.class.getDeclaredField("histFrom");
 		from.setAccessible(true);
 		from.set(panel, null);
-		Method m = ChroniclePanel.class.getDeclaredMethod("closingNow", Map.class, Map.class);
+		Method m = ChroniclePanel.class.getDeclaredMethod("window");
 		m.setAccessible(true);
-		return (Map<String, Long>) m.invoke(panel, closing, live);
+		return ((Period) m.invoke(panel)).closingNow(closing, live);
 	}
 
 	private static Map<String, Long> map(Object... kv)

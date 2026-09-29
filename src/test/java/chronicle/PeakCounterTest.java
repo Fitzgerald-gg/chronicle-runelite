@@ -16,7 +16,7 @@ public class PeakCounterTest
 	private static Map<String, Long> peaks(Map<String, Long> moved,
 		Map<String, Long> opening, Map<String, Long> closing) throws Exception
 	{
-		Class<?> span = Class.forName("chronicle.ChroniclePanel$Span");
+		Class<?> span = Class.forName("chronicle.Period$Span");
 		java.lang.reflect.Constructor<?> c = span.getDeclaredConstructors()[0];
 		c.setAccessible(true);
 		Object[] args = new Object[c.getParameterCount()];
@@ -27,7 +27,7 @@ public class PeakCounterTest
 			f.setAccessible(true);
 			f.set(s, baseline("closing".equals(which) ? closing : opening));
 		}
-		Method m = ChroniclePanel.class.getDeclaredMethod("peaksNotDeltas",
+		Method m = Period.class.getDeclaredMethod("peaksNotDeltas",
 			Map.class, span);
 		m.setAccessible(true);
 		@SuppressWarnings("unchecked")

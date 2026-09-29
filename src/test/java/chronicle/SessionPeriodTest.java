@@ -236,16 +236,19 @@ public class SessionPeriodTest
 
 	private static long[] windowMs() throws Exception
 	{
-		Method m = ChroniclePanel.class.getDeclaredMethod("windowMs");
-		m.setAccessible(true);
-		return (long[]) m.invoke(panel);
+		return window().ms();
 	}
 
 	private static boolean inside(long ts) throws Exception
 	{
-		Method m = ChroniclePanel.class.getDeclaredMethod("insideWindow", long.class);
+		return window().inside(ts);
+	}
+
+	private static Period window() throws Exception
+	{
+		Method m = ChroniclePanel.class.getDeclaredMethod("window");
 		m.setAccessible(true);
-		return (Boolean) m.invoke(panel, ts);
+		return (Period) m.invoke(panel);
 	}
 
 	@Test
@@ -461,12 +464,10 @@ public class SessionPeriodTest
 	{
 		period("Session");
 		assertEquals("the strip lost its capital", "This session", label());
-		Method m = ChroniclePanel.class.getDeclaredMethod("periodInSentence");
-		m.setAccessible(true);
 		assertEquals("a capital lands in the middle of every sentence naming it",
-			"this session", m.invoke(panel));
+			"this session", window().inSentence());
 		period("Lifetime");
-		assertEquals("Lifetime", m.invoke(panel));
+		assertEquals("Lifetime", window().inSentence());
 	}
 
 	@Test

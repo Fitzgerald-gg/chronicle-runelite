@@ -14,6 +14,7 @@ import chronicle.LocalStore.SlayerJourney;
 import chronicle.LocalStore.SlayerTask;
 import chronicle.LocalStore.SourceRow;
 import chronicle.LocalStore.UntakenRow;
+import chronicle.Period.Span;
 import chronicle.counters.ExperienceStatTracker;
 import chronicle.counters.StatKeys;
 import chronicle.panel.HistoryProgress;
@@ -141,21 +142,33 @@ import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.OSType;
 import net.runelite.http.api.item.ItemPrice;
+import static chronicle.Json.getIgnoreCase;
+import static chronicle.Json.has;
+import static chronicle.Json.keyOf;
+import static chronicle.Json.low;
+import static chronicle.Json.obj;
+import static chronicle.Json.safeLong;
+import static chronicle.Json.safeParse;
+import static chronicle.Json.str;
+import static chronicle.Json.strMap;
+import static chronicle.Json.strs;
+import static chronicle.Json.table;
 import static chronicle.LocalStore.kindOf;
+import static chronicle.Period.DAY;
+import static chronicle.Period.FULL_DAY;
+import static chronicle.Period.MONTH_YEAR;
+import static chronicle.Period.SESSION;
+import static chronicle.Period.TASK_DAY;
+import static chronicle.Period.dayOf;
+import static chronicle.Period.noon;
+import static chronicle.Period.peaksNotDeltas;
+import static chronicle.Period.startMs;
 import static chronicle.panel.StatRegistry.prettify;
 
 class ChroniclePanel extends PluginPanel
 {
-	private static final DateTimeFormatter DAY =
-		DateTimeFormatter.ofPattern("d MMM", Locale.UK).withZone(ZoneId.systemDefault());
 	private static final DateTimeFormatter CLOCK =
 		DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
-	private static final DateTimeFormatter TASK_DAY =
-		DateTimeFormatter.ofPattern("d MMM yy", Locale.UK).withZone(ZoneId.systemDefault());
-	private static final DateTimeFormatter FULL_DAY =
-		DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK).withZone(ZoneId.systemDefault());
-	private static final DateTimeFormatter MONTH_YEAR =
-		DateTimeFormatter.ofPattern("MMMM yyyy", Locale.UK).withZone(ZoneId.systemDefault());
 	static final Color DARK = ColorScheme.DARK_GRAY_COLOR;
 	static final Color DARKER = ColorScheme.DARKER_GRAY_COLOR;
 	static final Color ACCENT_LIFETIME = ColorScheme.BRAND_ORANGE;
@@ -605,36 +618,6 @@ class ChroniclePanel extends PluginPanel
 			FOUGHT_AS.put(kindOf(e.getKey()), strs(e.getValue())));
 	}
 
-	private static JsonObject table(String name)
-	{
-		try (InputStreamReader in = new InputStreamReader(ChroniclePanel.class.getResourceAsStream(
-			name), StandardCharsets.UTF_8))
-		{
-			return new com.google.gson.JsonParser().parse(in).getAsJsonObject();
-		}
-		catch (Exception ex)
-		{
-			return new JsonObject();
-		}
-	}
-
-	private static List<String> strs(JsonElement a)
-	{
-		List<String> out = new ArrayList<>();
-		if (a != null)
-		{
-			a.getAsJsonArray().forEach(n -> out.add(n.getAsString()));
-		}
-		return out;
-	}
-
-	private static Map<String, String> strMap(JsonObject t, String key)
-	{
-		Map<String, String> out = new LinkedHashMap<>();
-		obj(t, key).entrySet().forEach(e -> out.put(e.getKey(), e.getValue().getAsString()));
-		return out;
-	}
-
 	private Map<String, Long> kcByKind;
 
 	private Map<String, Long> kcByKind()
@@ -688,12 +671,6 @@ class ChroniclePanel extends PluginPanel
 		return v == null ? -1 : safeLong(v);
 	}
 
-	private static JsonElement getIgnoreCase(JsonObject o, String key)
-	{
-		String k = keyOf(o.keySet(), key);
-		return k == null ? null : o.get(k);
-	}
-
 	private long bossKillsInWindow(String name)
 	{
 		if (wholeRecord())
@@ -713,7 +690,7 @@ class ChroniclePanel extends PluginPanel
 		if (movedKcs == null)
 		{
 			movedKcs = HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
-				closingNow(s.closing.kcs, plugin.killCounts()));
+				window().closingNow(s.closing.kcs, plugin.killCounts()));
 		}
 		String key = keyOf(movedKcs.keySet(), name);
 		Long moved = key == null ? null : movedKcs.get(key);
@@ -764,7 +741,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			return null;
 		}
-		Window w = window();
+		Period w = window();
 		LocalDate began = dayOf(from);
 		return began.isAfter(w.start) ? began : null;
 	}
@@ -1216,7 +1193,7 @@ class ChroniclePanel extends PluginPanel
 	private String notCounting(boolean kills)
 	{
 		TreeMap<LocalDate, Baseline> spine = historySpine;
-		Window w = window();
+		Period w = window();
 		if (wholeRecord() || sessionPeriod() || spine == null || w == null)
 		{
 			return null;
@@ -2156,7 +2133,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel dropsInWindow(JPanel p)
 	{
-		Window win = window();
+		Period win = window();
 		LocalStore.LootWindow sitting = sessionPeriod() ? plugin.sessionLootWindow() : null;
 		long rollFrom = plugin.lootRollFrom();
 		long fromMs = startMs(win.start);
@@ -2168,7 +2145,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			LocalDate began = dayOf(rollFrom);
 			return noted(p, "The dated loot roll begins " + began.format(FULL_DAY)
-				+ ", which is inside " + periodInSentence() + ". Naming the part it can see "
+				+ ", which is inside " + window().inSentence() + ". Naming the part it can see "
 				+ "as the whole period would be worse than saying nothing.");
 		}
 		LocalStore.LootWindow w = sitting != null ? sitting
@@ -2224,25 +2201,6 @@ class ChroniclePanel extends PluginPanel
 			bag.add(new BagItem(0, r[0], safeParse(r[1]), safeParse(r[2])));
 		}
 		return bag;
-	}
-
-	private long[] windowMs()
-	{
-		if (wholeRecord())
-		{
-			return new long[]{Long.MIN_VALUE / 2, Long.MAX_VALUE / 2};
-		}
-		if (sessionPeriod())
-		{
-			long began = plugin.sessionStart();
-			return new long[]{began > 0 ? began
-				: startMs(LocalDate.now()),
-				System.currentTimeMillis()};
-		}
-		Window w = window();
-		return new long[]{
-			startMs(w.start),
-			startMs(w.end.plusDays(1)) - 1};
 	}
 
 	private boolean onTaskOnly;
@@ -2304,7 +2262,7 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, lens);
 		if (canAskOnTask && onTaskOnly)
 		{
-			long[] w = windowMs();
+			long[] w = window().ms();
 			List<BagItem> taskBag = plugin.onTaskLoot(w[0], w[1], null, wholeRecord());
 			if (taskBag.isEmpty())
 			{
@@ -2664,7 +2622,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel addOnTaskLoot(JPanel p)
 	{
-		long[] ms = windowMs();
+		long[] ms = window().ms();
 		final List<BagItem> bag = plugin.onTaskLoot(ms[0], ms[1], lootTask,
 			wholeRecord());
 		if (bag.isEmpty())
@@ -3148,7 +3106,7 @@ class ChroniclePanel extends PluginPanel
 		for (int i = 0; i < j.tasks.size(); i++)
 		{
 			SlayerTask t = j.tasks.get(i);
-			if (insideWindow((long) (t.ts * 1000)) && (wholeRecord() || !t.inProgress))
+			if (window().inside((long) (t.ts * 1000)) && (wholeRecord() || !t.inProgress))
 			{
 				shown.add(t);
 				where.add(i);
@@ -3385,22 +3343,6 @@ class ChroniclePanel extends PluginPanel
 			loose = loose == null && !exact && named.apply(r).equalsIgnoreCase(name) ? r : loose;
 		}
 		return loose;
-	}
-
-	private static String keyOf(Set<String> keys, String name)
-	{
-		if (keys.contains(name))
-		{
-			return name;
-		}
-		for (String k : keys)
-		{
-			if (k.equalsIgnoreCase(name))
-			{
-				return k;
-			}
-		}
-		return null;
 	}
 
 	void openSourceLoose(String name)
@@ -3873,7 +3815,7 @@ class ChroniclePanel extends PluginPanel
 			head.add(slot);
 		}
 		final boolean hasTask = taskItemsEver().containsKey(properName(name));
-		long[] tw = windowMs();
+		long[] tw = window().ms();
 		long[] mine = inWindow == null ? taskItemsEver().get(properName(name))
 			: plugin.onTaskItems(tw[0], tw[1]).getOrDefault(properName(name), new long[2]);
 		if (hasTask && onTaskOnly)
@@ -3952,25 +3894,25 @@ class ChroniclePanel extends PluginPanel
 
 	private Map<String, List<BagItem>> periodItems()
 	{
-		Window w = window();
+		Period w = window();
 		return sessionPeriod() ? plugin.itemsBySource(null, null) : plugin.itemsBySource(w.start, w.end);
 	}
 
 	private String lootSince()
 	{
 		long from = plugin.lootDetailFrom();
-		Window w = window();
+		Period w = window();
 		return sessionPeriod() || from > 0 && from <= startMs(w.start) ? null
 			: from <= 0 ? UNDATED
 			: !drawingCopy ? "Loot since " + dayOf(from).format(FULL_DAY)
 			: "Loot is dated for " + (dayOf(from).isAfter(w.end) ? "none" : "only part") + " of "
-			+ periodInSentence() + ".";
+			+ window().inSentence() + ".";
 	}
 
 	private String sinceLine(String since)
 	{
 		return since != null || wholeRecord() || !drawingCopy ? since
-			: "The figures above are " + periodInSentence() + "'s.";
+			: "The figures above are " + window().inSentence() + "'s.";
 	}
 
 	private JPanel nothing(JPanel p, String what, String since)
@@ -3996,7 +3938,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel byTaskRows(JPanel p, String name)
 	{
-		long[] w = windowMs();
+		long[] w = window().ms();
 		List<Object[]> split = plugin.onTaskItemByTask(name, w[0], w[1]);
 		if (split.isEmpty())
 		{
@@ -4103,7 +4045,7 @@ class ChroniclePanel extends PluginPanel
 
 	private void addAssignments(JPanel p, String npc)
 	{
-		long[] w = windowMs();
+		long[] w = window().ms();
 		List<LocalStore.Assignment> was = plugin.onTaskAssignments(npc, w[0], w[1]);
 		if (was.isEmpty())
 		{
@@ -4330,7 +4272,7 @@ class ChroniclePanel extends PluginPanel
 		List<JsonObject> got = new ArrayList<>();
 		for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
 		{
-			if ("COLLECTION".equals(typeOf(e)) && insideWindow(safeLong(e.get("ts"))))
+			if ("COLLECTION".equals(typeOf(e)) && window().inside(safeLong(e.get("ts"))))
 			{
 				got.add(e);
 			}
@@ -5022,18 +4964,6 @@ class ChroniclePanel extends PluginPanel
 		return shared;
 	}
 
-	private static long safeLong(JsonElement e)
-	{
-		try
-		{
-			return e != null && !e.isJsonNull() ? e.getAsLong() : 0;
-		}
-		catch (RuntimeException ex)
-		{
-			return 0;
-		}
-	}
-
 	private static synchronized Map<String, Map<String, List<String>>> taxonomy(
 		Gson gson)
 	{
@@ -5308,7 +5238,7 @@ class ChroniclePanel extends PluginPanel
 		for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
 		{
 			long ts = safeLong(e.get("ts"));
-			if (!"DEATH".equals(typeOf(e)) || !insideWindow(ts))
+			if (!"DEATH".equals(typeOf(e)) || !window().inside(ts))
 			{
 				continue;
 			}
@@ -5946,12 +5876,6 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private static boolean has(JsonObject o, String key)
-	{
-		return o.has(key) && !o.get(key).isJsonNull()
-			&& !o.get(key).getAsString().trim().isEmpty();
-	}
-
 	private static long sessionMinutes(JsonObject e)
 	{
 		JsonObject d = obj(e, "data");
@@ -5973,21 +5897,6 @@ class ChroniclePanel extends PluginPanel
 	static long filedAt(JsonObject e)
 	{
 		return "SESSION".equals(typeOf(e)) ? sittingStart(e) : safeLong(e.get("ts"));
-	}
-
-	private static long noon(LocalDate d)
-	{
-		return d.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
-	}
-
-	private static LocalDate dayOf(long ms)
-	{
-		return Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).toLocalDate();
-	}
-
-	private static long startMs(LocalDate d)
-	{
-		return d.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
 	}
 
 	private static final JsonObject KINDS = table("panel_kinds.json");
@@ -6019,18 +5928,6 @@ class ChroniclePanel extends PluginPanel
 			out.add(new String[]{r[0], fmt(safeParse(r[1])) + (always ? " · " + gps(val) : tail(val))});
 		}
 		return out;
-	}
-
-	private static long safeParse(String s)
-	{
-		try
-		{
-			return Long.parseLong(s);
-		}
-		catch (NumberFormatException e)
-		{
-			return 0;
-		}
 	}
 
 	private static long oldestTs(List<JsonObject> feed, boolean sittings)
@@ -6748,7 +6645,7 @@ class ChroniclePanel extends PluginPanel
 			movedTypes = new LinkedHashMap<>();
 			for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
 			{
-				if (insideWindow(safeLong(e.get("ts"))))
+				if (window().inside(safeLong(e.get("ts"))))
 				{
 					movedTypes.merge(typeOf(e), 1L, Long::sum);
 				}
@@ -6870,7 +6767,7 @@ class ChroniclePanel extends PluginPanel
 
 	private long[] taskTally()
 	{
-		long[] ms = windowMs();
+		long[] ms = window().ms();
 		long[] tally = Arrays.copyOf(plugin.onTaskTally(ms[0], ms[1], null, wholeRecord()), 4);
 		tally[3] = tallyOf(plugin.onTaskLoot(ms[0], ms[1], null, wholeRecord()))[1];
 		return tally;
@@ -7512,17 +7409,15 @@ class ChroniclePanel extends PluginPanel
 
 	private boolean wholeRecord()
 	{
-		return "Lifetime".equals(histGranularity) && histFrom == null;
+		return window().whole;
 	}
 
 	static final String[] PERIODS = {"Lifetime", "Year", "Month", "Week", "Day",
 		"Session"};
 
-	static final String SESSION = "Session";
-
 	private boolean sessionPeriod()
 	{
-		return SESSION.equals(histGranularity) && histFrom == null;
+		return window().session;
 	}
 
 	private LocalDate periodFrom;
@@ -7594,83 +7489,10 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	@RequiredArgsConstructor
-	private static final class Window
-	{
-		final LocalDate start;
-		final LocalDate end;
-		final String label;
-	}
-
 	private LocalStore.LootWindow lootWindow()
 	{
-		Window w = window();
+		Period w = window();
 		return sessionPeriod() ? plugin.sessionLootWindow() : plugin.lootBetween(w.start, w.end);
-	}
-
-	private Window window()
-	{
-		LocalDate end = histCursor;
-		LocalDate start;
-		String label;
-		if (histFrom != null && histTo != null)
-		{
-			start = histFrom;
-			end = histTo.isAfter(LocalDate.now()) ? LocalDate.now() : histTo;
-			label = start.format(TASK_DAY) + " - " + end.format(TASK_DAY);
-		}
-		else
-		{
-			switch (histGranularity)
-			{
-				case SESSION:
-				{
-					long began = plugin.sessionStart();
-					start = began > 0
-						? dayOf(began)
-						: LocalDate.now();
-					end = LocalDate.now();
-					label = "This session";
-					break;
-				}
-				case "Lifetime":
-					start = historySpine == null || historySpine.isEmpty()
-						? end.minusYears(30) : historySpine.firstKey();
-					end = LocalDate.now();
-					label = "Lifetime";
-					break;
-				case "Day":
-					start = end;
-					label = end.format(FULL_DAY);
-					break;
-				case "Month":
-					start = end.withDayOfMonth(1);
-					end = start.plusMonths(1).minusDays(1);
-					label = start.format(MONTH_YEAR);
-					break;
-				case "Year":
-					start = end.withDayOfYear(1);
-					end = start.plusYears(1).minusDays(1);
-					label = String.valueOf(start.getYear());
-					break;
-				case "Week":
-				default:
-					start = end.minusDays(6);
-					label = start.format(DAY) + " - " + end.format(FULL_DAY);
-					break;
-			}
-		}
-		periodFrom = start;
-		periodTo = end;
-		return new Window(start, end, label);
-	}
-
-	@RequiredArgsConstructor
-	private static final class Span
-	{
-		final Baseline opening;
-		final Baseline earliest;
-		final Baseline closing;
 	}
 
 	private Span span()
@@ -7680,66 +7502,24 @@ class ChroniclePanel extends PluginPanel
 			return buildSpan;
 		}
 		spanAsked = true;
-		buildSpan = foldSpan();
-		return buildSpan;
-	}
-
-	private boolean closesOnTheClient(Entry<LocalDate, Baseline> from,
-		LocalDate start, LocalDate end)
-	{
-		if (from == null || end.isBefore(LocalDate.now()))
-		{
-			return false;
-		}
-		return sessionPeriod() || !from.getKey().isBefore(start.minusDays(1));
-	}
-
-	private Span foldSpan()
-	{
 		if (historySpine == null)
 		{
 			gatherHistory();
-			return null;
 		}
-		if (historySpine.isEmpty())
+		else if (!historySpine.isEmpty())
 		{
-			return null;
+			buildSpan = window().span(historySpine);
 		}
-		Window w = window();
-		Entry<LocalDate, Baseline> from =
-			HistoryLog.windowStart(historySpine, w.start, w.end);
-		Entry<LocalDate, Baseline> at =
-			historySpine.floorEntry(w.end);
-		if (at == null || from == null
-			|| (at.getKey().equals(from.getKey()) && !closesOnTheClient(from, w.start, w.end)))
-		{
-			return null;
-		}
-		return new Span(HistoryLog.stateAt(historySpine, from.getKey()),
-			HistoryLog.earliest(historySpine, at.getKey()),
-			HistoryLog.stateAt(historySpine, at.getKey()));
+		return buildSpan;
 	}
 
-	private Map<String, Long> closingNow(Map<String, Long> closing, Map<String, Long> live)
+	private Period window()
 	{
-		if (closing == null || live == null || live.isEmpty() || !periodReachesToday())
-		{
-			return closing;
-		}
-		Map<String, Long> out = new HashMap<>(closing);
-		for (Entry<String, Long> e : live.entrySet())
-		{
-			if (e.getValue() != null)
-			{
-				out.merge(e.getKey(), e.getValue(), Math::max);
-			}
-		}
-		return out;
-	}
-
-	private boolean periodReachesToday()
-	{
-		return !window().end.isBefore(LocalDate.now());
+		Period w = Period.of(histGranularity, histCursor, histFrom, histTo, plugin.sessionStart(),
+			historySpine);
+		periodFrom = w.start;
+		periodTo = w.end;
+		return w;
 	}
 
 	private Map<String, Long> countersForPeriod()
@@ -7766,57 +7546,12 @@ class ChroniclePanel extends PluginPanel
 			return null;
 		}
 		return peaksNotDeltas(HistoryLog.gained(s.opening.counters,
-			s.earliest.counters, closingNow(s.closing.counters, counters())), s);
+			s.earliest.counters, window().closingNow(s.closing.counters, counters())), s);
 	}
 
 	private String inside(String said)
 	{
-		return said + " inside " + periodInSentence() + ".";
-	}
-
-	private String periodInSentence()
-	{
-		String label = window().label;
-		return label.startsWith("This ")
-			? Character.toLowerCase(label.charAt(0)) + label.substring(1) : label;
-	}
-
-	private static Map<String, Long> peaksNotDeltas(Map<String, Long> moved, Span s)
-	{
-		for (String key : StatRegistry.peakKeys())
-		{
-			if (!moved.containsKey(key))
-			{
-				continue;
-			}
-			long opened = s.opening.counters == null ? 0
-				: s.opening.counters.getOrDefault(key, 0L);
-			long shut = s.closing.counters == null ? 0
-				: s.closing.counters.getOrDefault(key, 0L);
-			if (shut > opened)
-			{
-				moved.put(key, shut);
-			}
-			else
-			{
-				moved.remove(key);
-			}
-		}
-		return moved;
-	}
-
-	private boolean insideWindow(long ts)
-	{
-		if (wholeRecord())
-		{
-			return true;
-		}
-		if (ts <= 0)
-		{
-			return !sessionPeriod();
-		}
-		long[] ms = windowMs();
-		return ts >= ms[0] && ts <= ms[1];
+		return said + " inside " + window().inSentence() + ".";
 	}
 
 	private List<SourceRow> skillGround(String craft)
@@ -7927,7 +7662,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			String unkept = notCounting(false);
 			return noted(p, unkept != null ? unkept : "Nothing is tracked under " + craft
-				+ (wholeRecord() ? "." : " in " + periodInSentence() + "."));
+				+ (wholeRecord() ? "." : " in " + window().inSentence() + "."));
 		}
 		rows.sort(StatRegistry::compareRows);
 		addPaceLine(p, craft);
@@ -7950,7 +7685,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		return note(historySpine == null
 			? "Reading your history..."
-			: "Nothing closed inside " + periodInSentence() + ". A period is the distance "
+			: "Nothing closed inside " + window().inSentence() + ". A period is the distance "
 				+ "between two baselines, and this window holds fewer than two.");
 	}
 
@@ -7964,7 +7699,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel periodRow()
 	{
-		final Window w = window();
+		final Period w = window();
 		JPanel r = stepStrip();
 		if (showingSitting())
 		{
@@ -8056,7 +7791,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildHistory()
 	{
 		JPanel p = column();
-		Window periodWin = window();
+		Period periodWin = window();
 		final LocalDate pStart = periodWin.start;
 		final LocalDate pEnd = periodWin.end;
 		final boolean live = !pEnd.isBefore(LocalDate.now());
@@ -8078,7 +7813,7 @@ class ChroniclePanel extends PluginPanel
 			HistoryLog.windowStart(hist, pStart, pEnd);
 		Entry<LocalDate, Baseline> at = hist.floorEntry(pEnd);
 		if (at == null || from == null
-			|| (at.getKey().equals(from.getKey()) && !closesOnTheClient(from, pStart, pEnd)))
+			|| (at.getKey().equals(from.getKey()) && !periodWin.closesOnTheClient(from)))
 		{
 			String empty;
 			if (hist.isEmpty())
@@ -8138,9 +7873,9 @@ class ChroniclePanel extends PluginPanel
 			}
 			gains.sort(Entry.<String, Long>comparingByValue().reversed());
 
-			long fromMs = sessionPeriod() ? windowMs()[0]
+			long fromMs = sessionPeriod() ? window().ms()[0]
 				: startMs(pStart);
-			long toMs = sessionPeriod() ? windowMs()[1]
+			long toMs = sessionPeriod() ? window().ms()[1]
 				: startMs(pEnd.plusDays(1));
 			Map<String, Long> fromFeed = new HashMap<>();
 			Map<String, List<String[]>> named = new LinkedHashMap<>();
@@ -8964,11 +8699,11 @@ class ChroniclePanel extends PluginPanel
 			{
 				f.skillsNote = notCounting(false) != null
 					? "The record keeps no experience this far back."
-					: "Nothing closed inside " + periodInSentence()
+					: "Nothing closed inside " + window().inSentence()
 						+ ": a period is the distance between two baselines, and this one holds fewer than two.";
 				return;
 			}
-			closing = closingSkills(s.closing.skills, periodReachesToday());
+			closing = closingSkills(s.closing.skills, window().reachesToday());
 		}
 		Map<String, Integer> startLevels = new LinkedHashMap<>();
 		Map<String, Integer> endLevels = new LinkedHashMap<>();
@@ -9062,7 +8797,7 @@ class ChroniclePanel extends PluginPanel
 	private void recapBosses(RecapPicture.Facts f, Span s)
 	{
 		List<Boss> roster = bossRoster(plugin.gson());
-		Map<String, Long> closing = s == null ? null : closingNow(s.closing.kcs, plugin.killCounts());
+		Map<String, Long> closing = s == null ? null : window().closingNow(s.closing.kcs, plugin.killCounts());
 		for (Boss b : roster)
 		{
 			if (f.whole)
@@ -9137,8 +8872,8 @@ class ChroniclePanel extends PluginPanel
 				return;
 			}
 			by.putAll(HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
-				closingNow(s.closing.kcs, plugin.killCounts())));
-			Window w = window();
+				window().closingNow(s.closing.kcs, plugin.killCounts())));
+			Period w = window();
 			worth.putAll(periodWorth(w.start, w.end));
 		}
 		Map<String, Long> loose = loosely(worth);
@@ -9196,7 +8931,7 @@ class ChroniclePanel extends PluginPanel
 		if (!f.whole && !f.session)
 		{
 			long from = plugin.lootRollFrom();
-			if (from <= 0 || from > windowMs()[0])
+			if (from <= 0 || from > window().ms()[0])
 			{
 				f.lootNote = "Loot is not dated this far back, so this period's cannot be told from the rest.";
 				return;
@@ -9366,7 +9101,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		for (JsonObject m : milestones())
 		{
-			if (insideWindow(safeLong(m.get("ts"))) && m.has("data"))
+			if (window().inside(safeLong(m.get("ts"))) && m.has("data"))
 			{
 				named.get("Milestones").add(m.getAsJsonObject("data").get("text").getAsString());
 			}
@@ -9374,7 +9109,7 @@ class ChroniclePanel extends PluginPanel
 		Set<String> bests = new HashSet<>();
 		for (JsonObject e : plugin.feedNewest(20_000))
 		{
-			if (!insideWindow(safeLong(e.get("ts"))))
+			if (!window().inside(safeLong(e.get("ts"))))
 			{
 				continue;
 			}
@@ -9590,7 +9325,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			for (Entry<LocalDate, long[]> d : daysPlayed().entrySet())
 			{
-				if (!insideWindow(noon(d.getKey())))
+				if (!window().inside(noon(d.getKey())))
 				{
 					continue;
 				}
@@ -9708,7 +9443,7 @@ class ChroniclePanel extends PluginPanel
 		for (JsonObject e : plugin.feedNewest(FEED_SCAN_DEEP))
 		{
 			String name = feedName(e);
-			if (name != null && insideWindow(safeLong(e.get("ts"))))
+			if (name != null && window().inside(safeLong(e.get("ts"))))
 			{
 				firstNamed.putIfAbsent(typeOf(e), name);
 			}
@@ -9880,7 +9615,7 @@ class ChroniclePanel extends PluginPanel
 			return null;
 		}
 		Baseline shut = new Baseline();
-		shut.skills.putAll(closingSkills(s.closing.skills, periodReachesToday()));
+		shut.skills.putAll(closingSkills(s.closing.skills, window().reachesToday()));
 		shut.complete = true;
 		HistoryLog.Levels was = HistoryLog.levels(s.opening, SKILL_KEYS);
 		HistoryLog.Levels now = HistoryLog.levels(shut, SKILL_KEYS);
@@ -9895,7 +9630,7 @@ class ChroniclePanel extends PluginPanel
 			return null;
 		}
 		Map<String, Long> out = new LinkedHashMap<>(HistoryLog.gained(s.opening.skills,
-			s.earliest.skills, closingSkills(s.closing.skills, periodReachesToday()), s.opening.complete));
+			s.earliest.skills, closingSkills(s.closing.skills, window().reachesToday()), s.opening.complete));
 		out.remove("overall");
 		return out;
 	}
@@ -9972,7 +9707,7 @@ class ChroniclePanel extends PluginPanel
 			return null;
 		}
 		Map<String, Long> moved = HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
-			closingNow(s.closing.kcs, plugin.killCounts()));
+			window().closingNow(s.closing.kcs, plugin.killCounts()));
 		String top = topOf(moved);
 		return top == null ? null : new String[]{top, fmt(moved.get(top))};
 	}
@@ -10271,7 +10006,7 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		List<JsonObject> all = plugin.feedWithSitting(4000);
-		if (all.size() >= 4000 && !wholeRecord() && windowMs()[0] < oldestTs(all, false))
+		if (all.size() >= 4000 && !wholeRecord() && window().ms()[0] < oldestTs(all, false))
 		{
 			all = plugin.feedWithSitting(JOURNAL_DEEP);
 		}
@@ -10280,7 +10015,7 @@ class ChroniclePanel extends PluginPanel
 		for (JsonObject e : all)
 		{
 			boolean kind = wanted.isEmpty() || wanted.contains(typeOf(e));
-			if (kind && insideWindow(filedAt(e)))
+			if (kind && window().inside(filedAt(e)))
 			{
 				feed.add(e);
 			}
@@ -11284,16 +11019,6 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private static JsonObject obj(JsonObject o, String key)
-	{
-		return o.has(key) && o.get(key).isJsonObject() ? o.getAsJsonObject(key) : new JsonObject();
-	}
-
-	private static String str(JsonObject o, String key, String fallback)
-	{
-		return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsString() : fallback;
-	}
-
 	private static JPanel column()
 	{
 		JPanel p = new JPanel(new GridBagLayout())
@@ -11744,11 +11469,6 @@ class ChroniclePanel extends PluginPanel
 			return String.format(Locale.UK, "%dk", n / 1_000);
 		}
 		return fmt(n);
-	}
-
-	private static String low(String s)
-	{
-		return s.toLowerCase(Locale.ROOT);
 	}
 
 	private static String gps(long n)
