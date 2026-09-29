@@ -64,8 +64,7 @@ final class Ui
 	static final DateTimeFormatter DAY =
 		DateTimeFormatter.ofPattern("d MMM", Locale.UK).withZone(ZoneId.systemDefault());
 
-	static final DateTimeFormatter CLOCK =
-		DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
+	static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
 
 	static final DateTimeFormatter TASK_DAY =
 		DateTimeFormatter.ofPattern("d MMM yy", Locale.UK).withZone(ZoneId.systemDefault());
@@ -211,8 +210,7 @@ final class Ui
 
 	static String prettyTier(String tier)
 	{
-		return tier == null || tier.isEmpty() ? ""
-			: Character.toUpperCase(tier.charAt(0)) + tier.substring(1);
+		return tier == null || tier.isEmpty() ? "" : Character.toUpperCase(tier.charAt(0)) + tier.substring(1);
 	}
 
 	static String bytes(long n)
@@ -228,8 +226,7 @@ final class Ui
 	{
 		long last = n % 10;
 		long tens = n % 100;
-		String suffix = tens >= 11 && tens <= 13 ? "th"
-			: last == 1 ? "st" : last == 2 ? "nd" : last == 3 ? "rd" : "th";
+		String suffix = tens >= 11 && tens <= 13 ? "th" : last == 1 ? "st" : last == 2 ? "nd" : last == 3 ? "rd" : "th";
 		return n + suffix;
 	}
 
@@ -314,8 +311,7 @@ final class Ui
 		return top == null ? null : top.getKey();
 	}
 
-	static <T> T find(List<T> rows, Function<T, String> named, String name,
-		boolean exact)
+	static <T> T find(List<T> rows, Function<T, String> named, String name, boolean exact)
 	{
 		T loose = null;
 		for (T r : rows)
@@ -493,8 +489,7 @@ final class Ui
 		r.add(l, BorderLayout.CENTER);
 		if (right != null && !right.isEmpty())
 		{
-			JLabel v = styled(new JLabel(right), FontManager.getRunescapeFont(),
-				rightColor != null ? rightColor : DIM);
+			JLabel v = styled(new JLabel(right), FontManager.getRunescapeFont(), rightColor != null ? rightColor : DIM);
 			r.add(v, BorderLayout.EAST);
 		}
 		return r;
@@ -515,8 +510,7 @@ final class Ui
 		outer.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JPanel inner = new JPanel();
 		inner.setBackground(ACCENT);
-		inner.setPreferredSize(new Dimension(
-			Math.max(1, Math.round(frac * (PluginPanel.PANEL_WIDTH - 40))), 4));
+		inner.setPreferredSize(new Dimension(Math.max(1, Math.round(frac * (PluginPanel.PANEL_WIDTH - 40))), 4));
 		JPanel holder = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
 		holder.setOpaque(false);
 		holder.add(inner);
@@ -637,9 +631,7 @@ final class Ui
 		{
 			return ColorScheme.DARK_GRAY_HOVER_COLOR;
 		}
-		return new Color(
-			Math.min(255, ground.getRed() + HOVER_LIFT),
-			Math.min(255, ground.getGreen() + HOVER_LIFT),
+		return new Color(Math.min(255, ground.getRed() + HOVER_LIFT), Math.min(255, ground.getGreen() + HOVER_LIFT),
 			Math.min(255, ground.getBlue() + HOVER_LIFT));
 	}
 
@@ -706,8 +698,7 @@ final class Ui
 				target = c;
 				wasOpaque = c.isOpaque();
 				wasBackground = c.getBackground();
-				Color ground = wasOpaque && wasBackground != null
-					? wasBackground : behind(c);
+				Color ground = wasOpaque && wasBackground != null ? wasBackground : behind(c);
 				c.setBackground(hoverOf(ground));
 				c.setOpaque(true);
 				c.repaint();
@@ -795,8 +786,7 @@ final class Ui
 	{
 		Color g = DARK;
 		double a = 0.22;
-		return new Color(
-			(int) Math.round(g.getRed() + (c.getRed() - g.getRed()) * a),
+		return new Color((int) Math.round(g.getRed() + (c.getRed() - g.getRed()) * a),
 			(int) Math.round(g.getGreen() + (c.getGreen() - g.getGreen()) * a),
 			(int) Math.round(g.getBlue() + (c.getBlue() - g.getBlue()) * a));
 	}
@@ -804,8 +794,7 @@ final class Ui
 	static Color wash(Color c, float weight)
 	{
 		Color base = DARKER;
-		return new Color(
-			Math.round(base.getRed() + (c.getRed() - base.getRed()) * weight),
+		return new Color(Math.round(base.getRed() + (c.getRed() - base.getRed()) * weight),
 			Math.round(base.getGreen() + (c.getGreen() - base.getGreen()) * weight),
 			Math.round(base.getBlue() + (c.getBlue() - base.getBlue()) * weight));
 	}
@@ -822,8 +811,7 @@ final class Ui
 
 	static JPanel fixedPeriod(JPanel r, String scope)
 	{
-		JLabel fixed = styled(new JLabel(scope, JLabel.CENTER), FontManager.getRunescapeFont(),
-			DIM);
+		JLabel fixed = styled(new JLabel(scope, JLabel.CENTER), FontManager.getRunescapeFont(), DIM);
 		r.add(fixed, BorderLayout.CENTER);
 		return r;
 	}
@@ -878,8 +866,7 @@ final class Ui
 		}
 	}
 
-	static String fitLine(Line line, List<Integer> order, int floor,
-		FontMetrics fm, int avail)
+	static String fitLine(Line line, List<Integer> order, int floor, FontMetrics fm, int avail)
 	{
 		Line work = new Line();
 		work.pieces.addAll(line.pieces);
@@ -900,8 +887,7 @@ final class Ui
 				}
 			}
 			String shortest = stub(name, floor);
-			work.pieces.set(idx,
-				fm.stringWidth(shortest) < fm.stringWidth(name) ? shortest : name);
+			work.pieces.set(idx, fm.stringWidth(shortest) < fm.stringWidth(name) ? shortest : name);
 		}
 		return null;
 	}

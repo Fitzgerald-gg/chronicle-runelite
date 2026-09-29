@@ -20,8 +20,7 @@ final class KillCounts
 	{
 	}
 
-	static Map<String, Long> reconciledKills(JsonObject clog,
-		List<SourceRow> sources, Map<String, Long> chat,
+	static Map<String, Long> reconciledKills(JsonObject clog, List<SourceRow> sources, Map<String, Long> chat,
 		Map<String, Long> anchored)
 	{
 		Map<String, Long> out = clogKillCounts(clog);
@@ -34,14 +33,12 @@ final class KillCounts
 		return out;
 	}
 
-	static long spineKills(JsonObject clog, List<SourceRow> sources,
-		Map<String, Long> reconciled)
+	static long spineKills(JsonObject clog, List<SourceRow> sources, Map<String, Long> reconciled)
 	{
 		return spineKillKeys(clog, sources, reconciled).stream().mapToLong(k -> reconciled.getOrDefault(k, 0L)).sum();
 	}
 
-	static Set<String> spineKillKeys(JsonObject clog, List<SourceRow> sources,
-		Map<String, Long> reconciled)
+	static Set<String> spineKillKeys(JsonObject clog, List<SourceRow> sources, Map<String, Long> reconciled)
 	{
 		Map<String, String> byKind = new HashMap<>();
 		reconciled.keySet().forEach(key -> byKind.putIfAbsent(chatKind(key), key));
@@ -58,8 +55,7 @@ final class KillCounts
 	}
 
 
-	private static Map<String, Long> sourceKills(JsonObject clog,
-		List<SourceRow> sources, boolean raiseToPage)
+	private static Map<String, Long> sourceKills(JsonObject clog, List<SourceRow> sources, boolean raiseToPage)
 	{
 		Map<String, Long> paged = clogKillCounts(clog);
 		Map<String, String> byKind = new HashMap<>();
@@ -146,8 +142,7 @@ final class KillCounts
 		return out;
 	}
 
-	static void foldChatCounts(Map<String, Long> out,
-		Map<String, Long> chat, Set<String> vocabulary)
+	static void foldChatCounts(Map<String, Long> out, Map<String, Long> chat, Set<String> vocabulary)
 	{
 		if (out == null || chat == null || chat.isEmpty())
 		{
@@ -183,8 +178,7 @@ final class KillCounts
 		return out;
 	}
 
-	private static void placeByKind(Map<String, Long> out,
-		Map<String, Long> stated, boolean floor)
+	private static void placeByKind(Map<String, Long> out, Map<String, Long> stated, boolean floor)
 	{
 		if (out == null || stated == null || stated.isEmpty())
 		{

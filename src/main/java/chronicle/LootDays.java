@@ -52,8 +52,7 @@ final class LootDays
 
 	private static final int DETAIL_DAYS = 400;
 
-	private static final DateTimeFormatter DAY_KEY =
-		DateTimeFormatter.ofPattern("yyyy-MM-dd");
+	private static final DateTimeFormatter DAY_KEY = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
 	void rollTaken(String source, long value, List<BagItem> priced, Double killTime)
 	{
@@ -296,8 +295,7 @@ final class LootDays
 		}
 	}
 
-	private static void gather(JsonObject day, String key,
-		Map<String, long[]> into, boolean named)
+	private static void gather(JsonObject day, String key, Map<String, long[]> into, boolean named)
 	{
 		for (var e : objects(obj(day, key)))
 		{

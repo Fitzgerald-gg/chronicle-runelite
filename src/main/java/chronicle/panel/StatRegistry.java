@@ -310,14 +310,12 @@ public final class StatRegistry
 	public static String suffixLabel(String suffix)
 	{
 		String fixed = SUFFIX_LABELS.get(suffix);
-		return fixed != null ? fixed
-			: prettify(Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1));
+		return fixed != null ? fixed : prettify(Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1));
 	}
 
 	public static String suffixFloor(String craft, String suffix)
 	{
-		String cand = SUFFIX_FLOORS.getOrDefault(suffix,
-			Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1));
+		String cand = SUFFIX_FLOORS.getOrDefault(suffix, Character.toLowerCase(suffix.charAt(0)) + suffix.substring(1));
 		SkillSpec s = spec(craft);
 		return s != null && Arrays.asList(s.floors).contains(cand) ? cand : null;
 	}
@@ -398,8 +396,7 @@ public final class StatRegistry
 	public static int compareRows(Map.Entry<String, Long> a, Map.Entry<String, Long> b)
 	{
 		int byValue = Long.compare(b.getValue(), a.getValue());
-		return byValue != 0 ? byValue
-			: rowLabel(a.getKey()).compareToIgnoreCase(rowLabel(b.getKey()));
+		return byValue != 0 ? byValue : rowLabel(a.getKey()).compareToIgnoreCase(rowLabel(b.getKey()));
 	}
 
 	public static List<String> fixedSections(String family)

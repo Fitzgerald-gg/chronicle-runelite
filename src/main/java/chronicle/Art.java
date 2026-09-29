@@ -117,8 +117,7 @@ final class Art
 	private static ImageIcon fit(BufferedImage img, int w, int h)
 	{
 		double scale = Math.min(w / (double) img.getWidth(), h / (double) img.getHeight());
-		return new ImageIcon(img.getScaledInstance(
-			Math.max(1, (int) Math.round(img.getWidth() * scale)),
+		return new ImageIcon(img.getScaledInstance(Math.max(1, (int) Math.round(img.getWidth() * scale)),
 			Math.max(1, (int) Math.round(img.getHeight() * scale)),
 			Image.SCALE_SMOOTH));
 	}

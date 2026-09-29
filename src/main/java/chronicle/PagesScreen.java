@@ -91,9 +91,7 @@ final class PagesScreen extends Screen
 			JPanel line = row(tier, qtyGp(n, r.value), ACCENT);
 			final String open = r.name;
 			link(line, () -> ui.openSource(open));
-			line.setToolTipText(tip(tier + " clues",
-				"Caskets", fmt(n),
-				"Worth", gps(r.value),
+			line.setToolTipText(tip(tier + " clues", "Caskets", fmt(n), "Worth", gps(r.value),
 				"Each", n > 0 ? gps(r.value / n) : "-"));
 			p.add(line);
 		}
@@ -126,8 +124,7 @@ final class PagesScreen extends Screen
 		addNames(p, "NOT STARTED", not, false, false);
 	}
 
-	private void addNames(JPanel p, String heading, List<String> names, boolean held,
-		boolean openByDefault)
+	private void addNames(JPanel p, String heading, List<String> names, boolean held, boolean openByDefault)
 	{
 		if (names.isEmpty())
 		{
@@ -186,12 +183,8 @@ final class PagesScreen extends Screen
 				}
 				int n = tiers.getAsJsonArray(tier).size();
 				boolean got = held != null && held.has(tier) && held.get(tier).getAsBoolean();
-				JPanel line = row(prettyTier(tier),
-					fmt(n) + " tasks",
-					known && !got ? DIM : null,
-					known && !got);
-				line.setToolTipText(taskTip(region + " " + tier,
-					tiers.getAsJsonArray(tier)));
+				JPanel line = row(prettyTier(tier), fmt(n) + " tasks", known && !got ? DIM : null, known && !got);
+				line.setToolTipText(taskTip(region + " " + tier, tiers.getAsJsonArray(tier)));
 				p.add(line);
 			}
 			p.add(vgap(4));
@@ -224,8 +217,7 @@ final class PagesScreen extends Screen
 		JsonObject all = CA_TASKS;
 		long[] c = board.combatStanding();
 		JPanel head = card("Combat achievements");
-		head.add(row("Points", c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]),
-			ACCENT));
+		head.add(row("Points", c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]), ACCENT));
 		head.add(row("Tiers unlocked", fmt(c[2]) + " / 6"));
 		Set<Integer> done = board.caDone();
 		boolean known = !done.isEmpty();
@@ -248,14 +240,12 @@ final class PagesScreen extends Screen
 			spaced(p, note("Which tasks you have done arrives when you next log in. "
 				+ "Until then this is what each tier asks for."), 4);
 		}
-		Map<String, List<JsonObject>> bySource = new TreeMap<>(
-			String.CASE_INSENSITIVE_ORDER);
+		Map<String, List<JsonObject>> bySource = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 		for (String id : all.keySet())
 		{
 			JsonObject task = all.getAsJsonObject(id).deepCopy();
 			task.addProperty("id", Integer.parseInt(id));
-			bySource.computeIfAbsent(caSource(task.get("monster").getAsString()),
-				k -> new ArrayList<>()).add(task);
+			bySource.computeIfAbsent(caSource(task.get("monster").getAsString()), k -> new ArrayList<>()).add(task);
 		}
 		for (Entry<String, List<JsonObject>> e : bySource.entrySet())
 		{
@@ -263,8 +253,7 @@ final class PagesScreen extends Screen
 			String foldKey = "ca:" + e.getKey();
 			boolean open = ui.foldOpen(foldKey);
 			int n = e.getValue().size();
-			p.add(ui.quietHead(e.getKey(), known
-				? fmt(got) + " / " + fmt(n)
+			p.add(ui.quietHead(e.getKey(), known ? fmt(got) + " / " + fmt(n)
 				: count(n, "task"), foldKey));
 			if (!open)
 			{
@@ -276,8 +265,7 @@ final class PagesScreen extends Screen
 				JPanel line = row(withoutSource(task.get("name").getAsString(), e.getKey()),
 					prettyTier(task.get("tier").getAsString()),
 					known ? (has ? GREEN : RED) : null, known);
-				line.setToolTipText(tip(task.get("name").getAsString(),
-					"Tier", task.get("tier").getAsString(),
+				line.setToolTipText(tip(task.get("name").getAsString(), "Tier", task.get("tier").getAsString(),
 					"Where", caSource(task.get("monster").getAsString()),
 					"Task", task.get("task").getAsString()));
 				p.add(line);
@@ -452,15 +440,13 @@ final class PagesScreen extends Screen
 				line.append(pet.source);
 				if (pet.kc > 0)
 				{
-					line.append(skill(pet.source.toUpperCase(Locale.ROOT)) != null
-						? ", " + fmt(pet.kc) + " xp"
+					line.append(skill(pet.source.toUpperCase(Locale.ROOT)) != null ? ", " + fmt(pet.kc) + " xp"
 						: ", kc " + fmt(pet.kc));
 				}
 			}
 			if (line.length() > 0)
 			{
-				out.add(ghostRow(line.toString(), pet.ts > 0
-					? day(pet.ts) : ""));
+				out.add(ghostRow(line.toString(), pet.ts > 0 ? day(pet.ts) : ""));
 			}
 		}
 		return out;

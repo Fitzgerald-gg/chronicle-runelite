@@ -658,8 +658,7 @@ public class SkillDeriver
 		switch (skill)
 		{
 			case "WOODCUTTING":
-				n = low.equals("logs") ? "normal"
-					: !(low.endsWith(" logs") || low.endsWith(" log")) ? null
+				n = low.equals("logs") ? "normal" : !(low.endsWith(" logs") || low.endsWith(" log")) ? null
 					: low.replace(" logs", "").replace(" log", "").trim();
 				n = "".equals(n) ? "normal" : n;
 				break;
@@ -668,8 +667,7 @@ public class SkillDeriver
 					: FISH_NORAW.contains(low) || low.startsWith("leaping ") ? low : null;
 				break;
 			case "MINING":
-				n = low.startsWith("granite") ? "granite"
-					: low.startsWith("sandstone") ? "sandstone"
+				n = low.startsWith("granite") ? "granite" : low.startsWith("sandstone") ? "sandstone"
 					: low.startsWith("uncut ") ? "gem rock"
 					: low.endsWith(" ore") || MINING_ROCKS.contains(low) ? low : null;
 				break;

@@ -204,8 +204,7 @@ public class ChroniclePlugin extends Plugin
 
 		reschedulePushLoop();
 		checkDependencies();
-		log.debug("Chronicle started - slayer service: {}",
-			eventCapture.hasSlayerService() ? "AVAILABLE" : "MISSING");
+		log.debug("Chronicle started - slayer service: {}", eventCapture.hasSlayerService() ? "AVAILABLE" : "MISSING");
 
 		if (client.getGameState() == GameState.LOGGED_IN)
 		{
@@ -263,8 +262,7 @@ public class ChroniclePlugin extends Plugin
 			pushTask = null;
 		}
 		long minutes = Math.max(1, config.pushIntervalMinutes());
-		pushTask = executor.scheduleWithFixedDelay(
-			this::scheduledPush, minutes, minutes, TimeUnit.MINUTES);
+		pushTask = executor.scheduleWithFixedDelay(this::scheduledPush, minutes, minutes, TimeUnit.MINUTES);
 	}
 
 	private void checkDependencies()
@@ -280,8 +278,7 @@ public class ChroniclePlugin extends Plugin
 		else if (isOff(LootTrackerPlugin.class))
 		{
 			now = "Loot Tracker off";
-			why = "Turn on the Loot Tracker plugin. Chest and casket loot reaches "
-				+ "Chronicle through it.";
+			why = "Turn on the Loot Tracker plugin. Chest and casket loot reaches Chronicle through it.";
 		}
 		captureWarning = now;
 		captureWarningWhy = why;
@@ -410,15 +407,13 @@ public class ChroniclePlugin extends Plugin
 		playtimeAt = readLong(KEY_PLAYTIME_AT);
 		refreshPanel();
 		final String who = name;
-		final String priorName = CloudSync.trim(
-			configManager.getRSProfileConfiguration(GROUP, KEY_JOURNAL_NAME));
+		final String priorName = CloudSync.trim(configManager.getRSProfileConfiguration(GROUP, KEY_JOURNAL_NAME));
 		executor.submit(() ->
 		{
 			if (priorName != null && !JournalFile.slug(priorName).equals(JournalFile.slug(who))
 				&& JournalFile.migrateJournalFiles(localDir(), priorName, who))
 			{
-				chat("Chronicle: your journal followed the rename. "
-					+ priorName + " is now " + who + ".");
+				chat("Chronicle: your journal followed the rename. " + priorName + " is now " + who + ".");
 			}
 			configManager.setRSProfileConfiguration(GROUP, KEY_JOURNAL_NAME, who);
 			localStore.load(localDir(), who);
@@ -576,8 +571,7 @@ public class ChroniclePlugin extends Plugin
 		{
 			return 0;
 		}
-		return had + (at > 0 && at >= sessionStartMs
-			? Math.max(0, (System.currentTimeMillis() - at) / 60_000L)
+		return had + (at > 0 && at >= sessionStartMs ? Math.max(0, (System.currentTimeMillis() - at) / 60_000L)
 			: sessionElapsedMinutes());
 	}
 
@@ -779,8 +773,7 @@ public class ChroniclePlugin extends Plugin
 
 	private void recordSessionLine()
 	{
-		long mins = sessionStartMs > 0
-			? Math.max(0, (System.currentTimeMillis() - sessionStartMs) / 60_000) : 0;
+		long mins = sessionStartMs > 0 ? Math.max(0, (System.currentTimeMillis() - sessionStartMs) / 60_000) : 0;
 		Map<String, Integer> sess = sessionView();
 		long xp = sess.getOrDefault("totalXpGained", 0);
 		int drops = localStore.loot.sessionLoots();
@@ -978,8 +971,7 @@ public class ChroniclePlugin extends Plugin
 			int days = spine.isFile() ? historyLog.importSpine(localDir(), rsn, spine) : 0;
 			localStore.flush(localDir());
 			reloadHistory(rsn);
-			chat("Chronicle: imported " + summary
-				+ (days > 0 ? " · " + days + " days of history" : "") + ".");
+			chat("Chronicle: imported " + summary + (days > 0 ? " · " + days + " days of history" : "") + ".");
 			clientThread.invoke(this::refreshLocal);
 		});
 	}

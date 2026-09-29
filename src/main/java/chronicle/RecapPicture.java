@@ -157,8 +157,7 @@ final class RecapPicture
 		return FontManager.getRunescapeBoldFont().deriveFont(32f);
 	}
 
-	private static final Graphics2D MEASURE = new BufferedImage(1, 1,
-		BufferedImage.TYPE_INT_RGB).createGraphics();
+	private static final Graphics2D MEASURE = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB).createGraphics();
 
 	private static FontMetrics fm(Font f)
 	{
@@ -444,8 +443,7 @@ final class RecapPicture
 		int height = headH + body + footH;
 		BufferedImage img = new BufferedImage(WIDTH, height, BufferedImage.TYPE_INT_RGB);
 		Graphics2D g = img.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
-			RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		g.setColor(GROUND);
 		g.fillRect(0, 0, WIDTH, height);
 
@@ -562,8 +560,7 @@ final class RecapPicture
 			{
 				rightText(g, s.xpStart == null ? "-" : fmt(s.xpStart), regular(), DIM, startR, base);
 				rightText(g, fmt(s.xpEnd), regular(), moved ? VALUE : DIM, endR, base);
-				rightText(g, moved ? "+" + fmt(s.gained()) : "-", regular(), moved ? ACCENT : DIM,
-					gainedR, base);
+				rightText(g, moved ? "+" + fmt(s.gained()) : "-", regular(), moved ? ACCENT : DIM, gainedR, base);
 			}
 			else
 			{
@@ -634,8 +631,7 @@ final class RecapPicture
 		return h;
 	}
 
-	private static boolean place(Graphics2D g, List<Block> blocks, int[] xs, int[] tops, int[] bottoms,
-		boolean draw)
+	private static boolean place(Graphics2D g, List<Block> blocks, int[] xs, int[] tops, int[] bottoms, boolean draw)
 	{
 		int[] y = tops.clone();
 		int roomiest = tallest(tops, bottoms);
@@ -743,8 +739,7 @@ final class RecapPicture
 		Block longest = null;
 		for (Block b : run)
 		{
-			if (b.trims && b.pieces.size() > 1 && (longest == null
-				|| b.pieces.size() > longest.pieces.size()))
+			if (b.trims && b.pieces.size() > 1 && (longest == null || b.pieces.size() > longest.pieces.size()))
 			{
 				longest = b;
 			}

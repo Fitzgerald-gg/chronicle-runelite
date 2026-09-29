@@ -240,8 +240,7 @@ public class FoodStatTracker implements StatTracker
 	private static boolean drinkable(ItemComposition definition)
 	{
 		String[] actions = definition.getInventoryActions();
-		return actions != null
-			&& Arrays.stream(actions).anyMatch(a -> a != null && "drink".equalsIgnoreCase(a.trim()));
+		return actions != null && Arrays.stream(actions).anyMatch(a -> a != null && "drink".equalsIgnoreCase(a.trim()));
 	}
 
 	private static boolean namesAgree(String potion, String base)

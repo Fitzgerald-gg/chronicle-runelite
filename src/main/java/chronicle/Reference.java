@@ -53,8 +53,7 @@ final class Reference
 		List<Boss> out = new ArrayList<>();
 		try
 		{
-			for (HiscoreSkill s
-				: HiscoreSkill.values())
+			for (HiscoreSkill s : HiscoreSkill.values())
 			{
 				if (s.getType() == HiscoreSkillType.BOSS)
 				{
@@ -75,14 +74,11 @@ final class Reference
 		{
 			if (in != null)
 			{
-				JsonArray arr = gson.fromJson(
-					new InputStreamReader(in, StandardCharsets.UTF_8),
-					JsonArray.class);
+				JsonArray arr = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), JsonArray.class);
 				for (JsonElement e : arr)
 				{
 					JsonObject o = e.getAsJsonObject();
-					out.add(new Boss(o.get("name").getAsString(),
-						o.has("sprite") ? o.get("sprite").getAsInt() : -1));
+					out.add(new Boss(o.get("name").getAsString(), o.has("sprite") ? o.get("sprite").getAsInt() : -1));
 				}
 			}
 		}
@@ -148,8 +144,7 @@ final class Reference
 
 	static Map<String, Map<String, List<String>>> taxonomy;
 
-	static synchronized Map<String, Map<String, List<String>>> taxonomy(
-		Gson gson)
+	static synchronized Map<String, Map<String, List<String>>> taxonomy(Gson gson)
 	{
 		if (taxonomy != null)
 		{
@@ -160,14 +155,11 @@ final class Reference
 		{
 			if (in != null)
 			{
-				JsonObject rootTax = gson.fromJson(
-					new InputStreamReader(in, StandardCharsets.UTF_8),
-					JsonObject.class);
+				JsonObject rootTax = gson.fromJson(new InputStreamReader(in, StandardCharsets.UTF_8), JsonObject.class);
 				for (Entry<String, JsonElement> tab : rootTax.entrySet())
 				{
 					Map<String, List<String>> pages = new LinkedHashMap<>();
-					for (Entry<String, JsonElement> pg
-						: tab.getValue().getAsJsonObject().entrySet())
+					for (Entry<String, JsonElement> pg : tab.getValue().getAsJsonObject().entrySet())
 					{
 						List<String> slots = new ArrayList<>();
 						pg.getValue().getAsJsonArray().forEach(it -> slots.add(it.getAsString()));
@@ -186,8 +178,7 @@ final class Reference
 
 	static Set<String> sharedSlotNames;
 
-	static synchronized Set<String> sharedSlotNames(
-		Gson gson)
+	static synchronized Set<String> sharedSlotNames(Gson gson)
 	{
 		if (sharedSlotNames != null)
 		{
@@ -242,8 +233,7 @@ final class Reference
 			}
 			lv[i] = l;
 		}
-		return Experience.getCombatLevel(lv[0], lv[1], lv[2], lv[3],
-			lv[5], lv[4], lv[6]);
+		return Experience.getCombatLevel(lv[0], lv[1], lv[2], lv[3], lv[5], lv[4], lv[6]);
 	}
 
 	static Integer combatOf(Map<String, Integer> levels)
@@ -253,8 +243,7 @@ final class Reference
 		return openingCombat(l);
 	}
 
-	static final Map<String, String[]> SKILL_ALIASES = Map.of(
-		"runecraft", new String[]{"runecrafting", "rc"},
+	static final Map<String, String[]> SKILL_ALIASES = Map.of("runecraft", new String[]{"runecrafting", "rc"},
 		"hitpoints", new String[]{"hp"},
 		"woodcutting", new String[]{"wc"},
 		"firemaking", new String[]{"fm"},
@@ -269,8 +258,7 @@ final class Reference
 	{
 		int open = source.lastIndexOf('(');
 		int close = source.lastIndexOf(')');
-		return open > 0 && close > open
-			&& kindOf(source.substring(open + 1, close))
+		return open > 0 && close > open && kindOf(source.substring(open + 1, close))
 				.equals(kindOf(boss));
 	}
 

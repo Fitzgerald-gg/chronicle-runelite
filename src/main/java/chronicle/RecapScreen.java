@@ -106,8 +106,7 @@ final class RecapScreen extends Screen
 		{
 			if (s == null)
 			{
-				f.skillsNote = board.notCounting(false) != null
-					? "The record keeps no experience this far back."
+				f.skillsNote = board.notCounting(false) != null ? "The record keeps no experience this far back."
 					: "Nothing closed inside " + board.periodInSentence()
 						+ ": a period is the distance between two baselines, and this one holds fewer than two.";
 				return;
@@ -154,8 +153,7 @@ final class RecapScreen extends Screen
 				lEnd = Math.max(10, lEnd);
 				lStart = lStart == null ? null : Math.max(10, lStart);
 			}
-			f.skills.add(new RecapPicture.SkillLine(sk, prettify(key), lStart, lEnd,
-				start, end));
+			f.skills.add(new RecapPicture.SkillLine(sk, prettify(key), lStart, lEnd, start, end));
 			endLevels.put(key, Math.min(99, lEnd));
 			endXp += end;
 			if (start == null)
@@ -248,8 +246,7 @@ final class RecapScreen extends Screen
 		}
 		if (f.bosses.isEmpty() && !f.whole)
 		{
-			f.bossesNote = board.notCounting(true) != null
-				? "The record keeps no kill counts this far back."
+			f.bossesNote = board.notCounting(true) != null ? "The record keeps no kill counts this far back."
 				: board.inside("No boss was killed");
 		}
 	}
@@ -289,8 +286,7 @@ final class RecapScreen extends Screen
 		for (Entry<String, Long> e : kept.subList(0, Math.min(10, kept.size())))
 		{
 			long paid = Board.paidFor(worth, loose, e.getKey());
-			f.monsters.add(new RecapPicture.Named(e.getKey(), fmt(e.getValue()),
-				paid > 0 ? gps(paid) : null));
+			f.monsters.add(new RecapPicture.Named(e.getKey(), fmt(e.getValue()), paid > 0 ? gps(paid) : null));
 		}
 		if (f.session && !f.monsters.isEmpty())
 		{
@@ -411,8 +407,7 @@ final class RecapScreen extends Screen
 		Map<String, Long> counters = board.countersForPeriod();
 		if (counters == null)
 		{
-			f.trackersNote = board.notCounting(false) != null
-				? "The record keeps no counters this far back."
+			f.trackersNote = board.notCounting(false) != null ? "The record keeps no counters this far back."
 				: board.inside("Nothing closed");
 			return;
 		}
@@ -564,8 +559,7 @@ final class RecapScreen extends Screen
 		}
 		else if (sittings > 0)
 		{
-			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(minutes),
-				count(sittings, "sitting")));
+			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(minutes), count(sittings, "sitting")));
 		}
 		long[] xp = board.periodXp();
 		if (xp != null && xp[0] > 0)
@@ -585,8 +579,7 @@ final class RecapScreen extends Screen
 			}
 			else if (a != null && b > a)
 			{
-				f.tiles.add(new RecapPicture.Tile("Levels", "+" + fmt(b - a),
-					climb(a, b) + " total"));
+				f.tiles.add(new RecapPicture.Tile("Levels", "+" + fmt(b - a), climb(a, b) + " total"));
 			}
 		}
 		for (RecapPicture.Named n : f.loot)
@@ -600,8 +593,7 @@ final class RecapScreen extends Screen
 		RecapPicture.BossLine top = most(f.bosses, b -> b.gained);
 		if (bossKills > 0)
 		{
-			f.tiles.add(new RecapPicture.Tile("Boss kills", (f.whole ? "" : "+") + fmt(bossKills),
-				"most " + top.name));
+			f.tiles.add(new RecapPicture.Tile("Boss kills", (f.whole ? "" : "+") + fmt(bossKills), "most " + top.name));
 		}
 		for (RecapPicture.Named n : f.slayer)
 		{
@@ -626,8 +618,7 @@ final class RecapScreen extends Screen
 		}
 		else if (!f.whole && slots != null)
 		{
-			f.tiles.add(new RecapPicture.Tile("Log slots", "+" + fmt(slots.size()),
-				"latest " + slots.get(0)));
+			f.tiles.add(new RecapPicture.Tile("Log slots", "+" + fmt(slots.size()), "latest " + slots.get(0)));
 		}
 		List<String> pets = f.feats.get("Pets");
 		if (pets != null && f.tiles.size() < 8)
@@ -667,8 +658,7 @@ final class RecapScreen extends Screen
 		if (xp != null && xp[0] > 0)
 		{
 			String most = board.periodXpMost();
-			line(plate, period.whole() ? "Xp" : "Xp gained",
-				(period.whole() ? "" : "+") + gp(xp[0]) + " xp"
+			line(plate, period.whole() ? "Xp" : "Xp gained", (period.whole() ? "" : "+") + gp(xp[0]) + " xp"
 					+ (most != null ? ", most in " + most : ""),
 				() -> ui.show(ChroniclePanel.View.STANDING));
 		}
@@ -683,8 +673,7 @@ final class RecapScreen extends Screen
 		long[] loot = board.periodLoot();
 		if (loot[0] > 0)
 		{
-			line(plate, "Drops", qtyGp(loot[0], loot[1]),
-				() -> ui.show(ChroniclePanel.View.LOOT));
+			line(plate, "Drops", qtyGp(loot[0], loot[1]), () -> ui.show(ChroniclePanel.View.LOOT));
 		}
 		String[] dearest = board.periodDearest();
 		if (dearest != null)
@@ -743,14 +732,12 @@ final class RecapScreen extends Screen
 		feedLine(plate, firstNamed, "PET", "Pet", "Pets", "Feats");
 		feedLine(plate, firstNamed, "QUEST", "Quest", "Quests", "Feats");
 		feedLine(plate, firstNamed, "DIARY", "Diary", "Diaries", "Feats");
-		feedLine(plate, firstNamed, "COMBAT_ACHIEVEMENT", "Combat achievement",
-			"Combat achievements", "Feats");
+		feedLine(plate, firstNamed, "COMBAT_ACHIEVEMENT", "Combat achievement", "Combat achievements", "Feats");
 		feedLine(plate, firstNamed, "DEATH", "Death", "Deaths", "Deaths");
 
 		if (plate.getComponentCount() == held)
 		{
-			plate.add(note(period.whole() ? "Nothing on the record yet."
-				: board.inside("Nothing")));
+			plate.add(note(period.whole() ? "Nothing on the record yet." : board.inside("Nothing")));
 		}
 		return plate;
 	}
@@ -776,8 +763,7 @@ final class RecapScreen extends Screen
 	private void line(JPanel plate, String left, Line right, Runnable go)
 	{
 		String whole = right.whole();
-		String fitted = fitLine(right, right.names, NAME_FLOOR, rowMetrics(),
-			chaseRoom(left, rowMetrics()));
+		String fitted = fitLine(right, right.names, NAME_FLOOR, rowMetrics(), chaseRoom(left, rowMetrics()));
 		line(plate, left, fitted != null ? fitted : whole, go);
 		if (fitted != null && !fitted.equals(whole))
 		{
@@ -786,8 +772,7 @@ final class RecapScreen extends Screen
 		}
 	}
 
-	private void feedLine(JPanel plate, Map<String, String> named,
-		String type, String one, String many, String lens)
+	private void feedLine(JPanel plate, Map<String, String> named, String type, String one, String many, String lens)
 	{
 		long n = board.stirred(type);
 		if (n == 0)

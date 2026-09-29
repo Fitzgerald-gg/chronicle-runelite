@@ -48,8 +48,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 {
 	private static final int SCHEMA = 1;
 	private static final int FEED_CAP = 20000;
-	static final Set<String> MAX_KEYS = new HashSet<>(
-		Arrays.asList("highestHit", "highestHitTaken"));
+	static final Set<String> MAX_KEYS = new HashSet<>(Arrays.asList("highestHit", "highestHitTaken"));
 	private static final Set<String> FEED_TYPES = new HashSet<>(Arrays.asList(
 		"PET", "COLLECTION", "COMBAT_ACHIEVEMENT", "QUEST", "DIARY", "CLUE", "DEATH", "SLAYER",
 		"LEVEL",
@@ -74,8 +73,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	private final ArrayDeque<RecentDrop> recentDrops = new ArrayDeque<>();
 
 	private static final int GATHERED_CAP = 1024;
-	private final Set<Integer> gatheredItems =
-		ConcurrentHashMap.newKeySet();
+	private final Set<Integer> gatheredItems = ConcurrentHashMap.newKeySet();
 
 	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	static final class RecentDrop
@@ -114,8 +112,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		long fileSchema = loaded != null ? asLong(loaded.get("schema")) : 0;
 		if (fileSchema > SCHEMA)
 		{
-			log.warn("journal {} is schema {}; this build reads {}",
-				f.getName(), fileSchema, SCHEMA);
+			log.warn("journal {} is schema {}; this build reads {}", f.getName(), fileSchema, SCHEMA);
 			journalWarning = "This journal was written by a newer version of Chronicle. "
 				+ "Update the plugin to open it. Nothing on disk has been changed.";
 			synchronized (lock)
@@ -424,8 +421,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					{
 						if (e.getKey() != null && e.getValue() instanceof Number)
 						{
-							anchorKill(String.valueOf(e.getKey()),
-								((Number) e.getValue()).longValue(), "log", rsn);
+							anchorKill(String.valueOf(e.getKey()), ((Number) e.getValue()).longValue(), "log", rsn);
 						}
 					}
 				}
@@ -989,14 +985,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 	}
 
-	static List<BagItem> bagRows(Map<String, long[]> summed,
-		Map<String, Integer> ids, int noId)
+	static List<BagItem> bagRows(Map<String, long[]> summed, Map<String, Integer> ids, int noId)
 	{
 		List<BagItem> out = new ArrayList<>();
 		for (var e : summed.entrySet())
 		{
-			out.add(new BagItem(ids.getOrDefault(e.getKey(), noId), e.getKey(),
-				e.getValue()[0], e.getValue()[1]));
+			out.add(new BagItem(ids.getOrDefault(e.getKey(), noId), e.getKey(), e.getValue()[0], e.getValue()[1]));
 		}
 		out.sort((a, b) -> Long.compare(b.value, a.value));
 		return out;
@@ -1317,8 +1311,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			value += r.value;
 		}
 		JsonObject cl = clogSnapshot();
-		Map<String, Long> reconciled =
-			reconciledKills(cl, sources, chatKillCounts(), anchoredKills());
+		Map<String, Long> reconciled = reconciledKills(cl, sources, chatKillCounts(), anchoredKills());
 		long kills = spineKills(cl, sources, reconciled);
 		long left = 0;
 		long leftValue = 0;

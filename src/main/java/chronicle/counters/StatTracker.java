@@ -49,9 +49,7 @@ public interface StatTracker
 	static boolean gameChat(ChatMessage event)
 	{
 		ChatMessageType type = event.getType();
-		return type == ChatMessageType.SPAM
-			|| type == ChatMessageType.GAMEMESSAGE
-			|| type == ChatMessageType.MESBOX;
+		return type == ChatMessageType.SPAM || type == ChatMessageType.GAMEMESSAGE || type == ChatMessageType.MESBOX;
 	}
 
 	static Map<Integer, Integer> inventory(Client client, ItemContainerChanged event)

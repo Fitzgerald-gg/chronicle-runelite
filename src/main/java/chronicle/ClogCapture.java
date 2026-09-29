@@ -173,8 +173,7 @@ public class ClogCapture
 			}
 			clogRetrieving = true;
 			clogItems.clear();
-			client.menuAction(-1, InterfaceID.Collection.SEARCH_TOGGLE, MenuAction.CC_OP,
-				1, -1, "Search", null);
+			client.menuAction(-1, InterfaceID.Collection.SEARCH_TOGGLE, MenuAction.CC_OP, 1, -1, "Search", null);
 			client.runScript(COLLECTION_INIT_SCRIPT);
 			clogFlushTick = client.getTickCount() + 5;
 		}
@@ -417,8 +416,7 @@ public class ClogCapture
 					String name = itemName(it.getItemId());
 					if (name != null)
 					{
-						pageItems.merge(name, Math.max(1, it.getItemQuantity()),
-							Integer::sum);
+						pageItems.merge(name, Math.max(1, it.getItemQuantity()), Integer::sum);
 					}
 				}
 			}

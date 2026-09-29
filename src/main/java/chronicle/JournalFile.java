@@ -55,8 +55,7 @@ final class JournalFile
 
 	static boolean setAside(File f, String tag)
 	{
-		File aside = new File(f.getParentFile(),
-			f.getName() + "." + tag + "-" + System.currentTimeMillis());
+		File aside = new File(f.getParentFile(), f.getName() + "." + tag + "-" + System.currentTimeMillis());
 		try
 		{
 			Files.move(f.toPath(), aside.toPath(), StandardCopyOption.REPLACE_EXISTING);
@@ -72,8 +71,7 @@ final class JournalFile
 
 	static String slug(String rsn)
 	{
-		String s = rsn == null ? ""
-			: rsn.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-");
+		String s = rsn == null ? "" : rsn.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-");
 		s = s.replaceAll("(^-+|-+$)", "");
 		return s.isEmpty() ? "profile" : s;
 	}

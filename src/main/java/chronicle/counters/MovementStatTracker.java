@@ -157,8 +157,7 @@ public class MovementStatTracker implements StatTracker
 		}
 
 		String place = isHomeRow(optLow) ? "house" : optLow;
-		if (matchDestinationKey(place) != null
-			&& !isWearHandling(optLow)
+		if (matchDestinationKey(place) != null && !isWearHandling(optLow)
 			&& (tgtLow.isEmpty() || event.isItemOp() || isTeleportCape(tgtLow)))
 		{
 			String item = tgtLow.isEmpty() ? itemName(event.getItemId()) : tgtLow;
@@ -284,8 +283,7 @@ public class MovementStatTracker implements StatTracker
 		{
 			rubTick = -1;
 		}
-		String method = pendingMethod != null ? pendingMethod
-			: (rubbed ? "teleportsViaJewellery" : null);
+		String method = pendingMethod != null ? pendingMethod : (rubbed ? "teleportsViaJewellery" : null);
 		armTeleport(place, false);
 		pendingMethod = method;
 		return true;
@@ -381,8 +379,7 @@ public class MovementStatTracker implements StatTracker
 		WorldPoint current = local.getWorldLocation();
 		if (lastPlayerPos != null && current != null)
 		{
-			int step = Math.max(
-				Math.abs(current.getX() - lastPlayerPos.getX()),
+			int step = Math.max(Math.abs(current.getX() - lastPlayerPos.getX()),
 				Math.abs(current.getY() - lastPlayerPos.getY()));
 			boolean regionChanged = current.getRegionID() != lastPlayerPos.getRegionID();
 			boolean jumped = step >= TELEPORT_MIN_JUMP || (regionChanged && step >= 3);
@@ -465,8 +462,7 @@ public class MovementStatTracker implements StatTracker
 
 	private boolean isRunStep(int step)
 	{
-		return step >= RUN_STEP_TILES
-			|| (client.getVarpValue(VarPlayerID.OPTION_RUN) == 1 && client.getEnergy() > 0);
+		return step >= RUN_STEP_TILES || (client.getVarpValue(VarPlayerID.OPTION_RUN) == 1 && client.getEnergy() > 0);
 	}
 
 	private static String matchDestinationKey(String label)

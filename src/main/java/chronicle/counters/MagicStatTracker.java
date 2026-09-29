@@ -27,8 +27,7 @@ public class MagicStatTracker implements StatTracker
 	private static final int GFX_DEMONIC = 1871;
 	private static final int GFX_SINISTER = 1872;
 	private static final Map<Integer, String> OFFERING = Map.of(GFX_DEMONIC, "demonic", GFX_SINISTER, "sinister");
-	private static final Map<Integer, String> OFFERING_SAC = Map.of(
-		GFX_DEMONIC, "ashesSacrificed",
+	private static final Map<Integer, String> OFFERING_SAC = Map.of(GFX_DEMONIC, "ashesSacrificed",
 		GFX_SINISTER, "bonesSacrificed");
 	private static final Set<Integer> OFFERING_RUNES = Set.of(565, 566, 21880);
 	private static final Set<Integer> OFFENSIVE_CAST_ANIMS =

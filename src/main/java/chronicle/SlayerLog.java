@@ -419,8 +419,7 @@ final class SlayerLog
 			}
 			JsonObject sl = obj(store.root, "slayer");
 			JsonArray tasks = taskArray();
-			List<SlayerTask> out =
-				new ArrayList<>(tasks.size());
+			List<SlayerTask> out = new ArrayList<>(tasks.size());
 			long totalKills = 0;
 			long totalValue = 0;
 			for (int i = tasks.size() - 1; i >= 0; i--)
@@ -434,18 +433,14 @@ final class SlayerLog
 				long value = asLong(seg.get("value"));
 				totalKills += kills;
 				totalValue += value;
-				out.add(new SlayerTask(
-					seg.has("task") ? seg.get("task").getAsString() : "?",
-					kills,
+				out.add(new SlayerTask(seg.has("task") ? seg.get("task").getAsString() : "?", kills,
 					asLong(seg.get("assignment")),
 					asLong(seg.get("noLootKills")),
 					asLong(seg.get("ts")),
 					value,
 					i == tasks.size() - 1 && isOpen(seg)));
 			}
-			return new SlayerJourney(
-				(int) asLong(sl.get("completed")),
-				totalKills, totalValue,
+			return new SlayerJourney((int) asLong(sl.get("completed")), totalKills, totalValue,
 				asLong(sl.get("xp_est")),
 				out);
 		}

@@ -76,28 +76,23 @@ final class OverlayScrollBarUI extends BasicScrollBarUI
 	}
 
 	@Override
-	protected void paintTrack(Graphics g, JComponent c,
-		Rectangle bounds)
+	protected void paintTrack(Graphics g, JComponent c, Rectangle bounds)
 	{
 	}
 
 	@Override
-	protected void paintThumb(Graphics g, JComponent c,
-		Rectangle t)
+	protected void paintThumb(Graphics g, JComponent c, Rectangle t)
 	{
 		if (alpha <= 0.02f || t.isEmpty())
 		{
 			return;
 		}
 		Graphics2D g2 = (Graphics2D) g.create();
-		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-			RenderingHints.VALUE_ANTIALIAS_ON);
-		g2.setComposite(AlphaComposite.getInstance(
-			AlphaComposite.SRC_OVER, Math.min(1f, alpha)));
+		g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, Math.min(1f, alpha)));
 		g2.setColor(THUMB);
 		int h = Math.max(WIDTH * 2, t.height - 4);
-		g2.fillRoundRect(t.x, t.y + 2, WIDTH, h,
-			WIDTH, WIDTH);
+		g2.fillRoundRect(t.x, t.y + 2, WIDTH, h, WIDTH, WIDTH);
 		g2.dispose();
 	}
 

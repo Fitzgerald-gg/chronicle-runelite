@@ -59,12 +59,10 @@ public class ChronicleEventCapture
 {
 	private static final int MAX_LEVEL = 99;
 
-	private static final Pattern KILL_COUNT = Pattern.compile(
-		"^Your (?:completed )?(?<subject>.+?)"
+	private static final Pattern KILL_COUNT = Pattern.compile("^Your (?:completed )?(?<subject>.+?)"
 			+ "(?: (?<kind>kill|chest|lap|harvest|success|completion))? count is: (?<tally>[\\d,]+)\\.$");
 
-	private static final Set<String> NOT_A_KILL =
-		new HashSet<>(Arrays.asList("lap", "harvest"));
+	private static final Set<String> NOT_A_KILL = new HashSet<>(Arrays.asList("lap", "harvest"));
 
 	private static final Pattern COLLECTION_ITEM = Pattern.compile(
 		"^New item added to your collection log: (?<entry>.+)$");
@@ -83,8 +81,7 @@ public class ChronicleEventCapture
 	private static final Pattern SLAYER_FINISHED = Pattern.compile(
 		"^You have completed your task! You killed (?<slain>[\\d,]+) (?<creature>[^.]+)\\.");
 	private static final Pattern SLAYER_TOTAL = Pattern.compile(
-		"^You've completed (?:at least )?(?<total>[\\d,]+) (?<qual>[A-Za-z]+ )?tasks?"
-			+ "(?:;| and received)");
+		"^You've completed (?:at least )?(?<total>[\\d,]+) (?<qual>[A-Za-z]+ )?tasks?(?:;| and received)");
 
 	private static final Pattern PET_RECEIVED = Pattern.compile(
 		"^(?:You have a funny feeling like you're being followed"
@@ -191,9 +188,7 @@ public class ChronicleEventCapture
 		{
 			return;
 		}
-		JsonObject data = Json.of("source", comp.getName(),
-			"npcId", comp.getId(),
-			"category", "NPC",
+		JsonObject data = Json.of("source", comp.getName(), "npcId", comp.getId(), "category", "NPC",
 			"lootSource", "server");
 		addLoot(data, comp.getName(), event.getItems());
 		stampSlayer(data, comp.getName(), comp.getId());
@@ -558,8 +553,7 @@ public class ChronicleEventCapture
 		{
 			for (NPC npc : client.getTopLevelWorldView().npcs())
 			{
-				if (npc != null && npc.getInteracting() == lp && npc.getName() != null
-					&& !npc.getName().isEmpty())
+				if (npc != null && npc.getInteracting() == lp && npc.getName() != null && !npc.getName().isEmpty())
 				{
 					return npc.getName();
 				}
@@ -580,8 +574,7 @@ public class ChronicleEventCapture
 	public void onChatMessage(ChatMessage message)
 	{
 		ChatMessageType t = message.getType();
-		if (t != ChatMessageType.MESBOX && t != ChatMessageType.GAMEMESSAGE
-			&& t != ChatMessageType.SPAM)
+		if (t != ChatMessageType.MESBOX && t != ChatMessageType.GAMEMESSAGE && t != ChatMessageType.SPAM)
 		{
 			return;
 		}
@@ -630,8 +623,7 @@ public class ChronicleEventCapture
 			lastKillTimeSec = parseDuration(dur.group("time"));
 			lastKillPb = msg.contains(NEW_PB_MARK);
 			Matcher pb = PERSONAL_BEST.matcher(msg);
-			lastPbTimeSec = lastKillPb ? lastKillTimeSec
-				: (pb.find() ? parseDuration(pb.group("pb")) : -1);
+			lastPbTimeSec = lastKillPb ? lastKillTimeSec : (pb.find() ? parseDuration(pb.group("pb")) : -1);
 			lastKillTimeTick = client.getTickCount();
 			return;
 		}

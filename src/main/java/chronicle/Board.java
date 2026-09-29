@@ -280,8 +280,7 @@ final class Board
 
 	JPanel noPeriod()
 	{
-		return note(historySpine == null
-			? "Reading your history..."
+		return note(historySpine == null ? "Reading your history..."
 			: "Nothing closed inside " + periodInSentence() + ". A period is the distance "
 				+ "between two baselines, and this window holds fewer than two.");
 	}
@@ -1526,8 +1525,7 @@ final class Board
 			long onPage = pageItems != null ? pageItems.getOrDefault(key, 0L) : 0L;
 			boolean globalMaySpeak = pageItems == null || !sharedNames.contains(key);
 			long have = Math.max(onPage, globalMaySpeak ? owned.getOrDefault(key, 0L) : 0L);
-			lit[i] = dupes.get(key) > 1
-				? seen.merge(key, 1, Integer::sum) - 1 < have
+			lit[i] = dupes.get(key) > 1 ? seen.merge(key, 1, Integer::sum) - 1 < have
 				: have > 0 || pageItems != null && pageItems.containsKey(key) || globalMaySpeak && owned.containsKey(key);
 		}
 		return lit;

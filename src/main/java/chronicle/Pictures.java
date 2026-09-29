@@ -104,16 +104,14 @@ final class Pictures
 
 	private static Transferable pngPayload(Image image)
 	{
-		if (PNG_BYTES == null || OSType.getOSType() != OSType.MacOS
-			|| !(image instanceof RenderedImage))
+		if (PNG_BYTES == null || OSType.getOSType() != OSType.MacOS || !(image instanceof RenderedImage))
 		{
 			return null;
 		}
 		try
 		{
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
-			MemoryCacheImageOutputStream ios =
-				new MemoryCacheImageOutputStream(out);
+			MemoryCacheImageOutputStream ios = new MemoryCacheImageOutputStream(out);
 			if (!ImageIO.write((RenderedImage) image, "png", ios))
 			{
 				return null;
@@ -170,8 +168,7 @@ final class Pictures
 
 			int h = Math.min(full, COPY_MAX_HEIGHT);
 			int lost = h < full ? pastTheEdge(page, h) : 0;
-			BufferedImage img = new BufferedImage(
-				w, h, BufferedImage.TYPE_INT_RGB);
+			BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
 			Graphics2D g = img.createGraphics();
 			g.setColor(DARK);
 			g.fillRect(0, 0, w, h);

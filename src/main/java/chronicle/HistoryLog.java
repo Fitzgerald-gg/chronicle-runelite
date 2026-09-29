@@ -293,8 +293,7 @@ class HistoryLog
 		return null;
 	}
 
-	static Map<String, Long> gained(Map<String, Long> start, Map<String, Long> earliest,
-		Map<String, Long> end)
+	static Map<String, Long> gained(Map<String, Long> start, Map<String, Long> earliest, Map<String, Long> end)
 	{
 		return gained(start, earliest, end, false);
 	}
@@ -521,8 +520,7 @@ class HistoryLog
 			log.debug("history compaction failed", e);
 			return 0;
 		}
-		log.debug("history spine: dropped {} repeated day lines, {} dates in order",
-			dropped, keep.size());
+		log.debug("history spine: dropped {} repeated day lines, {} dates in order", dropped, keep.size());
 		return dropped;
 	}
 

@@ -149,8 +149,7 @@ final class Feed
 		{
 			right.append(right.length() > 0 ? " · " : "").append(count(drops, "drop"));
 		}
-		return new String[]{"Session · " + hoursMinutes(asLong(d.get("minutes"))),
-			right.toString(), feedLine(e)};
+		return new String[]{"Session · " + hoursMinutes(asLong(d.get("minutes"))), right.toString(), feedLine(e)};
 	}
 
 	private static String mostOf(JsonObject d)
@@ -280,8 +279,7 @@ final class Feed
 		return out;
 	}
 
-	static void crossings(Map<String, Long> prev, Map<String, Long> now, long ts,
-		List<JsonObject> into)
+	static void crossings(Map<String, Long> prev, Map<String, Long> now, long ts, List<JsonObject> into)
 	{
 		cross(prev, now, ts, into, "total", TOTAL_LEVELS, t -> "Total level " + fmt(t));
 		cross(prev, now, ts, into, "nines", NINETY_NINES, t -> ordinal(t) + " 99");
@@ -290,8 +288,7 @@ final class Feed
 		{
 			if (key.startsWith("xp:"))
 			{
-				cross(prev, now, ts, into, key, SKILL_XP, t -> threshold(t) + " xp in "
-					+ prettify(key.substring(3)));
+				cross(prev, now, ts, into, key, SKILL_XP, t -> threshold(t) + " xp in " + prettify(key.substring(3)));
 			}
 		}
 		cross(prev, now, ts, into, "overall", OVERALL_XP, t -> threshold(t) + " xp overall");

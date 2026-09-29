@@ -34,8 +34,7 @@ class LeftBehind
 	private final Map<TileItem, GroundLoot> groundLoot = new IdentityHashMap<>();
 	private final Map<TileItem, GroundLoot> pendingSelf = new IdentityHashMap<>();
 	private final List<GroundLoot> untakenBatch = new ArrayList<>();
-	private final Set<TileItem> unloaded =
-		Collections.newSetFromMap(new IdentityHashMap<>());
+	private final Set<TileItem> unloaded = Collections.newSetFromMap(new IdentityHashMap<>());
 	private final List<RecentKill> recentKills = new ArrayList<>();
 	private static final int DEATH_MEMORY_TICKS = 10;
 	private final List<RecentDeath> recentDeaths = new ArrayList<>();
@@ -105,16 +104,14 @@ class LeftBehind
 		private final int killTick;
 		private final int killIndex;
 
-		private GroundLoot(int id, int qty, int despawnTick, int spawnTick,
-			boolean group, String owner, WorldPoint at)
+		private GroundLoot(int id, int qty, int despawnTick, int spawnTick, boolean group, String owner, WorldPoint at)
 		{
 			this(id, qty, despawnTick, spawnTick, group, owner, at, null, -1, -1);
 		}
 
 		private GroundLoot withKill(String source, int killTick, int killIndex)
 		{
-			return new GroundLoot(id, qty, despawnTick, spawnTick, group, owner, at,
-				source, killTick, killIndex);
+			return new GroundLoot(id, qty, despawnTick, spawnTick, group, owner, at, source, killTick, killIndex);
 		}
 	}
 
@@ -216,8 +213,7 @@ class LeftBehind
 			if (kill != null)
 			{
 				RecentDeath death = deathFor(g);
-				groundLoot.put(e.getKey(), death != null
-					? g.withKill(death.name, death.tick, death.index)
+				groundLoot.put(e.getKey(), death != null ? g.withKill(death.name, death.tick, death.index)
 					: g.withKill(kill.source, kill.tick, -1));
 				done.add(e.getKey());
 			}
@@ -269,8 +265,7 @@ class LeftBehind
 			{
 				continue;
 			}
-			if (best == null || distance < bestDistance
-				|| (distance == bestDistance && d.tick > best.tick))
+			if (best == null || distance < bestDistance || (distance == bestDistance && d.tick > best.tick))
 			{
 				best = d;
 				bestDistance = distance;
@@ -295,8 +290,7 @@ class LeftBehind
 		int now = client.getTickCount();
 		Player me = client.getLocalPlayer();
 		recentDrops.removeIf(d -> now - d.tick > DROP_WINDOW_TICKS);
-		recentDrops.add(new RecentDrop(event.getItemId(), now,
-			me == null ? null : me.getWorldLocation()));
+		recentDrops.add(new RecentDrop(event.getItemId(), now, me == null ? null : me.getWorldLocation()));
 	}
 
 	private boolean isOwnDrop(TileItem it, WorldPoint at, int now)
@@ -396,7 +390,6 @@ class LeftBehind
 		{
 			return;
 		}
-		recentDeaths.add(new RecentDeath(now, npc.getIndex(), name,
-			new WorldArea(at, size, size)));
+		recentDeaths.add(new RecentDeath(now, npc.getIndex(), name, new WorldArea(at, size, size)));
 	}
 }
