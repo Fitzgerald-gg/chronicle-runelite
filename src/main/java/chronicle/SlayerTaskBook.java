@@ -25,7 +25,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 final class SlayerTaskBook
 {
-	static final int UNKNOWN_ID = -1;
 
 	private final Map<Integer, String> npcToTask = new HashMap<>();
 	private final Map<String, List<String>> variants = new HashMap<>();
@@ -95,15 +94,5 @@ final class SlayerTaskBook
 			r = r.substring(0, r.length() - 1);
 		}
 		return r;
-	}
-
-	int idCount()
-	{
-		return npcToTask.size();
-	}
-
-	int taskCount()
-	{
-		return variants.size();
 	}
 }
