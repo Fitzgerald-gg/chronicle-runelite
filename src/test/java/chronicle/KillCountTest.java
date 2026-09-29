@@ -55,6 +55,7 @@ public class KillCountTest
 		h.clogPage("Wintertodt", Arrays.asList("Rewards claimed: 1,078", "Wintertodt kills: 447")).save();
 		h.chat("Your subdued Wintertodt count is: 448.");
 		assertEquals(Long.valueOf(448), kc("Wintertodt"));
+		assertNull(kc("subdued Wintertodt"));
 	}
 
 	@Test
