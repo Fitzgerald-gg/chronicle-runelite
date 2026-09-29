@@ -128,7 +128,7 @@ final class Period
 		return ts >= ms[0] && ts <= ms[1];
 	}
 
-	String inside(String said)
+	String phrase(String said)
 	{
 		return said + " inside " + inSentence() + ".";
 	}

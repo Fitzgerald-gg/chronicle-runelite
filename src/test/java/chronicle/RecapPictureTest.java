@@ -57,9 +57,22 @@ public class RecapPictureTest
 
 	private static Object call(ChroniclePanel p, String name) throws Exception
 	{
-		Method m = ChroniclePanel.class.getDeclaredMethod(name);
-		m.setAccessible(true);
-		return m.invoke(p);
+		java.lang.reflect.Field b = ChroniclePanel.class.getDeclaredField("build");
+		b.setAccessible(true);
+		Summary s = ((Build) b.get(p)).summary;
+		switch (name)
+		{
+			case "recapFacts":
+				return s.facts();
+			case "periodSkillGains":
+				return s.skillGains();
+			case "periodXp":
+				return s.xp();
+			default:
+				Method m = ChroniclePanel.class.getDeclaredMethod(name);
+				m.setAccessible(true);
+				return m.invoke(p);
+		}
 	}
 
 	private static RecapPicture.Facts facts(ChroniclePanel p, String g, LocalDate c) throws Exception

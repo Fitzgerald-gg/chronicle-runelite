@@ -803,7 +803,7 @@ class ChroniclePanel extends PluginPanel
 			if (had.isEmpty())
 			{
 				String unkept = build.notCounting(true);
-				return noted(p, unkept != null ? unkept : window().inside("Nothing on the boss sheet was killed"));
+				return noted(p, unkept != null ? unkept : window().phrase("Nothing on the boss sheet was killed"));
 			}
 			roster = had;
 		}
@@ -869,7 +869,7 @@ class ChroniclePanel extends PluginPanel
 		if (!wholeRecord())
 		{
 			long inWin = build.kills.bossKillsInWindow(b.name);
-			long[] paid = sourceInWindow(b.name);
+			long[] paid = build.summary.source(b.name);
 			lines.add(window().label);
 			lines.add((inWin < 0 ? "-" : count(inWin, "kill"))
 				+ tail(paid[1]));
@@ -883,7 +883,7 @@ class ChroniclePanel extends PluginPanel
 			lines.add(pb(pb.getValue()));
 		}
 		double[] timed = wholeRecord() && src != null ? new double[]{src.timed, src.timeSum}
-			: sourceTimesInWindow(b.name);
+			: build.summary.sourceTimes(b.name);
 		if (timed[0] > 0)
 		{
 			lines.add("Average kill");
@@ -1663,14 +1663,14 @@ class ChroniclePanel extends PluginPanel
 		{
 			if (w.items.isEmpty())
 			{
-				return noted(p, window().inside("Nothing taken"));
+				return noted(p, window().phrase("Nothing taken"));
 			}
 			return kindLens(p, win.label, bagOf(w.items), "win:");
 		}
 		List<String[]> ranked = dropsLeftBehind ? w.leftItems : w.sources;
 		if (ranked.isEmpty())
 		{
-			return noted(p, window().inside("Nothing " + (dropsLeftBehind ? "left behind" : "taken")));
+			return noted(p, window().phrase("Nothing " + (dropsLeftBehind ? "left behind" : "taken")));
 		}
 		JPanel head = dropsLeftBehind ? tallyCard("Left behind", "Items", fmt(w.left), ACCENT_RED, w.leftValue)
 			: tallyCard("Drops received", "Drops", fmt(w.loots), accent(), w.value);
@@ -1681,7 +1681,7 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, head);
 		final String key = dropsLeftBehind ? "win:left" : "win:source";
 		final int cap = drillShown.getOrDefault(key, ROW_CAP);
-		for (String[] r : firstN(ranked, cap))
+		for (String[] r : Sources.firstN(ranked, cap))
 		{
 			JPanel line = row(r[0], qtyGp(safeParse(r[1]), safeParse(r[2])));
 			final String name = r[0];
@@ -1775,7 +1775,7 @@ class ChroniclePanel extends PluginPanel
 			List<BagItem> taskBag = plugin.onTaskLoot(w[0], w[1], null, wholeRecord());
 			if (taskBag.isEmpty())
 			{
-				return noted(p, window().inside("No task closed"));
+				return noted(p, window().phrase("No task closed"));
 			}
 			return kindLens(p, wholeRecord() ? "On-task loot"
 				: "Tasks closed in " + window().label, taskBag, "ontask:");
@@ -1809,7 +1809,7 @@ class ChroniclePanel extends PluginPanel
 		JPanel lifeHead = tallyCard("Drops received", "Drops", fmt(everyDrop), accent(), everyValue);
 		lifeHead.add(row("Sources", fmt(sources.size())));
 		spaced(p, lifeHead);
-		for (SourceRow r : firstN(sources, dropsShown))
+		for (SourceRow r : Sources.firstN(sources, dropsShown))
 		{
 			boolean killed = build.kills.isKillSource(r.name);
 			String sub = (killed ? fmt(build.kills.standingKills(r)) + " kc" : count(r.loots, "drop"))
@@ -1908,7 +1908,7 @@ class ChroniclePanel extends PluginPanel
 		p.add(copyHeader(lootKind, () -> copyPicture(
 			lootPicture(lootKind, kept, mine, false), true)));
 		int cap = drillShown.getOrDefault(key + lootKind, ROW_CAP);
-		addBagRows(p, firstN(kept, cap));
+		addBagRows(p, Sources.firstN(kept, cap));
 		drillMore(p, key + lootKind, kept.size(), cap);
 		return p;
 	}
@@ -1943,7 +1943,7 @@ class ChroniclePanel extends PluginPanel
 		List<UntakenRow> list = byItem ? items : rows;
 		String key = byItem ? "left:item" : "left:source";
 		final int cap = drillShown.getOrDefault(key, ROW_CAP);
-		for (UntakenRow r : firstN(list, cap))
+		for (UntakenRow r : Sources.firstN(list, cap))
 		{
 			listCard(p, row(r.name, gps(r.value), ACCENT_RED),
 				byItem ? "\u00d7" + fmt(r.qty) : fmt(r.qty) + " left", r.qty > 0 ? perOne(r.value, r.qty, false) : "",
@@ -2138,10 +2138,10 @@ class ChroniclePanel extends PluginPanel
 		{
 			p.add(taskPicker());
 			return noted(p, lootTask != null
-				? window().inside("No loot logged on " + lootTask)
+				? window().phrase("No loot logged on " + lootTask)
 				: wholeRecord()
 					? "No task loot in the journal yet. It collects as tasks close."
-					: window().inside("No task loot"));
+					: window().phrase("No task loot"));
 		}
 		final long[] sum = LocalStore.tallyOf(bag);
 		final long qty = sum[0];
@@ -2406,7 +2406,7 @@ class ChroniclePanel extends PluginPanel
 		kcs.sort(Entry.<String, Long>comparingByValue().reversed());
 		JPanel card = card("Kill log");
 		final int cap = drillShown.getOrDefault("killlog", ROW_CAP);
-		for (Entry<String, Long> e : firstN(kcs, cap))
+		for (Entry<String, Long> e : Sources.firstN(kcs, cap))
 		{
 			JPanel r = row(e.getKey(), fmt(e.getValue()));
 			final String mob = e.getKey();
@@ -2611,7 +2611,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (shown.isEmpty() && !wholeRecord())
 		{
-			p.add(note(window().inside("No tasks closed")));
+			p.add(note(window().phrase("No tasks closed")));
 			return;
 		}
 		long tasksDone = j.completedTasks;
@@ -2802,29 +2802,6 @@ class ChroniclePanel extends PluginPanel
 		detailItem = null;
 		clearSearch();
 		rebuild();
-	}
-
-	private double[] sourceTimesInWindow(String name)
-	{
-		Map<String, double[]> times = build.lootWindow().times;
-		String key = keyOf(times.keySet(), name);
-		return key == null ? new double[]{0, 0} : times.get(key);
-	}
-
-	private long[] sourceInWindow(String name)
-	{
-		return rowOf(build.lootWindow().sources, name);
-	}
-
-	private static long[] rowOf(List<String[]> rows, String name)
-	{
-		String[] r = rowFor(rows, name, false);
-		return r == null ? new long[]{0, 0} : new long[]{safeParse(r[1]), safeParse(r[2])};
-	}
-
-	private static String[] rowFor(List<String[]> rows, String name, boolean exact)
-	{
-		return Sources.find(rows, r -> r[0], name, exact);
 	}
 
 	void openSourceLoose(String name)
@@ -3215,7 +3192,7 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 		}
-		final long[] inWindow = wholeRecord() ? null : rowOf(build.lootWindow().items, name);
+		final long[] inWindow = wholeRecord() ? null : Sources.rowOf(build.lootWindow().items, name);
 		long other = 0;
 		long otherValue = 0;
 		if (inWindow != null)
@@ -3223,7 +3200,7 @@ class ChroniclePanel extends PluginPanel
 			srcs.clear();
 			other = inWindow[0];
 			otherValue = inWindow[1];
-			String[] headRow = rowFor(build.lootWindow().items, name, false);
+			String[] headRow = Sources.rowFor(build.lootWindow().items, name, false);
 			String spelled = headRow != null ? headRow[0] : name;
 			for (Map.Entry<String, List<BagItem>> e : periodItems().entrySet())
 			{
@@ -3319,7 +3296,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(group("From"));
 		final int srcCap = Math.max(drawingCopy ? COPY_MOST : 40, drillShown.getOrDefault("item:src:" + name, 0));
-		for (Object[] s : firstN(srcs, srcCap))
+		for (Object[] s : Sources.firstN(srcs, srcCap))
 		{
 			JPanel r = row((String) s[0], "×" + fmt((long) s[1])
 				+ tail((long) s[2]));
@@ -3357,7 +3334,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel nothing(JPanel p, String what, String since)
 	{
-		return since != null ? p : noted(p, window().inside("Nothing " + what));
+		return since != null ? p : noted(p, window().phrase("Nothing " + what));
 	}
 
 	private static void addOther(JPanel p, String figure, boolean show)
@@ -3382,11 +3359,11 @@ class ChroniclePanel extends PluginPanel
 		List<Object[]> split = plugin.onTaskItemByTask(name, w[0], w[1]);
 		if (split.isEmpty())
 		{
-			return noted(p, window().inside("No task paid this"));
+			return noted(p, window().phrase("No task paid this"));
 		}
 		p.add(group("By task"));
 		final int taskCap = Math.max(drawingCopy ? COPY_MOST : 40, drillShown.getOrDefault("item:task:" + name, 0));
-		for (Object[] t : firstN(split, taskCap))
+		for (Object[] t : Sources.firstN(split, taskCap))
 		{
 			p.add(row("Task: " + t[0], "×" + fmt((long) t[1]) + tail((long) t[2])));
 		}
@@ -3432,7 +3409,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		p.add(group("Killed on task"));
 		int cap = drillShown.getOrDefault("ontask:src:" + npc, ROW_CAP);
-		for (LocalStore.Assignment a : firstN(was, cap))
+		for (LocalStore.Assignment a : Sources.firstN(was, cap))
 		{
 			p.add(row("Task: " + a.task, fmt(a.killsHere)));
 		}
@@ -3465,7 +3442,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel p = column();
 		final SourceRow sr = Sources.find(build.sources(), r -> r.name, name, false);
-		String[] row = wholeRecord() ? null : rowFor(build.lootWindow().sources, sr != null ? sr.name : name, sr != null);
+		String[] row = wholeRecord() ? null : Sources.rowFor(build.lootWindow().sources, sr != null ? sr.name : name, sr != null);
 		long[] inWindow = wholeRecord() ? null
 			: row == null ? new long[2] : new long[]{safeParse(row[1]), safeParse(row[2])};
 		String own = row != null ? row[0] : sr != null ? sr.name : name;
@@ -3595,7 +3572,7 @@ class ChroniclePanel extends PluginPanel
 			}
 			p.add(group("Loot"));
 			int cap = drawingCopy ? COPY_MOST : drillShown.getOrDefault(name, 25);
-			addBagRows(p, firstN(bag, cap));
+			addBagRows(p, Sources.firstN(bag, cap));
 			if (bag.size() > cap)
 			{
 				p.add(vgap(3));
@@ -3622,7 +3599,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (got.isEmpty())
 		{
-			return noted(p, window().inside("Nothing new was logged"));
+			return noted(p, window().phrase("Nothing new was logged"));
 		}
 		JPanel head = card("Collection log");
 		head.add(row("Slots logged", fmt(got.size()), accent()));
@@ -4309,7 +4286,7 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, head);
 		if (kept == 0)
 		{
-			return noted(p, window().inside("Nothing tracked"));
+			return noted(p, window().phrase("Nothing tracked"));
 		}
 		for (Entry<String, Map<String, List<Entry<String, Long>>>> fam : filed.entrySet())
 		{
@@ -4427,7 +4404,7 @@ class ChroniclePanel extends PluginPanel
 			String unkept = build.notCounting(false);
 			return noted(p, unkept != null ? unkept : wholeRecord()
 				? "Nothing under " + statsFamily + " yet."
-				: window().inside("Nothing under " + statsFamily));
+				: window().phrase("Nothing under " + statsFamily));
 		}
 
 		List<Entry<String, Long>> destRows = statsFamily.equals("Ledger & Roads")
@@ -4793,7 +4770,7 @@ class ChroniclePanel extends PluginPanel
 			if (experience)
 			{
 				int cap = shownCap(GAINS_LIST);
-				for (Entry<String, Long> e : firstN(gains, cap))
+				for (Entry<String, Long> e : Sources.firstN(gains, cap))
 				{
 					card.add(row(prettify(e.getKey()), "+" + gp(e.getValue())));
 				}
@@ -4826,7 +4803,7 @@ class ChroniclePanel extends PluginPanel
 		if (open)
 		{
 			int cap = shownCap(listKey);
-			for (String[] entry : firstN(list, cap))
+			for (String[] entry : Sources.firstN(list, cap))
 			{
 				card.add(nested(ghostRow(entry[0], entry[1])));
 			}
@@ -4852,7 +4829,7 @@ class ChroniclePanel extends PluginPanel
 			return;
 		}
 		int cap = shownCap(stateKey);
-		for (HistoryProgress.Row r : firstN(s.rows(), cap))
+		for (HistoryProgress.Row r : Sources.firstN(s.rows(), cap))
 		{
 			card.add(nested(row(r.label(), "+" + figure(r))));
 		}
@@ -4988,14 +4965,14 @@ class ChroniclePanel extends PluginPanel
 		else
 		{
 			gained = HistoryLog.gained(beforeKc, earliestKc, nowKc);
-			worth = periodWorth(from, to);
+			worth = build.summary.worth(from, to);
 		}
-		Map<String, Long> loose = loosely(worth);
+		Map<String, Long> loose = Summary.loosely(worth);
 		Map<String, List<Entry<String, Long>>> byKind = new LinkedHashMap<>();
 		for (String name : whole ? standing.keySet() : union(gained.keySet(), worth.keySet()))
 		{
 			long figure = whole ? standing.getOrDefault(name, 0L) : gained.getOrDefault(name, 0L);
-			if (figure <= 0 && paidFor(worth, loose, name) <= 0)
+			if (figure <= 0 && Summary.paidFor(worth, loose, name) <= 0)
 			{
 				continue;
 			}
@@ -5004,8 +4981,8 @@ class ChroniclePanel extends PluginPanel
 		}
 		Comparator<Entry<String, Long>> byPaid = (a, b) ->
 		{
-			long wa = paidFor(worth, loose, a.getKey());
-			long wb = paidFor(worth, loose, b.getKey());
+			long wa = Summary.paidFor(worth, loose, a.getKey());
+			long wb = Summary.paidFor(worth, loose, b.getKey());
 			if (wa != wb)
 			{
 				return Long.compare(wb, wa);
@@ -5039,42 +5016,6 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
-	private Map<String, Long> periodWorth(LocalDate from, LocalDate to)
-	{
-		Map<String, Long> out = new LinkedHashMap<>();
-		if (wholeRecord())
-		{
-			for (SourceRow r : build.sources())
-			{
-				out.merge(r.name, r.value, Long::sum);
-			}
-		}
-		else
-		{
-			for (String[] r : plugin.lootBetween(from, to).sources)
-			{
-				out.merge(r[0], safeParse(r[2]), Long::sum);
-			}
-		}
-		return out;
-	}
-
-	private static long paidFor(Map<String, Long> worth, Map<String, Long> loose, String name)
-	{
-		Long exact = worth.get(name);
-		return exact != null ? exact : loose.getOrDefault(kindOf(name), 0L);
-	}
-
-	private static Map<String, Long> loosely(Map<String, Long> worth)
-	{
-		Map<String, Long> out = new LinkedHashMap<>();
-		for (Entry<String, Long> e : worth.entrySet())
-		{
-			out.merge(kindOf(e.getKey()), e.getValue(), Long::sum);
-		}
-		return out;
-	}
-
 	private void addKindBand(JPanel p, String kind, List<Entry<String, Long>> rows,
 		Map<String, Long> worth, Map<String, Long> loose, boolean withIcons)
 	{
@@ -5088,10 +5029,10 @@ class ChroniclePanel extends PluginPanel
 		}
 		int cap = histListShown.getOrDefault(stateKey, BAND_CAP);
 		JPanel card = cardPlain();
-		for (Entry<String, Long> e : firstN(rows, cap))
+		for (Entry<String, Long> e : Sources.firstN(rows, cap))
 		{
 			card.add(kindRow(e.getKey(), e.getValue(),
-				paidFor(worth, loose, e.getKey()), withIcons));
+				Summary.paidFor(worth, loose, e.getKey()), withIcons));
 		}
 		addMore(card, stateKey, rows.size(), cap, false);
 		spaced(p, card);
@@ -6088,19 +6029,6 @@ class ChroniclePanel extends PluginPanel
 		return cur != null && cur.length > 1 && cur[1] > 0 ? cur[1] : null;
 	}
 
-	private long sessionXp(String key)
-	{
-		for (ExperienceStatTracker.SkillGain g : plugin.sessionSkillXp())
-		{
-			if (g.skill != null && g.xp > 0
-				&& key.equalsIgnoreCase(g.skill.name()))
-			{
-				return g.xp;
-			}
-		}
-		return 0;
-	}
-
 	private JPanel buildSkillDetail(String craft)
 	{
 		JPanel p = backPage();
@@ -6115,7 +6043,7 @@ class ChroniclePanel extends PluginPanel
 			now = s == null ? null : s.closing.skills.get(key);
 		}
 		Long was = sessionPeriod()
-			? (now == null ? null : Math.max(0, now - sessionXp(key)))
+			? (now == null ? null : Math.max(0, now - build.summary.sessionXp(key)))
 			: (s == null ? null : s.opening.skills.get(key));
 		if (now != null && now > 0)
 		{
@@ -6767,7 +6695,7 @@ class ChroniclePanel extends PluginPanel
 		RecapPicture.Facts facts;
 		try
 		{
-			facts = recapFacts();
+			facts = build.summary.facts();
 		}
 		catch (Throwable t)
 		{
@@ -6817,684 +6745,13 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	RecapPicture.Facts recapFacts()
-	{
-		RecapPicture.Facts f = new RecapPicture.Facts();
-		f.whole = wholeRecord();
-		f.session = sessionPeriod();
-		f.title = f.whole ? "The whole record" : window().label;
-		Span s = f.whole || f.session ? null : build.span();
-		recapSkills(f, s);
-		recapBosses(f, s);
-		recapMonsters(f, s);
-		recapLoot(f);
-		recapSlayerAndClues(f);
-		recapTrackers(f);
-		recapFeats(f);
-		recapTiles(f);
-		return f;
-	}
-
-	private void recapSkills(RecapPicture.Facts f, Span s)
-	{
-		Map<String, long[]> sheet = plugin.skillSheet();
-		Map<String, Long> closing = null;
-		if (!f.whole && !f.session)
-		{
-			if (s == null)
-			{
-				f.skillsNote = build.notCounting(false) != null
-					? "The record keeps no experience this far back."
-					: "Nothing closed inside " + window().inSentence()
-						+ ": a period is the distance between two baselines, and this one holds fewer than two.";
-				return;
-			}
-			closing = build.closingSkills(s.closing.skills, window().reachesToday());
-		}
-		Map<String, Integer> startLevels = new LinkedHashMap<>();
-		Map<String, Integer> endLevels = new LinkedHashMap<>();
-		long startXp = 0;
-		long endXp = 0;
-		boolean startsKnown = true;
-		for (Skill sk : Skill.values())
-		{
-			String key = low(sk.name());
-			Long end;
-			Long start = null;
-			if (closing != null)
-			{
-				end = closing.get(key);
-				Long base = s.opening.skills.get(key);
-				if (base == null)
-				{
-					base = s.opening.complete ? Long.valueOf(0L) : s.earliest.skills.get(key);
-				}
-				start = base == null || end == null ? null : Math.min(base, end);
-			}
-			else
-			{
-				long[] cur = sheet.get(key);
-				end = cur != null && cur.length > 1 ? cur[1] : null;
-				if (f.session && end != null)
-				{
-					start = Math.max(0, end - sessionXp(key));
-				}
-			}
-			if (end == null)
-			{
-				continue;
-			}
-			int lEnd = f.whole ? PaceBook.virtualLevelAt(end) : PaceBook.levelAt(end);
-			Integer lStart = start == null ? null : PaceBook.levelAt(start);
-			if (sk == Skill.HITPOINTS)
-			{
-				lEnd = Math.max(10, lEnd);
-				lStart = lStart == null ? null : Math.max(10, lStart);
-			}
-			f.skills.add(new RecapPicture.SkillLine(sk, prettify(key), lStart, lEnd,
-				start, end));
-			endLevels.put(key, Math.min(99, lEnd));
-			endXp += end;
-			if (start == null)
-			{
-				startsKnown = false;
-			}
-			else
-			{
-				startLevels.put(key, lStart);
-				startXp += start;
-			}
-		}
-		if (f.skills.isEmpty())
-		{
-			return;
-		}
-		long[] overall = sheet.get("overall");
-		long totalEnd = f.whole && overall != null && overall[0] > 0 ? overall[0] : sum(endLevels);
-		f.totalLevel = new Long[]{startsKnown ? sum(startLevels) : null, totalEnd};
-		f.totalXp = new Long[]{startsKnown ? startXp : null,
-			f.whole && overall != null && overall.length > 1 && overall[1] > 0 ? overall[1] : endXp};
-		Integer cEnd = combatOf(endLevels);
-		if (f.whole && plugin.combatLevel() > 0)
-		{
-			cEnd = plugin.combatLevel();
-		}
-		Integer cStart = startsKnown ? combatOf(startLevels) : null;
-		f.combat = cEnd == null ? null : new Long[]{cStart == null ? null : (long) cStart, (long) cEnd};
-	}
-
-	private static long sum(Map<String, Integer> levels)
-	{
-		long t = 0;
-		for (int l : levels.values())
-		{
-			t += l;
-		}
-		return t;
-	}
-
-	private static Integer combatOf(Map<String, Integer> levels)
-	{
-		HistoryLog.Levels l = new HistoryLog.Levels();
-		l.of.putAll(levels);
-		return HistoryLog.combat(l);
-	}
-
-	private void recapBosses(RecapPicture.Facts f, Span s)
-	{
-		List<Kills.Boss> roster = Kills.bossRoster(plugin.gson());
-		Map<String, Long> closing = s == null ? null : window().closingNow(s.closing.kcs, plugin.killCounts());
-		for (Kills.Boss b : roster)
-		{
-			if (f.whole)
-			{
-				long k = build.kills.bossKills(b.name);
-				if (k > 0)
-				{
-					f.bosses.add(new RecapPicture.BossLine(b.name, b.sprite, null, k, k));
-				}
-				continue;
-			}
-			long moved = build.kills.bossKillsInWindow(b.name);
-			if (moved <= 0)
-			{
-				continue;
-			}
-			Long start = null;
-			Long end = null;
-			Map<String, Long> movedKcs = build.kills.movedKcs();
-			String key = closing == null || movedKcs == null ? null : keyOf(movedKcs.keySet(), b.name);
-			if (key != null)
-			{
-				end = closing.get(key);
-				start = s.opening.kcs.containsKey(key) ? s.opening.kcs.get(key) : s.earliest.kcs.get(key);
-				if (start == null || end == null || end - start != moved)
-				{
-					start = null;
-					end = null;
-				}
-			}
-			f.bosses.add(new RecapPicture.BossLine(b.name, b.sprite, start, end, moved));
-		}
-		if (!f.whole)
-		{
-			f.bosses.sort((a, b) -> Long.compare(b.gained, a.gained));
-		}
-		if (build.kills.rollUsed())
-		{
-			f.notes.add("Kill counts without a start and an end are read from loot, and count only the kills that dropped something.");
-		}
-		if (f.bosses.isEmpty() && !f.whole)
-		{
-			f.bossesNote = build.notCounting(true) != null
-				? "The record keeps no kill counts this far back."
-				: window().inside("No boss was killed");
-		}
-	}
-
-	private void recapMonsters(RecapPicture.Facts f, Span s)
-	{
-		Map<String, Long> by = new LinkedHashMap<>();
-		Map<String, Long> worth = new LinkedHashMap<>();
-		if (f.whole)
-		{
-			by.putAll(plugin.killCounts());
-			for (SourceRow r : build.sources())
-			{
-				worth.merge(r.name, r.value, Long::sum);
-			}
-		}
-		else if (f.session)
-		{
-			for (String[] r : plugin.sessionLootWindow().sources)
-			{
-				by.merge(r[0], safeParse(r[1]), Long::sum);
-				worth.merge(r[0], safeParse(r[2]), Long::sum);
-			}
-		}
-		else
-		{
-			if (s == null)
-			{
-				return;
-			}
-			by.putAll(HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
-				window().closingNow(s.closing.kcs, plugin.killCounts())));
-			Period w = window();
-			worth.putAll(periodWorth(w.start, w.end));
-		}
-		Map<String, Long> loose = loosely(worth);
-		List<Entry<String, Long>> kept = new ArrayList<>();
-		for (Entry<String, Long> e : by.entrySet())
-		{
-			if (e.getValue() > 0 && recapMonster(e.getKey()))
-			{
-				kept.add(e);
-			}
-		}
-		kept.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
-		for (Entry<String, Long> e : kept.subList(0, Math.min(10, kept.size())))
-		{
-			long paid = paidFor(worth, loose, e.getKey());
-			f.monsters.add(new RecapPicture.Named(e.getKey(), fmt(e.getValue()),
-				paid > 0 ? gps(paid) : null));
-		}
-		if (f.session && !f.monsters.isEmpty())
-		{
-			f.monstersNote = "A sitting counts the kills that dropped something.";
-		}
-	}
-
-	private boolean recapMonster(String name)
-	{
-		if (!Sources.MONSTER.equals(build.names().kind(name)))
-		{
-			return false;
-		}
-		String kind = kindOf(name);
-		for (Kills.Boss b : Kills.bossRoster(plugin.gson()))
-		{
-			if (kindOf(b.name).equals(kind) || Kills.namesInBrackets(name, b.name)
-				|| Kills.paysOutThrough(b.name, name))
-			{
-				return false;
-			}
-		}
-		for (List<String> npcs : Kills.FOUGHT_AS.values())
-		{
-			for (String npc : npcs)
-			{
-				if (kindOf(npc).equals(kind))
-				{
-					return false;
-				}
-			}
-		}
-		return true;
-	}
-
-	private void recapLoot(RecapPicture.Facts f)
-	{
-		if (!f.whole && !f.session)
-		{
-			long from = plugin.lootRollFrom();
-			if (from <= 0 || from > window().ms()[0])
-			{
-				f.lootNote = "Loot is not dated this far back, so this period's cannot be told from the rest.";
-				return;
-			}
-		}
-		long[] loot = periodLoot();
-		if (loot[0] > 0)
-		{
-			f.loot.add(new RecapPicture.Named("Drops", fmt(loot[0]), gps(loot[1])));
-		}
-		if (loot[2] > 0)
-		{
-			f.loot.add(new RecapPicture.Named("Left behind", fmt(loot[2]), gps(loot[3])));
-		}
-		if (f.whole)
-		{
-			List<SourceRow> rows = new ArrayList<>(build.sources());
-			rows.sort((a, b) -> Long.compare(b.value, a.value));
-			for (SourceRow r : firstN(rows, 8))
-			{
-				if (r.value > 0)
-				{
-					f.sources.add(new RecapPicture.Named(r.name, null, gps(r.value)));
-				}
-			}
-			List<BagItem> bag = new ArrayList<>(plugin.allLoot());
-			bag.sort((a, b) -> Long.compare(b.value, a.value));
-			for (BagItem b : firstN(bag, 6))
-			{
-				if (b.value > 0)
-				{
-					f.items.add(new RecapPicture.Named(b.name + " ×" + fmt(b.qty), null, gps(b.value)));
-				}
-			}
-			return;
-		}
-		LocalStore.LootWindow win = build.lootWindow();
-		for (String[] r : firstN(win.sources, 8))
-		{
-			long v = safeParse(r[2]);
-			if (v > 0)
-			{
-				f.sources.add(new RecapPicture.Named(r[0], null, gps(v)));
-			}
-		}
-		for (String[] r : firstN(win.items, 6))
-		{
-			long v = safeParse(r[2]);
-			if (v > 0)
-			{
-				f.items.add(new RecapPicture.Named(r[0] + " ×" + fmt(safeParse(r[1])), null, gps(v)));
-			}
-		}
-		if (f.loot.isEmpty())
-		{
-			f.lootNote = window().inside("Nothing dropped");
-		}
-	}
-
-	private void recapSlayerAndClues(RecapPicture.Facts f)
-	{
-		long[] tally = build.taskTally();
-		long paid = tally[3];
-		if (tally[2] > 0)
-		{
-			f.slayer.add(new RecapPicture.Named("Tasks", fmt(tally[2]), null));
-			if (tally[1] > 0)
-			{
-				f.slayer.add(new RecapPicture.Named("Superiors", fmt(tally[1]), null));
-			}
-			if (paid > 0)
-			{
-				f.slayer.add(new RecapPicture.Named("On-task loot", null, gps(paid)));
-			}
-		}
-		for (String tier : Standings.CLUE_TIERS)
-		{
-			String source = "Clue Scroll (" + tier + ")";
-			long n = 0;
-			long v = 0;
-			SourceRow r = build.standings.clue(tier);
-			if (f.whole && r != null)
-			{
-				n = Standings.caskets(r);
-				v = r.value;
-			}
-			else if (!f.whole)
-			{
-				n = build.kills.rolled(source);
-				v = sourceInWindow(source)[1];
-			}
-			if (n > 0)
-			{
-				f.clues.add(new RecapPicture.Named(tier, fmt(n), v > 0 ? gps(v) : null));
-			}
-		}
-	}
-
-	private static final Map<String, Integer> RECAP_TRACKER_ROWS = new LinkedHashMap<>();
-
-	static
-	{
-		RECAP_TRACKER_ROWS.put("Combat", 8);
-		RECAP_TRACKER_ROWS.put("Skilling", 10);
-		RECAP_TRACKER_ROWS.put("Living", 6);
-		RECAP_TRACKER_ROWS.put("Ledger & Roads", 10);
-	}
-
-	private void recapTrackers(RecapPicture.Facts f)
-	{
-		Map<String, Long> counters = build.countersForPeriod();
-		if (counters == null)
-		{
-			f.trackersNote = build.notCounting(false) != null
-				? "The record keeps no counters this far back."
-				: window().inside("Nothing closed");
-			return;
-		}
-		for (Entry<String, Integer> fam : RECAP_TRACKER_ROWS.entrySet())
-		{
-			List<String> order = StatRegistry.fixedSections(fam.getKey());
-			List<Entry<String, Long>> rows = new ArrayList<>();
-			for (Entry<String, Long> e : counters.entrySet())
-			{
-				String key = e.getKey();
-				if (e.getValue() == null || e.getValue() <= 0 || StatRegistry.hidden(key)
-					|| !fam.getKey().equals(StatRegistry.family(key)) || StatRegistry.typed(key)
-					|| "Destinations".equals(StatRegistry.subgroup(key))
-					|| StatRegistry.label(key).startsWith("·"))
-				{
-					continue;
-				}
-				rows.add(e);
-			}
-			rows.sort((a, b) ->
-			{
-				int sa = order.indexOf(StatRegistry.subgroup(a.getKey()));
-				int sb = order.indexOf(StatRegistry.subgroup(b.getKey()));
-				if (sa != sb)
-				{
-					return Integer.compare(sa < 0 ? order.size() : sa, sb < 0 ? order.size() : sb);
-				}
-				return Long.compare(b.getValue(), a.getValue());
-			});
-			List<RecapPicture.Named> out = new ArrayList<>();
-			for (Entry<String, Long> e : rows.subList(0, Math.min(fam.getValue(), rows.size())))
-			{
-				String key = e.getKey();
-				boolean money = StatRegistry.isGp(key);
-				out.add(new RecapPicture.Named(StatRegistry.label(key),
-					money ? null : fmt(e.getValue()), money ? gps(e.getValue()) : null));
-			}
-			if (!out.isEmpty())
-			{
-				f.trackers.put(fam.getKey(), out);
-			}
-		}
-	}
-
-	private void recapFeats(RecapPicture.Facts f)
-	{
-		Map<String, List<String>> named = new LinkedHashMap<>();
-		for (String k : new String[]{"Milestones", "Collection log", "Pets", "Personal bests",
-			"Quests", "Diaries", "Combat achievements", "Deaths"})
-		{
-			named.put(k, new ArrayList<>());
-		}
-		for (JsonObject m : build.feed.milestones())
-		{
-			if (window().inside(safeLong(m.get("ts"))) && m.has("data"))
-			{
-				named.get("Milestones").add(m.getAsJsonObject("data").get("text").getAsString());
-			}
-		}
-		Set<String> bests = new HashSet<>();
-		for (JsonObject e : plugin.feedNewest(20_000))
-		{
-			if (!window().inside(safeLong(e.get("ts"))))
-			{
-				continue;
-			}
-			String type = typeOf(e);
-			JsonObject d = obj(e, "data");
-			switch (type)
-			{
-				case "COMBAT_ACHIEVEMENT":
-					if (!f.whole && d.has("task"))
-					{
-						named.get("Combat achievements").add(d.get("task").getAsString());
-					}
-					break;
-				case "COLLECTION":
-				case "QUEST":
-				case "DIARY":
-					if (!f.whole)
-					{
-						String n = feedName(e);
-						if (n != null)
-						{
-							named.get(featOf(type)).add(n);
-						}
-					}
-					break;
-				case "PET":
-					if (d.has("petName"))
-					{
-						named.get("Pets").add(d.get("petName").getAsString());
-					}
-					break;
-				case "RECORD":
-					if (d.has("source") && d.has("time")
-						&& bests.add(low(d.get("source").getAsString())))
-					{
-						named.get("Personal bests").add(d.get("source").getAsString() + " "
-							+ pb(d.get("time").getAsDouble()));
-					}
-					break;
-				case "DEATH":
-					if (!f.whole)
-					{
-						named.get("Deaths").add(d.has("killerName")
-							? d.get("killerName").getAsString() : "Unknown");
-					}
-					break;
-				default:
-					break;
-			}
-		}
-		if (!f.whole)
-		{
-			List<String> out = new ArrayList<>();
-			for (RecapPicture.SkillLine l : f.skills)
-			{
-				if (l.levelStart != null && l.levelStart < l.levelEnd)
-				{
-					out.add(l.name + " " + l.levelEnd);
-				}
-			}
-			if (!out.isEmpty())
-			{
-				f.feats.put("Levels", out);
-			}
-		}
-		if (f.whole && plugin.clogAvailable() > 0)
-		{
-			f.feats.put("Collection log", Collections.singletonList(
-				fmt(plugin.clogFinished()) + " of " + fmt(plugin.clogAvailable()) + " slots"));
-			named.remove("Collection log");
-		}
-		for (Entry<String, List<String>> e : named.entrySet())
-		{
-			if (!e.getValue().isEmpty())
-			{
-				f.feats.put(e.getKey(), counted(e.getValue()));
-			}
-		}
-	}
-
-	private static List<String> counted(List<String> names)
-	{
-		Map<String, Integer> n = new LinkedHashMap<>();
-		for (String s : names)
-		{
-			n.merge(s, 1, Integer::sum);
-		}
-		List<String> out = new ArrayList<>();
-		for (Entry<String, Integer> e : n.entrySet())
-		{
-			out.add(e.getKey() + (e.getValue() > 1 ? " ×" + e.getValue() : ""));
-		}
-		return out;
-	}
-
-	private static String featOf(String type)
-	{
-		switch (type)
-		{
-			case "COLLECTION":
-				return "Collection log";
-			case "QUEST":
-				return "Quests";
-			case "DIARY":
-				return "Diaries";
-			default:
-				return "Combat achievements";
-		}
-	}
-
-	private void recapTiles(RecapPicture.Facts f)
-	{
-		long[] sat = sittingsInWindow(new LocalDate[1]);
-		long minutes = sat[0];
-		int sittings = (int) sat[1];
-		long games = f.whole ? plugin.gamePlaytimeMinutes() : 0;
-		if (games > minutes)
-		{
-			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(games), "the game's own count"));
-		}
-		else if (sittings > 0)
-		{
-			f.tiles.add(new RecapPicture.Tile("Played", hoursMinutes(minutes),
-				count(sittings, "sitting")));
-		}
-		long[] xp = periodXp();
-		if (xp != null && xp[0] > 0)
-		{
-			String most = periodXpMost();
-			f.tiles.add(new RecapPicture.Tile("Experience", (f.whole ? "" : "+") + gp(xp[0]),
-				most == null ? null : "most in " + most));
-		}
-		if (f.totalLevel != null && f.totalLevel[1] != null)
-		{
-			Long a = f.totalLevel[0];
-			long b = f.totalLevel[1];
-			if (f.whole)
-			{
-				f.tiles.add(new RecapPicture.Tile("Total level", fmt(b),
-					f.combat != null && f.combat[1] != null ? "combat " + f.combat[1] : null));
-			}
-			else if (a != null && b > a)
-			{
-				f.tiles.add(new RecapPicture.Tile("Levels", "+" + fmt(b - a),
-					climb(a, b) + " total"));
-			}
-		}
-		for (RecapPicture.Named n : f.loot)
-		{
-			if ("Drops".equals(n.name))
-			{
-				f.tiles.add(new RecapPicture.Tile("Loot", n.gp, n.figure + " drops"));
-			}
-		}
-		long bossKills = 0;
-		for (RecapPicture.BossLine b : f.bosses)
-		{
-			bossKills += b.gained;
-		}
-		RecapPicture.BossLine top = most(f.bosses, b -> b.gained);
-		if (bossKills > 0)
-		{
-			f.tiles.add(new RecapPicture.Tile("Boss kills", (f.whole ? "" : "+") + fmt(bossKills),
-				"most " + top.name));
-		}
-		for (RecapPicture.Named n : f.slayer)
-		{
-			if ("Tasks".equals(n.name))
-			{
-				String paid = null;
-				for (RecapPicture.Named m : f.slayer)
-				{
-					if (m.gp != null)
-					{
-						paid = m.gp + " on task";
-					}
-				}
-				f.tiles.add(new RecapPicture.Tile("Slayer tasks", n.figure, paid));
-			}
-		}
-		List<String> slots = f.feats.get("Collection log");
-		if (f.whole && plugin.clogAvailable() > 0)
-		{
-			f.tiles.add(new RecapPicture.Tile("Collection log", fmt(plugin.clogFinished()),
-				"of " + fmt(plugin.clogAvailable())));
-		}
-		else if (!f.whole && slots != null)
-		{
-			f.tiles.add(new RecapPicture.Tile("Log slots", "+" + fmt(slots.size()),
-				"latest " + slots.get(0)));
-		}
-		List<String> pets = f.feats.get("Pets");
-		if (pets != null && f.tiles.size() < 8)
-		{
-			f.tiles.add(new RecapPicture.Tile("Pets", (f.whole ? "" : "+") + fmt(pets.size()),
-				"latest " + pets.get(0)));
-		}
-		while (f.tiles.size() > 8)
-		{
-			f.tiles.remove(f.tiles.size() - 1);
-		}
-	}
-
-	private long[] sittingsInWindow(LocalDate[] busiest)
-	{
-		long[] sat = new long[3];
-		if (sessionPeriod())
-		{
-			sat[0] = plugin.sessionElapsedMinutes();
-			sat[1] = sat[0] > 0 ? 1 : 0;
-		}
-		else
-		{
-			for (Entry<LocalDate, long[]> d : build.feed.days().entrySet())
-			{
-				if (!window().inside(noon(d.getKey())))
-				{
-					continue;
-				}
-				sat[0] += d.getValue()[0];
-				sat[1] += d.getValue()[1];
-				if (d.getValue()[0] > sat[2])
-				{
-					sat[2] = d.getValue()[0];
-					busiest[0] = d.getKey();
-				}
-			}
-		}
-		return sat;
-	}
-
 	private JPanel recapPlate()
 	{
 		JPanel plate = card(wholeRecord() ? "The whole record" : window().label);
 		int held = plate.getComponentCount();
 
 		LocalDate[] busiest = new LocalDate[1];
-		long[] sat = sittingsInWindow(busiest);
+		long[] sat = build.summary.played(busiest);
 		long minutes = sat[0];
 		int sittings = (int) sat[1];
 		if (sittings > 0)
@@ -7510,16 +6767,16 @@ class ChroniclePanel extends PluginPanel
 				() -> openJournalOn(noon(day)));
 		}
 
-		long[] xp = periodXp();
+		long[] xp = build.summary.xp();
 		if (xp != null && xp[0] > 0)
 		{
-			String most = periodXpMost();
+			String most = build.summary.xpMost();
 			plateRow(plate, wholeRecord() ? "Xp" : "Xp gained",
 				(wholeRecord() ? "" : "+") + gp(xp[0]) + " xp"
 					+ (most != null ? ", most in " + most : ""),
 				() -> applyTab(View.SHEET));
 		}
-		long[] levels = periodLevels();
+		long[] levels = build.summary.levels();
 		if (levels != null)
 		{
 			plateRow(plate, wholeRecord() ? "Total level" : "Levels",
@@ -7527,13 +6784,13 @@ class ChroniclePanel extends PluginPanel
 				() -> applyTab(View.SHEET));
 		}
 
-		long[] loot = periodLoot();
+		long[] loot = build.summary.loot();
 		if (loot[0] > 0)
 		{
 			plateRow(plate, "Drops", qtyGp(loot[0], loot[1]),
 				() -> applyTab(View.DROPS));
 		}
-		String[] dearest = periodDearest();
+		String[] dearest = build.summary.dearest();
 		if (dearest != null)
 		{
 			final String item = dearest[0];
@@ -7571,7 +6828,7 @@ class ChroniclePanel extends PluginPanel
 				+ splitSpend("potionsConsumedValue", counters), toLiving);
 		}
 
-		String[] killed = periodKilledMost();
+		String[] killed = build.summary.killedMost();
 		if (killed != null)
 		{
 			final String who = killed[0];
@@ -7606,7 +6863,7 @@ class ChroniclePanel extends PluginPanel
 		if (plate.getComponentCount() == held)
 		{
 			plate.add(note(wholeRecord() ? "Nothing on the record yet."
-				: window().inside("Nothing")));
+				: window().phrase("Nothing")));
 		}
 		return plate;
 	}
@@ -7659,166 +6916,6 @@ class ChroniclePanel extends PluginPanel
 			right.name(name);
 		}
 		plateRow(plate, n == 1 ? one : many, right, () -> openJournal(lens));
-	}
-
-	private long[] periodXp()
-	{
-		if (wholeRecord())
-		{
-			long[] overall = plugin.skillSheet().get("overall");
-			return overall != null && overall.length > 1 ? new long[]{overall[1]} : null;
-		}
-		if (sessionPeriod())
-		{
-			long xp = 0;
-			for (ExperienceStatTracker.SkillGain g : plugin.sessionSkillXp())
-			{
-				xp += Math.max(0, g.xp);
-			}
-			return new long[]{xp};
-		}
-		Map<String, Long> gains = periodSkillGains();
-		if (gains == null)
-		{
-			return null;
-		}
-		long total = 0;
-		for (long g : gains.values())
-		{
-			total += Math.max(0, g);
-		}
-		return new long[]{total};
-	}
-
-	private String periodXpMost()
-	{
-		Map<String, Long> by = new LinkedHashMap<>();
-		if (sessionPeriod())
-		{
-			ExperienceStatTracker.SkillGain top = most(plugin.sessionSkillXp(), g -> g.xp);
-			return top == null ? null : prettify(low(top.skill.name()));
-		}
-		if (wholeRecord())
-		{
-			for (Entry<String, long[]> e : plugin.skillSheet().entrySet())
-			{
-				if (!"overall".equals(e.getKey()) && e.getValue().length > 1)
-				{
-					by.put(e.getKey(), e.getValue()[1]);
-				}
-			}
-		}
-		else
-		{
-			Map<String, Long> gains = periodSkillGains();
-			if (gains == null)
-			{
-				return null;
-			}
-			by.putAll(gains);
-		}
-		String top = topOf(by);
-		return top == null ? null : prettify(top);
-	}
-
-	private long[] periodLevels()
-	{
-		if (wholeRecord())
-		{
-			long[] overall = plugin.skillSheet().get("overall");
-			return overall != null && overall[0] > 0 ? new long[]{overall[0], overall[0]} : null;
-		}
-		if (sessionPeriod())
-		{
-			long[] overall = plugin.skillSheet().get("overall");
-			long gained = build.feed.inWindow("LEVEL");
-			return gained > 0 && overall != null ? new long[]{gained, overall[0]} : null;
-		}
-		Span s = build.span();
-		if (s == null || !s.opening.complete || !s.closing.complete)
-		{
-			return null;
-		}
-		Baseline shut = new Baseline();
-		shut.skills.putAll(build.closingSkills(s.closing.skills, window().reachesToday()));
-		shut.complete = true;
-		HistoryLog.Levels was = HistoryLog.levels(s.opening, HistoryLog.SKILL_KEYS);
-		HistoryLog.Levels now = HistoryLog.levels(shut, HistoryLog.SKILL_KEYS);
-		return now.total > was.total ? new long[]{now.total - was.total, now.total} : null;
-	}
-
-	private Map<String, Long> periodSkillGains()
-	{
-		Span s = build.span();
-		if (s == null)
-		{
-			return null;
-		}
-		Map<String, Long> out = new LinkedHashMap<>(HistoryLog.gained(s.opening.skills,
-			s.earliest.skills, build.closingSkills(s.closing.skills, window().reachesToday()), s.opening.complete));
-		out.remove("overall");
-		return out;
-	}
-
-	private long[] periodLoot()
-	{
-		if (wholeRecord())
-		{
-			long[] out = new long[4];
-			for (SourceRow r : build.sources())
-			{
-				out[0] += r.loots;
-				out[1] += r.value;
-			}
-			for (UntakenRow u : plugin.untakenSources())
-			{
-				out[2] += u.qty;
-				out[3] += u.value;
-			}
-			return out;
-		}
-		LocalStore.LootWindow win = build.lootWindow();
-		return new long[]{win.loots, win.value, win.left, win.leftValue};
-	}
-
-	private String[] periodDearest()
-	{
-		if (wholeRecord())
-		{
-			return null;
-		}
-		LocalStore.LootWindow win = build.lootWindow();
-		return win.items.isEmpty() ? null : new String[]{win.items.get(0)[0], win.items.get(0)[2]};
-	}
-
-	private String[] periodKilledMost()
-	{
-		if (wholeRecord())
-		{
-			SourceRow top = null;
-			for (SourceRow r : build.sources())
-			{
-				if (build.kills.isKillSource(r.name) && (top == null || build.kills.standingKills(r) > build.kills.standingKills(top)))
-				{
-					top = r;
-				}
-			}
-			return top == null ? null : new String[]{top.name, fmt(build.kills.standingKills(top))};
-		}
-		if (sessionPeriod())
-		{
-			String[] top = most(plugin.sessionLootWindow().sources, r -> safeParse(r[1]));
-			return top == null ? null : new String[]{top[0], fmt(safeParse(top[1]))};
-		}
-		Span s = build.span();
-		if (s == null)
-		{
-			return null;
-		}
-		Map<String, Long> moved = HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
-			window().closingNow(s.closing.kcs, plugin.killCounts()));
-		String top = topOf(moved);
-		return top == null ? null : new String[]{top, fmt(moved.get(top))};
 	}
 
 	private JPanel buildRecords()
@@ -8127,7 +7224,7 @@ class ChroniclePanel extends PluginPanel
 		feed.sort((a, b) -> dayOf(filedAt(b)).compareTo(dayOf(filedAt(a))));
 		if (feed.isEmpty() && !wholeRecord())
 		{
-			p.add(note(window().inside("No " + ("All".equals(journalLens) ? "milestones" : low(journalLens)))));
+			p.add(note(window().phrase("No " + ("All".equals(journalLens) ? "milestones" : low(journalLens)))));
 			return p;
 		}
 		if (feed.isEmpty())
@@ -8139,7 +7236,7 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		String lastDay = null;
-		for (JsonObject e : firstN(feed, journalShown))
+		for (JsonObject e : Sources.firstN(feed, journalShown))
 		{
 			long ts = filedAt(e);
 			String day = ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "";
@@ -8524,7 +7621,7 @@ class ChroniclePanel extends PluginPanel
 		String key = "search:" + title;
 		int cap = drillShown.getOrDefault(key, SEARCH_CAP);
 		FontMetrics fm = rowMetrics();
-		for (Hit h : firstN(hits, cap))
+		for (Hit h : Sources.firstN(hits, cap))
 		{
 			int room = boardRowRoom() - ROW_GAP - (h.figure.isEmpty() ? 0 : fm.stringWidth(h.figure));
 			String shown = h.name;
@@ -9329,11 +8426,6 @@ class ChroniclePanel extends PluginPanel
 		JLabel name = styled(new JLabel(title), small(), dim());
 		cell.add(name, BorderLayout.CENTER);
 		return cell;
-	}
-
-	private static <T> List<T> firstN(List<T> l, int cap)
-	{
-		return l.subList(0, Math.min(cap, l.size()));
 	}
 
 	private static JPanel tile(int v, int h)

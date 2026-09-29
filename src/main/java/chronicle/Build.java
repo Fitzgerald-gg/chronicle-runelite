@@ -31,6 +31,7 @@ final class Build
 	final Kills kills = new Kills(this);
 	final Feed feed = new Feed(this);
 	final Standings standings = new Standings(this);
+	final Summary summary = new Summary(this);
 	private List<SourceRow> sources;
 	private JsonObject clog;
 	private ClogBook book;

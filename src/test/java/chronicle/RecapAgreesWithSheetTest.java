@@ -60,13 +60,12 @@ public class RecapAgreesWithSheetTest
 				Field c = ChroniclePanel.class.getDeclaredField("histCursor");
 				c.setAccessible(true);
 				c.set(hold[0], LocalDate.of(2025, 6, 1));
-				Method xp = ChroniclePanel.class.getDeclaredMethod("periodXp");
-				xp.setAccessible(true);
-				recap[0] = ((long[]) xp.invoke(hold[0]))[0];
-				Method gains = ChroniclePanel.class.getDeclaredMethod("periodSkillGains");
-				gains.setAccessible(true);
+				Field b = ChroniclePanel.class.getDeclaredField("build");
+				b.setAccessible(true);
+				Summary summary = ((Build) b.get(hold[0])).summary;
+				recap[0] = summary.xp()[0];
 				long total = 0;
-				for (Object v : ((java.util.Map<?, ?>) gains.invoke(hold[0])).values())
+				for (Object v : summary.skillGains().values())
 				{
 					total += (Long) v;
 				}

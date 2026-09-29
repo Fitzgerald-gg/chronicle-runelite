@@ -132,9 +132,9 @@ public class LivingSplitTest
 				Field g = ChroniclePanel.class.getDeclaredField("histGranularity");
 				g.setAccessible(true);
 				g.set(hold[0], "Lifetime");
-				Method m = ChroniclePanel.class.getDeclaredMethod("recapFacts");
-				m.setAccessible(true);
-				facts[0] = m.invoke(hold[0]);
+				Field b = ChroniclePanel.class.getDeclaredField("build");
+				b.setAccessible(true);
+				facts[0] = ((Build) b.get(hold[0])).summary.facts();
 				Method q = ChroniclePanel.class.getDeclaredMethod("buildSearch", String.class);
 				q.setAccessible(true);
 				collect((Component) q.invoke(hold[0], "consumed value"), found);
