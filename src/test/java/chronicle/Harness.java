@@ -251,6 +251,8 @@ final class Harness
 		when(client.getOverallExperience()).thenAnswer(i -> skills.entrySet().stream()
 			.filter(e -> e.getKey() != Skill.OVERALL).mapToLong(e -> e.getValue()[1]).sum());
 		when(client.getItemContainer(anyInt())).thenAnswer(i -> containers.get(i.<Integer>getArgument(0)));
+		net.runelite.api.WorldView view = mock(net.runelite.api.WorldView.class);
+		when(client.getTopLevelWorldView()).thenReturn(view);
 		when(client.getItemContainer(any(net.runelite.api.InventoryID.class)))
 			.thenAnswer(i -> containers.get(i.<net.runelite.api.InventoryID>getArgument(0).getId()));
 		when(client.getItemDefinition(anyInt())).thenAnswer(i -> comp(i.getArgument(0)));

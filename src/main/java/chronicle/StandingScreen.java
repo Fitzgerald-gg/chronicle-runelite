@@ -30,7 +30,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import net.runelite.api.Skill;
-import net.runelite.api.SpriteID;
+import net.runelite.api.gameval.SpriteID;
 import net.runelite.client.hiscore.HiscoreSkill;
 import static chronicle.Feed.*;
 import static chronicle.Json.obj;
@@ -135,7 +135,7 @@ final class StandingScreen extends Screen
 		if (period.session())
 		{
 			plugin.sessionSkillXp().stream().filter(g -> g.skill != null && g.xp > 0)
-				.forEach(g -> list.add(Map.entry(low(g.skill.name()), (long) g.xp)));
+				.forEach(g -> list.add(Map.entry(low(g.skill.name()), g.xp)));
 		}
 		else
 		{
@@ -433,9 +433,9 @@ final class StandingScreen extends Screen
 			case "Collections":
 				return HiscoreSkill.COLLECTIONS_LOGGED.getSpriteId();
 			case "Quests":
-				return SpriteID.TAB_QUESTS;
+				return SpriteID.SideiconsInterface.QUESTS;
 			case "Diaries":
-				return SpriteID.TAB_QUESTS_GREEN_ACHIEVEMENT_DIARIES;
+				return SpriteID.SideiconsInterface.ACHIEVEMENT_DIARIES;
 			default:
 				return 0;
 		}

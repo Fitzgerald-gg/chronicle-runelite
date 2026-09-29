@@ -8,7 +8,7 @@ import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
-import net.runelite.api.ItemID;
+import net.runelite.api.gameval.ItemID;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
 import net.runelite.api.events.AnimationChanged;
@@ -96,7 +96,7 @@ public class MagicStatTracker implements StatTracker
 			});
 		}
 		invSnap = now;
-		int coins = now.getOrDefault(ItemID.COINS_995, 0);
+		int coins = now.getOrDefault(ItemID.COINS, 0);
 		if (lastCoins < 0)
 		{
 			lastCoins = coins;
@@ -182,11 +182,6 @@ public class MagicStatTracker implements StatTracker
 		if (me == null)
 		{
 			return -1;
-		}
-		int g = me.getGraphic();
-		if (OFFERING.containsKey(g))
-		{
-			return g;
 		}
 		if (me.hasSpotAnim(GFX_DEMONIC))
 		{

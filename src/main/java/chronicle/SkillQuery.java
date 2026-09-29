@@ -114,7 +114,7 @@ final class SkillQuery
 		Map<String, Long> by = new LinkedHashMap<>();
 		if (board.period.session())
 		{
-			board.plugin.sessionSkillXp().forEach(g -> by.put(low(g.skill.name()), (long) Math.max(0, g.xp)));
+			board.plugin.sessionSkillXp().forEach(g -> by.put(low(g.skill.name()), Math.max(0, g.xp)));
 		}
 		else if (board.period.whole())
 		{

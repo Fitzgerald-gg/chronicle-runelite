@@ -521,6 +521,7 @@ public class ChroniclePlugin extends Plugin
 		statStore.clear();
 	}
 
+	@SuppressWarnings("deprecation")
 	private Map<String, SkillRow> readSkills()
 	{
 		Map<String, SkillRow> out = new LinkedHashMap<>();

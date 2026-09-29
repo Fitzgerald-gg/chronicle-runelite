@@ -6,7 +6,7 @@ package chronicle.counters;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
-import net.runelite.api.ItemID;
+import net.runelite.api.gameval.ItemID;
 import net.runelite.api.MenuAction;
 import net.runelite.api.Skill;
 import net.runelite.api.events.ChatMessage;

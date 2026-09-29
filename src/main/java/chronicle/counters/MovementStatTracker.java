@@ -59,7 +59,7 @@ public class MovementStatTracker implements StatTracker
 			return;
 		}
 
-		int group = event.getWidgetId() >> 16;
+		int group = event.getParam1() >> 16;
 
 		if (optLow.equals("close")
 			&& (group == InterfaceID.TELENEXUS_TELEPORT || group == InterfaceID.POH_JEWELLERY_BOX))
@@ -131,7 +131,7 @@ public class MovementStatTracker implements StatTracker
 			&& (optLow.equals("enter") || optLow.equals("home")
 			|| optLow.equals("build mode") || optLow.equals("friend's house")))
 		{
-			if (client.isInInstancedRegion())
+			if (client.getTopLevelWorldView().isInstance())
 			{
 				clearPending();
 			}
@@ -290,7 +290,7 @@ public class MovementStatTracker implements StatTracker
 
 	private String rowLabel(MenuOptionClicked event, String optLow, String tgtLow)
 	{
-		String row = menuRowText(event.getWidgetId(), event.getParam0()).toLowerCase(Locale.ROOT);
+		String row = menuRowText(event.getParam1(), event.getParam0()).toLowerCase(Locale.ROOT);
 		return (row + " " + optLow + " " + tgtLow).trim();
 	}
 

@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
-import net.runelite.api.InventoryID;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.Skill;
 import net.runelite.api.events.AnimationChanged;
@@ -54,7 +54,7 @@ public interface StatTracker
 
 	static Map<Integer, Integer> inventory(Client client, ItemContainerChanged event)
 	{
-		if (event.getItemContainer() != client.getItemContainer(InventoryID.INVENTORY))
+		if (event.getItemContainer() != client.getItemContainer(InventoryID.INV))
 		{
 			return null;
 		}

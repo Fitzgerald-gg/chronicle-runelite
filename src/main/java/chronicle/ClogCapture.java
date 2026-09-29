@@ -26,7 +26,6 @@ import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.VarbitID;
-import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
@@ -321,8 +320,8 @@ public class ClogCapture
 		}
 		try
 		{
-			Widget header = client.getWidget(ComponentID.COLLECTION_LOG_ENTRY_HEADER);
-			Widget items = client.getWidget(ComponentID.COLLECTION_LOG_ENTRY_ITEMS);
+			Widget header = client.getWidget(InterfaceID.Collection.HEADER_TEXT);
+			Widget items = client.getWidget(InterfaceID.Collection.ITEMS_CONTENTS);
 			if (header == null || items == null)
 			{
 				return;

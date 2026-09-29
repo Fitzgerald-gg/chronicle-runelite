@@ -1327,7 +1327,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		out.put("lootLeftKills", leftKills);
 		out.put("kills", kills);
 		out.put("slayerTasksCompleted", journey != null ? journey.completedTasks : 0L);
-		out.put("clogSlotsObtained", (long) (finished > 0 ? finished : obtainedSlots(cl)));
+		out.put("clogSlotsObtained", finished > 0 ? finished : obtainedSlots(cl));
 		return out;
 	}
 

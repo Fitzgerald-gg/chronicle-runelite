@@ -6,14 +6,14 @@ package chronicle.counters;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
-import net.runelite.api.InventoryID;
 import net.runelite.api.ItemContainer;
-import net.runelite.api.ItemID;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
-import net.runelite.api.widgets.InterfaceID;
+import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.ItemID;
 
 @RequiredArgsConstructor
 public class GoldStatTracker implements StatTracker
@@ -26,7 +26,7 @@ public class GoldStatTracker implements StatTracker
 	@Override
 	public void onWidgetLoaded(WidgetLoaded event)
 	{
-		if (event.getGroupId() == InterfaceID.SHOP_INVENTORY)
+		if (event.getGroupId() == InterfaceID.SHOPSIDE)
 		{
 			coinsLastTick = packCoins();
 		}
@@ -35,7 +35,7 @@ public class GoldStatTracker implements StatTracker
 	@Override
 	public void onWidgetClosed(WidgetClosed event)
 	{
-		if (event.getGroupId() == InterfaceID.SHOP_INVENTORY)
+		if (event.getGroupId() == InterfaceID.SHOPSIDE)
 		{
 			coinsLastTick = IDLE;
 		}
@@ -72,7 +72,7 @@ public class GoldStatTracker implements StatTracker
 
 	private int packCoins()
 	{
-		ItemContainer pack = client.getItemContainer(InventoryID.INVENTORY);
-		return pack == null ? IDLE : pack.count(ItemID.COINS_995);
+		ItemContainer pack = client.getItemContainer(InventoryID.INV);
+		return pack == null ? IDLE : pack.count(ItemID.COINS);
 	}
 }

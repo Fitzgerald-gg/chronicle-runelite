@@ -45,6 +45,10 @@ tasks.withType(JavaCompile).configureEach {
 	options.release.set(11)
 }
 
+compileJava {
+	options.compilerArgs += ['-Xlint:all,-serial,-processing,-classfile', '-Werror']
+}
+
 // `gradle run` launches a dev-mode RuneLite with this plugin side-loaded.
 tasks.register('run', JavaExec) {
 	classpath = sourceSets.test.runtimeClasspath

@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
-import net.runelite.api.InventoryID;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.events.GameStateChanged;
@@ -28,7 +28,7 @@ public class RangedStatTracker implements StatTracker
 	@Override
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
-		if (event.getItemContainer() != client.getItemContainer(InventoryID.EQUIPMENT))
+		if (event.getItemContainer() != client.getItemContainer(InventoryID.WORN))
 		{
 			return;
 		}
@@ -75,7 +75,7 @@ public class RangedStatTracker implements StatTracker
 
 	private int packCount(int itemId)
 	{
-		ItemContainer pack = client.getItemContainer(InventoryID.INVENTORY);
+		ItemContainer pack = client.getItemContainer(InventoryID.INV);
 		return pack == null ? 0 : pack.count(itemId);
 	}
 }

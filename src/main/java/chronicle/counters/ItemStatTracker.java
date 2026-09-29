@@ -5,7 +5,7 @@ package chronicle.counters;
 
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
-import net.runelite.api.InventoryID;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.events.ChatMessage;
@@ -41,7 +41,7 @@ public class ItemStatTracker implements StatTracker
 	{
 		int itemId = event.getItemId();
 		int qty = 1;
-		ItemContainer inv = client.getItemContainer(InventoryID.INVENTORY);
+		ItemContainer inv = client.getItemContainer(InventoryID.INV);
 		Item slotItem = inv == null ? null : inv.getItem(event.getParam0());
 		if (slotItem != null && slotItem.getId() == itemId)
 		{

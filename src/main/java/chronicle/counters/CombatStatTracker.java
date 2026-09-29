@@ -10,7 +10,7 @@ import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.HitsplatID;
 import net.runelite.api.Skill;
-import net.runelite.api.VarPlayer;
+import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
@@ -38,7 +38,7 @@ public class CombatStatTracker implements StatTracker
 	@Override
 	public void onGameTick(GameTick tick)
 	{
-		int cur = client.getVarpValue(VarPlayer.SPECIAL_ATTACK_PERCENT);
+		int cur = client.getVarpValue(VarPlayerID.SA_ENERGY);
 		if (prevSpecEnergy >= 0 && cur < prevSpecEnergy)
 		{
 			store.incrementStat("specialAttacksUsed");
