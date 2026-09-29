@@ -376,13 +376,13 @@ final class SearchScreen extends Screen
 		{
 			return hits;
 		}
-		for (Object[] line : board.searchFeed())
+		for (Board.FeedLine line : board.searchFeed())
 		{
-			if (((String) line[0]).contains(qj))
+			if (line.key.contains(qj))
 			{
-				long at = (Long) line[2];
+				long at = line.ts;
 				String day = at <= 0 ? "" : (dayOf(at).getYear() == year ? DAY : TASK_DAY).format(Instant.ofEpochMilli(at));
-				hits.add(new Hit((String) line[1], day, null, null, () -> ui.openJournalOn(at), 0, at));
+				hits.add(new Hit(line.text, day, null, null, () -> ui.openJournalOn(at), 0, at));
 			}
 		}
 		return hits;

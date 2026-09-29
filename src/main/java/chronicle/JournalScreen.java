@@ -66,7 +66,7 @@ final class JournalScreen extends Screen
 		spaced(p, lenses);
 		List<String> wanted = LENSES.getOrDefault(journalLens, List.of());
 		List<JsonObject> all = plugin.feedWithSitting(FEED_SCAN);
-		if (all.size() >= FEED_SCAN && !period.whole() && board.windowMs()[0] < oldestTs(all, false))
+		if (all.size() >= FEED_SCAN && !period.whole() && board.range().from < oldestTs(all, false))
 		{
 			all = plugin.feedWithSitting(Board.JOURNAL_DEEP);
 		}
@@ -100,9 +100,8 @@ final class JournalScreen extends Screen
 			}
 			if ("SESSION".equals(typeOf(e)))
 			{
-				String[] parts = sessionParts(e);
-				JPanel sr = row(parts[0], parts[1]);
-				sr.setToolTipText(parts[2]);
+				JPanel sr = row(sessionTitle(e), sessionFigures(e));
+				sr.setToolTipText(feedLine(e));
 				p.add(sr);
 			}
 			else

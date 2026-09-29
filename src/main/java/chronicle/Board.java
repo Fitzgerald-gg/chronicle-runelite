@@ -67,9 +67,9 @@ final class Board
 	long historyFeedTs;
 	boolean historyGathering;
 	private int historyEpoch;
-	private List<Object[]> searchFeed;
+	private List<FeedLine> searchFeed;
 	private long searchFeedTs = -1;
-	private Object searchFeedSpine;
+	private TreeMap<LocalDate, Baseline> searchFeedSpine;
 
 	@RequiredArgsConstructor
 	static final class Span
@@ -205,17 +205,16 @@ final class Board
 		}
 		historyGathering = true;
 		final int epoch = historyEpoch;
-		new SwingWorker<Object[], Void>()
+		new SwingWorker<History, Void>()
 		{
 			@Override
-			protected Object[] doInBackground()
+			protected History doInBackground()
 			{
-				return new Object[]{plugin.historyBaselines(), store.feedNewest(HISTORY_FEED_SCAN),
-					plugin.slayerJourney(), LocalDate.now()};
+				return new History(plugin.historyBaselines(), store.feedNewest(HISTORY_FEED_SCAN), plugin.slayerJourney(),
+					LocalDate.now());
 			}
 
 			@Override
-			@SuppressWarnings("unchecked")
 			protected void done()
 			{
 				if (epoch != historyEpoch)
@@ -223,19 +222,19 @@ final class Board
 					return;
 				}
 				historyGathering = false;
-				Object[] d;
+				History h;
 				try
 				{
-					d = get();
+					h = get();
 				}
 				catch (Exception e)
 				{
 					return;
 				}
-				historySpine = (TreeMap<LocalDate, Baseline>) d[0];
-				historyFeed = (List<JsonObject>) d[1];
-				historyJourney = (SlayerJourney) d[2];
-				historyDay = (LocalDate) d[3];
+				historySpine = h.spine;
+				historyFeed = h.feed;
+				historyJourney = h.journey;
+				historyDay = h.day;
 				historyFeedTs = newestTs(historyFeed);
 				onHistory.run();
 			}
@@ -248,19 +247,19 @@ final class Board
 			historySpine == null || historySpine.isEmpty() ? null : historySpine.firstKey());
 	}
 
-	long[] windowMs()
+	Range range()
 	{
 		if (period.whole())
 		{
-			return new long[]{EVER_FROM, EVER_TO};
+			return new Range(EVER_FROM, EVER_TO);
 		}
 		if (period.session())
 		{
 			long began = plugin.sessionStart();
-			return new long[]{began > 0 ? began : startMs(LocalDate.now()), System.currentTimeMillis()};
+			return new Range(began > 0 ? began : startMs(LocalDate.now()), System.currentTimeMillis());
 		}
 		Window w = window();
-		return new long[]{startMs(w.start), startMs(w.end.plusDays(1)) - 1};
+		return new Range(startMs(w.start), startMs(w.end.plusDays(1)) - 1);
 	}
 
 	boolean insideWindow(long ts)
@@ -273,8 +272,7 @@ final class Board
 		{
 			return !period.session();
 		}
-		long[] ms = windowMs();
-		return ts >= ms[0] && ts <= ms[1];
+		return range().holds(ts);
 	}
 
 	String inside(String said)
@@ -572,9 +570,9 @@ final class Board
 
 	SlayerLog.TaskTally taskTally()
 	{
-		long[] ms = windowMs();
-		SlayerLog.TaskTally tally = store.slayer.onTaskTally(ms[0], ms[1], null, period.whole());
-		tally.loot = Tally.of(store.slayer.onTaskLoot(ms[0], ms[1], null, period.whole())).value;
+		Range ms = range();
+		SlayerLog.TaskTally tally = store.slayer.onTaskTally(ms.from, ms.to, null, period.whole());
+		tally.loot = Tally.of(store.slayer.onTaskLoot(ms.from, ms.to, null, period.whole())).value;
 		return tally;
 	}
 
@@ -1243,12 +1241,29 @@ final class Board
 		return sat;
 	}
 
-	List<Object[]> searchFeed()
+	@RequiredArgsConstructor
+	private static final class History
+	{
+		final TreeMap<LocalDate, Baseline> spine;
+		final List<JsonObject> feed;
+		final SlayerJourney journey;
+		final LocalDate day;
+	}
+
+	@RequiredArgsConstructor
+	static final class FeedLine
+	{
+		final String key;
+		final String text;
+		final long ts;
+	}
+
+	List<FeedLine> searchFeed()
 	{
 		long newest = newestTs(store.feedNewest(1));
 		if (searchFeed == null || newest != searchFeedTs || historySpine != searchFeedSpine)
 		{
-			List<Object[]> out = new ArrayList<>();
+			List<FeedLine> out = new ArrayList<>();
 			List<JsonObject> all = new ArrayList<>(store.feedNewest(JOURNAL_DEEP));
 			all.addAll(milestones());
 			for (JsonObject e : all)
@@ -1256,7 +1271,7 @@ final class Board
 				String line = feedLine(e);
 				if (line != null && !line.isEmpty())
 				{
-					out.add(new Object[]{low(line).replace("'", ""), line, filedAt(e)});
+					out.add(new FeedLine(low(line).replace("'", ""), line, filedAt(e)));
 				}
 			}
 			searchFeed = out;

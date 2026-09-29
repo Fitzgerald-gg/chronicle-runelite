@@ -146,8 +146,8 @@ final class SlayerScreen extends Screen
 
 	private JPanel onTaskLoot(JPanel p)
 	{
-		long[] ms = board.windowMs();
-		List<BagItem> bag = store.slayer.onTaskLoot(ms[0], ms[1], taskFilter, period.whole());
+		Range ms = board.range();
+		List<BagItem> bag = store.slayer.onTaskLoot(ms.from, ms.to, taskFilter, period.whole());
 		if (bag.isEmpty() || ui.loot.lootKind != null)
 		{
 			p.add(taskPicker());
@@ -157,7 +157,7 @@ final class SlayerScreen extends Screen
 				: board.inside("No task loot"));
 		}
 		Tally sum = Tally.of(bag);
-		SlayerLog.TaskTally tally = store.slayer.onTaskTally(ms[0], ms[1], taskFilter, period.whole());
+		SlayerLog.TaskTally tally = store.slayer.onTaskTally(ms.from, ms.to, taskFilter, period.whole());
 		spaced(p, onTaskHead(sum, tally));
 		p.add(taskPicker());
 		Map<String, BooleanSupplier> ways = new LinkedHashMap<>();

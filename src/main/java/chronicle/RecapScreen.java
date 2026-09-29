@@ -299,7 +299,7 @@ final class RecapScreen extends Screen
 		if (!f.whole && !f.session)
 		{
 			long from = store.loot.lootRollFrom();
-			if (from <= 0 || from > board.windowMs()[0])
+			if (from <= 0 || from > board.range().from)
 			{
 				f.lootNote = "Loot is not dated this far back, so this period's cannot be told from the rest.";
 				return;

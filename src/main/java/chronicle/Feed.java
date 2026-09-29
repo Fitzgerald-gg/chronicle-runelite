@@ -135,7 +135,12 @@ final class Feed
 		}
 	}
 
-	static String[] sessionParts(JsonObject e)
+	static String sessionTitle(JsonObject e)
+	{
+		return "Session · " + hoursMinutes(asLong(obj(e, "data").get("minutes")));
+	}
+
+	static String sessionFigures(JsonObject e)
 	{
 		JsonObject d = obj(e, "data");
 		long xp = asLong(d.get("xp"));
@@ -149,7 +154,7 @@ final class Feed
 		{
 			right.append(right.length() > 0 ? " · " : "").append(count(drops, "drop"));
 		}
-		return new String[]{"Session · " + hoursMinutes(asLong(d.get("minutes"))), right.toString(), feedLine(e)};
+		return right.toString();
 	}
 
 	private static String mostOf(JsonObject d)

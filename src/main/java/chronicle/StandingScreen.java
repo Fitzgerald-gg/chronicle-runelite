@@ -109,10 +109,10 @@ final class StandingScreen extends Screen
 		}
 		SkillStand stand = board.skillStand(closing, live);
 		HistoryLog.Levels opened = HistoryLog.levels(opening, stand.keys);
-		long[] played = played(w);
+		Board.Sittings played = played(w);
 		periodTip = tip(period.session() ? "This sitting" : period.whole() ? "Lifetime" : "The period",
-			"Time played", hoursMinutes(played[0]),
-			"Sessions", fmt(played[1]),
+			"Time played", hoursMinutes(played.minutes),
+			"Sessions", fmt(played.count),
 			"Experience", "+" + gp(gains.values().stream().mapToLong(Long::longValue).sum()));
 		long lootFrom = earliestDatedLoot(board.historyFeed, store.loot.lootRollFrom());
 		LocalDate lootSince = lootFrom > 0 && dayOf(lootFrom).isAfter(w.start) ? dayOf(lootFrom) : null;
@@ -149,12 +149,12 @@ final class StandingScreen extends Screen
 		return out;
 	}
 
-	private long[] played(Window w)
+	private Board.Sittings played(Window w)
 	{
-		long[] ms = board.windowMs();
-		long fromMs = period.session() ? ms[0] : startMs(w.start);
-		long toMs = period.session() ? ms[1] : startMs(w.end.plusDays(1));
-		long[] played = {0, 0};
+		Range ms = board.range();
+		long fromMs = period.session() ? ms.from : startMs(w.start);
+		long toMs = period.session() ? ms.to : startMs(w.end.plusDays(1));
+		Board.Sittings played = new Board.Sittings();
 		long oldest = oldestTs(board.historyFeed, false);
 		if (oldest > 0 && oldest < fromMs || period.whole())
 		{
@@ -163,8 +163,8 @@ final class StandingScreen extends Screen
 				long filed = filedAt(e);
 				if (filed >= fromMs && filed < toMs && "SESSION".equals(typeOf(e)))
 				{
-					played[0] += sessionMinutes(e);
-					played[1]++;
+					played.minutes += sessionMinutes(e);
+					played.count++;
 				}
 			}
 		}
@@ -173,12 +173,12 @@ final class StandingScreen extends Screen
 		boolean counts = period.session() ? !w.end.isBefore(LocalDate.now()) : began > 0 && began >= fromMs && began < toMs;
 		if (counts && running > 0)
 		{
-			played[0] += running;
-			played[1]++;
+			played.minutes += running;
+			played.count++;
 		}
 		if (period.whole())
 		{
-			played[0] = Math.max(played[0], plugin.gamePlaytimeMinutes());
+			played.minutes = Math.max(played.minutes, plugin.gamePlaytimeMinutes());
 		}
 		return played;
 	}

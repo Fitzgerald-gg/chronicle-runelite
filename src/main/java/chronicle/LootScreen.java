@@ -56,8 +56,8 @@ final class LootScreen extends Screen
 		spaced(p, lens);
 		if (askOnTask && onTaskOnly)
 		{
-			long[] w = board.windowMs();
-			List<BagItem> bag = store.slayer.onTaskLoot(w[0], w[1], null, period.whole());
+			Range w = board.range();
+			List<BagItem> bag = store.slayer.onTaskLoot(w.from, w.to, null, period.whole());
 			return bag.isEmpty() ? noted(p, board.inside("No task closed"))
 				: kindLens(p, period.whole() ? "On-task loot" : "Tasks closed in " + board.window().label, bag, "ontask:");
 		}

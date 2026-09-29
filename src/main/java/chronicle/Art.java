@@ -27,9 +27,17 @@ final class Art
 {
 	private final ChroniclePlugin plugin;
 	private final Map<Integer, BufferedImage> sprites = new HashMap<>();
-	private final Map<Integer, List<Object[]>> waiting = new HashMap<>();
+	private final Map<Integer, List<Want>> waiting = new HashMap<>();
 	private final Map<String, ImageIcon> scaled = new HashMap<>();
 	private final Map<Skill, BufferedImage> skills = new EnumMap<>(Skill.class);
+
+	@RequiredArgsConstructor
+	private static final class Want
+	{
+		final JLabel label;
+		final int w;
+		final int h;
+	}
 
 	BufferedImage sprite(int id)
 	{
@@ -50,7 +58,7 @@ final class Art
 			return;
 		}
 		boolean asked = waiting.containsKey(id);
-		waiting.computeIfAbsent(id, k -> new ArrayList<>()).add(new Object[]{label, w, h});
+		waiting.computeIfAbsent(id, k -> new ArrayList<>()).add(new Want(label, w, h));
 		SpriteManager sm = plugin.sprites();
 		if (asked || sm == null)
 		{
@@ -103,8 +111,7 @@ final class Art
 			return;
 		}
 		sprites.put(id, img);
-		waiting.getOrDefault(id, List.of()).forEach(want ->
-			dress((JLabel) want[0], id, img, (Integer) want[1], (Integer) want[2]));
+		waiting.getOrDefault(id, List.of()).forEach(want -> dress(want.label, id, img, want.w, want.h));
 		waiting.remove(id);
 	}
 

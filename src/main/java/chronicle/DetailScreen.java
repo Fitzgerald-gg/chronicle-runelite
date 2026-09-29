@@ -124,9 +124,9 @@ final class DetailScreen extends Screen
 		boolean onTask = hasTask && ui.loot.onTaskOnly;
 		if (onTask)
 		{
-			long[] tw = board.windowMs();
+			Range tw = board.range();
 			Tally mine = inWindow == null ? board.taskItemsEver().get(proper)
-				: store.slayer.onTaskItems(tw[0], tw[1]).getOrDefault(proper, new Tally(proper));
+				: store.slayer.onTaskItems(tw.from, tw.to).getOrDefault(proper, new Tally(proper));
 			head.add(row("Obtained on task", "×" + fmt(mine.qty), ACCENT));
 			if (inWindow == null || lootSince() == null)
 			{
@@ -197,8 +197,8 @@ final class DetailScreen extends Screen
 
 	private JPanel byTask(JPanel p, String name)
 	{
-		long[] w = board.windowMs();
-		List<Tally> split = store.slayer.onTaskItemByTask(name, w[0], w[1]);
+		Range w = board.range();
+		List<Tally> split = store.slayer.onTaskItemByTask(name, w.from, w.to);
 		if (split.isEmpty())
 		{
 			return noted(p, board.inside("No task paid this"));
@@ -386,8 +386,8 @@ final class DetailScreen extends Screen
 
 	private void addAssignments(JPanel p, String npc)
 	{
-		long[] w = board.windowMs();
-		List<SlayerLog.Assignment> was = store.slayer.onTaskAssignments(npc, w[0], w[1]);
+		Range w = board.range();
+		List<SlayerLog.Assignment> was = store.slayer.onTaskAssignments(npc, w.from, w.to);
 		if (was.isEmpty())
 		{
 			return;
