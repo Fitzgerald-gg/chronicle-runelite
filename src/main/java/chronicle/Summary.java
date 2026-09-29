@@ -164,8 +164,8 @@ final class Summary
 			return;
 		}
 		long[] overall = sheet.get("overall");
-		long totalEnd = f.whole && overall != null && overall[0] > 0 ? overall[0] : sum(endLevels);
-		f.totalLevel = new Long[]{startsKnown ? sum(startLevels) : null, totalEnd};
+		long[] total = levels();
+		f.totalLevel = total == null ? null : new Long[]{total[0] < 0 ? null : total[0], total[1]};
 		f.totalXp = new Long[]{startsKnown ? startXp : null,
 			f.whole && overall != null && overall.length > 1 && overall[1] > 0 ? overall[1] : endXp};
 		Integer cEnd = combatOf(endLevels);
@@ -802,28 +802,29 @@ final class Summary
 
 	long[] levels()
 	{
-		if (build.period().whole)
+		Period w = build.period();
+		if (w.whole)
 		{
 			long[] overall = build.plugin.skillSheet().get("overall");
-			return overall != null && overall[0] > 0 ? new long[]{overall[0], overall[0]} : null;
-		}
-		if (build.period().session)
-		{
-			long[] overall = build.plugin.skillSheet().get("overall");
-			long gained = build.feed.inWindow("LEVEL");
-			return gained > 0 && overall != null ? new long[]{gained, overall[0]} : null;
+			return overall != null && overall[0] > 0 ? new long[]{-1, overall[0]} : null;
 		}
 		Span s = build.span();
 		if (s == null || !s.opening.complete || !s.closing.complete)
 		{
 			return null;
 		}
-		Baseline shut = new Baseline();
-		shut.skills.putAll(build.closingSkills(s.closing.skills, build.period().reachesToday()));
-		shut.complete = true;
-		HistoryLog.Levels was = HistoryLog.levels(s.opening, HistoryLog.SKILL_KEYS);
-		HistoryLog.Levels now = HistoryLog.levels(shut, HistoryLog.SKILL_KEYS);
-		return now.total > was.total ? new long[]{now.total - was.total, now.total} : null;
+		Map<String, Long> shut = build.closingSkills(s.closing.skills, w.reachesToday());
+		Map<String, Long> open = new HashMap<>(s.opening.skills);
+		if (w.session)
+		{
+			open = new HashMap<>(shut);
+			for (Map.Entry<String, Long> e : open.entrySet())
+			{
+				e.setValue(Math.max(0, e.getValue() - sessionXp(e.getKey())));
+			}
+		}
+		return new long[]{HistoryLog.levels(baselineAt(open), HistoryLog.SKILL_KEYS).total,
+			HistoryLog.levels(baselineAt(shut), HistoryLog.SKILL_KEYS).total};
 	}
 
 	Map<String, Long> skillGains()

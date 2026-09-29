@@ -6332,10 +6332,10 @@ class ChroniclePanel extends PluginPanel
 				() -> applyTab(View.SHEET));
 		}
 		long[] levels = build.summary.levels();
-		if (levels != null)
+		if (levels != null && (wholeRecord() || levels[1] > levels[0]))
 		{
 			plateRow(plate, wholeRecord() ? "Total level" : "Levels",
-				wholeRecord() ? fmt(levels[0]) : "+" + fmt(levels[0]) + " · " + fmt(levels[1]) + " now",
+				wholeRecord() ? fmt(levels[1]) : "+" + fmt(levels[1] - levels[0]) + " · " + fmt(levels[1]) + " now",
 				() -> applyTab(View.SHEET));
 		}
 
