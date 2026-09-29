@@ -177,6 +177,7 @@ final class Harness
 			{
 				throw new IllegalStateException("RuneLite dir is not under the test home");
 			}
+			System.setProperty("java.awt.headless", "true");
 			return new File(RuneLite.RUNELITE_DIR, "chronicle");
 		}
 		catch (IOException e)
@@ -364,6 +365,13 @@ final class Harness
 			b.bind(SpriteManager.class).toInstance(sprites);
 			b.bind(SlayerPluginService.class).toInstance(slayer);
 			b.bind(Gson.class).toInstance(new Gson());
+		});
+		edt(() ->
+		{
+			if (!(javax.swing.UIManager.getLookAndFeel() instanceof net.runelite.client.ui.laf.RuneLiteLAF))
+			{
+				javax.swing.UIManager.setLookAndFeel(new net.runelite.client.ui.laf.RuneLiteLAF());
+			}
 		});
 		plugin = injector.getInstance(ChroniclePlugin.class);
 		edt(plugin::startUp);
@@ -905,6 +913,59 @@ final class Harness
 			collect(p, out);
 		});
 		return out;
+	}
+
+	BufferedImage picture(String... path)
+	{
+		screen(path);
+		ChroniclePanel p = (ChroniclePanel) get(plugin, "panel");
+		BufferedImage[] img = new BufferedImage[1];
+		edt(() ->
+		{
+			p.setSize(242, 8000);
+			lay(p);
+			javax.swing.JScrollPane pane = find(p, javax.swing.JScrollPane.class);
+			int h = pane.getY() + pane.getViewport().getView().getPreferredSize().height + 8;
+			p.setSize(242, Math.min(8000, h));
+			lay(p);
+			img[0] = new BufferedImage(242, p.getHeight(), BufferedImage.TYPE_INT_RGB);
+			Graphics2D g = img[0].createGraphics();
+			p.paint(g);
+			g.dispose();
+		});
+		return img[0];
+	}
+
+	private static void lay(Component c)
+	{
+		c.doLayout();
+		if (c instanceof Container)
+		{
+			for (Component k : ((Container) c).getComponents())
+			{
+				lay(k);
+			}
+		}
+	}
+
+	private static <T> T find(Component c, Class<T> type)
+	{
+		if (type.isInstance(c))
+		{
+			return type.cast(c);
+		}
+		if (c instanceof Container)
+		{
+			for (Component k : ((Container) c).getComponents())
+			{
+				T hit = find(k, type);
+				if (hit != null)
+				{
+					return hit;
+				}
+			}
+		}
+		return null;
 	}
 
 	private void go(ChroniclePanel p, String[] path) throws Exception
