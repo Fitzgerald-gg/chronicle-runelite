@@ -78,7 +78,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -132,14 +131,11 @@ import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
 import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.OSType;
-import static chronicle.Feed.earliestDatedLoot;
 import static chronicle.Feed.feedName;
 import static chronicle.Feed.filedAt;
 import static chronicle.Feed.most;
 import static chronicle.Feed.newestTs;
 import static chronicle.Feed.oldestTs;
-import static chronicle.Feed.sessionMinutes;
-import static chronicle.Feed.sittingsCover;
 import static chronicle.Feed.typeOf;
 import static chronicle.Json.getIgnoreCase;
 import static chronicle.Json.has;
@@ -148,7 +144,6 @@ import static chronicle.Json.low;
 import static chronicle.Json.obj;
 import static chronicle.Json.safeLong;
 import static chronicle.Json.str;
-import static chronicle.Json.strMap;
 import static chronicle.LocalStore.kindOf;
 import static chronicle.Period.DAY;
 import static chronicle.Period.FULL_DAY;
@@ -1104,7 +1099,6 @@ class ChroniclePanel extends PluginPanel
 	{
 		buildsRun++;
 		freshBuild();
-		taskItemsEver = null;
 		resourcesDropped = 0;
 		artWaiting.clear();
 		paintBand(plugin.journalWarning(), plugin.captureWarning(),
@@ -1696,7 +1690,7 @@ class ChroniclePanel extends PluginPanel
 
 	private boolean hasKindOnTask(String kind)
 	{
-		for (String name : taskItemsEver().keySet())
+		for (String name : build.taskItems().keySet())
 		{
 			String k = ItemKinds.kindOf(name);
 			if (UNFILED.equals(kind) ? k == null : kind.equals(k))
@@ -1709,19 +1703,9 @@ class ChroniclePanel extends PluginPanel
 
 	private boolean everOnTask()
 	{
-		return !taskItemsEver().isEmpty();
+		return !build.taskItems().isEmpty();
 	}
 
-	private Map<String, long[]> taskItemsEver;
-
-	private Map<String, long[]> taskItemsEver()
-	{
-		if (taskItemsEver == null)
-		{
-			taskItemsEver = plugin.allTasks().items();
-		}
-		return taskItemsEver;
-	}
 
 	private boolean dropsLeftBehind;
 	private String lootKind;
@@ -3214,9 +3198,9 @@ class ChroniclePanel extends PluginPanel
 			img.addTo(slot);
 			head.add(slot);
 		}
-		final boolean hasTask = taskItemsEver().containsKey(properName(name));
+		final boolean hasTask = build.taskItems().containsKey(properName(name));
 		long[] tw = window().ms();
-		long[] mine = inWindow == null ? taskItemsEver().get(properName(name))
+		long[] mine = inWindow == null ? build.taskItems().get(properName(name))
 			: plugin.tasks(tw[0], tw[1], null, true).items().getOrDefault(properName(name), new long[2]);
 		if (hasTask && onTaskOnly)
 		{
@@ -3326,7 +3310,7 @@ class ChroniclePanel extends PluginPanel
 
 	private String properName(String typed)
 	{
-		String key = keyOf(taskItemsEver().keySet(), typed);
+		String key = keyOf(build.taskItems().keySet(), typed);
 		return key == null ? typed : key;
 	}
 
@@ -4832,71 +4816,6 @@ class ChroniclePanel extends PluginPanel
 		more(card, size, cap, inset, n -> histListShown.put(key, n));
 	}
 
-	private static String countersSince(
-		SortedMap<LocalDate, Baseline> spine,
-		LocalDate startLine, LocalDate lootFrom, boolean lootFromSittings)
-	{
-		LocalDate counters = HistoryLog.firstCarrying(spine, null);
-		LocalDate loot = lootFromSittings
-			? lootFrom : HistoryLog.firstCarrying(spine, "dropsReceived");
-		StringBuilder note = new StringBuilder();
-		LocalDate since = startLine;
-		if (counters != null && (since == null || counters.isAfter(since)))
-		{
-			note.append("Counters since ").append(counters.format(FULL_DAY));
-			since = counters;
-		}
-		if (loot != null && (lootFromSittings || since == null || loot.isAfter(since)))
-		{
-			String what = lootFromSittings ? "loot" : "loot and kills";
-			note.append(note.length() == 0
-				? prettyTier(what) + " since "
-				: " · " + what + " since ")
-				.append(loot.format(FULL_DAY));
-		}
-		return note.length() == 0 ? null : note.toString();
-	}
-
-	private static boolean closedInside(SlayerTask t, long fromMs, long toMs)
-	{
-		long ms = (long) (t.ts * 1000);
-		return !t.inProgress && ms >= fromMs && ms < toMs;
-	}
-
-	private static List<String[]> closedTaskNames(SlayerJourney j,
-		long fromMs, long toMs)
-	{
-		List<SlayerTask> closed = new ArrayList<>();
-		for (SlayerTask t : j.tasks)
-		{
-			if (closedInside(t, fromMs, toMs))
-			{
-				closed.add(t);
-			}
-		}
-		closed.sort((a, b) -> Double.compare(b.ts, a.ts));
-		List<String[]> out = new ArrayList<>(closed.size());
-		for (SlayerTask t : closed)
-		{
-			long ms = (long) (t.ts * 1000);
-			out.add(new String[]{t.task, fmt(t.kills) + " · "
-				+ DAY.format(Instant.ofEpochMilli(ms))});
-		}
-		return out;
-	}
-
-	private static final Map<String, String> FEED_SUMMARY_KEYS = strMap(Sources.KINDS, "feedSummaryKeys");
-
-	private static List<String[]> itemLines(List<LocalStore.Row> ranked, boolean always)
-	{
-		List<String[]> out = new ArrayList<>();
-		for (LocalStore.Row r : ranked)
-		{
-			out.add(new String[]{r.name, fmt(r.qty) + (always ? " · " + gps(r.value) : tail(r.value))});
-		}
-		return out;
-	}
-
 	private static String figure(HistoryProgress.Row r)
 	{
 		String base = r.gp() ? gps(r.value()) : fmt(r.value());
@@ -5088,56 +5007,10 @@ class ChroniclePanel extends PluginPanel
 		return Sources.SKILLING.equals(kind) ? 775 : 774;
 	}
 
-	@RequiredArgsConstructor
-	private static final class SkillStand
-	{
-		final List<Skill> order;
-		final List<String> keys;
-		final Map<Skill, Long> levels;
-		final long standing;
-		final HistoryLog.Levels closed;
-	}
-
-	private static Baseline baselineAt(Map<String, Long> xp)
-	{
-		Baseline at = new Baseline();
-		at.skills.putAll(xp);
-		at.complete = true;
-		return at;
-	}
-
-	private SkillStand skillStand(Baseline closing, boolean live)
-	{
-		Map<String, long[]> sheet = live ? plugin.skillSheet() : Collections.emptyMap();
-		List<Skill> order = Sources.skillOrder();
-		List<String> keys = new ArrayList<>();
-		for (Skill sk : order)
-		{
-			keys.add(low(sk.name()));
-		}
-		HistoryLog.Levels closed = HistoryLog.levels(closing, keys);
-		Map<Skill, Long> levels =
-			new EnumMap<>(Skill.class);
-		long total = 0;
-		for (Skill sk : order)
-		{
-			String key = low(sk.name());
-			long[] cur = sheet.get(key);
-			long level = cur != null && cur[0] > 0 ? cur[0] : closed.of.get(key);
-			total += level;
-			long shown = wholeRecord() && cur != null && cur.length > 1 && cur[1] > 0
-				? PaceBook.virtualLevelAt(cur[1]) : level;
-			levels.put(sk, Math.max(level, shown));
-		}
-		long[] ov = sheet.get("overall");
-		return new SkillStand(order, keys, levels,
-			ov != null && ov[0] > 0 ? ov[0] : total, closed);
-	}
-
 	private static final String[] HEADLINE_KEYS = {"kills", "slayerTasksCompleted"};
 
 	private JPanel headline(HistoryProgress progress, List<Entry<String, Long>> gains,
-		SkillStand stand, HistoryLog.Levels opened, long[] played)
+		Summary.Stand stand, HistoryLog.Levels opened, long[] played)
 	{
 		JPanel card = card(sessionPeriod() ? "This sitting" : "The period");
 		long xp = sumOf(gains);
@@ -5217,7 +5090,7 @@ class ChroniclePanel extends PluginPanel
 		return null;
 	}
 
-	private void addSkillGrid(JPanel p, List<Entry<String, Long>> gains, SkillStand stand,
+	private void addSkillGrid(JPanel p, List<Entry<String, Long>> gains, Summary.Stand stand,
 		HistoryLog.Levels opened)
 	{
 		Map<String, Long> gain = new LinkedHashMap<>();
@@ -5528,7 +5401,7 @@ class ChroniclePanel extends PluginPanel
 				}
 				int n = tiers.getAsJsonArray(tier).size();
 				boolean got = held != null && held.has(tier) && held.get(tier).getAsBoolean();
-				JPanel line = row(prettyTier(tier),
+				JPanel line = row(Text.capital(tier),
 					fmt(n) + " tasks",
 					known && !got ? dim() : null,
 					known && !got);
@@ -5538,12 +5411,6 @@ class ChroniclePanel extends PluginPanel
 			}
 			p.add(vgap(4));
 		}
-	}
-
-	private static String prettyTier(String tier)
-	{
-		return tier == null || tier.isEmpty() ? ""
-			: Character.toUpperCase(tier.charAt(0)) + tier.substring(1);
 	}
 
 	private static String taskTip(String title, JsonArray tasks)
@@ -5628,7 +5495,7 @@ class ChroniclePanel extends PluginPanel
 			{
 				boolean has = known && done.contains(task.get("id").getAsInt());
 				JPanel line = row(withoutSource(task.get("name").getAsString(), e.getKey()),
-					prettyTier(task.get("tier").getAsString()),
+					Text.capital(task.get("tier").getAsString()),
 					known ? (has ? ACCENT_SESSION : ACCENT_RED) : null, known);
 				line.setToolTipText(tip(task.get("name").getAsString(),
 					"Tier", task.get("tier").getAsString(),
@@ -5690,7 +5557,7 @@ class ChroniclePanel extends PluginPanel
 		return s.length() > most ? s.substring(0, most) + "..." : s;
 	}
 
-	private JPanel totalLevelTile(SkillStand stand, HistoryLog.Levels opened)
+	private JPanel totalLevelTile(Summary.Stand stand, HistoryLog.Levels opened)
 	{
 		HistoryLog.Levels shut = stand.closed;
 		boolean paired = !wholeRecord() && opened != null && shut.drawn == opened.drawn;
@@ -5937,7 +5804,8 @@ class ChroniclePanel extends PluginPanel
 
 	private void freshBuild()
 	{
-		build = new Build(plugin, this::window, () -> historySpine, this::gatherHistory);
+		build = new Build(plugin, this::window, () -> historySpine, () -> historyFeed, () -> historyJourney,
+			this::gatherHistory);
 	}
 
 	private Period window()
@@ -6173,11 +6041,6 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildHistory()
 	{
 		JPanel p = column();
-		Period periodWin = window();
-		final LocalDate pStart = periodWin.start;
-		final LocalDate pEnd = periodWin.end;
-		final boolean live = !pEnd.isBefore(LocalDate.now());
-
 		if (historySpine == null || !LocalDate.now().equals(historyDay)
 			|| newestTs(plugin.feedNewest(1)) != historyFeedTs)
 		{
@@ -6187,305 +6050,54 @@ class ChroniclePanel extends PluginPanel
 		{
 			return noted(p, "Reading your history…");
 		}
-		TreeMap<LocalDate, Baseline> hist = historySpine;
-
-		Entry<LocalDate, Baseline> before =
-			hist.floorEntry(pStart.minusDays(1));
-		Entry<LocalDate, Baseline> from =
-			HistoryLog.windowStart(hist, pStart, pEnd);
-		Entry<LocalDate, Baseline> at = hist.floorEntry(pEnd);
-		if (at == null || from == null
-			|| (at.getKey().equals(from.getKey()) && !periodWin.closesOnTheClient(from)))
+		Summary.Board b = build.summary.board();
+		if (b.empty != null)
 		{
-			String empty;
-			if (hist.isEmpty())
-			{
-				empty = "The record starts today: baselines close at each login, "
-					+ "day rollover and logout, and a period is the distance "
-					+ "between two of them.";
-			}
-			else if (hist.firstKey().isBefore(pStart)
-				&& ("Day".equals(histGranularity) || "Week".equals(histGranularity)))
-			{
-				empty = "The imported past resolves by month. Switch to Month "
-					+ "or Year to read this era. Daily detail begins with the plugin.";
-			}
-			else
-			{
-				empty = "Nothing recorded in this period.";
-			}
-			p.add(note(empty));
+			return noted(p, b.empty);
+		}
+		if (b.measuredSince != null)
+		{
+			measuredSince = b.measuredSince;
+		}
+		if (view == View.SHEET)
+		{
+			periodTip = periodTip(b.played, b.gains);
 		}
 		else
 		{
-			if (before == null)
-			{
-				measuredSince = "Measured since " + from.getKey().format(FULL_DAY)
-					+ ", the earliest baseline on record.";
-			}
-			else if (before.getKey().isBefore(pStart.minusDays(1)))
-			{
-				measuredSince = "Measured since " + before.getKey().format(FULL_DAY)
-					+ ", the nearest earlier baseline.";
-			}
-			Baseline earliest = HistoryLog.earliest(hist, at.getKey());
-			Baseline closing = HistoryLog.stateAt(hist, at.getKey());
-			Baseline opening = HistoryLog.stateAt(hist, from.getKey());
-			Map<String, Long> closesOn = live ? build.closingSkills(closing.skills, true) : closing.skills;
-			List<Entry<String, Long>> gains = new ArrayList<>();
-			for (Entry<String, Long> e : HistoryLog.gained(opening.skills,
-				earliest.skills, closesOn, opening.complete).entrySet())
-			{
-				if (!"overall".equals(e.getKey()))
-				{
-					gains.add(e);
-				}
-			}
-			if (sessionPeriod())
-			{
-				gains.clear();
-				for (ExperienceStatTracker.SkillGain g : plugin.sessionSkillXp())
-				{
-					if (g.skill != null && g.xp > 0)
-					{
-						gains.add(new AbstractMap.SimpleEntry<>(
-							low(g.skill.name()), g.xp));
-					}
-				}
-			}
-			gains.sort(Entry.<String, Long>comparingByValue().reversed());
-
-			long fromMs = sessionPeriod() ? window().ms()[0]
-				: startMs(pStart);
-			long toMs = sessionPeriod() ? window().ms()[1]
-				: startMs(pEnd.plusDays(1));
-			Map<String, Long> fromFeed = new HashMap<>();
-			Map<String, List<String[]>> named = new LinkedHashMap<>();
-			long[] played = {0, 0};
-			long[] took = {0, 0, 0, 0, 0, 0};
-			for (JsonObject e : historyFeed)
-			{
-				long ts = safeLong(e.get("ts"));
-				long filed = filedAt(e);
-				if (filed >= fromMs && filed < toMs)
-				{
-					String type = typeOf(e);
-					String key = FEED_SUMMARY_KEYS.get(type);
-					if (key != null)
-					{
-						fromFeed.merge(key, 1L, Long::sum);
-						String line = feedName(e);
-						if (line != null)
-						{
-							named.computeIfAbsent(key, k -> new ArrayList<>())
-								.add(new String[]{line, DAY.format(Instant.ofEpochMilli(ts))});
-						}
-					}
-					if ("SESSION".equals(type))
-					{
-						played[0] += sessionMinutes(e);
-						played[1]++;
-						JsonObject d = obj(e, "data");
-						took[0] += safeLong(d.get("drops"));
-						took[1] += safeLong(d.get("dropsGp"));
-						took[2] += safeLong(d.get("left"));
-						took[3] += safeLong(d.get("leftGp"));
-						took[4] += safeLong(d.get("leftKills"));
-						if (d.has("leftKills"))
-						{
-							took[5]++;
-						}
-					}
-				}
-			}
-			Map<String, Long> retro = new HashMap<>();
-			boolean sessionsHoldTheFloor = false;
-			boolean sessionsSpeak = false;
-			if (historyJourney != null)
-			{
-				long closedN = 0;
-				long closedKills = 0;
-				for (SlayerTask t : historyJourney.tasks)
-				{
-					if (closedInside(t, fromMs, toMs))
-					{
-						closedN++;
-						closedKills += t.kills;
-					}
-				}
-				retro.put("slayerTasksCompleted", closedN);
-				retro.put("slayerKills", closedKills);
-				List<String[]> tasks = closedTaskNames(historyJourney, fromMs, toMs);
-				if (!tasks.isEmpty())
-				{
-					named.put("slayerTasksCompleted", tasks);
-				}
-			}
-			long oldest = oldestTs(historyFeed, false);
-			boolean reachesBack = oldest > 0 && oldest < fromMs;
-			if (reachesBack)
-			{
-				for (String key : FEED_SUMMARY_KEYS.values())
-				{
-					retro.put(key, fromFeed.getOrDefault(key, 0L));
-				}
-				long rollFrom = build.lootDays().rollFrom();
-				LocalStore.LootWindow dated = sessionPeriod() || rollFrom > 0 && rollFrom <= fromMs
-					? build.lootWindow() : null;
-				if (dated != null)
-				{
-					sessionsSpeak = true;
-					sessionsHoldTheFloor = true;
-					retro.put("dropsReceived", dated.loots);
-					retro.put("lootValue", dated.value);
-					retro.put("lootLeftCount", dated.left);
-					retro.put("lootLeftValue", dated.leftValue);
-					retro.put("lootLeftKills", dated.leftKills);
-					if (!dated.items.isEmpty())
-					{
-						named.put("lootValue", itemLines(dated.items, false));
-					}
-					if (!dated.leftItems.isEmpty())
-					{
-						named.put("lootLeftCount", itemLines(dated.leftItems, false));
-					}
-					if (!dated.sources.isEmpty())
-					{
-						named.put("dropsReceived", itemLines(dated.sources, true));
-					}
-				}
-				else if (sittingsCover(historyFeed, fromMs) && played[1] > 0 && took[0] > 0)
-				{
-					sessionsSpeak = true;
-					retro.put("dropsReceived", took[0]);
-					retro.put("lootValue", took[1]);
-					retro.put("lootLeftCount", took[2]);
-					retro.put("lootLeftValue", took[3]);
-					retro.put("lootLeftKills", took[4]);
-					sessionsHoldTheFloor = took[5] == played[1];
-				}
-			}
-			else
-			{
-				if (!"Lifetime".equals(histGranularity) || histFrom != null)
-				{
-					for (String key : FEED_SUMMARY_KEYS.values())
-					{
-						named.remove(key);
-					}
-					played[0] = 0;
-					played[1] = 0;
-				}
-			}
-
-			long began = plugin.sessionStart();
-			if (sessionPeriod() ? live : (began > 0 && began >= fromMs && began < toMs))
-			{
-				long running = plugin.sessionElapsedMinutes();
-				if (running > 0)
-				{
-					played[0] += running;
-					played[1]++;
-				}
-			}
+			spaced(p, headline(b.progress, b.gains, b.stand, b.opened, b.played), 5);
+		}
+		if (b.since != null)
+		{
+			spaced(p, note(b.since), 5);
+		}
+		Period w = window();
+		if ("PvM".equals(histFacet))
+		{
+			addLootValues(p, b.progress);
+			addKinds(p, b.opening.kcs, b.earliest.kcs, b.closing.kcs, b.live, w.start, w.end,
+				Sources.BOSS, Sources.MONSTER);
+		}
+		else if ("Activities".equals(histFacet))
+		{
+			addKinds(p, b.opening.kcs, b.earliest.kcs, b.closing.kcs, b.live, w.start, w.end,
+				Sources.ACTIVITY, Sources.SKILLING);
+		}
+		else if ("Trackers".equals(histFacet))
+		{
 			if (wholeRecord())
 			{
-				long theirs = plugin.gamePlaytimeMinutes();
-				if (theirs > played[0])
-				{
-					played[0] = theirs;
-				}
+				p.add(buildStats());
 			}
-
-			LocalDate leftFrom = HistoryLog.firstCarrying(
-				hist.headMap(at.getKey(), true), "lootLeftKills");
-			boolean leftDated = sessionsSpeak
-				? sessionsHoldTheFloor
-				: (leftFrom != null && !leftFrom.isAfter(from.getKey()));
-			boolean whole = wholeRecord();
-			HistoryProgress progress = HistoryProgress.of(
-				whole ? build.withLedgerSpend(closing.counters)
-					: HistoryLog.gained(opening.counters, earliest.counters,
-						closing.counters),
-				null, whole ? new HashMap<>() : retro, leftDated || whole);
-			Baseline sittingOpen = null;
-			if (sessionPeriod())
+			else if (!b.progress.groups().isEmpty() || !b.gains.isEmpty())
 			{
-				Map<String, Long> openXp = new HashMap<>(closesOn);
-				for (ExperienceStatTracker.SkillGain g : plugin.sessionSkillXp())
-				{
-					if (g.skill == null || g.xp <= 0)
-					{
-						continue;
-					}
-					String key = low(g.skill.name());
-					Long had = openXp.get(key);
-					if (had != null)
-					{
-						openXp.put(key, Math.max(0, had - g.xp));
-					}
-				}
-				sittingOpen = baselineAt(openXp);
-				closing = baselineAt(closesOn);
-			}
-			SkillStand stand = skillStand(closing, live);
-			HistoryLog.Levels opened = sittingOpen != null
-				? HistoryLog.levels(sittingOpen, stand.keys)
-				: HistoryLog.levels(opening, stand.keys);
-			if (view == View.SHEET)
-			{
-				periodTip = periodTip(played, gains);
-			}
-			else
-			{
-				spaced(p, headline(progress, gains, stand, opened, played), 5);
-			}
-			LocalDate lootSince = null;
-			long lootFromTs = earliestDatedLoot(historyFeed, build.lootDays().rollFrom());
-			if (lootFromTs > 0)
-			{
-				LocalDate sat = dayOf(lootFromTs);
-				if (sat.isAfter(pStart))
-				{
-					lootSince = sat;
-				}
-			}
-			String since = wholeRecord() ? null
-				: countersSince(hist.headMap(at.getKey(), true), from.getKey(),
-					lootSince, lootFromTs > 0);
-			if (since != null)
-			{
-				spaced(p, note(since), 5);
-			}
-
-			if ("PvM".equals(histFacet))
-			{
-				addLootValues(p, progress);
-				addKinds(p, opening.kcs, earliest.kcs, closing.kcs, live, pStart, pEnd,
-					Sources.BOSS, Sources.MONSTER);
-			}
-			else if ("Activities".equals(histFacet))
-			{
-				addKinds(p, opening.kcs, earliest.kcs, closing.kcs, live, pStart, pEnd,
-					Sources.ACTIVITY, Sources.SKILLING);
-			}
-			else if ("Trackers".equals(histFacet))
-			{
-				if (wholeRecord())
-				{
-					p.add(buildStats());
-				}
-				else if (!progress.groups().isEmpty() || !gains.isEmpty())
-				{
-					spaced(p, trackedProgress(progress, gains, named), 5);
-				}
-			}
-			else
-			{
-				addSkillGrid(p, gains, stand, opened);
+				spaced(p, trackedProgress(b.progress, b.gains, b.named), 5);
 			}
 		}
-
+		else
+		{
+			addSkillGrid(p, b.gains, b.stand, b.opened);
+		}
 		return p;
 	}
 
@@ -7587,7 +7199,7 @@ class ChroniclePanel extends PluginPanel
 					continue;
 				}
 				boolean has = done.contains(Integer.parseInt(id));
-				caHits.add(new Hit(name, prettyTier(low(t.get("tier").getAsString())),
+				caHits.add(new Hit(name, Text.capital(low(t.get("tier").getAsString())),
 					done.isEmpty() ? null : has ? ACCENT_SESSION : ACCENT_RED,
 					t.get("monster").getAsString() + ": " + task, () -> openSheetPage("combat"), sc,
 					has ? 1 : 0));

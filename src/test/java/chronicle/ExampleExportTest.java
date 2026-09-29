@@ -81,7 +81,7 @@ public class ExampleExportTest
 		for (String n : new String[]{"build", "aboveBoard", "bandFixes",
 			"grindsCache", "journeyCache", "consumVals",
 			"resourcesDropped", "historySpine", "historyFeed", "historyJourney",
-			"historyDay", "historyFeedTs", "historyEpoch", "periodFrom", "periodTo", "searchFirst", "taskItemsEver", "periodTip", "measuredSince"})
+			"historyDay", "historyFeedTs", "historyEpoch", "periodFrom", "periodTo", "searchFirst", "periodTip", "measuredSince"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
 		}

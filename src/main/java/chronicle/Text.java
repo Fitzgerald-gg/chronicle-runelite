@@ -133,4 +133,10 @@ final class Text
 	{
 		return FULL_DAY.format(Instant.ofEpochMilli(ts));
 	}
+
+	static String capital(String tier)
+	{
+		return tier == null || tier.isEmpty() ? ""
+			: Character.toUpperCase(tier.charAt(0)) + tier.substring(1);
+	}
 }

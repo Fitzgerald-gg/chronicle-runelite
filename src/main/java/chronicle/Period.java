@@ -34,6 +34,7 @@ final class Period
 
 	static final String SESSION = "Session";
 
+	final String granularity;
 	final LocalDate start;
 	final LocalDate end;
 	final String label;
@@ -96,7 +97,7 @@ final class Period
 					break;
 			}
 		}
-		return new Period(start, end, label, "Lifetime".equals(granularity) && from == null,
+		return new Period(granularity, start, end, label, "Lifetime".equals(granularity) && from == null,
 			SESSION.equals(granularity) && from == null, sessionStart);
 	}
 

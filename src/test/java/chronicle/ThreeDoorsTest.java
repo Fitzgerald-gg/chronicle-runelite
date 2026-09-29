@@ -110,7 +110,7 @@ public class ThreeDoorsTest
 		{
 			xp.put(k, 5_346_332L);
 		}
-		Method at = ChroniclePanel.class.getDeclaredMethod("baselineAt", Map.class);
+		Method at = Summary.class.getDeclaredMethod("baselineAt", Map.class);
 		at.setAccessible(true);
 		Object base = at.invoke(null, xp);
 		List<String> keys = new ArrayList<>(xp.keySet());

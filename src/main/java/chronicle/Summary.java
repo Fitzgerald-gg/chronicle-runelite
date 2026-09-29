@@ -26,8 +26,28 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import java.util.TreeMap;
+import java.util.SortedMap;
+import java.util.HashMap;
+import java.util.EnumMap;
+import java.util.AbstractMap;
+import java.time.Instant;
+import chronicle.panel.HistoryProgress;
+import chronicle.LocalStore.SlayerTask;
+import chronicle.LocalStore.SlayerJourney;
 import net.runelite.api.Skill;
 import static chronicle.Feed.feedName;
+import static chronicle.Text.tail;
+import static chronicle.Period.startMs;
+import static chronicle.Period.dayOf;
+import static chronicle.Period.FULL_DAY;
+import static chronicle.Period.DAY;
+import static chronicle.Json.strMap;
+import static chronicle.Feed.sittingsCover;
+import static chronicle.Feed.sessionMinutes;
+import static chronicle.Feed.oldestTs;
+import static chronicle.Feed.filedAt;
+import static chronicle.Feed.earliestDatedLoot;
 import static chronicle.Feed.most;
 import static chronicle.Feed.topOf;
 import static chronicle.Feed.typeOf;
@@ -933,5 +953,409 @@ final class Summary
 	{
 		LocalStore.Row r = build.lootWindow().source(name, false);
 		return r != null ? r : new LocalStore.Row(name, 0, 0);
+	}
+
+	static final class Board
+	{
+		String empty;
+		String measuredSince;
+		final List<Entry<String, Long>> gains = new ArrayList<>();
+		final Map<String, List<String[]>> named = new LinkedHashMap<>();
+		final long[] played = {0, 0};
+		HistoryProgress progress;
+		Baseline opening;
+		Baseline earliest;
+		Baseline closing;
+		Stand stand;
+		HistoryLog.Levels opened;
+		boolean live;
+		String since;
+	}
+
+	Board board()
+	{
+		Board b = new Board();
+		Period w = build.period();
+		LocalDate pStart = w.start;
+		LocalDate pEnd = w.end;
+		boolean live = !pEnd.isBefore(LocalDate.now());
+		b.live = live;
+		TreeMap<LocalDate, Baseline> hist = build.spine();
+		List<JsonObject> feed = build.historyFeed();
+		SlayerJourney journey = build.journey();
+
+		Entry<LocalDate, Baseline> before =
+			hist.floorEntry(pStart.minusDays(1));
+		Entry<LocalDate, Baseline> from =
+			HistoryLog.windowStart(hist, pStart, pEnd);
+		Entry<LocalDate, Baseline> at = hist.floorEntry(pEnd);
+		if (at == null || from == null
+			|| (at.getKey().equals(from.getKey()) && !w.closesOnTheClient(from)))
+		{
+			String empty;
+			if (hist.isEmpty())
+			{
+				empty = "The record starts today: baselines close at each login, "
+					+ "day rollover and logout, and a period is the distance "
+					+ "between two of them.";
+			}
+			else if (hist.firstKey().isBefore(pStart)
+				&& ("Day".equals(w.granularity) || "Week".equals(w.granularity)))
+			{
+				empty = "The imported past resolves by month. Switch to Month "
+					+ "or Year to read this era. Daily detail begins with the plugin.";
+			}
+			else
+			{
+				empty = "Nothing recorded in this period.";
+			}
+			b.empty = empty;
+			return b;
+		}
+		if (before == null)
+		{
+			b.measuredSince = "Measured since " + from.getKey().format(FULL_DAY)
+				+ ", the earliest baseline on record.";
+		}
+		else if (before.getKey().isBefore(pStart.minusDays(1)))
+		{
+			b.measuredSince = "Measured since " + before.getKey().format(FULL_DAY)
+				+ ", the nearest earlier baseline.";
+		}
+		Baseline earliest = HistoryLog.earliest(hist, at.getKey());
+		Baseline closing = HistoryLog.stateAt(hist, at.getKey());
+		Baseline opening = HistoryLog.stateAt(hist, from.getKey());
+		Map<String, Long> closesOn = live ? build.closingSkills(closing.skills, true) : closing.skills;
+		List<Entry<String, Long>> gains = b.gains;
+		for (Entry<String, Long> e : HistoryLog.gained(opening.skills,
+			earliest.skills, closesOn, opening.complete).entrySet())
+		{
+			if (!"overall".equals(e.getKey()))
+			{
+				gains.add(e);
+			}
+		}
+		if (w.session)
+		{
+			gains.clear();
+			for (ExperienceStatTracker.SkillGain g : build.plugin.sessionSkillXp())
+			{
+				if (g.skill != null && g.xp > 0)
+				{
+					gains.add(new AbstractMap.SimpleEntry<>(
+						low(g.skill.name()), g.xp));
+				}
+			}
+		}
+		gains.sort(Entry.<String, Long>comparingByValue().reversed());
+
+		long fromMs = w.session ? w.ms()[0]
+			: startMs(pStart);
+		long toMs = w.session ? w.ms()[1]
+			: startMs(pEnd.plusDays(1));
+		Map<String, Long> fromFeed = new HashMap<>();
+		Map<String, List<String[]>> named = b.named;
+		long[] played = b.played;
+		long[] took = {0, 0, 0, 0, 0, 0};
+		for (JsonObject e : feed)
+		{
+			long ts = safeLong(e.get("ts"));
+			long filed = filedAt(e);
+			if (filed >= fromMs && filed < toMs)
+			{
+				String type = typeOf(e);
+				String key = FEED_SUMMARY_KEYS.get(type);
+				if (key != null)
+				{
+					fromFeed.merge(key, 1L, Long::sum);
+					String line = feedName(e);
+					if (line != null)
+					{
+						named.computeIfAbsent(key, k -> new ArrayList<>())
+							.add(new String[]{line, DAY.format(Instant.ofEpochMilli(ts))});
+					}
+				}
+				if ("SESSION".equals(type))
+				{
+					played[0] += sessionMinutes(e);
+					played[1]++;
+					JsonObject d = obj(e, "data");
+					took[0] += safeLong(d.get("drops"));
+					took[1] += safeLong(d.get("dropsGp"));
+					took[2] += safeLong(d.get("left"));
+					took[3] += safeLong(d.get("leftGp"));
+					took[4] += safeLong(d.get("leftKills"));
+					if (d.has("leftKills"))
+					{
+						took[5]++;
+					}
+				}
+			}
+		}
+		Map<String, Long> retro = new HashMap<>();
+		boolean sessionsHoldTheFloor = false;
+		boolean sessionsSpeak = false;
+		if (journey != null)
+		{
+			long closedN = 0;
+			long closedKills = 0;
+			for (SlayerTask t : journey.tasks)
+			{
+				if (closedInside(t, fromMs, toMs))
+				{
+					closedN++;
+					closedKills += t.kills;
+				}
+			}
+			retro.put("slayerTasksCompleted", closedN);
+			retro.put("slayerKills", closedKills);
+			List<String[]> tasks = closedTaskNames(journey, fromMs, toMs);
+			if (!tasks.isEmpty())
+			{
+				named.put("slayerTasksCompleted", tasks);
+			}
+		}
+		long oldest = oldestTs(feed, false);
+		boolean reachesBack = oldest > 0 && oldest < fromMs;
+		if (reachesBack)
+		{
+			for (String key : FEED_SUMMARY_KEYS.values())
+			{
+				retro.put(key, fromFeed.getOrDefault(key, 0L));
+			}
+			long rollFrom = build.lootDays().rollFrom();
+			LocalStore.LootWindow dated = w.session || rollFrom > 0 && rollFrom <= fromMs
+				? build.lootWindow() : null;
+			if (dated != null)
+			{
+				sessionsSpeak = true;
+				sessionsHoldTheFloor = true;
+				retro.put("dropsReceived", dated.loots);
+				retro.put("lootValue", dated.value);
+				retro.put("lootLeftCount", dated.left);
+				retro.put("lootLeftValue", dated.leftValue);
+				retro.put("lootLeftKills", dated.leftKills);
+				if (!dated.items.isEmpty())
+				{
+					named.put("lootValue", itemLines(dated.items, false));
+				}
+				if (!dated.leftItems.isEmpty())
+				{
+					named.put("lootLeftCount", itemLines(dated.leftItems, false));
+				}
+				if (!dated.sources.isEmpty())
+				{
+					named.put("dropsReceived", itemLines(dated.sources, true));
+				}
+			}
+			else if (sittingsCover(feed, fromMs) && played[1] > 0 && took[0] > 0)
+			{
+				sessionsSpeak = true;
+				retro.put("dropsReceived", took[0]);
+				retro.put("lootValue", took[1]);
+				retro.put("lootLeftCount", took[2]);
+				retro.put("lootLeftValue", took[3]);
+				retro.put("lootLeftKills", took[4]);
+				sessionsHoldTheFloor = took[5] == played[1];
+			}
+		}
+		else
+		{
+			if (!w.whole)
+			{
+				for (String key : FEED_SUMMARY_KEYS.values())
+				{
+					named.remove(key);
+				}
+				played[0] = 0;
+				played[1] = 0;
+			}
+		}
+
+		long began = build.plugin.sessionStart();
+		if (w.session ? live : (began > 0 && began >= fromMs && began < toMs))
+		{
+			long running = build.plugin.sessionElapsedMinutes();
+			if (running > 0)
+			{
+				played[0] += running;
+				played[1]++;
+			}
+		}
+		if (w.whole)
+		{
+			long theirs = build.plugin.gamePlaytimeMinutes();
+			if (theirs > played[0])
+			{
+				played[0] = theirs;
+			}
+		}
+
+		LocalDate leftFrom = HistoryLog.firstCarrying(
+			hist.headMap(at.getKey(), true), "lootLeftKills");
+		boolean leftDated = sessionsSpeak
+			? sessionsHoldTheFloor
+			: (leftFrom != null && !leftFrom.isAfter(from.getKey()));
+		boolean whole = w.whole;
+		HistoryProgress progress = HistoryProgress.of(
+			whole ? build.withLedgerSpend(closing.counters)
+				: HistoryLog.gained(opening.counters, earliest.counters,
+					closing.counters),
+			null, whole ? new HashMap<>() : retro, leftDated || whole);
+		Baseline sittingOpen = null;
+		if (w.session)
+		{
+			Map<String, Long> openXp = new HashMap<>(closesOn);
+			for (ExperienceStatTracker.SkillGain g : build.plugin.sessionSkillXp())
+			{
+				if (g.skill == null || g.xp <= 0)
+				{
+					continue;
+				}
+				String key = low(g.skill.name());
+				Long had = openXp.get(key);
+				if (had != null)
+				{
+					openXp.put(key, Math.max(0, had - g.xp));
+				}
+			}
+			sittingOpen = baselineAt(openXp);
+			closing = baselineAt(closesOn);
+		}
+		Stand stand = stand(closing, live);
+		HistoryLog.Levels opened = sittingOpen != null
+			? HistoryLog.levels(sittingOpen, stand.keys)
+			: HistoryLog.levels(opening, stand.keys);
+		LocalDate lootSince = null;
+		long lootFromTs = earliestDatedLoot(feed, build.lootDays().rollFrom());
+		if (lootFromTs > 0)
+		{
+			LocalDate sat = dayOf(lootFromTs);
+			if (sat.isAfter(pStart))
+			{
+				lootSince = sat;
+			}
+		}
+		b.since = build.period().whole ? null
+			: countersSince(hist.headMap(at.getKey(), true), from.getKey(),
+				lootSince, lootFromTs > 0);
+		b.progress = progress;
+		b.opening = opening;
+		b.earliest = earliest;
+		b.closing = closing;
+		b.stand = stand;
+		b.opened = opened;
+		return b;
+	}
+
+	private static String countersSince(
+		SortedMap<LocalDate, Baseline> spine,
+		LocalDate startLine, LocalDate lootFrom, boolean lootFromSittings)
+	{
+		LocalDate counters = HistoryLog.firstCarrying(spine, null);
+		LocalDate loot = lootFromSittings
+			? lootFrom : HistoryLog.firstCarrying(spine, "dropsReceived");
+		StringBuilder note = new StringBuilder();
+		LocalDate since = startLine;
+		if (counters != null && (since == null || counters.isAfter(since)))
+		{
+			note.append("Counters since ").append(counters.format(FULL_DAY));
+			since = counters;
+		}
+		if (loot != null && (lootFromSittings || since == null || loot.isAfter(since)))
+		{
+			String what = lootFromSittings ? "loot" : "loot and kills";
+			note.append(note.length() == 0
+				? Text.capital(what) + " since "
+				: " · " + what + " since ")
+				.append(loot.format(FULL_DAY));
+		}
+		return note.length() == 0 ? null : note.toString();
+	}
+
+	private static boolean closedInside(SlayerTask t, long fromMs, long toMs)
+	{
+		long ms = (long) (t.ts * 1000);
+		return !t.inProgress && ms >= fromMs && ms < toMs;
+	}
+
+	private static List<String[]> closedTaskNames(SlayerJourney j,
+		long fromMs, long toMs)
+	{
+		List<SlayerTask> closed = new ArrayList<>();
+		for (SlayerTask t : j.tasks)
+		{
+			if (closedInside(t, fromMs, toMs))
+			{
+				closed.add(t);
+			}
+		}
+		closed.sort((a, b) -> Double.compare(b.ts, a.ts));
+		List<String[]> out = new ArrayList<>(closed.size());
+		for (SlayerTask t : closed)
+		{
+			long ms = (long) (t.ts * 1000);
+			out.add(new String[]{t.task, fmt(t.kills) + " · "
+				+ DAY.format(Instant.ofEpochMilli(ms))});
+		}
+		return out;
+	}
+
+	private static final Map<String, String> FEED_SUMMARY_KEYS = strMap(Sources.KINDS, "feedSummaryKeys");
+
+	private static List<String[]> itemLines(List<LocalStore.Row> ranked, boolean always)
+	{
+		List<String[]> out = new ArrayList<>();
+		for (LocalStore.Row r : ranked)
+		{
+			out.add(new String[]{r.name, fmt(r.qty) + (always ? " · " + gps(r.value) : tail(r.value))});
+		}
+		return out;
+	}
+
+	@RequiredArgsConstructor
+	static final class Stand
+	{
+		final List<Skill> order;
+		final List<String> keys;
+		final Map<Skill, Long> levels;
+		final long standing;
+		final HistoryLog.Levels closed;
+	}
+
+	static Baseline baselineAt(Map<String, Long> xp)
+	{
+		Baseline at = new Baseline();
+		at.skills.putAll(xp);
+		at.complete = true;
+		return at;
+	}
+
+	Stand stand(Baseline closing, boolean live)
+	{
+		Map<String, long[]> sheet = live ? build.plugin.skillSheet() : Collections.emptyMap();
+		List<Skill> order = Sources.skillOrder();
+		List<String> keys = new ArrayList<>();
+		for (Skill sk : order)
+		{
+			keys.add(low(sk.name()));
+		}
+		HistoryLog.Levels closed = HistoryLog.levels(closing, keys);
+		Map<Skill, Long> levels =
+			new EnumMap<>(Skill.class);
+		long total = 0;
+		for (Skill sk : order)
+		{
+			String key = low(sk.name());
+			long[] cur = sheet.get(key);
+			long level = cur != null && cur[0] > 0 ? cur[0] : closed.of.get(key);
+			total += level;
+			long shown = build.period().whole && cur != null && cur.length > 1 && cur[1] > 0
+				? PaceBook.virtualLevelAt(cur[1]) : level;
+			levels.put(sk, Math.max(level, shown));
+		}
+		long[] ov = sheet.get("overall");
+		return new Stand(order, keys, levels,
+			ov != null && ov[0] > 0 ? ov[0] : total, closed);
 	}
 }

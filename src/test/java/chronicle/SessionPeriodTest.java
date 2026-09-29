@@ -169,7 +169,7 @@ public class SessionPeriodTest
 	@Test
 	public void theSittingOpensWhereTheSittingBeganNotWhereTheDayDid() throws Exception
 	{
-		java.lang.reflect.Method m = ChroniclePanel.class
+		java.lang.reflect.Method m = Summary.class
 			.getDeclaredMethod("baselineAt", Map.class);
 		m.setAccessible(true);
 
@@ -201,7 +201,7 @@ public class SessionPeriodTest
 	@Test
 	public void theDerivedOpeningCountsAsACompleteSnapshot() throws Exception
 	{
-		java.lang.reflect.Method m = ChroniclePanel.class
+		java.lang.reflect.Method m = Summary.class
 			.getDeclaredMethod("baselineAt", Map.class);
 		m.setAccessible(true);
 		Object at = m.invoke(null, new java.util.HashMap<String, Long>());
@@ -215,13 +215,13 @@ public class SessionPeriodTest
 	public void virtualLevelsAreForTheWholeRecordOnly() throws Exception
 	{
 		String src = new String(java.nio.file.Files.readAllBytes(
-			java.nio.file.Paths.get("src/main/java/chronicle/ChroniclePanel.java")),
+			java.nio.file.Paths.get("src/main/java/chronicle/Summary.java")),
 			java.nio.charset.StandardCharsets.UTF_8);
 		int at = src.indexOf("PaceBook.virtualLevelAt(cur[1])");
 		assertTrue("the skill grid no longer reads a virtual level at all", at > 0);
 		String around = src.substring(Math.max(0, at - 200), at);
 		assertTrue("a virtual level is drawn on a period, where it says nothing"
-			+ " about that period", around.contains("wholeRecord()"));
+			+ " about that period", around.contains("period().whole"));
 	}
 
 	private static void began(long agoMs) throws Exception

@@ -27,6 +27,8 @@ final class Build
 	final ChroniclePlugin plugin;
 	private final Supplier<Period> period;
 	private final Supplier<TreeMap<LocalDate, Baseline>> spine;
+	private final Supplier<List<JsonObject>> historyFeed;
+	private final Supplier<LocalStore.SlayerJourney> journey;
 	private final Runnable askHistory;
 	final Kills kills = new Kills(this);
 	final Feed feed = new Feed(this);
@@ -41,14 +43,28 @@ final class Build
 	private Map<String, Long> periodCounters;
 	private boolean periodCountersAsked;
 	private LocalStore.LootDays lootDays;
+	private LocalStore.Tasks allTasks;
+	private Map<String, long[]> taskItems;
 
-	Build(ChroniclePlugin plugin, Supplier<Period> period,
-		Supplier<TreeMap<LocalDate, Baseline>> spine, Runnable askHistory)
+	Build(ChroniclePlugin plugin, Supplier<Period> period, Supplier<TreeMap<LocalDate, Baseline>> spine,
+		Supplier<List<JsonObject>> historyFeed, Supplier<LocalStore.SlayerJourney> journey, Runnable askHistory)
 	{
 		this.plugin = plugin;
 		this.period = period;
 		this.spine = spine;
+		this.historyFeed = historyFeed;
+		this.journey = journey;
 		this.askHistory = askHistory;
+	}
+
+	List<JsonObject> historyFeed()
+	{
+		return historyFeed.get();
+	}
+
+	LocalStore.SlayerJourney journey()
+	{
+		return journey.get();
 	}
 
 	TreeMap<LocalDate, Baseline> spine()
@@ -124,6 +140,24 @@ final class Build
 	{
 		Period w = period();
 		return plugin.loot(w.session ? null : w.start, w.end);
+	}
+
+	LocalStore.Tasks allTasks()
+	{
+		if (allTasks == null)
+		{
+			allTasks = plugin.allTasks();
+		}
+		return allTasks;
+	}
+
+	Map<String, long[]> taskItems()
+	{
+		if (taskItems == null)
+		{
+			taskItems = allTasks().items();
+		}
+		return taskItems;
 	}
 
 	LocalStore.LootDays lootDays()
