@@ -412,16 +412,13 @@ public class SessionPeriodTest
 			try
 			{
 				Method m = ChroniclePanel.class.getDeclaredMethod("addKinds",
-					javax.swing.JPanel.class, Map.class, Map.class, Map.class,
-					boolean.class, java.time.LocalDate.class, java.time.LocalDate.class,
-					String.class, String.class);
+					javax.swing.JPanel.class, Period.Span.class, String.class, String.class);
 				m.setAccessible(true);
 				javax.swing.JPanel into = new javax.swing.JPanel();
 				into.setLayout(new javax.swing.BoxLayout(into, javax.swing.BoxLayout.Y_AXIS));
-				java.util.Map<String, Long> spine = new java.util.HashMap<>();
-				spine.put("vorkath", 40L);
-				m.invoke(panel, into, spine, spine, spine, false,
-					java.time.LocalDate.now(), java.time.LocalDate.now(),
+				HistoryLog.Baseline spine = new HistoryLog.Baseline();
+				spine.kcs.put("vorkath", 40L);
+				m.invoke(panel, into, new Period.Span(spine, spine, spine),
 					Sources.BOSS, Sources.MONSTER);
 				collect(into, said);
 			}

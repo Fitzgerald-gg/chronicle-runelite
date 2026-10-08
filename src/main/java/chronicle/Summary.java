@@ -248,35 +248,12 @@ final class Summary
 
 	private void recapMonsters(RecapPicture.Facts f, Span s)
 	{
-		Map<String, Long> by = new LinkedHashMap<>();
-		Map<String, Long> worth = new LinkedHashMap<>();
-		if (f.whole)
+		Map<String, Long> by = killed(s);
+		if (by == null)
 		{
-			by.putAll(build.plugin.killCounts());
-			for (SourceRow r : build.sources())
-			{
-				worth.merge(r.name, r.value, Long::sum);
-			}
+			return;
 		}
-		else if (f.session)
-		{
-			for (LocalStore.Row r : build.plugin.loot(null, null).sources)
-			{
-				by.merge(r.name, r.qty, Long::sum);
-				worth.merge(r.name, r.value, Long::sum);
-			}
-		}
-		else
-		{
-			if (s == null)
-			{
-				return;
-			}
-			by.putAll(HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
-				build.period().closingNow(s.closing.kcs, build.plugin.killCounts())));
-			Period w = build.period();
-			worth.putAll(worth(w.start, w.end));
-		}
+		Map<String, Long> worth = paid();
 		Map<String, Long> loose = loosely(worth);
 		List<Entry<String, Long>> kept = new ArrayList<>();
 		for (Entry<String, Long> e : by.entrySet())
@@ -928,22 +905,33 @@ final class Summary
 		return top == null ? null : new String[]{top, fmt(moved.get(top))};
 	}
 
-	Map<String, Long> worth(LocalDate from, LocalDate to)
+	Map<String, Long> killed(Span s)
+	{
+		Period w = build.period();
+		if (w.whole)
+		{
+			return new LinkedHashMap<>(build.plugin.killCounts());
+		}
+		if (w.session)
+		{
+			Map<String, Long> out = new LinkedHashMap<>();
+			build.lootWindow().sources.forEach(r -> out.merge(r.name, r.qty, Long::sum));
+			return out;
+		}
+		return s == null ? null : HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
+			w.closingNow(s.closing.kcs, build.plugin.killCounts()));
+	}
+
+	Map<String, Long> paid()
 	{
 		Map<String, Long> out = new LinkedHashMap<>();
 		if (build.period().whole)
 		{
-			for (SourceRow r : build.sources())
-			{
-				out.merge(r.name, r.value, Long::sum);
-			}
+			build.sources().forEach(r -> out.merge(r.name, r.value, Long::sum));
 		}
 		else
 		{
-			for (LocalStore.Row r : build.plugin.loot(from, to).sources)
-			{
-				out.merge(r.name, r.value, Long::sum);
-			}
+			build.lootWindow().sources.forEach(r -> out.merge(r.name, r.value, Long::sum));
 		}
 		return out;
 	}

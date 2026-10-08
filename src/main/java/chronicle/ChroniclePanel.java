@@ -4834,35 +4834,17 @@ class ChroniclePanel extends PluginPanel
 		spaced(p, card);
 	}
 
-	private void addKinds(JPanel p, Map<String, Long> beforeKc, Map<String, Long> earliestKc,
-		Map<String, Long> nowKc, boolean live, LocalDate from,
-		LocalDate to, String first, String second)
+	private void addKinds(JPanel p, Span span, String first, String second)
 	{
 		boolean whole = wholeRecord();
 		build.forgetNames();
-		Map<String, Long> standing = live ? plugin.killCounts() : nowKc;
-		Map<String, Long> gained;
-		Map<String, Long> worth;
-		if (sessionPeriod())
-		{
-			gained = new LinkedHashMap<>();
-			worth = new LinkedHashMap<>();
-			for (LocalStore.Row r : build.lootWindow().sources)
-			{
-				gained.put(r.name, r.qty);
-				worth.put(r.name, r.value);
-			}
-		}
-		else
-		{
-			gained = HistoryLog.gained(beforeKc, earliestKc, nowKc);
-			worth = build.summary.worth(from, to);
-		}
+		Map<String, Long> gained = build.summary.killed(span);
+		Map<String, Long> worth = build.summary.paid();
 		Map<String, Long> loose = Summary.loosely(worth);
 		Map<String, List<Entry<String, Long>>> byKind = new LinkedHashMap<>();
-		for (String name : whole ? standing.keySet() : union(gained.keySet(), worth.keySet()))
+		for (String name : whole ? gained.keySet() : union(gained.keySet(), worth.keySet()))
 		{
-			long figure = whole ? standing.getOrDefault(name, 0L) : gained.getOrDefault(name, 0L);
+			long figure = gained.getOrDefault(name, 0L);
 			if (figure <= 0 && Summary.paidFor(worth, loose, name) <= 0)
 			{
 				continue;
@@ -6072,13 +6054,11 @@ class ChroniclePanel extends PluginPanel
 		if ("PvM".equals(histFacet))
 		{
 			addLootValues(p, b.progress);
-			addKinds(p, b.opening.kcs, b.earliest.kcs, b.closing.kcs, b.live, w.start, w.end,
-				Sources.BOSS, Sources.MONSTER);
+			addKinds(p, new Span(b.opening, b.earliest, b.closing), Sources.BOSS, Sources.MONSTER);
 		}
 		else if ("Activities".equals(histFacet))
 		{
-			addKinds(p, b.opening.kcs, b.earliest.kcs, b.closing.kcs, b.live, w.start, w.end,
-				Sources.ACTIVITY, Sources.SKILLING);
+			addKinds(p, new Span(b.opening, b.earliest, b.closing), Sources.ACTIVITY, Sources.SKILLING);
 		}
 		else if ("Trackers".equals(histFacet))
 		{
