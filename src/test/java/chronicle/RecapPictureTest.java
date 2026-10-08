@@ -143,7 +143,7 @@ public class RecapPictureTest
 		{
 			RecapPicture.Facts f = facts(p, g, LocalDate.now());
 			BufferedImage img = RecapPicture.paint(f, null, null);
-			assertEquals(g, RecapPicture.WIDTH, img.getWidth());
+			assertTrue(g + " is " + img.getWidth() + " wide", img.getWidth() <= RecapPicture.WIDTH);
 			assertTrue(g + " is " + img.getHeight() + " tall", img.getHeight() <= RecapPicture.MAX_HEIGHT);
 		}
 	}
@@ -169,6 +169,28 @@ public class RecapPictureTest
 		BufferedImage img = RecapPicture.paint(f, null, null);
 		assertTrue("the sheet ran to " + img.getHeight(), img.getHeight() <= RecapPicture.MAX_HEIGHT);
 		assertTrue("rows were lost and nothing was dropped by count", f.dropped > 0);
+	}
+
+	@Test
+	public void aQuietPeriodIsNarrowerAndAFullOneKeepsTheWholeWidth() throws Exception
+	{
+		RecapPicture.Facts quiet = new RecapPicture.Facts();
+		quiet.title = "A quiet day";
+		quiet.bosses.add(new RecapPicture.BossLine("Vorkath", 0, null, 100L, 3));
+		assertTrue(RecapPicture.paint(quiet, null, null).getWidth() < RecapPicture.WIDTH);
+
+		RecapPicture.Facts full = new RecapPicture.Facts();
+		full.title = "A busy year";
+		for (String fam : new String[]{"Combat", "Skilling", "Living", "Ledger & Roads"})
+		{
+			List<RecapPicture.Named> rows = new ArrayList<>();
+			for (int i = 0; i < 30; i++)
+			{
+				rows.add(new RecapPicture.Named(fam + " " + i, "1", null));
+			}
+			full.trackers.put(fam, rows);
+		}
+		assertEquals(RecapPicture.WIDTH, RecapPicture.paint(full, null, null).getWidth());
 	}
 
 	@Test

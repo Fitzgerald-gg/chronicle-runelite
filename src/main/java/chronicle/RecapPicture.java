@@ -41,6 +41,7 @@ final class RecapPicture
 	private static final int TILE_H = 84;
 	private static final int NOTE_ROW = 15;
 	private static final int MIN_BODY = 260;
+	private static final int MIN_TILE = 150;
 
 	private static final Color GROUND = ChroniclePanel.DARK;
 	private static final Color CARD = ChroniclePanel.DARKER;
@@ -317,7 +318,6 @@ final class RecapPicture
 	static BufferedImage paint(Facts f, Function<Skill, BufferedImage> skillIcons,
 		Function<Integer, BufferedImage> sprites)
 	{
-		int contentW = COLUMNS * COL + (COLUMNS - 1) * GAP;
 		int inner = COL - 2 * PAD;
 		int wideInner = 2 * COL + GAP - 2 * PAD;
 
@@ -408,17 +408,22 @@ final class RecapPicture
 
 		List<Block> run = new ArrayList<>(left);
 		run.addAll(right);
-		int[] tops = {tableH + GAP, tableH + GAP, 0, 0, 0, 0};
-		int[] cols = {0, 1, 2, 3, 4, 5};
+		int cols = COLUMNS;
 		int body = Math.max(MIN_BODY, tableH);
-		while (body < maxBody && !place(null, run, cols, tops, even(body), false))
+		while (body < maxBody && !fits(run, cols, tableH, even(cols, body)))
 		{
 			body += 10;
 		}
 		body = Math.min(body, maxBody);
-		while (!place(null, run, cols, tops, even(body), false) && trimOne(run, inner))
+		while (!fits(run, cols, tableH, even(cols, body)) && trimOne(run, inner))
 		{
 		}
+		int fewest = Math.max(run.isEmpty() ? 2 : 3, tileColumns(f.tiles.size()));
+		while (cols > fewest && fits(run, cols - 1, tableH, even(cols - 1, body)))
+		{
+			cols--;
+		}
+		int[] tops = tops(cols, tableH);
 		f.dropped = 0;
 		for (Block b : run)
 		{
@@ -432,11 +437,13 @@ final class RecapPicture
 				beside = Math.max(beside, blockHeight(b, 0, b.pieces.size()));
 			}
 		}
-		int[] bottoms = even(body);
+		int[] bottoms = even(cols, body);
 		while (beside < body)
 		{
-			int[] tried = {body, body, beside, beside, beside, beside};
-			if (place(null, run, cols, tops, tried, false))
+			int[] tried = even(cols, beside);
+			tried[0] = body;
+			tried[1] = body;
+			if (fits(run, cols, tableH, tried))
 			{
 				bottoms = tried;
 				break;
@@ -444,13 +451,15 @@ final class RecapPicture
 			beside += 10;
 		}
 
+		int contentW = cols * COL + (cols - 1) * GAP;
+		int width = contentW + 2 * LEFT;
 		int height = headH + body + footH;
-		BufferedImage img = new BufferedImage(WIDTH, height, BufferedImage.TYPE_INT_RGB);
+		BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 		Graphics2D g = img.createGraphics();
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
 			RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		g.setColor(GROUND);
-		g.fillRect(0, 0, WIDTH, height);
+		g.fillRect(0, 0, width, height);
 
 		int y = TOP;
 		text(g, "RECAP", small(), ACCENT, LEFT, y + 11);
@@ -459,7 +468,7 @@ final class RecapPicture
 		y += 34 + 16;
 		if (!f.tiles.isEmpty())
 		{
-			int n = Math.max(f.tiles.size(), 6);
+			int n = f.tiles.size();
 			int tw = (contentW - (n - 1) * GAP) / n;
 			int tx = LEFT;
 			for (Tile t : f.tiles)
@@ -472,14 +481,14 @@ final class RecapPicture
 
 		int bodyTop = y;
 		drawSkillsTable(g, f, skillIcons, LEFT, bodyTop, 2 * COL + GAP, tableH, wideInner);
-		int[] colX = new int[COLUMNS];
-		for (int c = 0; c < COLUMNS; c++)
+		int[] colX = new int[cols];
+		for (int c = 0; c < cols; c++)
 		{
 			colX[c] = LEFT + c * (COL + GAP);
 		}
-		int[] at = new int[COLUMNS];
-		int[] foot = new int[COLUMNS];
-		for (int c = 0; c < COLUMNS; c++)
+		int[] at = new int[cols];
+		int[] foot = new int[cols];
+		for (int c = 0; c < cols; c++)
 		{
 			at[c] = bodyTop + tops[c];
 			foot[c] = bodyTop + bottoms[c];
@@ -705,9 +714,37 @@ final class RecapPicture
 		return true;
 	}
 
-	private static int[] even(int bottom)
+	private static boolean fits(List<Block> run, int cols, int tableH, int[] bottoms)
 	{
-		int[] b = new int[COLUMNS];
+		return place(null, run, new int[cols], tops(cols, tableH), bottoms, false);
+	}
+
+	private static int[] tops(int cols, int tableH)
+	{
+		int[] t = new int[cols];
+		t[0] = tableH + GAP;
+		t[1] = tableH + GAP;
+		return t;
+	}
+
+	private static int tileColumns(int tiles)
+	{
+		int cols = 2;
+		while (cols < COLUMNS)
+		{
+			int n = Math.max(tiles, 1);
+			if ((cols * COL + (cols - 1) * GAP - (n - 1) * GAP) / n >= MIN_TILE)
+			{
+				break;
+			}
+			cols++;
+		}
+		return cols;
+	}
+
+	private static int[] even(int cols, int bottom)
+	{
+		int[] b = new int[cols];
 		Arrays.fill(b, bottom);
 		return b;
 	}
