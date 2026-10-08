@@ -177,16 +177,6 @@ final class Summary
 		f.combat = cEnd == null ? null : new Long[]{cStart == null ? null : (long) cStart, (long) cEnd};
 	}
 
-	private static long sum(Map<String, Integer> levels)
-	{
-		long t = 0;
-		for (int l : levels.values())
-		{
-			t += l;
-		}
-		return t;
-	}
-
 	private static Integer combatOf(Map<String, Integer> levels)
 	{
 		HistoryLog.Levels l = new HistoryLog.Levels();
