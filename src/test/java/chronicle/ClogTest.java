@@ -59,6 +59,15 @@ public class ClogTest
 	}
 
 	@Test
+	public void openingYourLogAsksTheGameForEverySlotAndAHouseBookDoesNot()
+	{
+		h.varbit(net.runelite.api.gameval.VarbitID.COLLECTION_POH_HOST_BOOK_OPEN, 1).clogOpened();
+		assertTrue(h.clicked().isEmpty());
+		h.varbit(net.runelite.api.gameval.VarbitID.COLLECTION_POH_HOST_BOOK_OPEN, 0).clogOpened();
+		assertEquals(Arrays.asList("Search"), h.clicked());
+	}
+
+	@Test
 	public void theTransmitBurstIsKeptOnceItSettles()
 	{
 		h.clogTransmit(4151, 1).clogTransmit(13262, 1).ticks(4);

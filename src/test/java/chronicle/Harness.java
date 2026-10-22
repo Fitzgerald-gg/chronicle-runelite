@@ -115,6 +115,7 @@ final class Harness
 	private final EventBus bus = new EventBus();
 	private final ItemManager items = mock(ItemManager.class);
 	private final List<String> said = new ArrayList<>();
+	private final List<String> clicked = new ArrayList<>();
 	private ChroniclePlugin plugin;
 	private String rsn;
 	private GameState state = GameState.LOGIN_SCREEN;
@@ -277,6 +278,11 @@ final class Harness
 			said.add(i.getArgument(2));
 			return null;
 		}).when(client).addChatMessage(any(), any(), any(), any());
+		doAnswer(i ->
+		{
+			clicked.add(i.getArgument(5));
+			return null;
+		}).when(client).menuAction(anyInt(), anyInt(), any(), anyInt(), anyInt(), any(), any());
 	}
 
 	private void fakeItems()
@@ -694,6 +700,16 @@ final class Harness
 		widgets.put(ComponentID.COLLECTION_LOG_ENTRY_HEADER, header);
 		widgets.put(ComponentID.COLLECTION_LOG_ENTRY_ITEMS, grid);
 		return post(new ScriptPostFired(net.runelite.api.ScriptID.COLLECTION_DRAW_LIST));
+	}
+
+	Harness clogOpened()
+	{
+		return post(new ScriptPostFired(7797));
+	}
+
+	List<String> clicked()
+	{
+		return clicked;
 	}
 
 	Harness clogTransmit(int itemId, int qty)

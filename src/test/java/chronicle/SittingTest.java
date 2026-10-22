@@ -74,6 +74,16 @@ public class SittingTest
 	}
 
 	@Test
+	public void aShortSittingThatTookSomethingKeepsItsLine()
+	{
+		h.kill("Bear", 1, 1618, 1).sitting(3).logout().login();
+		assertEquals(1, h.feed("SESSION").get(0).get("drops").getAsInt());
+		Harness other = new Harness().login();
+		other.level(Skill.HUNTER, 50, 101333).xp(Skill.HUNTER, 500).sitting(3).logout().login();
+		assertEquals(500, other.feed("SESSION").get(0).get("xp").getAsInt());
+	}
+
+	@Test
 	public void theSittingInProgressReadsAsASessionInTheJournal()
 	{
 		h.kill("Bear", 1, 1618, 1).sitting(97);
