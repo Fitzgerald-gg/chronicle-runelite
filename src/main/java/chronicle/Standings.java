@@ -48,7 +48,7 @@ final class Standings
 	{
 		if (achievements == null)
 		{
-			achievements = build.plugin.achievements();
+			achievements = build.store.achievements();
 		}
 		return achievements;
 	}

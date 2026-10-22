@@ -11,6 +11,7 @@ package chronicle;
 import chronicle.HistoryLog.Baseline;
 import chronicle.LocalStore.SourceRow;
 import chronicle.Period.Span;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -24,7 +25,9 @@ import java.util.function.Supplier;
 
 final class Build
 {
-	final ChroniclePlugin plugin;
+	final LocalStore store;
+	final Live live;
+	final Gson gson;
 	private final Supplier<Period> period;
 	private final Supplier<TreeMap<LocalDate, Baseline>> spine;
 	private final Supplier<LocalStore.SlayerJourney> journey;
@@ -45,10 +48,12 @@ final class Build
 	private LocalStore.Tasks allTasks;
 	private Map<String, long[]> taskItems;
 
-	Build(ChroniclePlugin plugin, Supplier<Period> period, Supplier<TreeMap<LocalDate, Baseline>> spine,
-		Supplier<LocalStore.SlayerJourney> journey, Runnable askHistory)
+	Build(LocalStore store, Live live, Gson gson, Supplier<Period> period,
+		Supplier<TreeMap<LocalDate, Baseline>> spine, Supplier<LocalStore.SlayerJourney> journey, Runnable askHistory)
 	{
-		this.plugin = plugin;
+		this.store = store;
+		this.live = live;
+		this.gson = gson;
 		this.period = period;
 		this.spine = spine;
 		this.journey = journey;
@@ -74,7 +79,7 @@ final class Build
 	{
 		if (sources == null)
 		{
-			sources = plugin.dropSources();
+			sources = store.dropSources();
 		}
 		return sources;
 	}
@@ -83,7 +88,7 @@ final class Build
 	{
 		if (clog == null)
 		{
-			clog = plugin.clogSnapshot();
+			clog = store.clogSnapshot();
 		}
 		return clog;
 	}
@@ -92,7 +97,7 @@ final class Build
 	{
 		if (book == null)
 		{
-			book = new ClogBook(clog(), plugin.gson());
+			book = new ClogBook(clog(), gson);
 		}
 		return book;
 	}
@@ -132,14 +137,14 @@ final class Build
 	LocalStore.LootWindow lootWindow()
 	{
 		Period w = period();
-		return plugin.loot(w.session ? null : w.start, w.end);
+		return store.loot(w.session ? null : w.start, w.end);
 	}
 
 	LocalStore.Tasks allTasks()
 	{
 		if (allTasks == null)
 		{
-			allTasks = plugin.allTasks();
+			allTasks = store.allTasks();
 		}
 		return allTasks;
 	}
@@ -157,9 +162,14 @@ final class Build
 	{
 		if (lootDays == null)
 		{
-			lootDays = plugin.lootDays();
+			lootDays = store.lootDays();
 		}
 		return lootDays;
+	}
+
+	Map<String, Long> lifetime()
+	{
+		return live.ready() ? store.lifetimeOf(live.sessionView()) : store.trackersSnapshot();
 	}
 
 	Map<String, Long> withLedgerSpend(Map<String, Long> base)
@@ -167,7 +177,7 @@ final class Build
 		Map<String, Long> out = new LinkedHashMap<>(base);
 		long food = 0;
 		long potions = 0;
-		for (Map.Entry<String, Long> e : plugin.consumableValues().entrySet())
+		for (Map.Entry<String, Long> e : store.consumableValues().entrySet())
 		{
 			long v = e.getValue() == null ? 0 : e.getValue();
 			if (v <= 0)
@@ -203,12 +213,12 @@ final class Build
 		Period w = period();
 		if (w.whole)
 		{
-			return withLedgerSpend(plugin.lifetimeCounters());
+			return withLedgerSpend(lifetime());
 		}
 		if (w.session)
 		{
 			Map<String, Long> out = new LinkedHashMap<>();
-			for (Map.Entry<String, Integer> e : plugin.sessionView().entrySet())
+			for (Map.Entry<String, Integer> e : live.sessionView().entrySet())
 			{
 				if (e.getValue() != null && e.getValue() != 0)
 				{
@@ -223,7 +233,7 @@ final class Build
 			return null;
 		}
 		return Period.peaksNotDeltas(HistoryLog.gained(s.opening.counters,
-			s.earliest.counters, w.closingNow(s.closing.counters, plugin.lifetimeCounters())), s);
+			s.earliest.counters, w.closingNow(s.closing.counters, lifetime())), s);
 	}
 
 	Map<String, Long> periodCounters()
@@ -262,7 +272,7 @@ final class Build
 		Map<String, Long> close = new HashMap<>(skills);
 		if (live)
 		{
-			for (Map.Entry<String, long[]> e : plugin.skillSheet().entrySet())
+			for (Map.Entry<String, long[]> e : this.live.skillSheet().entrySet())
 			{
 				if (e.getValue() != null && e.getValue().length > 1 && e.getValue()[1] > 0)
 				{
@@ -277,7 +287,7 @@ final class Build
 	{
 		Period w = period();
 		long[] ms = w.ms();
-		LocalStore.Tasks tasks = plugin.tasks(ms[0], ms[1], null, w.whole);
+		LocalStore.Tasks tasks = store.tasks(ms[0], ms[1], null, w.whole);
 		long[] tally = Arrays.copyOf(tasks.tally(), 4);
 		tally[3] = LocalStore.tallyOf(tasks.loot())[1];
 		return tally;

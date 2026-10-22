@@ -9,6 +9,7 @@
 package chronicle;
 
 import chronicle.LocalStore.BagItem;
+import com.google.gson.Gson;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -22,7 +23,8 @@ import static chronicle.Json.low;
 @RequiredArgsConstructor
 final class ItemNames
 {
-	private final ChroniclePlugin plugin;
+	private final LocalStore store;
+	private final Gson gson;
 	private final UnaryOperator<String> ledgerName;
 	private final Map<String, Integer> signatures = new LinkedHashMap<>();
 	private Map<String, Integer> byName;
@@ -40,7 +42,7 @@ final class ItemNames
 			return known;
 		}
 		String own = ledgerName.apply(source);
-		List<BagItem> bag = own == null ? new ArrayList<>() : new ArrayList<>(plugin.sourceItems(own));
+		List<BagItem> bag = own == null ? new ArrayList<>() : new ArrayList<>(store.sourceItems(own));
 		bag.sort((a, b) -> Long.compare(b.value, a.value));
 		int best = 0;
 		for (BagItem b : bag)
@@ -64,7 +66,7 @@ final class ItemNames
 
 	private int paged(String page)
 	{
-		for (Map<String, List<String>> pages : ClogBook.taxonomy(plugin.gson()).values())
+		for (Map<String, List<String>> pages : ClogBook.taxonomy(gson).values())
 		{
 			List<String> slots = pages.get(page);
 			if (slots == null)
@@ -101,7 +103,7 @@ final class ItemNames
 		{
 			return byName;
 		}
-		List<ItemPrice> all = plugin.items().search("");
+		List<ItemPrice> all = store.items().search("");
 		if (all == null || all.isEmpty())
 		{
 			return null;

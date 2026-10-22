@@ -872,7 +872,7 @@ final class Harness
 
 	Map<String, Long> kills()
 	{
-		return plugin.killCounts();
+		return store().killCounts();
 	}
 
 	Harness importFile(File f)

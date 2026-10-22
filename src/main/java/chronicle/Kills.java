@@ -215,7 +215,7 @@ final class Kills
 		if (movedKcs == null)
 		{
 			movedKcs = HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
-				build.period().closingNow(s.closing.kcs, build.plugin.killCounts()));
+				build.period().closingNow(s.closing.kcs, build.store.killCounts()));
 		}
 		String key = keyOf(movedKcs.keySet(), name);
 		Long moved = key == null ? null : movedKcs.get(key);
@@ -323,7 +323,7 @@ final class Kills
 			return killKinds;
 		}
 		Set<String> out = new HashSet<>();
-		for (Boss b : bossRoster(build.plugin.gson()))
+		for (Boss b : bossRoster(build.gson))
 		{
 			out.add(kindOf(b.name));
 		}
@@ -367,7 +367,7 @@ final class Kills
 		String said = low(label);
 		String mine = bare(boss);
 		String best = null;
-		for (Boss b : bossRoster(build.plugin.gson()))
+		for (Boss b : bossRoster(build.gson))
 		{
 			String name = bare(b.name);
 			if (!name.isEmpty() && said.contains(name)
@@ -385,7 +385,7 @@ final class Kills
 		{
 			return namesOneOf(said, words(mine, bare(page)));
 		}
-		for (Boss other : bossRoster(build.plugin.gson()))
+		for (Boss other : bossRoster(build.gson))
 		{
 			String onPage = LOG_PAGE_FOR.getOrDefault(other.name, other.name);
 			if (other.name.equalsIgnoreCase(boss) || !onPage.equalsIgnoreCase(page))
@@ -472,7 +472,7 @@ final class Kills
 		if (chatKcByKind == null)
 		{
 			Map<String, Long> out = new LinkedHashMap<>();
-			for (Entry<String, Long> e : build.plugin.killCounts().entrySet())
+			for (Entry<String, Long> e : build.store.killCounts().entrySet())
 			{
 				out.merge(LocalStore.chatKind(e.getKey()), e.getValue(), Math::max);
 			}
@@ -486,9 +486,9 @@ final class Kills
 		String want = LocalStore.chatKind(sr.name);
 		Map<String, Long> rows = new LinkedHashMap<>();
 		putKind(rows, "Kill Log", LocalStore.killLogCounts(build.clog()), want);
-		putKind(rows, "Said in chat", build.plugin.chatKills(), want);
+		putKind(rows, "Said in chat", build.store.chatKillCounts(), want);
 		putKind(rows, "Collection log", LocalStore.pageKillLines(build.clog()), want);
-		putKind(rows, "Running count", build.plugin.anchoredKills(), want);
+		putKind(rows, "Running count", build.store.anchoredKills(), want);
 		if (sr.loots > 0)
 		{
 			rows.put("Drops logged", (long) sr.loots);

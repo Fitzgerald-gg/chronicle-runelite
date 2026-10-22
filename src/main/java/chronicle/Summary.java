@@ -91,7 +91,7 @@ final class Summary
 
 	private void recapSkills(RecapPicture.Facts f, Span s)
 	{
-		Map<String, long[]> sheet = build.plugin.skillSheet();
+		Map<String, long[]> sheet = build.live.skillSheet();
 		Map<String, Long> closing = null;
 		if (!f.whole && !f.session)
 		{
@@ -169,9 +169,9 @@ final class Summary
 		f.totalXp = new Long[]{startsKnown ? startXp : null,
 			f.whole && overall != null && overall.length > 1 && overall[1] > 0 ? overall[1] : endXp};
 		Integer cEnd = combatOf(endLevels);
-		if (f.whole && build.plugin.combatLevel() > 0)
+		if (f.whole && build.store.combatLevel() > 0)
 		{
-			cEnd = build.plugin.combatLevel();
+			cEnd = build.store.combatLevel();
 		}
 		Integer cStart = startsKnown ? combatOf(startLevels) : null;
 		f.combat = cEnd == null ? null : new Long[]{cStart == null ? null : (long) cStart, (long) cEnd};
@@ -186,8 +186,8 @@ final class Summary
 
 	private void recapBosses(RecapPicture.Facts f, Span s)
 	{
-		List<Kills.Boss> roster = Kills.bossRoster(build.plugin.gson());
-		Map<String, Long> closing = s == null ? null : build.period().closingNow(s.closing.kcs, build.plugin.killCounts());
+		List<Kills.Boss> roster = Kills.bossRoster(build.gson);
+		Map<String, Long> closing = s == null ? null : build.period().closingNow(s.closing.kcs, build.store.killCounts());
 		for (Kills.Boss b : roster)
 		{
 			if (f.whole)
@@ -273,7 +273,7 @@ final class Summary
 			return false;
 		}
 		String kind = kindOf(name);
-		for (Kills.Boss b : Kills.bossRoster(build.plugin.gson()))
+		for (Kills.Boss b : Kills.bossRoster(build.gson))
 		{
 			if (kindOf(b.name).equals(kind) || Kills.namesInBrackets(name, b.name)
 				|| Kills.paysOutThrough(b.name, name))
@@ -321,7 +321,7 @@ final class Summary
 					f.sources.add(new RecapPicture.Named(r.name, null, gps(r.value)));
 				}
 			}
-			List<BagItem> bag = new ArrayList<>(build.plugin.allLoot());
+			List<BagItem> bag = new ArrayList<>(build.store.allLoot());
 			bag.sort((a, b) -> Long.compare(b.value, a.value));
 			for (BagItem b : Sources.firstN(bag, 6))
 			{
@@ -537,10 +537,10 @@ final class Summary
 				f.feats.put("Levels", out);
 			}
 		}
-		if (f.whole && build.plugin.clogAvailable() > 0)
+		if (f.whole && build.live.clogAvailable() > 0)
 		{
 			f.feats.put("Collection log", Collections.singletonList(
-				fmt(build.plugin.clogFinished()) + " of " + fmt(build.plugin.clogAvailable()) + " slots"));
+				fmt(build.live.clogFinished()) + " of " + fmt(build.live.clogAvailable()) + " slots"));
 			named.remove("Collection log");
 		}
 		for (Entry<String, List<String>> e : named.entrySet())
@@ -649,10 +649,10 @@ final class Summary
 			}
 		}
 		List<String> slots = f.feats.get("Collection log");
-		if (f.whole && build.plugin.clogAvailable() > 0)
+		if (f.whole && build.live.clogAvailable() > 0)
 		{
-			f.tiles.add(new RecapPicture.Tile("Collection log", fmt(build.plugin.clogFinished()),
-				"of " + fmt(build.plugin.clogAvailable())));
+			f.tiles.add(new RecapPicture.Tile("Collection log", fmt(build.live.clogFinished()),
+				"of " + fmt(build.live.clogAvailable())));
 		}
 		else if (!f.whole && slots != null)
 		{
@@ -691,17 +691,17 @@ final class Summary
 				}
 			}
 		}
-		long began = build.plugin.sessionStart();
+		long began = build.live.sessionStart();
 		if (w.session ? w.reachesToday() : began > 0 && began >= fromMs && began < toMs)
 		{
-			long running = build.plugin.sessionElapsedMinutes();
+			long running = build.live.sessionElapsedMinutes();
 			if (running > 0)
 			{
 				out[0] += running;
 				out[1]++;
 			}
 		}
-		long theirs = w.whole ? build.plugin.gamePlaytimeMinutes() : 0;
+		long theirs = w.whole ? build.live.gamePlaytimeMinutes() : 0;
 		if (theirs > out[0])
 		{
 			out[0] = theirs;
@@ -727,13 +727,13 @@ final class Summary
 	{
 		if (build.period().whole)
 		{
-			long[] overall = build.plugin.skillSheet().get("overall");
+			long[] overall = build.live.skillSheet().get("overall");
 			return overall != null && overall.length > 1 ? new long[]{overall[1]} : null;
 		}
 		if (build.period().session)
 		{
 			long xp = 0;
-			for (ExperienceStatTracker.SkillGain g : build.plugin.sessionSkillXp())
+			for (ExperienceStatTracker.SkillGain g : build.live.sessionSkillXp())
 			{
 				xp += Math.max(0, g.xp);
 			}
@@ -757,12 +757,12 @@ final class Summary
 		Map<String, Long> by = new LinkedHashMap<>();
 		if (build.period().session)
 		{
-			ExperienceStatTracker.SkillGain top = most(build.plugin.sessionSkillXp(), g -> g.xp);
+			ExperienceStatTracker.SkillGain top = most(build.live.sessionSkillXp(), g -> g.xp);
 			return top == null ? null : prettify(low(top.skill.name()));
 		}
 		if (build.period().whole)
 		{
-			for (Entry<String, long[]> e : build.plugin.skillSheet().entrySet())
+			for (Entry<String, long[]> e : build.live.skillSheet().entrySet())
 			{
 				if (!"overall".equals(e.getKey()) && e.getValue().length > 1)
 				{
@@ -788,7 +788,7 @@ final class Summary
 		Period w = build.period();
 		if (w.whole)
 		{
-			long[] overall = build.plugin.skillSheet().get("overall");
+			long[] overall = build.live.skillSheet().get("overall");
 			return overall != null && overall[0] > 0 ? new long[]{-1, overall[0]} : null;
 		}
 		Span s = build.span();
@@ -844,7 +844,7 @@ final class Summary
 				out[0] += r.loots;
 				out[1] += r.value;
 			}
-			for (UntakenRow u : build.plugin.untaken().sources)
+			for (UntakenRow u : build.store.untaken().sources)
 			{
 				out[2] += u.qty;
 				out[3] += u.value;
@@ -881,7 +881,7 @@ final class Summary
 		}
 		if (build.period().session)
 		{
-			LocalStore.Row top = most(build.plugin.loot(null, null).sources, r -> r.qty);
+			LocalStore.Row top = most(build.store.loot(null, null).sources, r -> r.qty);
 			return top == null ? null : new String[]{top.name, fmt(top.qty)};
 		}
 		Span s = build.span();
@@ -890,7 +890,7 @@ final class Summary
 			return null;
 		}
 		Map<String, Long> moved = HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
-			build.period().closingNow(s.closing.kcs, build.plugin.killCounts()));
+			build.period().closingNow(s.closing.kcs, build.store.killCounts()));
 		String top = topOf(moved);
 		return top == null ? null : new String[]{top, fmt(moved.get(top))};
 	}
@@ -900,7 +900,7 @@ final class Summary
 		Period w = build.period();
 		if (w.whole)
 		{
-			return new LinkedHashMap<>(build.plugin.killCounts());
+			return new LinkedHashMap<>(build.store.killCounts());
 		}
 		if (w.session)
 		{
@@ -909,7 +909,7 @@ final class Summary
 			return out;
 		}
 		return s == null ? null : HistoryLog.gained(s.opening.kcs, s.earliest.kcs,
-			w.closingNow(s.closing.kcs, build.plugin.killCounts()));
+			w.closingNow(s.closing.kcs, build.store.killCounts()));
 	}
 
 	Map<String, Long> paid()
@@ -944,7 +944,7 @@ final class Summary
 
 	long sessionXp(String key)
 	{
-		for (ExperienceStatTracker.SkillGain g : build.plugin.sessionSkillXp())
+		for (ExperienceStatTracker.SkillGain g : build.live.sessionSkillXp())
 		{
 			if (g.skill != null && g.xp > 0
 				&& key.equalsIgnoreCase(g.skill.name()))
@@ -1044,7 +1044,7 @@ final class Summary
 		if (w.session)
 		{
 			gains.clear();
-			for (ExperienceStatTracker.SkillGain g : build.plugin.sessionSkillXp())
+			for (ExperienceStatTracker.SkillGain g : build.live.sessionSkillXp())
 			{
 				if (g.skill != null && g.xp > 0)
 				{
@@ -1190,7 +1190,7 @@ final class Summary
 		if (w.session)
 		{
 			Map<String, Long> openXp = new HashMap<>(closesOn);
-			for (ExperienceStatTracker.SkillGain g : build.plugin.sessionSkillXp())
+			for (ExperienceStatTracker.SkillGain g : build.live.sessionSkillXp())
 			{
 				if (g.skill == null || g.xp <= 0)
 				{
@@ -1317,7 +1317,7 @@ final class Summary
 
 	Stand stand(Baseline closing, boolean live)
 	{
-		Map<String, long[]> sheet = live ? build.plugin.skillSheet() : Collections.emptyMap();
+		Map<String, long[]> sheet = live ? build.live.skillSheet() : Collections.emptyMap();
 		List<Skill> order = Sources.skillOrder();
 		List<String> keys = new ArrayList<>();
 		for (Skill sk : order)

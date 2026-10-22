@@ -110,7 +110,7 @@ public class AuditCrawlTest
 				beforeBaseline = true;
 			}
 			final ChroniclePanel[] hold = new ChroniclePanel[1];
-			SwingUtilities.invokeAndWait(() -> hold[0] = new ChroniclePanel(stub));
+			SwingUtilities.invokeAndWait(() -> hold[0] = stub.panel());
 			panel = hold[0];
 			fields.clear();
 			PanelPreviewTest.regatherHistory(panel);

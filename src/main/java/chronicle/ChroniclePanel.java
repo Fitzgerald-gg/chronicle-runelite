@@ -19,6 +19,7 @@ import chronicle.counters.ExperienceStatTracker;
 import chronicle.counters.StatKeys;
 import chronicle.panel.HistoryProgress;
 import chronicle.panel.StatRegistry;
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -66,6 +67,7 @@ import java.util.AbstractMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -80,6 +82,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
@@ -121,6 +124,7 @@ import javax.swing.plaf.basic.BasicScrollBarUI;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Skill;
 import net.runelite.api.SpriteID;
+import net.runelite.client.game.SkillIconManager;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.hiscore.HiscoreSkill;
 import net.runelite.client.ui.ColorScheme;
@@ -206,7 +210,13 @@ class ChroniclePanel extends PluginPanel
 		SUBS.put(Tab.TRACKERS, new String[0]);
 	}
 
-	private final ChroniclePlugin plugin;
+	private final LocalStore store;
+	private final Live live;
+	private final ScheduledExecutorService executor;
+	private final Gson gson;
+	private final SpriteManager sprites;
+	private final SkillIconManager skillIcons;
+	private final GrindBook grindBook;
 	private Build build;
 	private final ItemNames itemNames;
 	private final Search search;
@@ -246,13 +256,20 @@ class ChroniclePanel extends PluginPanel
 	private LocalDate histFrom;
 	private LocalDate histTo;
 
-	ChroniclePanel(ChroniclePlugin plugin)
+	ChroniclePanel(LocalStore store, Live live, ScheduledExecutorService executor, Gson gson,
+		SpriteManager sprites, SkillIconManager skillIcons)
 	{
 		super(false);
-		this.plugin = plugin;
+		this.store = store;
+		this.live = live;
+		this.executor = executor;
+		this.gson = gson;
+		this.sprites = sprites;
+		this.skillIcons = skillIcons;
+		grindBook = new GrindBook(gson);
 		freshBuild();
-		itemNames = new ItemNames(plugin, n -> build.names().named(n));
-		search = new Search(plugin);
+		itemNames = new ItemNames(store, gson, n -> build.names().named(n));
+		search = new Search(store);
 
 		watchForReturn();
 		setLayout(new BorderLayout());
@@ -692,7 +709,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		else if ("Collections".equals(label))
 		{
-			figure = plugin.clogFinished();
+			figure = live.clogFinished();
 			int[] logStanding = clogStanding();
 			hover = tip("Collection log",
 				"Obtained", fmt(figure),
@@ -758,7 +775,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel p = column();
 		build.kills.forgetWindow();
-		List<Kills.Boss> roster = Kills.bossRoster(plugin.gson());
+		List<Kills.Boss> roster = Kills.bossRoster(gson);
 		if (roster.isEmpty())
 		{
 			return noted(p, "The boss roster did not load.");
@@ -867,7 +884,7 @@ class ChroniclePanel extends PluginPanel
 			lines.add("Average kill");
 			lines.add(pb(timed[1] / timed[0]) + " · " + fmt((long) timed[0]) + " timed");
 		}
-		long here = build.kills.minutesAt(b.name, wholeRecord() ? plugin.lifetimeCounters() : build.periodCounters());
+		long here = build.kills.minutesAt(b.name, wholeRecord() ? build.lifetime() : build.periodCounters());
 		if (here > 0 && build.kills.minutesCoverPeriod())
 		{
 			lines.add("Time here");
@@ -898,7 +915,7 @@ class ChroniclePanel extends PluginPanel
 
 	private String paidFigure(SourceRow r)
 	{
-		return qtyGp(LocalStore.tallyOf(plugin.sourceItems(r.name))[0], r.value);
+		return qtyGp(LocalStore.tallyOf(store.sourceItems(r.name))[0], r.value);
 	}
 
 	private Color accent()
@@ -1103,8 +1120,8 @@ class ChroniclePanel extends PluginPanel
 		freshBuild();
 		resourcesDropped = 0;
 		artWaiting.clear();
-		paintBand(plugin.journalWarning(), plugin.captureWarning(),
-			plugin.captureWarningWhy());
+		paintBand(store.journalWarning(), live.captureWarning(),
+			live.captureWarningWhy());
 		if (aboveBoard != null)
 		{
 			display.remove(aboveBoard);
@@ -1231,7 +1248,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			band.addMouseListener(clicker(() ->
 			{
-				plugin.turnOnMissingCapture();
+				live.turnOnMissingCapture();
 				update();
 			}));
 		}
@@ -1280,7 +1297,7 @@ class ChroniclePanel extends PluginPanel
 
 	private void addXpBySkill(JPanel strip)
 	{
-		List<ExperienceStatTracker.SkillGain> gains = plugin.sessionSkillXp();
+		List<ExperienceStatTracker.SkillGain> gains = live.sessionSkillXp();
 		if (gains.isEmpty())
 		{
 			strip.add(ghostRow("no skill breakdown yet", ""));
@@ -1299,25 +1316,25 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildHome()
 	{
 		JPanel p = column();
-		String stalled = plugin.journalWarning();
+		String stalled = store.journalWarning();
 		if (stalled != null)
 		{
 			spaced(p, note(stalled));
 		}
 
-		ChronicleEventCapture.SlayerView task = plugin.slayerView();
-		if (task != null && plugin.slayerSeenThisSession())
+		ChronicleEventCapture.SlayerView task = live.slayerView();
+		if (task != null && live.slayerSeenThisSession())
 		{
 			addTaskCard(p, task, "Slayer task", ACCENT_SESSION);
 		}
 
-		long began = plugin.sessionStart();
-		long ran = plugin.sessionElapsedMinutes();
+		long began = live.sessionStart();
+		long ran = live.sessionElapsedMinutes();
 		JPanel strip = began > 0 && ran > 0
 			? card("This session", "since " + CLOCK.format(Instant.ofEpochMilli(began))
 				+ " · " + hoursMinutes(ran))
 			: card("This session");
-		Map<String, Integer> sess = plugin.sessionView();
+		Map<String, Integer> sess = live.sessionView();
 		int mounted = 0;
 		Set<String> shownKeys = new HashSet<>();
 		for (String key : HOME_PINNED)
@@ -1360,35 +1377,35 @@ class ChroniclePanel extends PluginPanel
 				mounted++;
 			}
 		}
-		if (plugin.sessionLoots() > 0)
+		if (store.sessionLoots() > 0)
 		{
 			strip.add(row("Drops received",
-				plugin.sessionLoots() + " · " + gps(plugin.sessionLootValue()),
+				store.sessionLoots() + " · " + gps(store.sessionLootValue()),
 				ACCENT_SESSION));
 			mounted++;
-			if (plugin.sessionUntakenKills() > 0)
+			if (store.sessionUntakenKills() > 0)
 			{
 				strip.add(row("Drops taken",
-					fmt(Math.max(0, plugin.sessionLoots() - plugin.sessionUntakenKills())),
+					fmt(Math.max(0, store.sessionLoots() - store.sessionUntakenKills())),
 					ACCENT_SESSION));
 				mounted++;
 			}
 		}
-		long[] untaken = plugin.sessionUntakenTally();
+		long[] untaken = store.sessionUntakenTally();
 		if (untaken[0] > 0)
 		{
 			strip.add(row("Left behind", qtyGp(untaken[0], untaken[1])));
 			mounted++;
 		}
 		mounted += addSittingFeats(strip);
-		mounted += addSessionMovers(strip, plugin.sessionDisplayCounters(), shownKeys);
+		mounted += addSessionMovers(strip, sessionDisplayCounters(), shownKeys);
 		if (mounted == 0)
 		{
 			strip.add(row("A fresh page", ""));
 		}
 		spaced(p, strip);
 
-		List<LocalStore.RecentDrop> recent = plugin.recentDrops();
+		List<LocalStore.RecentDrop> recent = store.recentDrops();
 		if (!recent.isEmpty())
 		{
 			JPanel card = card("Recent drops");
@@ -1436,7 +1453,7 @@ class ChroniclePanel extends PluginPanel
 
 	private int addSittingFeats(JPanel strip)
 	{
-		long since = plugin.sessionStart();
+		long since = live.sessionStart();
 		if (since <= 0)
 		{
 			return 0;
@@ -1738,7 +1755,7 @@ class ChroniclePanel extends PluginPanel
 		if (canAskOnTask && onTaskOnly)
 		{
 			long[] w = window().ms();
-			List<BagItem> taskBag = plugin.tasks(w[0], w[1], null, wholeRecord()).loot();
+			List<BagItem> taskBag = store.tasks(w[0], w[1], null, wholeRecord()).loot();
 			if (taskBag.isEmpty())
 			{
 				return noted(p, window().phrase("No task closed"));
@@ -1805,7 +1822,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel buildLootByKind(JPanel p)
 	{
-		final List<BagItem> bag = plugin.allLoot();
+		final List<BagItem> bag = store.allLoot();
 		if (bag.isEmpty())
 		{
 			return noted(p, "Drops appear here as you play: every kill, priced as it lands.");
@@ -1881,7 +1898,7 @@ class ChroniclePanel extends PluginPanel
 
 	private JPanel buildLeftBehind(JPanel p)
 	{
-		List<UntakenRow> rows = plugin.untaken().sources;
+		List<UntakenRow> rows = store.untaken().sources;
 		rows.sort(Comparator.comparingLong((UntakenRow r) -> r.value).reversed());
 		long totalQty = 0;
 		long totalVal = 0;
@@ -1895,7 +1912,7 @@ class ChroniclePanel extends PluginPanel
 			return noted(p, "What you walk past gets counted here, priced at the "
 				+ "moment you declined it.");
 		}
-		List<UntakenRow> items = plugin.untaken().items;
+		List<UntakenRow> items = store.untaken().items;
 		items.sort(Comparator.comparingLong((UntakenRow r) -> r.value).reversed());
 		JPanel head = tallyCard("Left behind", "Items", fmt(totalQty), ACCENT_RED, totalVal);
 		head.add(row(dropsByKind ? "Distinct items" : "Sources",
@@ -1927,6 +1944,52 @@ class ChroniclePanel extends PluginPanel
 	private int detailTask = -1;
 	private String leftBehindSource;
 	private String leftBehindItem;
+
+	private void fetchSlayerJourney(Consumer<SlayerJourney> onDone)
+	{
+		if (!live.ready())
+		{
+			onDone.accept(null);
+			return;
+		}
+		executor.submit(() -> onDone.accept(store.slayerJourney()));
+	}
+
+	private void fetchGrinds(Consumer<List<GrindBook.GrindRow>> onDone)
+	{
+		if (!live.ready())
+		{
+			onDone.accept(null);
+			return;
+		}
+		final JsonObject clog = store.clogSnapshot();
+		final List<SourceRow> sources = store.dropSources();
+		executor.submit(() -> onDone.accept(grindBook.grinds(clog, sources)));
+	}
+
+	private Map<String, GrindBook.PetChase> petChases(Collection<String> pets)
+	{
+		if (!live.ready())
+		{
+			return Collections.emptyMap();
+		}
+		return grindBook.petChases(store.clogSnapshot(), store.dropSources(), store.trackersSnapshot(),
+			store.skillSheet(), store.achievements(), pets);
+	}
+
+	private Map<String, Integer> sessionDisplayCounters()
+	{
+		Map<String, Integer> out = new HashMap<>(live.sessionView());
+		for (String key : LocalStore.MAX_KEYS)
+		{
+			Integer val = out.get(key);
+			if (val != null && val <= store.trackerBase(key))
+			{
+				out.remove(key);
+			}
+		}
+		return out;
+	}
 
 	void resetAccountCaches()
 	{
@@ -1980,7 +2043,7 @@ class ChroniclePanel extends PluginPanel
 
 	private void openCurrentTask()
 	{
-		ChronicleEventCapture.SlayerView live = plugin.slayerView();
+		ChronicleEventCapture.SlayerView live = this.live.slayerView();
 		if (live == null)
 		{
 			return;
@@ -1988,7 +2051,7 @@ class ChroniclePanel extends PluginPanel
 		SlayerJourney journey = journeyCache;
 		if (journey == null)
 		{
-			plugin.fetchSlayerJourney(read -> SwingUtilities.invokeLater(() ->
+			fetchSlayerJourney(read -> SwingUtilities.invokeLater(() ->
 			{
 				if (read != null)
 				{
@@ -2037,7 +2100,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildSlayer()
 	{
 		JPanel p = column();
-		ChronicleEventCapture.SlayerView task = plugin.slayerView();
+		ChronicleEventCapture.SlayerView task = live.slayerView();
 		if (task != null)
 		{
 			addTaskCard(p, task, "Current task", accent());
@@ -2058,7 +2121,7 @@ class ChroniclePanel extends PluginPanel
 		if (!journeyFetching)
 		{
 			journeyFetching = true;
-			plugin.fetchSlayerJourney(j -> SwingUtilities.invokeLater(() ->
+			fetchSlayerJourney(j -> SwingUtilities.invokeLater(() ->
 			{
 				journeyFetching = false;
 				if (j == null)
@@ -2096,7 +2159,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel addOnTaskLoot(JPanel p)
 	{
 		long[] ms = window().ms();
-		final LocalStore.Tasks tasks = plugin.tasks(ms[0], ms[1], lootTask, wholeRecord());
+		final LocalStore.Tasks tasks = store.tasks(ms[0], ms[1], lootTask, wholeRecord());
 		final List<BagItem> bag = tasks.loot();
 		if (bag.isEmpty())
 		{
@@ -2237,7 +2300,7 @@ class ChroniclePanel extends PluginPanel
 		slot.setHorizontalAlignment(JLabel.CENTER);
 		slot.setToolTipText(named(name, qty));
 		link(slot, () -> openItem(name));
-		plugin.items().getImage(itemId, (int) Math.min(Integer.MAX_VALUE, qty), qty > 1).addTo(slot);
+		store.items().getImage(itemId, (int) Math.min(Integer.MAX_VALUE, qty), qty > 1).addTo(slot);
 		return slot;
 	}
 
@@ -2468,7 +2531,7 @@ class ChroniclePanel extends PluginPanel
 		addTaskAgainstRecord(head, j, index, t);
 		spaced(p, head);
 
-		LocalStore.TaskView seg = plugin.allTasks().at(index);
+		LocalStore.TaskView seg = store.allTasks().at(index);
 		List<UntakenRow> monsters = seg.fought();
 		if (!monsters.isEmpty())
 		{
@@ -2512,7 +2575,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildLeftBehindDetail()
 	{
 		JPanel p = column();
-		LocalStore.Untaken untaken = plugin.untaken();
+		LocalStore.Untaken untaken = store.untaken();
 		p.add(backRow("< Back", "", () -> showLeftBehind(null, null)));
 		p.add(vgap(4));
 
@@ -2677,7 +2740,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel p = column();
 		spaced(p, backRow(() -> copyPage(this::buildInfo)), 4);
-		Map<String, Long> f = plugin.journalFacts();
+		Map<String, Long> f = store.journalFacts();
 
 		JPanel loot = facts(card("Loot"), f, accent(), "Sources", "sources",
 			"Item rows", "itemRows", "Loot events", "lootEvents");
@@ -3144,7 +3207,7 @@ class ChroniclePanel extends PluginPanel
 		final List<Object[]> srcs = new ArrayList<>();
 		for (SourceRow r : build.sources())
 		{
-			for (BagItem b : plugin.sourceItems(r.name))
+			for (BagItem b : store.sourceItems(r.name))
 			{
 				if (b.name.equalsIgnoreCase(name))
 				{
@@ -3194,7 +3257,7 @@ class ChroniclePanel extends PluginPanel
 			JLabel slot = new JLabel();
 			slot.setPreferredSize(new Dimension(36, 32));
 			slot.setAlignmentX(Component.LEFT_ALIGNMENT);
-			AsyncBufferedImage img = plugin.items().getImage(itemId,
+			AsyncBufferedImage img = store.items().getImage(itemId,
 				(int) Math.min(Integer.MAX_VALUE, Math.max(1, qty)), qty > 1);
 			img.addTo(slot);
 			head.add(slot);
@@ -3202,7 +3265,7 @@ class ChroniclePanel extends PluginPanel
 		final boolean hasTask = build.taskItems().containsKey(properName(name));
 		long[] tw = window().ms();
 		long[] mine = inWindow == null ? build.taskItems().get(properName(name))
-			: plugin.tasks(tw[0], tw[1], null, true).items().getOrDefault(properName(name), new long[2]);
+			: store.tasks(tw[0], tw[1], null, true).items().getOrDefault(properName(name), new long[2]);
 		if (hasTask && onTaskOnly)
 		{
 			head.add(row("Obtained on task", "×" + fmt(mine[0]), accent()));
@@ -3318,7 +3381,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel byTaskRows(JPanel p, String name)
 	{
 		long[] w = window().ms();
-		List<LocalStore.Row> split = plugin.tasks(w[0], w[1], null, true).byTask(name);
+		List<LocalStore.Row> split = store.tasks(w[0], w[1], null, true).byTask(name);
 		if (split.isEmpty())
 		{
 			return noted(p, window().phrase("No task paid this"));
@@ -3364,7 +3427,7 @@ class ChroniclePanel extends PluginPanel
 	private void addAssignments(JPanel p, String npc)
 	{
 		long[] w = window().ms();
-		List<LocalStore.Assignment> was = plugin.tasks(w[0], w[1], null, true).assignments(npc);
+		List<LocalStore.Assignment> was = store.tasks(w[0], w[1], null, true).assignments(npc);
 		if (was.isEmpty())
 		{
 			return;
@@ -3381,7 +3444,7 @@ class ChroniclePanel extends PluginPanel
 
 	private void addFloorRow(JPanel head, String name)
 	{
-		for (UntakenRow u : plugin.untaken().sources)
+		for (UntakenRow u : store.untaken().sources)
 		{
 			if (u.qty > 0 && u.name.equalsIgnoreCase(name))
 			{
@@ -3408,7 +3471,7 @@ class ChroniclePanel extends PluginPanel
 		LocalStore.Row row = win == null ? null : win.source(sr != null ? sr.name : name, sr != null);
 		long[] inWindow = win == null ? null : row == null ? new long[2] : new long[]{row.qty, row.value};
 		String own = row != null ? row.name : sr != null ? sr.name : name;
-		final List<BagItem> bag = win == null ? plugin.sourceItems(own)
+		final List<BagItem> bag = win == null ? store.sourceItems(own)
 			: new ArrayList<>(win.bySource.getOrDefault(own, new ArrayList<>()));
 		bag.sort(Comparator.comparingLong((BagItem b) -> b.value).reversed());
 		final long other = inWindow == null ? 0 : inWindow[1] - LocalStore.tallyOf(bag)[1];
@@ -3457,7 +3520,7 @@ class ChroniclePanel extends PluginPanel
 				head.add(row("Average kill", pb(timed[1] / timed[0]) + " · "
 					+ fmt((long) timed[0]) + " timed"));
 			}
-			long here = build.kills.minutesAt(sr.name, inWindow == null ? plugin.lifetimeCounters() : build.periodCounters());
+			long here = build.kills.minutesAt(sr.name, inWindow == null ? build.lifetime() : build.periodCounters());
 			if (here > 0 && build.kills.minutesCoverPeriod())
 			{
 				boolean rate = killed && shown > 0 && here >= 30;
@@ -3472,7 +3535,7 @@ class ChroniclePanel extends PluginPanel
 			if (grindsCache == null && !grindsFetching && !drawingCopy)
 			{
 				grindsFetching = true;
-				plugin.fetchGrinds(rows2 -> SwingUtilities.invokeLater(() ->
+				fetchGrinds(rows2 -> SwingUtilities.invokeLater(() ->
 				{
 					grindsFetching = false;
 					if (rows2 == null)
@@ -3584,7 +3647,7 @@ class ChroniclePanel extends PluginPanel
 			return logInWindow(p);
 		}
 		int[] standing = clogStanding();
-		int fin = plugin.clogFinished();
+		int fin = live.clogFinished();
 		JPanel head = card("Collection log");
 		if (standing != null)
 		{
@@ -3653,7 +3716,7 @@ class ChroniclePanel extends PluginPanel
 				Map<String, LocalStore.PetRow> known = petPage
 					? petsByName() : Collections.emptyMap();
 				Map<String, GrindBook.PetChase> chases = petPage
-					? plugin.petChases(slots) : Collections.emptyMap();
+					? petChases(slots) : Collections.emptyMap();
 				List<List<JPanel>> detail = new ArrayList<>();
 				boolean anyDetail = false;
 				for (int i = 0; i < slots.size(); i++)
@@ -4097,7 +4160,7 @@ class ChroniclePanel extends PluginPanel
 	private Map<String, LocalStore.PetRow> petsByName()
 	{
 		Map<String, LocalStore.PetRow> out = new LinkedHashMap<>();
-		for (LocalStore.PetRow r : plugin.pets())
+		for (LocalStore.PetRow r : store.pets())
 		{
 			out.putIfAbsent(low(r.name), r);
 		}
@@ -4106,8 +4169,8 @@ class ChroniclePanel extends PluginPanel
 
 	private int[] clogStanding()
 	{
-		int avail = plugin.clogAvailable();
-		return avail > 0 ? new int[]{plugin.clogFinished(), avail} : null;
+		int avail = live.clogAvailable();
+		return avail > 0 ? new int[]{live.clogFinished(), avail} : null;
 	}
 
 	private void addPaceLine(JPanel p, String section)
@@ -4115,7 +4178,7 @@ class ChroniclePanel extends PluginPanel
 		PaceBook.Pace pace;
 		try
 		{
-			pace = plugin.pace(section);
+			pace = live.pace(section);
 		}
 		catch (RuntimeException e)
 		{
@@ -4213,7 +4276,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildAllTrackers()
 	{
 		JPanel p = backPage();
-		consumVals = plugin.consumableValues();
+		consumVals = store.consumableValues();
 		Map<String, Long> counters = build.countersForPeriod();
 		if (counters == null)
 		{
@@ -4314,7 +4377,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildStats()
 	{
 		JPanel p = column();
-		consumVals = plugin.consumableValues();
+		consumVals = store.consumableValues();
 		String[] families = tab == Tab.RECORD
 			? new String[]{"Ledger & Roads", "Living"}
 			: StatRegistry.FAMILIES;
@@ -4667,8 +4730,8 @@ class ChroniclePanel extends PluginPanel
 			@Override
 			protected HistoryData doInBackground()
 			{
-				return new HistoryData(plugin.historyBaselines(),
-					newestTs(plugin.feedNewest(1)), plugin.slayerJourney(), LocalDate.now());
+				return new HistoryData(live.historyBaselines(),
+					newestTs(store.feedNewest(1)), (live.ready() ? store.slayerJourney() : null), LocalDate.now());
 			}
 
 			@Override
@@ -4969,7 +5032,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		wear(label, "item:" + itemId, ICON_W, ICON_H, done ->
 		{
-			AsyncBufferedImage img = plugin.items().getImage(itemId, 1, false);
+			AsyncBufferedImage img = store.items().getImage(itemId, 1, false);
 			if (img != null)
 			{
 				img.onLoaded(() -> done.accept(img));
@@ -5115,7 +5178,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel combatLevelTile(Map<String, Long> gain, HistoryLog.Levels opened)
 	{
 		JPanel cell = levelTile("Combat");
-		int cb = plugin.combatLevel();
+		int cb = store.combatLevel();
 		Integer was = HistoryLog.combat(opened);
 		boolean climbed = !wholeRecord() && was != null && cb > was;
 		JLabel fig = new JLabel(cb > 0 ? (climbed ? climb(was, cb) : fmt(cb)) : "-",
@@ -5124,7 +5187,7 @@ class ChroniclePanel extends PluginPanel
 		fig.setForeground(cb > 0 && (wholeRecord() || combatSkillsMoved(gain))
 			? TILE_LIT : dim());
 		cell.add(fig, BorderLayout.EAST);
-		Map<String, Long> c = plugin.lifetimeCounters();
+		Map<String, Long> c = build.lifetime();
 		long[] ca = build.standings.combat();
 		cell.setToolTipText(tip("Combat",
 			"Achievement points", ca[1] > 0 ? fmt(ca[0]) + " / " + fmt(ca[1]) : fmt(ca[0]),
@@ -5606,7 +5669,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			try
 			{
-				return plugin.skillIcons().getSkillImage(s, true);
+				return skillIcons.getSkillImage(s, true);
 			}
 			catch (Throwable e)
 			{
@@ -5628,7 +5691,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		wear(label, "sprite:" + spriteId, w, h, done ->
 		{
-			SpriteManager sm = plugin.sprites();
+			SpriteManager sm = sprites;
 			if (sm != null)
 			{
 				sm.getSpriteAsync(spriteId, 0, done);
@@ -5755,7 +5818,7 @@ class ChroniclePanel extends PluginPanel
 		JPopupMenu menu = new JPopupMenu();
 		menuItem(menu, "Every task", lootTask == null, () -> pickTask(null));
 		menu.addSeparator();
-		for (String task : plugin.allTasks().names())
+		for (String task : store.allTasks().names())
 		{
 			menuItem(menu, task, task.equals(lootTask), () -> pickTask(task));
 		}
@@ -5783,13 +5846,13 @@ class ChroniclePanel extends PluginPanel
 
 	private void freshBuild()
 	{
-		build = new Build(plugin, this::window, () -> historySpine, () -> historyJourney,
+		build = new Build(store, live, gson, this::window, () -> historySpine, () -> historyJourney,
 			this::gatherHistory);
 	}
 
 	private Period window()
 	{
-		Period w = Period.of(histGranularity, histCursor, histFrom, histTo, plugin.sessionStart(),
+		Period w = Period.of(histGranularity, histCursor, histFrom, histTo, live.sessionStart(),
 			historySpine);
 		periodFrom = w.start;
 		periodTo = w.end;
@@ -5825,14 +5888,14 @@ class ChroniclePanel extends PluginPanel
 
 	private Long liveXp(String key)
 	{
-		long[] cur = plugin.skillSheet().get(key);
+		long[] cur = live.skillSheet().get(key);
 		return cur != null && cur.length > 1 && cur[1] > 0 ? cur[1] : null;
 	}
 
 	private JPanel buildSkillDetail(String craft)
 	{
 		JPanel p = backPage();
-		consumVals = plugin.consumableValues();
+		consumVals = store.consumableValues();
 		String key = low(craft);
 
 		JPanel head = card(craft);
@@ -5858,7 +5921,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			head.add(row("Level", "-"));
 		}
-		long minutes = (wholeRecord() ? plugin.lifetimeCounters() : build.periodCounters())
+		long minutes = (wholeRecord() ? build.lifetime() : build.periodCounters())
 			.getOrDefault(StatKeys.timeKey(craft), 0L);
 		if (minutes > 0 && build.kills.minutesCoverPeriod())
 		{
@@ -6021,7 +6084,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		JPanel p = column();
 		if (historySpine == null || !LocalDate.now().equals(historyDay)
-			|| newestTs(plugin.feedNewest(1)) != historyFeedTs)
+			|| newestTs(store.feedNewest(1)) != historyFeedTs)
 		{
 			gatherHistory();
 		}
@@ -6341,7 +6404,7 @@ class ChroniclePanel extends PluginPanel
 			});
 		}
 
-		Map<String, Long> counters = wholeRecord() ? build.withLedgerSpend(plugin.lifetimeCounters()) : build.periodCounters();
+		Map<String, Long> counters = wholeRecord() ? build.withLedgerSpend(build.lifetime()) : build.periodCounters();
 		Runnable toLiving = () ->
 		{
 			statsFamily = "Living";
@@ -6685,11 +6748,11 @@ class ChroniclePanel extends PluginPanel
 
 	private void addFrontispiece(JPanel p)
 	{
-		String rsn = plugin.displayRsn();
+		String rsn = live.displayRsn();
 		JPanel plate = card(rsn != null && !rsn.isEmpty()
 			? "The journal of " + rsn : "The journal");
 
-		long since = plugin.keptSince();
+		long since = store.keptSince();
 		TreeMap<LocalDate, Baseline> spine = historySpine;
 		if (since > 0)
 		{
@@ -6703,16 +6766,16 @@ class ChroniclePanel extends PluginPanel
 			link(days, this::openCalendar);
 			plate.add(days);
 		}
-		Map<String, long[]> sheet = plugin.skillSheet();
+		Map<String, long[]> sheet = live.skillSheet();
 		long[] overall = sheet.get("overall");
-		int combat = plugin.combatLevel();
+		int combat = store.combatLevel();
 		if (overall != null && overall[0] > 0)
 		{
 			plate.add(row("Total level", fmt(overall[0])
 				+ (combat > 0 ? " · combat " + combat : "")));
 		}
 		int[] logStanding = clogStanding();
-		int fin = plugin.clogFinished();
+		int fin = live.clogFinished();
 		if (logStanding != null)
 		{
 			plate.add(row("Collection log",
@@ -6753,7 +6816,7 @@ class ChroniclePanel extends PluginPanel
 				}
 			}
 		}
-		List<JsonObject> recent = plugin.feedNewest(2);
+		List<JsonObject> recent = store.feedNewest(2);
 		if (recent.size() == 2)
 		{
 			long days = (safeLong(recent.get(0).get("ts")) - safeLong(recent.get(1).get("ts"))) / 86_400_000L;
@@ -6773,7 +6836,7 @@ class ChroniclePanel extends PluginPanel
 			"Chronicle journal (*.json)", "json"));
 		if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
 		{
-			plugin.actionImport(fc.getSelectedFile());
+			live.actionImport(fc.getSelectedFile());
 		}
 	}
 
@@ -6885,7 +6948,7 @@ class ChroniclePanel extends PluginPanel
 			return;
 		}
 		journeyFetching = true;
-		plugin.fetchSlayerJourney(j -> SwingUtilities.invokeLater(() ->
+		fetchSlayerJourney(j -> SwingUtilities.invokeLater(() ->
 		{
 			journeyFetching = false;
 			if (j == null)
@@ -6909,7 +6972,7 @@ class ChroniclePanel extends PluginPanel
 		searchFirst = null;
 
 		List<Hit> go = new ArrayList<>();
-		Map<String, long[]> sheet = plugin.skillSheet();
+		Map<String, long[]> sheet = live.skillSheet();
 		for (Skill sk : Sources.skillOrder())
 		{
 			String key = low(sk.name());
@@ -6922,8 +6985,8 @@ class ChroniclePanel extends PluginPanel
 		Standings.Quests quests = build.standings.quests();
 		goTo(go, ql, "Quests", quests.known > 0 ? fmt(quests.done.size()) + " / " + fmt(quests.known) : "",
 			() -> openSheetPage("quests"), 1, "quest");
-		goTo(go, ql, "Collection log", plugin.clogAvailable() > 0
-			? fmt(plugin.clogFinished()) + " / " + fmt(plugin.clogAvailable()) : "",
+		goTo(go, ql, "Collection log", live.clogAvailable() > 0
+			? fmt(live.clogFinished()) + " / " + fmt(live.clogAvailable()) : "",
 			() -> openSheetPage("log"), 1, "clog", "log");
 		goTo(go, ql, "Achievement diaries", "", () -> openSheetPage("diaries"), 1,
 			"diary", "diaries");
@@ -6971,7 +7034,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			ledgerRows.put(r.name, r);
 		}
-		for (Kills.Boss b : Kills.bossRoster(plugin.gson()))
+		for (Kills.Boss b : Kills.bossRoster(gson))
 		{
 			int sc = Search.matchScore(ql, b.name);
 			if (sc < 0 || !kinds.add(kindOf(b.name)))
@@ -7055,7 +7118,7 @@ class ChroniclePanel extends PluginPanel
 		Map<String, List<String>> itemSrcs = new LinkedHashMap<>();
 		for (SourceRow src : build.sources())
 		{
-			for (BagItem b : plugin.sourceItems(src.name))
+			for (BagItem b : store.sourceItems(src.name))
 			{
 				if (Search.matchScore(ql, b.name) < 0)
 				{
@@ -7078,7 +7141,7 @@ class ChroniclePanel extends PluginPanel
 			items.add(new Hit(itm, "×" + fmt(e.getValue()[0]), null, tip, () -> openItem(itm),
 				Search.matchScore(ql, itm), e.getValue()[1]));
 		}
-		for (UntakenRow u : plugin.untaken().items)
+		for (UntakenRow u : store.untaken().items)
 		{
 			if (itemAgg.containsKey(u.name) || Search.matchScore(ql, u.name) < 0)
 			{
@@ -7204,7 +7267,7 @@ class ChroniclePanel extends PluginPanel
 		}
 
 		List<Hit> stats = new ArrayList<>();
-		for (Entry<String, Long> e : build.withLedgerSpend(plugin.lifetimeCounters()).entrySet())
+		for (Entry<String, Long> e : build.withLedgerSpend(build.lifetime()).entrySet())
 		{
 			if (e.getValue() == 0 || StatRegistry.hidden(e.getKey()))
 			{

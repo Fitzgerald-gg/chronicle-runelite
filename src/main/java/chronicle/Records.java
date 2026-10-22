@@ -164,7 +164,7 @@ final class Records
 					+ dated(busy[1][1]) : ""));
 		}
 
-		long hit = build.plugin.lifetimeCounters().getOrDefault("highestHit", 0L);
+		long hit = build.lifetime().getOrDefault("highestHit", 0L);
 		if (hit > 0)
 		{
 			add("Highest hit", fmt(hit), UNDATED, null);

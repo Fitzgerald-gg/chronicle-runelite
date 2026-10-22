@@ -63,7 +63,7 @@ final class Sources
 		{
 			return SKILLING;
 		}
-		for (Entry<String, Map<String, List<String>>> tab : ClogBook.taxonomy(build.plugin.gson()).entrySet())
+		for (Entry<String, Map<String, List<String>>> tab : ClogBook.taxonomy(build.gson).entrySet())
 		{
 			if (!tab.getValue().containsKey(name))
 			{
@@ -89,7 +89,7 @@ final class Sources
 		if (skilled == null)
 		{
 			skilled = new LinkedHashMap<>();
-			for (String key : build.plugin.lifetimeCounters().keySet())
+			for (String key : build.lifetime().keySet())
 			{
 				for (String[] verb : SKILLED)
 				{

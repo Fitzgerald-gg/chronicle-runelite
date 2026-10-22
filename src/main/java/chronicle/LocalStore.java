@@ -2831,6 +2831,35 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return out;
 	}
 
+	Map<String, Long> killCounts()
+	{
+		return reconciledKills(clogSnapshot(), dropSources(), chatKillCounts(), anchoredKills());
+	}
+
+	long keptSince()
+	{
+		long earliest = Long.MAX_VALUE;
+		for (SourceRow r : dropSources())
+		{
+			if (r.firstMs > 0)
+			{
+				earliest = Math.min(earliest, r.firstMs);
+			}
+		}
+		for (JsonObject e : feedNewest(4000))
+		{
+			if (e.has("ts"))
+			{
+				long ts = e.get("ts").getAsLong();
+				if (ts > 0)
+				{
+					earliest = Math.min(earliest, ts);
+				}
+			}
+		}
+		return earliest == Long.MAX_VALUE ? 0 : earliest;
+	}
+
 	Map<String, Long> spineCounters()
 	{
 		Map<String, Long> out = trackersSnapshot();

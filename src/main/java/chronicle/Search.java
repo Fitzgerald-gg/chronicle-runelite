@@ -51,7 +51,7 @@ final class Search
 		final long at;
 	}
 
-	private final ChroniclePlugin plugin;
+	private final LocalStore store;
 	private List<Line> feed;
 	private long feedTs = -1;
 	private Object feedSpine;
@@ -64,11 +64,11 @@ final class Search
 
 	List<Line> feed(Build build)
 	{
-		long newest = newestTs(plugin.feedNewest(1));
+		long newest = newestTs(store.feedNewest(1));
 		if (feed == null || newest != feedTs || build.spine() != feedSpine)
 		{
 			List<Line> out = new ArrayList<>();
-			List<JsonObject> all = new ArrayList<>(plugin.feedNewest(JOURNAL_DEEP));
+			List<JsonObject> all = new ArrayList<>(store.feedNewest(JOURNAL_DEEP));
 			all.addAll(build.feed.milestones());
 			for (JsonObject e : all)
 			{
@@ -95,12 +95,12 @@ final class Search
 		for (SourceRow r : build.sources())
 		{
 			names.add(r.name);
-			for (BagItem b : build.plugin.sourceItems(r.name))
+			for (BagItem b : build.store.sourceItems(r.name))
 			{
 				names.add(b.name);
 			}
 		}
-		for (Map<String, List<String>> tab : ClogBook.taxonomy(build.plugin.gson()).values())
+		for (Map<String, List<String>> tab : ClogBook.taxonomy(build.gson).values())
 		{
 			names.addAll(tab.keySet());
 			for (List<String> slots : tab.values())
@@ -108,7 +108,7 @@ final class Search
 				names.addAll(slots);
 			}
 		}
-		for (Kills.Boss b : Kills.bossRoster(build.plugin.gson()))
+		for (Kills.Boss b : Kills.bossRoster(build.gson))
 		{
 			names.add(b.name);
 		}

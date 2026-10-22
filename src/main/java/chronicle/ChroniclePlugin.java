@@ -22,7 +22,6 @@ import java.nio.file.Files;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -35,7 +34,6 @@ import java.util.TreeMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
@@ -54,7 +52,6 @@ import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
-import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.SkillIconManager;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.plugins.Plugin;
@@ -77,7 +74,7 @@ import net.runelite.http.api.loottracker.LootRecordType;
 	tags = {"chronicle", "journal", "stats", "tracker", "loot", "slayer", "collection", "osrs"}
 )
 @PluginDependency(SlayerPlugin.class)
-public class ChroniclePlugin extends Plugin
+public class ChroniclePlugin extends Plugin implements Live
 {
 	static final String GROUP = ChronicleConfig.GROUP;
 	static final String KEY_TOKEN = "token";
@@ -161,8 +158,6 @@ public class ChroniclePlugin extends Plugin
 	private static final String KEY_PLAYTIME = "gamePlaytime";
 	private static final String KEY_PLAYTIME_AT = "gamePlaytimeAt";
 
-	private GrindBook grindBook;
-
 	private volatile String syncedRsn;
 	private volatile String localName;
 	private volatile String captureWarning;
@@ -186,8 +181,7 @@ public class ChroniclePlugin extends Plugin
 	protected void startUp()
 	{
 		historyLog = new HistoryLog(gson);
-		grindBook = new GrindBook(gson);
-		panel = new ChroniclePanel(this);
+		panel = new ChroniclePanel(localStore, this, executor, gson, sprites, skillIcons);
 		navButton = NavigationButton.builder()
 			.tooltip("Chronicle")
 			.icon(ImageUtil.loadImageResource(ChroniclePlugin.class, "plugin_nav_icon.png"))
@@ -304,7 +298,8 @@ public class ChroniclePlugin extends Plugin
 		}
 	}
 
-	void turnOnMissingCapture()
+	@Override
+	public void turnOnMissingCapture()
 	{
 		for (Class<? extends Plugin> type : List.of(SlayerPlugin.class, LootTrackerPlugin.class))
 		{
@@ -624,7 +619,8 @@ public class ChroniclePlugin extends Plugin
 		return out;
 	}
 
-	private boolean ready()
+	@Override
+	public boolean ready()
 	{
 		String rsn = localName;
 		return rsn != null && localStore.isReadyFor(rsn);
@@ -701,7 +697,7 @@ public class ChroniclePlugin extends Plugin
 		return skills;
 	}
 
-	void actionPushNow()
+	private void actionPushNow()
 	{
 		if (!cloudActive())
 		{
@@ -712,19 +708,13 @@ public class ChroniclePlugin extends Plugin
 		clientThread.invoke(this::pushCurrent);
 	}
 
-	boolean cloudActive()
+	private boolean cloudActive()
 	{
 		return config.cloudSync() && !config.serverBaseUrl().trim().isEmpty();
 	}
 
-	Map<String, Long> lifetimeCounters()
-	{
-		return localStore.isReadyFor(localName)
-			? localStore.lifetimeOf(sessionView())
-			: localStore.trackersSnapshot();
-	}
-
-	long gamePlaytimeMinutes()
+	@Override
+	public long gamePlaytimeMinutes()
 	{
 		return carriedForward(playtimeMinutes, playtimeAt, System.currentTimeMillis(),
 			sessionStartMs, sessionElapsedMinutes());
@@ -779,12 +769,14 @@ public class ChroniclePlugin extends Plugin
 		}
 	}
 
-	long sessionStart()
+	@Override
+	public long sessionStart()
 	{
 		return sessionStartMs;
 	}
 
-	long sessionElapsedMinutes()
+	@Override
+	public long sessionElapsedMinutes()
 	{
 		if (sessionStartMs <= 0 || client == null
 			|| client.getGameState() != GameState.LOGGED_IN)
@@ -794,73 +786,21 @@ public class ChroniclePlugin extends Plugin
 		return Math.max(0, (System.currentTimeMillis() - sessionStartMs) / 60_000L);
 	}
 
-	List<SkillGain> sessionSkillXp()
+	@Override
+	public List<SkillGain> sessionSkillXp()
 	{
 		ChronicleCounters c = counters;
 		return c == null ? Collections.emptyList() : c.sessionSkillXp();
 	}
 
-	List<LocalStore.SourceRow> dropSources()
-	{
-		return localStore.dropSources();
-	}
-
-	LocalStore.LootWindow loot(LocalDate from, LocalDate to)
-	{
-		return localStore.loot(from, to);
-	}
-
-	LocalStore.LootDays lootDays()
-	{
-		return localStore.lootDays();
-	}
-
-	List<LocalStore.BagItem> sourceItems(String source)
-	{
-		return localStore.sourceItems(source);
-	}
-
-	void fetchSlayerJourney(Consumer<LocalStore.SlayerJourney> onDone)
-	{
-		if (!ready())
-		{
-			onDone.accept(null);
-			return;
-		}
-		executor.submit(() -> onDone.accept(localStore.slayerJourney()));
-	}
-
-	LocalStore.SlayerJourney slayerJourney()
-	{
-		return ready() ? localStore.slayerJourney() : null;
-	}
-
-	List<JsonObject> feedNewest(int n)
-	{
-		return localStore.feedNewest(n);
-	}
-
-	int sessionLoots()
-	{
-		return localStore.sessionLoots();
-	}
-
-	long sessionLootValue()
-	{
-		return localStore.sessionLootValue();
-	}
-
-	List<LocalStore.RecentDrop> recentDrops()
-	{
-		return localStore.recentDrops();
-	}
-
-	ChronicleEventCapture.SlayerView slayerView()
+	@Override
+	public ChronicleEventCapture.SlayerView slayerView()
 	{
 		return eventCapture.slayerView();
 	}
 
-	TreeMap<LocalDate, HistoryLog.Baseline> historyBaselines()
+	@Override
+	public TreeMap<LocalDate, HistoryLog.Baseline> historyBaselines()
 	{
 		String rsn = localName;
 		if (rsn == null)
@@ -902,114 +842,27 @@ public class ChroniclePlugin extends Plugin
 		}
 	}
 
-	long keptSince()
-	{
-		long earliest = Long.MAX_VALUE;
-		for (LocalStore.SourceRow r : localStore.dropSources())
-		{
-			if (r.firstMs > 0)
-			{
-				earliest = Math.min(earliest, r.firstMs);
-			}
-		}
-		for (JsonObject e : localStore.feedNewest(4000))
-		{
-			if (e.has("ts"))
-			{
-				long ts = e.get("ts").getAsLong();
-				if (ts > 0)
-				{
-					earliest = Math.min(earliest, ts);
-				}
-			}
-		}
-		return earliest == Long.MAX_VALUE ? 0 : earliest;
-	}
-
-	JsonObject achievements()
-	{
-		return localStore == null ? new JsonObject() : localStore.achievements();
-	}
-
-	int combatLevel()
-	{
-		return localStore.combatLevel();
-	}
-
-	SkillIconManager skillIcons()
-	{
-		return skillIcons;
-	}
-
-	SpriteManager sprites()
-	{
-		return sprites;
-	}
-
-	Map<String, Long> killCounts()
-	{
-		return LocalStore.reconciledKills(localStore.clogSnapshot(),
-			localStore.dropSources(), localStore.chatKillCounts(),
-			localStore.anchoredKills());
-	}
-
-	Map<String, long[]> skillSheet()
+	@Override
+	public Map<String, long[]> skillSheet()
 	{
 		Map<String, long[]> now = liveSkills;
 		return now.isEmpty() ? localStore.skillSheet() : now;
 	}
 
-	JsonObject clogSnapshot()
-	{
-		return localStore.clogSnapshot();
-	}
-
-	int clogFinished()
+	@Override
+	public int clogFinished()
 	{
 		return Math.max(clogCapture.finishedCount(), localStore.clogFraction()[0]);
 	}
 
-	int clogAvailable()
+	@Override
+	public int clogAvailable()
 	{
 		return Math.max(clogCapture.availableCount(), localStore.clogFraction()[1]);
 	}
 
-	List<LocalStore.BagItem> allLoot()
-	{
-		return localStore.allLoot();
-	}
-
-	LocalStore.Tasks tasks(long fromMs, long toMs, String onlyTask, boolean includeOpen)
-	{
-		return localStore.tasks(fromMs, toMs, onlyTask, includeOpen);
-	}
-
-	LocalStore.Tasks allTasks()
-	{
-		return localStore.allTasks();
-	}
-
-	Map<String, Long> journalFacts()
-	{
-		return localStore.journalFacts();
-	}
-
-	Map<String, Long> chatKills()
-	{
-		return localStore.chatKillCounts();
-	}
-
-	Map<String, Long> anchoredKills()
-	{
-		return localStore.anchoredKills();
-	}
-
-	List<LocalStore.PetRow> pets()
-	{
-		return localStore.pets();
-	}
-
-	PaceBook.Pace pace(String skill)
+	@Override
+	public PaceBook.Pace pace(String skill)
 	{
 		TreeMap<LocalDate, HistoryLog.Baseline> spine = historyBaselines();
 		long xp = 0;
@@ -1023,40 +876,8 @@ public class ChroniclePlugin extends Plugin
 		return PaceBook.forSkill(spine, skill.toLowerCase(Locale.ROOT), xp, LocalDate.now());
 	}
 
-	LocalStore.Untaken untaken()
-	{
-		return localStore.untaken();
-	}
-
-	Map<String, Long> consumableValues()
-	{
-		return localStore.consumableValues();
-	}
-
-	void fetchGrinds(Consumer<List<GrindBook.GrindRow>> onDone)
-	{
-		if (!ready())
-		{
-			onDone.accept(null);
-			return;
-		}
-		final JsonObject clog = localStore.clogSnapshot();
-		final List<LocalStore.SourceRow> sources = localStore.dropSources();
-		executor.submit(() -> onDone.accept(grindBook.grinds(clog, sources)));
-	}
-
-	Map<String, GrindBook.PetChase> petChases(Collection<String> pets)
-	{
-		if (!ready())
-		{
-			return Collections.emptyMap();
-		}
-		return grindBook.petChases(localStore.clogSnapshot(), localStore.dropSources(),
-			localStore.trackersSnapshot(), localStore.skillSheet(),
-			localStore.achievements(), pets);
-	}
-
-	boolean slayerSeenThisSession()
+	@Override
+	public boolean slayerSeenThisSession()
 	{
 		return eventCapture.slayerSeenThisSession();
 	}
@@ -1106,7 +927,8 @@ public class ChroniclePlugin extends Plugin
 		return data;
 	}
 
-	JsonObject liveSessionLine()
+	@Override
+	public JsonObject liveSessionLine()
 	{
 		if (client == null || localStore == null)
 		{
@@ -1132,46 +954,14 @@ public class ChroniclePlugin extends Plugin
 		return line;
 	}
 
-	long[] sessionUntakenTally()
-	{
-		return localStore.sessionUntakenTally();
-	}
-
-	int sessionUntakenKills()
-	{
-		return localStore.sessionUntakenKills();
-	}
-
-	Map<String, Integer> sessionDisplayCounters()
-	{
-		Map<String, Integer> out = new HashMap<>(sessionView());
-		for (String key : LocalStore.MAX_KEYS)
-		{
-			Integer val = out.get(key);
-			if (val != null && val <= localStore.trackerBase(key))
-			{
-				out.remove(key);
-			}
-		}
-		return out;
-	}
-
-	Gson gson()
-	{
-		return gson;
-	}
-
-	ItemManager items()
-	{
-		return localStore.items();
-	}
-
-	String displayRsn()
+	@Override
+	public String displayRsn()
 	{
 		return cloudActive() && syncedRsn != null && !syncedRsn.isEmpty() ? syncedRsn : localName;
 	}
 
-	Map<String, Integer> sessionView()
+	@Override
+	public Map<String, Integer> sessionView()
 	{
 		Map<String, Integer> abs = statStore.snapshotAll();
 		Map<String, Integer> out = new HashMap<>(abs.size());
@@ -1371,7 +1161,7 @@ public class ChroniclePlugin extends Plugin
 			skills.put(e.getKey(), e.getValue()[1]);
 		}
 		final Map<String, Long> counters = localStore.spineCounters();
-		final Map<String, Long> kcs = killCounts();
+		final Map<String, Long> kcs = localStore.killCounts();
 		final HistoryLog.Adjust adj = localStore.takePendingAdjust();
 		executor.submit(() ->
 		{
@@ -1385,22 +1175,20 @@ public class ChroniclePlugin extends Plugin
 		});
 	}
 
-	String captureWarning()
+	@Override
+	public String captureWarning()
 	{
 		return captureWarning;
 	}
 
-	String captureWarningWhy()
+	@Override
+	public String captureWarningWhy()
 	{
 		return captureWarningWhy;
 	}
 
-	String journalWarning()
-	{
-		return localStore.journalWarning();
-	}
-
-	void actionImport(File file)
+	@Override
+	public void actionImport(File file)
 	{
 		final String rsn = localName;
 		if (!ready())

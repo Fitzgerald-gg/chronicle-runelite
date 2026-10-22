@@ -164,7 +164,7 @@ public class ExampleExportTest
 		dressWithRealIcons(stub);
 		giveItASitting(stub);
 		final ChroniclePanel[] holder = new ChroniclePanel[1];
-		edt(() -> holder[0] = new ChroniclePanel(stub));
+		edt(() -> holder[0] = stub.panel());
 		ChroniclePanel panel = holder[0];
 		awaitGather(panel);
 
@@ -298,7 +298,7 @@ public class ExampleExportTest
 
 		private String firstTaskName()
 		{
-			java.util.List<String> names = plugin.allTasks().names();
+			java.util.List<String> names = plugin.store.allTasks().names();
 			return names.isEmpty() ? null : names.get(0);
 		}
 
@@ -437,12 +437,12 @@ public class ExampleExportTest
 
 			Map<String, String> sources = new LinkedHashMap<>();
 			java.util.Set<String> itemNames = new java.util.LinkedHashSet<>();
-			for (LocalStore.SourceRow r : plugin.dropSources())
+			for (LocalStore.SourceRow r : plugin.store.dropSources())
 			{
 				restore(home);
 				edt(() -> openSource.invoke(panel, r.name));
 				sources.put(r.name, remember());
-				for (LocalStore.BagItem b : plugin.sourceItems(r.name))
+				for (LocalStore.BagItem b : plugin.store.sourceItems(r.name))
 				{
 					itemNames.add(b.name);
 				}
@@ -462,7 +462,7 @@ public class ExampleExportTest
 		private void gatherCorpus() throws Exception
 		{
 			List<Object> trackers = new ArrayList<>();
-			for (Map.Entry<String, Long> e : plugin.lifetimeCounters().entrySet())
+			for (Map.Entry<String, Long> e : plugin.store.lifetime.entrySet())
 			{
 				if (e.getValue() != 0 && !chronicle.panel.StatRegistry.hidden(e.getKey()))
 				{
@@ -476,10 +476,10 @@ public class ExampleExportTest
 			Map<String, long[]> agg = new LinkedHashMap<>();
 			Map<String, List<String>> from = new LinkedHashMap<>();
 			List<Object> sources = new ArrayList<>();
-			for (LocalStore.SourceRow src : plugin.dropSources())
+			for (LocalStore.SourceRow src : plugin.store.dropSources())
 			{
 				sources.add(java.util.Arrays.asList(src.name, src.kc, src.value));
-				for (LocalStore.BagItem b : plugin.sourceItems(src.name))
+				for (LocalStore.BagItem b : plugin.store.sourceItems(src.name))
 				{
 					long[] a = agg.computeIfAbsent(b.name, k -> new long[2]);
 					a[0] += b.qty;
@@ -497,9 +497,9 @@ public class ExampleExportTest
 			corpus.put("items", items);
 			corpus.put("sources", sources);
 			List<Object> rows = new ArrayList<>();
-			for (LocalStore.SourceRow src : plugin.dropSources())
+			for (LocalStore.SourceRow src : plugin.store.dropSources())
 			{
-				for (LocalStore.BagItem b : plugin.sourceItems(src.name))
+				for (LocalStore.BagItem b : plugin.store.sourceItems(src.name))
 				{
 					rows.add(java.util.Arrays.asList(b.name, b.value));
 				}
@@ -515,14 +515,14 @@ public class ExampleExportTest
 				"sharedSlotNames", Gson.class);
 			sharedNames.setAccessible(true);
 			java.util.Set<String> shared =
-				(java.util.Set<String>) sharedNames.invoke(null, plugin.gson());
+				(java.util.Set<String>) sharedNames.invoke(null, new Gson());
 			Method taxonomy = ChroniclePanel.class.getDeclaredMethod("taxonomy", Gson.class);
 			obtained.setAccessible(true);
 			slotHeld.setAccessible(true);
 			taxonomy.setAccessible(true);
-			Object ob = obtained.invoke(null, plugin.clogSnapshot());
+			Object ob = obtained.invoke(null, plugin.store.clogSnapshot());
 			Map<String, Map<String, List<String>>> tax =
-				(Map<String, Map<String, List<String>>>) taxonomy.invoke(null, plugin.gson());
+				(Map<String, Map<String, List<String>>>) taxonomy.invoke(null, new Gson());
 			List<Object> slots = new ArrayList<>();
 			java.util.Set<String> seenSlot = new java.util.LinkedHashSet<>();
 			for (Map<String, List<String>> tab : tax.values())
@@ -549,14 +549,14 @@ public class ExampleExportTest
 			feedLine.setAccessible(true);
 			stamp.setAccessible(true);
 			List<Object> feed = new ArrayList<>();
-			for (com.google.gson.JsonObject e : plugin.feedNewest(500))
+			for (com.google.gson.JsonObject e : plugin.store.feedNewest(500))
 			{
 				feed.add(java.util.Arrays.asList(feedLine.invoke(null, e), stamp.invoke(null, e)));
 			}
 			corpus.put("feed", feed);
 
 			java.util.Set<String> taskKinds = new java.util.LinkedHashSet<>();
-			for (LocalStore.BagItem b : plugin.tasks(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, null, true).loot())
+			for (LocalStore.BagItem b : plugin.store.tasks(Long.MIN_VALUE / 2, Long.MAX_VALUE / 2, null, true).loot())
 			{
 				String k = ItemKinds.kindOf(b.name);
 				taskKinds.add(k == null ? "Everything else" : k);
@@ -1158,9 +1158,9 @@ public class ExampleExportTest
 			}
 		}
 		Integer loots = stub.session.get("dropsReceived");
-		stub.sessionLoots = loots == null ? 0 : loots;
+		stub.store.sessionLoots = loots == null ? 0 : loots;
 		Integer worth = stub.session.get("lootValue");
-		stub.sessionLootValue = worth == null ? 0 : worth;
+		stub.store.sessionLootValue = worth == null ? 0 : worth;
 	}
 
 	private static void dressWithRealIcons(PanelPreviewTest.StubPlugin stub) throws Exception
@@ -1237,7 +1237,7 @@ public class ExampleExportTest
 				}
 				return hit;
 			});
-		stub.itemManager = im;
+		stub.store.itemManager = im;
 
 		String spriteDir = System.getProperty("chronicle.exampleSprites");
 		File sprites = spriteDir == null ? null : new File(spriteDir);

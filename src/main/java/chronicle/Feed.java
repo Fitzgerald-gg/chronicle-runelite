@@ -55,7 +55,7 @@ final class Feed
 	{
 		if (all == null)
 		{
-			all = build.plugin.feedNewest(Integer.MAX_VALUE);
+			all = build.store.feedNewest(Integer.MAX_VALUE);
 		}
 		return all;
 	}
@@ -64,7 +64,7 @@ final class Feed
 	{
 		if (withSitting == null)
 		{
-			JsonObject live = build.plugin.liveSessionLine();
+			JsonObject live = build.live.liveSessionLine();
 			withSitting = live == null ? all() : new ArrayList<>(all());
 			if (live != null)
 			{
