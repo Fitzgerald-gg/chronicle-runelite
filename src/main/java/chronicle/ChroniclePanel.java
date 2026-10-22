@@ -47,6 +47,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
+import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JFileChooser;
@@ -1323,7 +1324,12 @@ class ChroniclePanel extends PluginPanel
 		JPanel r = stepStrip();
 		if (showingSitting())
 		{
-			return fixedPeriod(r, "This session");
+			fixedPeriod(r, "This session");
+			if (live.ready() && live.sessionStart() > 0)
+			{
+				addEndSession(r);
+			}
+			return r;
 		}
 		if (!searchQuery().isEmpty())
 		{
@@ -1339,6 +1345,17 @@ class ChroniclePanel extends PluginPanel
 		link(lbl, () -> periodMenu().show(r, 0, r.getHeight()));
 		r.add(lbl, BorderLayout.CENTER);
 		return r;
+	}
+
+	private void addEndSession(JPanel bar)
+	{
+		JLabel end = new JLabel("X");
+		end.setFont(FontManager.getRunescapeFont());
+		end.setForeground(ColorScheme.PROGRESS_ERROR_COLOR);
+		end.setToolTipText("End this session and start a new one. It is saved to the journal.");
+		link(end, live::newSession);
+		bar.add(Box.createRigidArea(new Dimension(end.getPreferredSize().width, 0)), BorderLayout.WEST);
+		bar.add(end, BorderLayout.EAST);
 	}
 
 	private boolean showingSitting()

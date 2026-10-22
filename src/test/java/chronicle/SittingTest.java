@@ -117,7 +117,7 @@ public class SittingTest
 	{
 		h.level(Skill.HUNTER, 50, 101333).xp(Skill.HUNTER, 2000);
 		h.kill("Bear", 1, 1618, 1).chat("Oh dear, you are dead!");
-		h.tick().sitting(42).press("end", "Now");
+		h.tick().sitting(42).press("X", "Now");
 		JsonObject first = h.feed("SESSION").get(0);
 		assertEquals(42, first.get("minutes").getAsInt());
 		assertEquals(2000, first.get("xp").getAsInt());

@@ -11,7 +11,6 @@ package chronicle;
 import chronicle.counters.ExperienceStatTracker;
 import chronicle.panel.StatRegistry;
 import com.google.gson.JsonObject;
-import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.GridLayout;
@@ -28,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import static chronicle.Feed.typeOf;
 import static chronicle.Json.has;
@@ -39,16 +37,12 @@ import static chronicle.Kit.ACCENT_SESSION;
 import static chronicle.Kit.DARKER;
 import static chronicle.Kit.card;
 import static chronicle.Kit.column;
-import static chronicle.Kit.dim;
 import static chronicle.Kit.ghostRow;
-import static chronicle.Kit.link;
 import static chronicle.Kit.nested;
 import static chronicle.Kit.note;
 import static chronicle.Kit.pad;
 import static chronicle.Kit.row;
-import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
-import static chronicle.Kit.styled;
 import static chronicle.Kit.value;
 import static chronicle.Text.fmt;
 import static chronicle.Text.gp;
@@ -122,21 +116,6 @@ final class HomePage
 		}
 	}
 
-	private JPanel sessionHead(String clock)
-	{
-		JPanel head = new JPanel(new BorderLayout(8, 0));
-		head.setOpaque(false);
-		if (clock != null)
-		{
-			head.add(styled(new JLabel(clock), small(), dim()), BorderLayout.CENTER);
-		}
-		JLabel end = styled(new JLabel("end"), small(), dim());
-		end.setToolTipText("End this session and start a new one. It is saved to the journal.");
-		link(end, panel.live::newSession);
-		head.add(end, BorderLayout.EAST);
-		return head;
-	}
-
 	JPanel buildHome()
 	{
 		JPanel p = column();
@@ -154,22 +133,10 @@ final class HomePage
 
 		long began = panel.live.sessionStart();
 		long ran = panel.live.sessionElapsedMinutes();
-		String clock = began > 0 && ran > 0
-			? CLOCK.format(Instant.ofEpochMilli(began)) + " · " + hoursMinutes(ran)
-			: null;
-		JPanel strip;
-		if (began > 0 && panel.live.ready())
-		{
-			strip = card("This session", sessionHead(clock));
-		}
-		else if (clock != null)
-		{
-			strip = card("This session", "since " + clock);
-		}
-		else
-		{
-			strip = card("This session");
-		}
+		JPanel strip = began > 0 && ran > 0
+			? card("This session", "since " + CLOCK.format(Instant.ofEpochMilli(began))
+				+ " · " + hoursMinutes(ran))
+			: card("This session");
 		Map<String, Integer> sess = panel.live.sessionView();
 		int mounted = 0;
 		Set<String> shownKeys = new HashSet<>();
