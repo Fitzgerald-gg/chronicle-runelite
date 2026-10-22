@@ -2856,12 +2856,12 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		if (version < 1)
 		{
 			placeByKind(out, sourceKills(clog, sources), true);
-			placeByKind(out, anchored, false);
+			placeByKind(out, respelled(anchored, out.keySet()), false);
 			return out;
 		}
 		placeByKind(out, pageKillLines(clog), true);
 		placeByKind(out, ledgerKills(clog, sources), true);
-		placeByKind(out, anchored, false);
+		placeByKind(out, respelled(anchored, out.keySet()), false);
 		return out;
 	}
 
@@ -3199,22 +3199,38 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		}
 		for (var e : chat.entrySet())
 		{
-			String said = e.getKey();
-			String known = byKind.get(chatKind(said));
-			if (known == null)
-			{
-				int space = said.indexOf(' ');
-				if (space > 0)
-				{
-					known = byKind.get(chatKind(said.substring(space + 1)));
-				}
-			}
-			if (known == null)
-			{
-				known = byKind.get(chatKind(said + " chests"));
-			}
-			out.merge(known != null ? known : said, e.getValue(), Math::max);
+			out.merge(spokenAs(byKind, e.getKey()), e.getValue(), Math::max);
 		}
+	}
+
+	private static String spokenAs(Map<String, String> byKind, String said)
+	{
+		String known = byKind.get(chatKind(said));
+		int space = said.indexOf(' ');
+		if (known == null && space > 0)
+		{
+			known = byKind.get(chatKind(said.substring(space + 1)));
+		}
+		if (known == null)
+		{
+			known = byKind.get(chatKind(said + " chests"));
+		}
+		return known != null ? known : said;
+	}
+
+	static Map<String, Long> respelled(Map<String, Long> said, Set<String> names)
+	{
+		Map<String, String> byKind = new HashMap<>();
+		for (String name : names)
+		{
+			byKind.putIfAbsent(chatKind(name), name);
+		}
+		Map<String, Long> out = new LinkedHashMap<>();
+		for (var e : said.entrySet())
+		{
+			out.merge(spokenAs(byKind, e.getKey()), e.getValue(), Math::max);
+		}
+		return out;
 	}
 
 	static void placeByKind(Map<String, Long> out,
