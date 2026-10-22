@@ -507,12 +507,6 @@ final class Feed
 		return "SESSION".equals(typeOf(e)) ? sittingStart(e) : safeLong(e.get("ts"));
 	}
 
-	static boolean sittingsCover(List<JsonObject> feed, long fromMs)
-	{
-		long oldest = oldestTs(feed, true);
-		return oldest > 0 && oldest <= fromMs;
-	}
-
 	static long earliestDatedLoot(List<JsonObject> feed, long rollFrom)
 	{
 		long sittings = oldestTs(feed, true);

@@ -86,11 +86,6 @@ public final class StatRegistry
 			|| chronicle.counters.StatKeys.isTime(key);
 	}
 
-	public static boolean isPeak(String key)
-	{
-		return PEAK.contains(key);
-	}
-
 	public static Set<String> peakKeys()
 	{
 		return Collections.unmodifiableSet(PEAK);
@@ -274,17 +269,6 @@ public final class StatRegistry
 			return typedName(key, key.endsWith("Eaten") ? "Eaten" : "Doses");
 		}
 		return thrallTyped(key) ? typedName(key, THRALL_SUFFIX) : label(key);
-	}
-
-	public static String rowLabelWithVerb(String key)
-	{
-		String verb = suffixOf(key);
-		if (verb == null)
-		{
-			return rowLabel(key);
-		}
-		String phrase = prettify(Character.toLowerCase(verb.charAt(0)) + verb.substring(1));
-		return rowLabel(key) + " " + phrase.toLowerCase(Locale.ROOT);
 	}
 
 	private static String teleName(String key)
