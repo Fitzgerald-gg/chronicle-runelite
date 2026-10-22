@@ -111,8 +111,6 @@ import net.runelite.client.util.ImageUtil;
 import static chronicle.Copy.COPY_MOST;
 import static chronicle.Copy.copyPicture;
 import static chronicle.Copy.stripChrome;
-import static chronicle.Copy.toClipboard;
-import static chronicle.Feed.feedName;
 import static chronicle.Feed.filedAt;
 import static chronicle.Feed.most;
 import static chronicle.Feed.newestTs;
@@ -146,7 +144,6 @@ import static chronicle.Kit.copyLabel;
 import static chronicle.Kit.day;
 import static chronicle.Kit.dim;
 import static chronicle.Kit.dimLine;
-import static chronicle.Kit.facts;
 import static chronicle.Kit.figure;
 import static chronicle.Kit.fitLine;
 import static chronicle.Kit.ghostRow;
@@ -178,10 +175,8 @@ import static chronicle.Kit.wrapClauses;
 import static chronicle.LocalStore.kindOf;
 import static chronicle.Period.DAY;
 import static chronicle.Period.FULL_DAY;
-import static chronicle.Period.MONTH_YEAR;
 import static chronicle.Period.TASK_DAY;
 import static chronicle.Period.dayOf;
-import static chronicle.Period.noon;
 import static chronicle.Period.startMs;
 import static chronicle.Text.climb;
 import static chronicle.Text.count;
@@ -232,6 +227,8 @@ class ChroniclePanel extends PluginPanel
 	final SkillIconManager skillIcons;
 	private final GrindBook grindBook;
 	Build build;
+	final RecapPage recap = new RecapPage(this);
+	final RecordsPage records = new RecordsPage(this);
 	final SearchPage search = new SearchPage(this);
 	final Art art = new Art(this);
 	final ItemNames itemNames;
@@ -258,9 +255,9 @@ class ChroniclePanel extends PluginPanel
 	private boolean showInfo;
 	private boolean showRecords;
 	private boolean showCalendar;
-	private YearMonth calendarMonth = YearMonth.now();
+	YearMonth calendarMonth = YearMonth.now();
 	private final ArrayDeque<String[]> detailStack = new ArrayDeque<>();
-	private String statsFamily = StatRegistry.FAMILIES[0];
+	String statsFamily = StatRegistry.FAMILIES[0];
 	private int dropsShown = ROW_CAP;
 	private String clogTab = "Bosses";
 	private String clogPageSel;
@@ -551,7 +548,7 @@ class ChroniclePanel extends PluginPanel
 		applyCommon();
 	}
 
-	private void applyCommon()
+	void applyCommon()
 	{
 		view = viewOf();
 		sheetPage = null;
@@ -1156,9 +1153,9 @@ class ChroniclePanel extends PluginPanel
 			: detailSource != null ? buildSourceDetail(detailSource)
 			: detailSkill != null ? buildSkillDetail(detailSkill)
 			: allTrackers ? buildAllTrackers()
-			: showRecords ? buildRecords()
-			: showCalendar ? buildCalendar()
-			: showInfo ? buildInfo()
+			: showRecords ? records.buildRecords()
+			: showCalendar ? records.buildCalendar()
+			: showInfo ? records.buildInfo()
 			: detailTask >= 0 ? buildTaskDetail(detailTask)
 			: leftBehindSource != null || leftBehindItem != null ? buildLeftBehindDetail()
 			: sheetPage != null ? buildSheetPage()
@@ -1211,7 +1208,7 @@ class ChroniclePanel extends PluginPanel
 			case JOURNAL:
 				return buildJournal();
 			case RECAP:
-				return buildRecap();
+				return recap.buildRecap();
 			case HOME:
 			default:
 				return buildHome();
@@ -2348,7 +2345,7 @@ class ChroniclePanel extends PluginPanel
 		return head;
 	}
 
-	private void reportCopy(JLabel take, boolean ok)
+	void reportCopy(JLabel take, boolean ok)
 	{
 		take.setText(ok ? "copied" : "cannot copy");
 		take.setForeground(ok ? accent() : ColorScheme.PROGRESS_ERROR_COLOR);
@@ -2369,7 +2366,7 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 
-	private JPanel copyHeaderLater(String title, Consumer<JLabel> copy)
+	JPanel copyHeaderLater(String title, Consumer<JLabel> copy)
 	{
 		JPanel r = row(title, "copy");
 		styled(part(r, BorderLayout.CENTER), small(), accent());
@@ -2700,51 +2697,6 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	private JPanel buildInfo()
-	{
-		JPanel p = column();
-		spaced(p, backRow(() -> copyPage(this::buildInfo)), 4);
-		Map<String, Long> f = store.journalFacts();
-
-		JPanel loot = facts(card("Loot"), f, accent(), "Sources", "sources",
-			"Item rows", "itemRows", "Loot events", "lootEvents");
-		loot.add(worthRow(f.getOrDefault("lootWorth", 0L)));
-		facts(loot, f, null, "Dated days", "lootDays");
-		loot.add(row("Left behind", fmt(f.getOrDefault("untakenItems", 0L)) + " items, "
-			+ fmt(f.getOrDefault("untakenSources", 0L)) + " sources"));
-		spaced(p, loot);
-
-		spaced(p, facts(card("Slayer"), f, accent(), "Assignments", "tasks",
-			"Closed", "tasksClosed"));
-
-		JPanel log = card("Collection log");
-		long availKnown = f.getOrDefault("clogAvailable", 0L);
-		log.add(row("Slots filled", fmt(f.getOrDefault("clogSlots", 0L))
-			+ (availKnown > 0 ? " of " + fmt(availKnown) : ""), accent()));
-		spaced(p, facts(log, f, null, "Items named", "clogItems",
-			"Pages with a count", "clogPages", "Kill Log lines", "killLogLines",
-			"Labelled kill lines", "pageKillLines"));
-
-		spaced(p, facts(card("Counted"), f, accent(), "Trackers", "trackers",
-			"Skills", "skills", "Feed entries", "feed", "Chat kill counts", "chatCounts",
-			"Anchored counts", "anchors"));
-
-		JPanel file = card("On disk");
-		file.add(row("Journal", bytes(f.getOrDefault("journalBytes", 0L)), accent()));
-		file.add(row("History spine", bytes(f.getOrDefault("spineBytes", 0L))));
-		p.add(facts(file, f, null, "Schema", "schema"));
-		return p;
-	}
-
-	private static String bytes(long n)
-	{
-		if (n >= 1024 * 1024)
-		{
-			return String.format("%.1f MB", n / (1024.0 * 1024.0));
-		}
-		return n >= 1024 ? fmt(n / 1024) + " KB" : fmt(n) + " B";
-	}
-
 	void openInfo()
 	{
 		leaveAll();
@@ -2861,7 +2813,7 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	private JPanel backRow(String label, String right, Runnable go)
+	JPanel backRow(String label, String right, Runnable go)
 	{
 		JPanel r = row(label, right);
 		styled(part(r, BorderLayout.CENTER), small(), accent());
@@ -2869,12 +2821,12 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	private JPanel backRow()
+	JPanel backRow()
 	{
 		return backRow(null);
 	}
 
-	private JPanel backRow(BooleanSupplier copy)
+	JPanel backRow(BooleanSupplier copy)
 	{
 		JPanel r = backRow("< Back", copy == null ? "" : "copy", this::backDetail);
 		JLabel take = copy == null ? null : copyLabel(r, "Copy this page as a picture");
@@ -2887,7 +2839,7 @@ class ChroniclePanel extends PluginPanel
 
 	private boolean drawingCopy;
 
-	private boolean copyPage(Supplier<JPanel> page)
+	boolean copyPage(Supplier<JPanel> page)
 	{
 		drawingCopy = true;
 		try
@@ -4166,7 +4118,7 @@ class ChroniclePanel extends PluginPanel
 	}
 
 
-	private TreeMap<LocalDate, Baseline> historySpine;
+	TreeMap<LocalDate, Baseline> historySpine;
 	SlayerJourney historyJourney;
 	private LocalDate historyDay;
 	private long historyFeedTs;
@@ -5047,7 +4999,7 @@ class ChroniclePanel extends PluginPanel
 	private String sheetPage;
 	private String measuredSince;
 
-	private boolean wholeRecord()
+	boolean wholeRecord()
 	{
 		return window().whole;
 	}
@@ -5055,7 +5007,7 @@ class ChroniclePanel extends PluginPanel
 	static final String[] PERIODS = {"Lifetime", "Year", "Month", "Week", "Day",
 		"Session"};
 
-	private boolean sessionPeriod()
+	boolean sessionPeriod()
 	{
 		return window().session;
 	}
@@ -5135,7 +5087,7 @@ class ChroniclePanel extends PluginPanel
 			this::gatherHistory);
 	}
 
-	private Period window()
+	Period window()
 	{
 		Period w = Period.of(histGranularity, histCursor, histFrom, histTo, live.sessionStart(),
 			historySpine);
@@ -5298,7 +5250,7 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	private static JPanel stepStrip()
+	static JPanel stepStrip()
 	{
 		JPanel r = new JPanel(new BorderLayout());
 		r.setBackground(DARKER);
@@ -5308,7 +5260,7 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	private void arrows(JPanel r, Runnable back, boolean ahead, Runnable forward, JLabel title)
+	void arrows(JPanel r, Runnable back, boolean ahead, Runnable forward, JLabel title)
 	{
 		JLabel b = new JLabel("<");
 		JLabel fwd = new JLabel(">");
@@ -5520,370 +5472,10 @@ class ChroniclePanel extends PluginPanel
 		openJournal("All");
 	}
 
-	private void openJournal(String lens)
+	void openJournal(String lens)
 	{
 		journalLens = lens;
 		applyTab(View.JOURNAL);
-	}
-
-	private JPanel buildRecap()
-	{
-		JPanel p = column();
-		p.add(copyHeaderLater("Recap", take ->
-		{
-			take.setText("copying");
-			copyRecapPicture(take);
-		}));
-		p.add(recapPlate());
-		return p;
-	}
-
-	private void copyRecapPicture(JLabel take)
-	{
-		RecapPicture.Facts facts;
-		try
-		{
-			facts = build.summary.facts();
-		}
-		catch (Throwable t)
-		{
-			reportCopy(take, false);
-			return;
-		}
-		Set<Integer> want = new LinkedHashSet<>();
-		for (RecapPicture.BossLine b : facts.bosses)
-		{
-			if (b.sprite > 0 && art.sprite(b.sprite) == null)
-			{
-				want.add(b.sprite);
-			}
-		}
-		for (int id : want)
-		{
-			art.wearSprite(new JLabel(), id, 22, 22);
-		}
-		long deadline = System.currentTimeMillis() + 1500;
-		Timer wait = new Timer(100, null);
-		wait.addActionListener(e ->
-		{
-			boolean all = true;
-			for (int id : want)
-			{
-				all &= art.sprite(id) != null;
-			}
-			if (all || System.currentTimeMillis() > deadline)
-			{
-				wait.stop();
-				reportCopy(take, toClipboard(recapImage(facts)));
-			}
-		});
-		wait.setInitialDelay(want.isEmpty() ? 0 : 100);
-		wait.start();
-	}
-
-	BufferedImage recapImage(RecapPicture.Facts facts)
-	{
-		try
-		{
-			return RecapPicture.paint(facts, art::skillIcon, art::sprite);
-		}
-		catch (Throwable t)
-		{
-			return null;
-		}
-	}
-
-	private JPanel recapPlate()
-	{
-		JPanel plate = card(wholeRecord() ? "The whole record" : window().label);
-		int held = plate.getComponentCount();
-
-		long[] sat = build.summary.played();
-		if (sat[1] > 0)
-		{
-			plateRow(plate, "Played", hoursMinutes(sat[0]) + " · " + count(sat[1], "sitting"),
-				() -> openJournal("Sessions"));
-		}
-		Entry<LocalDate, Long> busiest = sat[1] > 1 ? build.summary.busiest() : null;
-		if (busiest != null)
-		{
-			final LocalDate day = busiest.getKey();
-			plateRow(plate, "Busiest day", TASK_DAY.format(day.atStartOfDay(
-				ZoneId.systemDefault()).toInstant()) + " · " + hoursMinutes(busiest.getValue()),
-				() -> openJournalOn(noon(day)));
-		}
-
-		long[] xp = build.summary.xp();
-		if (xp != null && xp[0] > 0)
-		{
-			String most = build.summary.xpMost();
-			plateRow(plate, wholeRecord() ? "Xp" : "Xp gained",
-				(wholeRecord() ? "" : "+") + gp(xp[0]) + " xp"
-					+ (most != null ? ", most in " + most : ""),
-				() -> applyTab(View.SHEET));
-		}
-		long[] levels = build.summary.levels();
-		if (levels != null && (wholeRecord() || levels[1] > levels[0]))
-		{
-			plateRow(plate, wholeRecord() ? "Total level" : "Levels",
-				wholeRecord() ? fmt(levels[1]) : "+" + fmt(levels[1] - levels[0]) + " · " + fmt(levels[1]) + " now",
-				() -> applyTab(View.SHEET));
-		}
-
-		long[] loot = build.summary.loot();
-		if (loot[0] > 0)
-		{
-			plateRow(plate, "Drops", qtyGp(loot[0], loot[1]),
-				() -> applyTab(View.DROPS));
-		}
-		LocalStore.Row dearest = build.summary.dearest();
-		if (dearest != null)
-		{
-			final String item = dearest.name;
-			Line said = new Line();
-			said.name(item);
-			said.fixed(" · " + gps(dearest.value));
-			plateRow(plate, "Dearest drop", said, () -> openItem(item));
-		}
-		if (loot[2] > 0)
-		{
-			plateRow(plate, "Left behind", qtyGp(loot[2], loot[3]), () ->
-			{
-				dropsLeftBehind = true;
-				applyTab(View.DROPS);
-			});
-		}
-
-		Map<String, Long> counters = wholeRecord() ? build.withLedgerSpend(build.lifetime()) : build.periodCounters();
-		Runnable toLiving = () ->
-		{
-			statsFamily = "Living";
-			subByTab.put(Tab.RECORD, "Ledger");
-			applyCommon();
-		};
-		long food = counters.getOrDefault("foodEaten", 0L);
-		if (food > 0)
-		{
-			plateRow(plate, "Food", fmt(food)
-				+ splitSpend("foodConsumedValue", counters), toLiving);
-		}
-		long doses = counters.getOrDefault("potionDoses", 0L);
-		if (doses > 0)
-		{
-			plateRow(plate, "Potions", count(doses, "dose")
-				+ splitSpend("potionsConsumedValue", counters), toLiving);
-		}
-
-		String[] killed = build.summary.killedMost();
-		if (killed != null)
-		{
-			final String who = killed[0];
-			Line said = new Line();
-			said.name(who);
-			said.fixed(" · " + killed[1]);
-			plateRow(plate, "Killed most", said, () -> openSourceLoose(who));
-		}
-		long[] tally = build.taskTally();
-		if (tally[2] > 0)
-		{
-			plateRow(plate, "Tasks", fmt(tally[2]) + tail(tally[3]), () -> openSlayer("Tasks"));
-		}
-
-		Map<String, String> firstNamed = new LinkedHashMap<>();
-		for (JsonObject e : build.feed.all())
-		{
-			String name = feedName(e);
-			if (name != null && window().inside(safeLong(e.get("ts"))))
-			{
-				firstNamed.putIfAbsent(typeOf(e), name);
-			}
-		}
-		feedPlateRow(plate, firstNamed, "COLLECTION", "Log slot", "Log slots", "Log");
-		feedPlateRow(plate, firstNamed, "PET", "Pet", "Pets", "Feats");
-		feedPlateRow(plate, firstNamed, "QUEST", "Quest", "Quests", "Feats");
-		feedPlateRow(plate, firstNamed, "DIARY", "Diary", "Diaries", "Feats");
-		feedPlateRow(plate, firstNamed, "COMBAT_ACHIEVEMENT", "Combat achievement",
-			"Combat achievements", "Feats");
-		feedPlateRow(plate, firstNamed, "DEATH", "Death", "Deaths", "Deaths");
-
-		if (plate.getComponentCount() == held)
-		{
-			plate.add(note(wholeRecord() ? "Nothing on the record yet."
-				: window().phrase("Nothing")));
-		}
-		return plate;
-	}
-
-	private String splitSpend(String key, Map<String, Long> counters)
-	{
-		Span s = build.span();
-		if (!wholeRecord() && !sessionPeriod() && (s == null || !s.opening.counters.containsKey(key)))
-		{
-			return "";
-		}
-		long spend = counters.getOrDefault(key, 0L);
-		return tail(spend);
-	}
-
-	private void plateRow(JPanel plate, String left, String right, Runnable go)
-	{
-		JPanel r = row(left, right);
-		link(r, go);
-		plate.add(r);
-	}
-
-	private void plateRow(JPanel plate, String left, Line right, Runnable go)
-	{
-		String whole = right.whole();
-		String fitted = fitLine(right, right.names, NAME_FLOOR, rowMetrics(),
-			chaseRoom(left, rowMetrics()));
-		plateRow(plate, left, fitted != null ? fitted : whole, go);
-		if (fitted != null && !fitted.equals(whole))
-		{
-			((JPanel) plate.getComponent(plate.getComponentCount() - 1))
-				.setToolTipText(left + ": " + whole);
-		}
-	}
-
-	private void feedPlateRow(JPanel plate, Map<String, String> named,
-		String type, String one, String many, String lens)
-	{
-		long n = build.feed.inWindow(type);
-		if (n == 0)
-		{
-			return;
-		}
-		String name = named.get(type);
-		Line right = new Line();
-		right.fixed(fmt(n));
-		if (name != null)
-		{
-			right.fixed(" · ");
-			right.name(name);
-		}
-		plateRow(plate, n == 1 ? one : many, right, () -> openJournal(lens));
-	}
-
-	private JPanel buildRecords()
-	{
-		JPanel p = backPage();
-		JPanel book = card("Records");
-		List<Records.Line> lines = Records.of(build);
-		for (Records.Line r : lines)
-		{
-			JPanel line = row(r.left, r.ts != Records.UNDATED ? r.figure + " · " + dated(r.ts) : r.figure);
-			if (r.hover != null && !r.hover.isEmpty())
-			{
-				line.setToolTipText(r.hover);
-			}
-			book.add(line);
-		}
-		if (lines.isEmpty())
-		{
-			book.add(note("No record set yet."));
-		}
-		p.add(book);
-		return p;
-	}
-
-	private JPanel buildCalendar()
-	{
-		JPanel p = backPage();
-		JPanel head = stepStrip();
-		JLabel title = styled(new JLabel(MONTH_YEAR.format(calendarMonth.atDay(1)
-			.atStartOfDay(ZoneId.systemDefault()).toInstant()).toUpperCase(Locale.ROOT), JLabel.CENTER),
-			FontManager.getRunescapeFont(), accent());
-		arrows(head, () ->
-		{
-			calendarMonth = calendarMonth.minusMonths(1);
-			rebuildInPlace();
-		}, calendarMonth.isBefore(YearMonth.now()), () ->
-		{
-			calendarMonth = calendarMonth.plusMonths(1);
-			rebuildInPlace();
-		}, title);
-		spaced(p, head, 4);
-
-		JPanel grid = new JPanel(new GridLayout(0, 7, 2, 2));
-		grid.setBackground(DARK);
-		grid.setAlignmentX(Component.LEFT_ALIGNMENT);
-		for (String d : new String[]{"M", "T", "W", "T", "F", "S", "S"})
-		{
-			grid.add(styled(new JLabel(d, JLabel.CENTER), small(), dim()));
-		}
-		Map<LocalDate, long[]> played = build.feed.days();
-		TreeMap<LocalDate, Baseline> spine = historySpine;
-		long most = 1;
-		for (int d = 1; d <= calendarMonth.lengthOfMonth(); d++)
-		{
-			long[] t = played.get(calendarMonth.atDay(d));
-			most = Math.max(most, t == null ? 0 : t[0]);
-		}
-		int lead = calendarMonth.atDay(1).getDayOfWeek().getValue() - 1;
-		for (int i = 0; i < lead; i++)
-		{
-			grid.add(blankCell());
-		}
-		long monthMinutes = 0;
-		int written = 0;
-		LocalDate today = LocalDate.now();
-		for (int d = 1; d <= calendarMonth.lengthOfMonth(); d++)
-		{
-			LocalDate day = calendarMonth.atDay(d);
-			long[] t = played.get(day);
-			boolean onSpine = spine != null && spine.containsKey(day);
-			boolean future = day.isAfter(today);
-			JPanel cell = new JPanel(new BorderLayout());
-			cell.setPreferredSize(new Dimension(26, 24));
-			JLabel n = new JLabel(String.valueOf(d), JLabel.CENTER);
-			n.setFont(small());
-			if (t != null && t[0] > 0)
-			{
-				monthMinutes += t[0];
-				written++;
-				float weight = 0.25f + 0.75f * Math.min(1f, (float) t[0] / most);
-				cell.setBackground(wash(accent(), weight));
-				n.setForeground(Color.WHITE);
-				cell.setToolTipText(hoursMinutes(t[0]) + " · " + count(t[1], "sitting"));
-			}
-			else if (onSpine || (t != null && t[1] > 0))
-			{
-				written++;
-				cell.setBackground(wash(accent(), 0.18f));
-				n.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-				cell.setToolTipText("Written");
-			}
-			else
-			{
-				cell.setBackground(DARKER);
-				n.setForeground(future ? DARK.brighter()
-					: dim());
-			}
-			if (!future && (onSpine || t != null))
-			{
-				final long ts = noon(day);
-				link(cell, () -> openJournalOn(ts));
-			}
-			cell.add(n, BorderLayout.CENTER);
-			grid.add(cell);
-		}
-		while (grid.getComponentCount() % 7 != 0)
-		{
-			grid.add(blankCell());
-		}
-		spaced(p, grid, 4);
-		p.add(ghostRow(written == 0 ? "nothing written this month"
-			: count(written, "day") + " written"
-			+ (monthMinutes > 0 ? " · " + hoursMinutes(monthMinutes) : ""), ""));
-		return p;
-	}
-
-	private static JPanel blankCell()
-	{
-		JPanel c = new JPanel();
-		c.setBackground(DARK);
-		c.setPreferredSize(new Dimension(26, 24));
-		return c;
 	}
 
 	private JPanel buildJournal()
@@ -6112,7 +5704,7 @@ class ChroniclePanel extends PluginPanel
 		return g;
 	}
 
-	private JPanel backPage()
+	JPanel backPage()
 	{
 		JPanel p = column();
 		spaced(p, backRow(), 4);

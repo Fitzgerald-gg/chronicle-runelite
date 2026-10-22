@@ -843,7 +843,7 @@ final class Harness
 	{
 		screen("Recap");
 		ChroniclePanel p = (ChroniclePanel) get(plugin, "panel");
-		return (BufferedImage) onEdt(() -> p.recapImage(((Build) get(p, "build")).summary.facts()));
+		return (BufferedImage) onEdt(() -> p.recap.recapImage(((Build) get(p, "build")).summary.facts()));
 	}
 
 	JsonArray feed()
