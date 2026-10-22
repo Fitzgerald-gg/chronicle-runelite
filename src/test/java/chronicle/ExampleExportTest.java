@@ -61,7 +61,7 @@ public class ExampleExportTest
 
 	private static final String[] STATE_FIELDS = {
 		"tab", "subByTab", "view",
-		"histFacet", "histGranularity", "histCursor", "histFrom", "histTo",
+		"histGranularity", "histCursor", "histFrom", "histTo",
 		"detailSource", "detailItem", "detailSkill", "detailTask",
 		"allTrackers", "showInfo", "showRecords", "showCalendar", "calendarMonth", "sheetPage", "slayerLens",
 		"clogPageSel", "journalLens", "dropsLeftBehind",

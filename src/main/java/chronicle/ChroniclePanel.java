@@ -18,7 +18,6 @@ import chronicle.LocalStore.SourceRow;
 import chronicle.LocalStore.UntakenRow;
 import chronicle.Period.Span;
 import chronicle.counters.StatKeys;
-import chronicle.panel.HistoryProgress;
 import chronicle.panel.StatRegistry;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -68,7 +67,6 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.Supplier;
-import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
@@ -190,7 +188,7 @@ class ChroniclePanel extends PluginPanel
 {
 	enum View
 	{
-		HOME, DROPS, SLAYER, LOG, STATS, HISTORY, JOURNAL, KILLS, SHEET, RECAP
+		HOME, DROPS, SLAYER, STATS, JOURNAL, SHEET, RECAP
 	}
 
 	enum Tab
@@ -488,10 +486,7 @@ class ChroniclePanel extends PluginPanel
 			case DROPS:
 			case SLAYER:
 				return Tab.LOOT;
-			case KILLS:
 			case SHEET:
-			case HISTORY:
-			case LOG:
 				return Tab.STANDING;
 			case STATS:
 				return Tab.TRACKERS;
@@ -506,10 +501,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		switch (v)
 		{
-			case KILLS:
 			case SHEET:
-			case HISTORY:
-			case LOG:
 			case STATS:
 				return "";
 			case DROPS:
@@ -543,11 +535,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		view = viewOf();
 		sheetPage = null;
-		if (tab == Tab.STANDING)
-		{
-			histFacet = "Skills";
-		}
-		else if (tab == Tab.TRACKERS)
+		if (tab == Tab.TRACKERS)
 		{
 			statsFamily = StatRegistry.FAMILIES[0];
 		}
@@ -597,16 +585,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel buildSheet()
 	{
 		JPanel p = column();
-		String was = histFacet;
-		try
-		{
-			histFacet = "Skills";
-			p.add(buildHistory());
-		}
-		finally
-		{
-			histFacet = was;
-		}
+		p.add(buildHistory());
 		p.add(activitySheet());
 		p.add(buildKills());
 		return p;
@@ -968,13 +947,9 @@ class ChroniclePanel extends PluginPanel
 			case SLAYER:
 			case JOURNAL:
 				return (moved & MOVED_RECORD) != 0;
-			case LOG:
-			case KILLS:
-				return (moved & (MOVED_RECORD | MOVED_CLOG)) != 0;
 			case STATS:
 				return (moved & (MOVED_COUNTERS | MOVED_RECORD)) != 0;
 			case SHEET:
-			case HISTORY:
 			case HOME:
 			default:
 				return true;
@@ -1184,18 +1159,12 @@ class ChroniclePanel extends PluginPanel
 		{
 			case SHEET:
 				return buildSheet();
-			case KILLS:
-				return buildKills();
 			case DROPS:
 				return buildDrops();
 			case SLAYER:
 				return buildSlayer();
-			case LOG:
-				return buildLog();
 			case STATS:
 				return buildStats();
-			case HISTORY:
-				return buildHistory();
 			case JOURNAL:
 				return journal.buildJournal();
 			case RECAP:
@@ -3794,103 +3763,6 @@ class ChroniclePanel extends PluginPanel
 	private static final int HIST_LIST_CAP = 6;
 	private final Map<String, Integer> histListShown = new LinkedHashMap<>();
 
-	private JPanel trackedProgress(HistoryProgress progress,
-		List<Entry<String, Long>> gains, Map<String, List<String[]>> named)
-	{
-		JPanel card = card("Tracked progress");
-		for (String name : HistoryProgress.GROUPS)
-		{
-			HistoryProgress.Group g = progress.group(name);
-			boolean experience = "Experience".equals(name);
-			List<HistoryProgress.Row> rows = g != null ? g.rows()
-				: Collections.<HistoryProgress.Row>emptyList();
-			List<HistoryProgress.Section> secs = g != null ? g.sections()
-				: Collections.<HistoryProgress.Section>emptyList();
-			int lines = rows.size() + secs.size() + (experience ? gains.size() : 0);
-			if (lines == 0)
-			{
-				continue;
-			}
-			String stateKey = "history:shut:" + name;
-			boolean open = foldOpen(stateKey, true);
-			card.add(quietHead(name, fmt(lines), stateKey));
-			if (!open)
-			{
-				continue;
-			}
-			if (experience)
-			{
-				int cap = shownCap(GAINS_LIST);
-				for (Entry<String, Long> e : Sources.firstN(gains, cap))
-				{
-					card.add(row(prettify(e.getKey()), "+" + gp(e.getValue())));
-				}
-				addMore(card, GAINS_LIST, gains.size(), cap, false);
-			}
-			for (HistoryProgress.Row r : rows)
-			{
-				addGroupRow(card, r, named.get(r.key()));
-			}
-			for (HistoryProgress.Section s : secs)
-			{
-				addGroupSection(card, s);
-			}
-		}
-		return card;
-	}
-
-	private static final String GAINS_LIST = "history:xp";
-
-	private void addGroupRow(JPanel card, HistoryProgress.Row r, List<String[]> list)
-	{
-		if (list == null || list.isEmpty())
-		{
-			card.add(row(r.label(), "+" + figure(r)));
-			return;
-		}
-		String listKey = "history:list:" + r.key();
-		boolean open = foldOpen(listKey);
-		card.add(folds(row(r.label(), "+" + figure(r)), listKey));
-		if (open)
-		{
-			int cap = shownCap(listKey);
-			for (String[] entry : Sources.firstN(list, cap))
-			{
-				card.add(nested(ghostRow(entry[0], entry[1])));
-			}
-			addMore(card, listKey, list.size(), cap, true);
-			long unnamed = r.gp() ? 0 : r.value() - list.size();
-			if (unnamed > 0)
-			{
-				card.add(nested(ghostRow("Not named in the record", "+" + fmt(unnamed))));
-			}
-		}
-	}
-
-	private void addGroupSection(JPanel card, HistoryProgress.Section s)
-	{
-		String stateKey = "history:" + s.family() + ":" + s.name();
-		boolean open = foldOpen(stateKey);
-		String total = s.summed()
-			? "+" + (s.gp() ? gps(s.total()) : fmt(s.total()))
-			: fmt(s.rows().size());
-		card.add(subHead(s.name(), total, stateKey));
-		if (!open)
-		{
-			return;
-		}
-		int cap = shownCap(stateKey);
-		for (HistoryProgress.Row r : Sources.firstN(s.rows(), cap))
-		{
-			card.add(nested(row(r.label(), "+" + figure(r))));
-		}
-		addMore(card, stateKey, s.rows().size(), cap, true);
-		if (s.ghost() > 0)
-		{
-			card.add(nested(ghostRow(s.ghostLabel(), "+" + fmt(s.ghost()))));
-		}
-	}
-
 	int shownCap(String key)
 	{
 		return histListShown.getOrDefault(key, HIST_LIST_CAP);
@@ -3901,213 +3773,8 @@ class ChroniclePanel extends PluginPanel
 		more(card, size, cap, inset, n -> histListShown.put(key, n));
 	}
 
-	private void addLootValues(JPanel p, HistoryProgress progress)
-	{
-		long received = summaryValue(progress, "lootValue");
-		HistoryProgress.Row keptRow = summaryRow(progress, "lootKept");
-		long kept = keptRow == null ? received : keptRow.value();
-		long left = Math.max(0, received - kept);
-		JPanel card = card("What it was worth");
-		card.add(row("Loot received", gps(received), accent()));
-		card.add(row("Loot taken", gps(kept)));
-		card.add(row("Loot left", gps(left)));
-		card.add(row("Discarded", gps(summaryValue(progress, "itemsDroppedValue"))));
-		card.add(row("Upkeep", gps(summaryValue(progress, "consumedValue"))));
-		spaced(p, card);
-	}
-
-	private void addKinds(JPanel p, Span span, String first, String second)
-	{
-		boolean whole = wholeRecord();
-		build.forgetNames();
-		Map<String, Long> gained = build.summary.killed(span);
-		Map<String, Long> worth = build.summary.paid();
-		Map<String, Long> loose = Summary.loosely(worth);
-		Map<String, List<Entry<String, Long>>> byKind = new LinkedHashMap<>();
-		for (String name : whole ? gained.keySet() : union(gained.keySet(), worth.keySet()))
-		{
-			long figure = gained.getOrDefault(name, 0L);
-			if (figure <= 0 && Summary.paidFor(worth, loose, name) <= 0)
-			{
-				continue;
-			}
-			byKind.computeIfAbsent(build.names().kind(name), k -> new ArrayList<>())
-				.add(new AbstractMap.SimpleEntry<>(name, figure));
-		}
-		Comparator<Entry<String, Long>> byPaid = (a, b) ->
-		{
-			long wa = Summary.paidFor(worth, loose, a.getKey());
-			long wb = Summary.paidFor(worth, loose, b.getKey());
-			if (wa != wb)
-			{
-				return Long.compare(wb, wa);
-			}
-			return b.getValue().equals(a.getValue())
-				? a.getKey().compareToIgnoreCase(b.getKey())
-				: Long.compare(b.getValue(), a.getValue());
-		};
-		boolean drew = false;
-		for (String kind : new String[]{first, second})
-		{
-			List<Entry<String, Long>> rows = byKind.get(kind);
-			if (rows == null || rows.isEmpty())
-			{
-				continue;
-			}
-			rows.sort(byPaid);
-			addKindBand(p, kind, rows, worth, loose, kind.equals(first));
-			drew = true;
-		}
-		if (!drew)
-		{
-			spaced(p, ghostRow(whole ? "Nothing counted yet." : "Nothing counted this period.", ""));
-		}
-	}
-
-	private static Set<String> union(Set<String> a, Set<String> b)
-	{
-		Set<String> out = new LinkedHashSet<>(a);
-		out.addAll(b);
-		return out;
-	}
-
-	private void addKindBand(JPanel p, String kind, List<Entry<String, Long>> rows,
-		Map<String, Long> worth, Map<String, Long> loose, boolean withIcons)
-	{
-		String stateKey = "history:kind:" + kind;
-		boolean open = foldOpen(stateKey, true);
-		p.add(quietHead(kind, open ? "" : fmt(rows.size()), stateKey));
-		if (!open)
-		{
-			p.add(vgap(4));
-			return;
-		}
-		int cap = histListShown.getOrDefault(stateKey, BAND_CAP);
-		JPanel card = cardPlain();
-		for (Entry<String, Long> e : Sources.firstN(rows, cap))
-		{
-			card.add(kindRow(e.getKey(), e.getValue(),
-				Summary.paidFor(worth, loose, e.getKey()), withIcons));
-		}
-		addMore(card, stateKey, rows.size(), cap, false);
-		spaced(p, card);
-	}
-
-	private static final int BAND_CAP = 12;
 	static final int ICON_W = 22;
 	static final int ICON_H = 18;
-
-	private JPanel kindRow(String name, long figure, long worth, boolean withIcon)
-	{
-		JPanel r = row(name, null);
-		r.setToolTipText(name + ", " + fmt(figure)
-			+ (worth > 0 ? " · " + fmt(worth) + " gp" : ""));
-
-		if (withIcon)
-		{
-			JLabel icon = new JLabel();
-			icon.setPreferredSize(new Dimension(ICON_W, ICON_H));
-			art.mountKindIcon(icon, name);
-			r.add(icon, BorderLayout.WEST);
-		}
-
-		JPanel figures = new JPanel();
-		figures.setLayout(new BoxLayout(figures, BoxLayout.X_AXIS));
-		figures.setOpaque(false);
-		figures.add(styled(new JLabel(fmt(figure)), FontManager.getRunescapeFont(), dim()));
-		if (worth > 0)
-		{
-			figures.add(Box.createHorizontalStrut(6));
-			figures.add(styled(new JLabel(gp(worth)), FontManager.getRunescapeFont(), accent()));
-		}
-		r.add(figures, BorderLayout.EAST);
-
-		link(r, () -> openSourceLoose(name));
-		return r;
-	}
-
-	private static final String[] HEADLINE_KEYS = {"kills", "slayerTasksCompleted"};
-
-	private JPanel headline(HistoryProgress progress, List<Entry<String, Long>> gains,
-		Summary.Stand stand, HistoryLog.Levels opened, long[] played)
-	{
-		JPanel card = card(sessionPeriod() ? "This sitting" : "The period");
-		long xp = sumOf(gains);
-		if ("PvM".equals(histFacet))
-		{
-			card.add(row("Monsters slain", "+" + fmt(summaryValue(progress, "kills"))));
-			card.add(row("Deaths", "+" + fmt(summaryValue(progress, "deaths"))));
-			card.add(row("Slayer tasks completed",
-				"+" + fmt(summaryValue(progress, "slayerTasksCompleted"))));
-			return card;
-		}
-		boolean fixed = "Skills".equals(histFacet);
-		if (fixed || played[1] > 0)
-		{
-			card.add(row("Time played", hoursMinutes(played[0])));
-			if (!sessionPeriod())
-			{
-				card.add(row("Sessions", fmt(played[1])));
-			}
-		}
-		if (fixed || xp > 0)
-		{
-			card.add(row("Experience", "+" + gp(xp), xp > 0 ? accent() : null));
-		}
-		HistoryLog.Levels closed = stand.closed;
-		boolean paired = closed.drawn == opened.drawn;
-		if (fixed || paired && closed.nines > opened.nines)
-		{
-			card.add(row("99s reached", fmt(paired ? Math.max(0, closed.nines - opened.nines) : 0)));
-		}
-		if (fixed)
-		{
-			return card;
-		}
-		for (String key : HEADLINE_KEYS)
-		{
-			HistoryProgress.Row r = summaryRow(progress, key);
-			if (r != null)
-			{
-				card.add(row(r.label(), "+" + figure(r)));
-			}
-		}
-		HistoryProgress.Row drops = summaryRow(progress, "dropsReceived");
-		HistoryProgress.Row value = summaryRow(progress, "lootValue");
-		if (drops != null)
-		{
-			card.add(row(drops.label(), "+" + fmt(drops.value())
-				+ (value != null ? " · " + gp(value.value()) : "")));
-		}
-		else if (value != null)
-		{
-			card.add(row(value.label(), "+" + figure(value)));
-		}
-		HistoryProgress.Row deaths = summaryRow(progress, "deaths");
-		if (deaths != null)
-		{
-			card.add(row(deaths.label(), "+" + figure(deaths)));
-		}
-		return card;
-	}
-
-	private static long summaryValue(HistoryProgress progress, String key)
-	{
-		HistoryProgress.Row r = summaryRow(progress, key);
-		return r == null ? 0 : r.value();
-	}
-
-	private static HistoryProgress.Row summaryRow(HistoryProgress progress, String key)
-	{
-		for (HistoryProgress.Row r : progress.summary())
-		{
-			if (r.key().equals(key))
-			{
-				return r;
-			}
-		}
-		return null;
-	}
 
 	private void addSkillGrid(JPanel p, List<Entry<String, Long>> gains, Summary.Stand stand,
 		HistoryLog.Levels opened)
@@ -4608,7 +4275,6 @@ class ChroniclePanel extends PluginPanel
 		return cell;
 	}
 
-	private String histFacet = "Skills";
 	private String periodTip;
 	private String sheetPage;
 	private String measuredSince;
@@ -4952,43 +4618,12 @@ class ChroniclePanel extends PluginPanel
 		{
 			measuredSince = b.measuredSince;
 		}
-		if (view == View.SHEET)
-		{
-			periodTip = periodTip(b.played, b.gains);
-		}
-		else
-		{
-			spaced(p, headline(b.progress, b.gains, b.stand, b.opened, b.played), 5);
-		}
+		periodTip = periodTip(b.played, b.gains);
 		if (b.since != null)
 		{
 			spaced(p, note(b.since), 5);
 		}
-		Period w = window();
-		if ("PvM".equals(histFacet))
-		{
-			addLootValues(p, b.progress);
-			addKinds(p, new Span(b.opening, b.earliest, b.closing), Sources.BOSS, Sources.MONSTER);
-		}
-		else if ("Activities".equals(histFacet))
-		{
-			addKinds(p, new Span(b.opening, b.earliest, b.closing), Sources.ACTIVITY, Sources.SKILLING);
-		}
-		else if ("Trackers".equals(histFacet))
-		{
-			if (wholeRecord())
-			{
-				p.add(buildStats());
-			}
-			else if (!b.progress.groups().isEmpty() || !b.gains.isEmpty())
-			{
-				spaced(p, trackedProgress(b.progress, b.gains, b.named), 5);
-			}
-		}
-		else
-		{
-			addSkillGrid(p, b.gains, b.stand, b.opened);
-		}
+		addSkillGrid(p, b.gains, b.stand, b.opened);
 		return p;
 	}
 
