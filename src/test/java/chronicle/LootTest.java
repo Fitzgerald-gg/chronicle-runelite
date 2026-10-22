@@ -9,6 +9,7 @@ import java.util.List;
 import net.runelite.api.TileItem;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.GameState;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.http.api.loottracker.LootRecordType;
@@ -327,5 +328,73 @@ public class LootTest
 		h.chat("You find some coal inside.").tick().logout().login().ticks(2);
 		assertEquals(2, chestLoots());
 		assertEquals(25, qty(chestItems(), ItemID.COAL));
+	}
+
+	private static final int NOTED_DIAMOND = ItemID.UNCUT_DIAMOND + 1;
+
+	private Harness diamondLines(int openings)
+	{
+		h.noted(NOTED_DIAMOND, ItemID.UNCUT_DIAMOND);
+		for (int i = 0; i < openings; i++)
+		{
+			h.chat("You find some uncut diamonds inside.").ticks(8);
+		}
+		return h;
+	}
+
+	private int diamonds()
+	{
+		return qty(chestItems(), ItemID.UNCUT_DIAMOND);
+	}
+
+	@Test
+	public void checkingTheBagAddsTheBigDiamondRollsTheLineCouldNotSee()
+	{
+		h.noted(NOTED_DIAMOND, ItemID.UNCUT_DIAMOND);
+		wilderness(true).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 10);
+		diamondLines(3).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 25);
+		assertEquals(3, chestLoots());
+		assertEquals(15, diamonds());
+	}
+
+	@Test
+	public void anEmptyBagSeenInTheCheckWindowStartsTheCountAtNothing()
+	{
+		wilderness(false).checkEmptyBag().tick();
+		diamondLines(2).checkBag(NOTED_DIAMOND, 8).tick();
+		assertEquals(2, chestLoots());
+		assertEquals(8, diamonds());
+	}
+
+	@Test
+	public void aGapNoMixOfBigRollsExplainsIsLeftAlone()
+	{
+		wilderness(true).chat("You empty all of your containers into the bank.");
+		diamondLines(1).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 7);
+		diamondLines(1).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 22);
+		assertEquals(6, diamonds());
+		wilderness(false).chat("You empty all of your containers into the bank.");
+		diamondLines(1).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 6);
+		assertEquals(9, diamonds());
+	}
+
+	@Test
+	public void withoutAnEarlierReadingTheFirstCheckOnlySetsTheCount()
+	{
+		wilderness(true);
+		diamondLines(1).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 6);
+		assertEquals(3, diamonds());
+	}
+
+	@Test
+	public void takingOrDepositingDiamondsForgetsTheCount()
+	{
+		wilderness(true).chat("You empty all of your containers into the bank.");
+		diamondLines(1).click("Take", "Uncut diamond", NOTED_DIAMOND).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 6);
+		assertEquals(3, diamonds());
+		h.pack(ItemID.LOOTING_BAG_OPEN, 1, NOTED_DIAMOND, 6).chat("You empty all of your containers into the bank.");
+		diamondLines(1).pack(ItemID.LOOTING_BAG_OPEN, 1).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 12);
+		assertEquals(6, diamonds());
+		assertEquals(2, chestLoots());
 	}
 }

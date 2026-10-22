@@ -89,6 +89,9 @@ public class ChronicleEventCapture
 	private static final Pattern ROGUES_CHEST = Pattern.compile("You find (?:a|some) (.+) inside\\.");
 	private static final String ROGUES_CHEST_NAME = "Rogues' Chest";
 	private static final int ROGUES_REPORT_TICKS = 6;
+	private static final int[] BIG_DIAMOND_ROLL = {5, 6};
+	private static final String BAG_EMPTY = "The bag is empty.";
+	private static final String CONTAINERS_BANKED = "You empty all of your containers into the bank.";
 	// item, medium-diary amount, hard-diary amount
 	private static final Map<String, int[]> ROGUES_LOOT = Map.ofEntries(
 		Map.entry("nature runes", new int[]{ItemID.NATURERUNE, 40, 50}),
@@ -262,6 +265,10 @@ public class ChronicleEventCapture
 	private int roguesPendingTick = -1;
 	private String roguesOwner;
 	private boolean roguesCarried;
+	private boolean roguesHard;
+	private final LootingBagDiamonds bagDiamonds = new LootingBagDiamonds();
+	private int bagWindowTick = -1;
+	private int heldDiamonds = -1;
 
 	void reset()
 	{
@@ -491,6 +498,10 @@ public class ChronicleEventCapture
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
+		if ("Take".equals(event.getMenuOption()) && unnoted(event.getId()) == ItemID.UNCUT_DIAMOND)
+		{
+			bagDiamonds.forget();
+		}
 		if (!event.isItemOp() || !"Drop".equals(event.getMenuOption()) || event.getItemId() <= 0)
 		{
 			return;
@@ -742,10 +753,70 @@ public class ChronicleEventCapture
 		ItemStack item = roguesPending;
 		roguesPending = null;
 		roguesCarried = false;
-		if (who.equals(roguesOwner))
+		if (!who.equals(roguesOwner))
 		{
-			emitLoot(ROGUES_CHEST_NAME, LootRecordType.EVENT, Collections.singletonList(item));
+			return;
 		}
+		emitLoot(ROGUES_CHEST_NAME, LootRecordType.EVENT, Collections.singletonList(item));
+		if (item.getId() == ItemID.UNCUT_DIAMOND)
+		{
+			bagDiamonds.opened(item.getQuantity(), BIG_DIAMOND_ROLL[roguesHard ? 1 : 0] - item.getQuantity());
+		}
+	}
+
+	private void readBag(long diamonds)
+	{
+		if (roguesPending != null && roguesPending.getId() == ItemID.UNCUT_DIAMOND)
+		{
+			flushRoguesChest();
+		}
+		long extra = bagDiamonds.read(diamonds);
+		String who = localName();
+		if (extra > 0 && who != null)
+		{
+			localStore.topUpLoot(ROGUES_CHEST_NAME, ItemID.UNCUT_DIAMOND, extra, who);
+		}
+	}
+
+	private void readBagWindow()
+	{
+		ItemContainer bag = client.getItemContainer(InventoryID.LOOTING_BAG);
+		if (bag != null)
+		{
+			readBag(diamondsIn(bag));
+			return;
+		}
+		Widget items = client.getWidget(InterfaceID.WildernessLootingbag.ITEMS);
+		Widget[] lines = items == null ? null : items.getDynamicChildren();
+		if (lines != null && Arrays.stream(lines).anyMatch(w -> w != null && BAG_EMPTY.equals(w.getText())))
+		{
+			readBag(0);
+		}
+	}
+
+	private long diamondsIn(ItemContainer container)
+	{
+		long n = 0;
+		for (Map.Entry<Integer, Integer> e : containerCounts(container).entrySet())
+		{
+			if (unnoted(e.getKey()) == ItemID.UNCUT_DIAMOND)
+			{
+				n += e.getValue();
+			}
+		}
+		return n;
+	}
+
+	private void watchHeldDiamonds(ItemContainer inventory)
+	{
+		Map<Integer, Integer> held = containerCounts(inventory);
+		int diamonds = (int) diamondsIn(inventory);
+		boolean bag = held.containsKey(ItemID.LOOTING_BAG) || held.containsKey(ItemID.LOOTING_BAG_OPEN);
+		if (!bag || diamonds < heldDiamonds)
+		{
+			bagDiamonds.forget();
+		}
+		heldDiamonds = diamonds;
 	}
 
 	private void addLoot(JsonObject data, String source, Collection<ItemStack> items)
@@ -806,6 +877,10 @@ public class ChronicleEventCapture
 		{
 			emitQuestFromScroll();
 		}
+		if (event.getGroupId() == InterfaceID.WILDERNESS_LOOTINGBAG)
+		{
+			bagWindowTick = client.getTickCount() + 1;
+		}
 	}
 
 	@Subscribe
@@ -820,6 +895,16 @@ public class ChronicleEventCapture
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event)
 	{
+		if (event.getContainerId() == InventoryID.LOOTING_BAG)
+		{
+			readBag(diamondsIn(event.getItemContainer()));
+			return;
+		}
+		if (event.getContainerId() == InventoryID.INV)
+		{
+			watchHeldDiamonds(event.getItemContainer());
+			return;
+		}
 		if (!groupStorageOpen || event.getContainerId() != InventoryID.INV_GROUP_TEMP)
 		{
 			return;
@@ -953,6 +1038,7 @@ public class ChronicleEventCapture
 		{
 			return;
 		}
+		bagDiamonds.forget();
 		JsonObject data = new JsonObject();
 		try
 		{
@@ -1042,10 +1128,15 @@ public class ChronicleEventCapture
 			{
 				flushRoguesChest();
 			}
-			boolean hard = client.getVarbitValue(VarbitID.WILDERNESS_DIARY_HARD_COMPLETE) == 1;
-			roguesPending = new ItemStack(row[0], hard ? row[2] : row[1]);
+			roguesHard = client.getVarbitValue(VarbitID.WILDERNESS_DIARY_HARD_COMPLETE) == 1;
+			roguesPending = new ItemStack(row[0], roguesHard ? row[2] : row[1]);
 			roguesPendingTick = client.getTickCount();
 			roguesOwner = localName();
+			return;
+		}
+		if (CONTAINERS_BANKED.equals(msg))
+		{
+			readBag(0);
 			return;
 		}
 
@@ -1212,6 +1303,11 @@ public class ChronicleEventCapture
 		{
 			flushRoguesChest();
 		}
+		if (bagWindowTick >= 0 && client.getTickCount() >= bagWindowTick)
+		{
+			bagWindowTick = -1;
+			readBagWindow();
+		}
 		sweepTimedOutLoot();
 		flushUntakenLoot();
 
@@ -1246,6 +1342,11 @@ public class ChronicleEventCapture
 		if (state == GameState.LOADING)
 		{
 			unloaded.addAll(groundLoot.keySet());
+		}
+		if (state == GameState.LOGIN_SCREEN)
+		{
+			bagDiamonds.forget();
+			heldDiamonds = -1;
 		}
 		if (state == GameState.HOPPING || state == GameState.LOGIN_SCREEN)
 		{

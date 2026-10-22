@@ -571,6 +571,28 @@ final class Harness
 
 	Harness container(int id, int... idQty)
 	{
+		return post(new ItemContainerChanged(id, stock(id, idQty)));
+	}
+
+	Harness checkBag(int... idQty)
+	{
+		stock(InventoryID.LOOTING_BAG, idQty);
+		widgets.remove(InterfaceID.WildernessLootingbag.ITEMS);
+		return widget(InterfaceID.WILDERNESS_LOOTINGBAG);
+	}
+
+	Harness checkEmptyBag()
+	{
+		containers.remove(InventoryID.LOOTING_BAG);
+		Widget empty = text("The bag is empty.");
+		Widget items = mock(Widget.class);
+		when(items.getDynamicChildren()).thenReturn(new Widget[]{empty});
+		widgets.put(InterfaceID.WildernessLootingbag.ITEMS, items);
+		return widget(InterfaceID.WILDERNESS_LOOTINGBAG);
+	}
+
+	private ItemContainer stock(int id, int... idQty)
+	{
 		Item[] held = new Item[idQty.length / 2];
 		for (int i = 0; i < held.length; i++)
 		{
@@ -588,7 +610,7 @@ final class Harness
 			.filter(it -> it != null && it.getId() == i.<Integer>getArgument(0)).mapToInt(Item::getQuantity).sum());
 		when(c.getId()).thenReturn(id);
 		containers.put(id, c);
-		return post(new ItemContainerChanged(id, c));
+		return c;
 	}
 
 	Harness widget(int group)

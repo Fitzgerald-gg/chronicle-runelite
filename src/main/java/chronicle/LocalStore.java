@@ -356,7 +356,7 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			{
 				src.addProperty("last_seen", nowMs);
 			}
-			rollTaken(source, batchValue, priced, killTime);
+			rollTaken(source, batchValue, priced, killTime, true);
 			for (BagItem b : priced)
 			{
 				recentDrops.addFirst(new RecentDrop(b.itemId, (int) b.qty, b.name));
@@ -381,22 +381,46 @@ class LocalStore implements chronicle.counters.GatheredLedger
 					appendFeed("RECORD", rec);
 				}
 			}
-			JsonObject bag = sub(src, "items");
-			for (BagItem b : priced)
-			{
-				String key = String.valueOf(b.itemId);
-				JsonObject cur = isObject(bag, key) ? bag.getAsJsonObject(key) : null;
-				if (cur == null)
-				{
-					cur = new JsonObject();
-					cur.addProperty("id", b.itemId);
-					bag.add(key, cur);
-				}
-				cur.addProperty("name", b.name);
-				bump(cur, "qty", b.qty);
-				bump(cur, "value", b.value);
-			}
+			fileItems(src, priced);
 			touch();
+		}
+	}
+
+	void topUpLoot(String source, int itemId, long qty, String rsn)
+	{
+		if (!isReadyFor(rsn) || qty <= 0)
+		{
+			return;
+		}
+		revision++;
+		List<BagItem> priced = List.of(price(itemId, qty));
+		long value = priced.get(0).value;
+		synchronized (lock)
+		{
+			JsonObject src = sourceIn(root.getAsJsonObject("drops"), source);
+			bump(src, "value", value);
+			rollTaken(source, value, priced, null, false);
+			fileItems(src, priced);
+			touch();
+		}
+	}
+
+	private static void fileItems(JsonObject src, List<BagItem> priced)
+	{
+		JsonObject bag = sub(src, "items");
+		for (BagItem b : priced)
+		{
+			String key = String.valueOf(b.itemId);
+			JsonObject cur = isObject(bag, key) ? bag.getAsJsonObject(key) : null;
+			if (cur == null)
+			{
+				cur = new JsonObject();
+				cur.addProperty("id", b.itemId);
+				bag.add(key, cur);
+			}
+			cur.addProperty("name", b.name);
+			bump(cur, "qty", b.qty);
+			bump(cur, "value", b.value);
 		}
 	}
 
@@ -490,19 +514,20 @@ class LocalStore implements chronicle.counters.GatheredLedger
 		return o != null && isObject(o, key) ? o.getAsJsonObject(key) : new JsonObject();
 	}
 
-	private void rollTaken(String source, long value, List<BagItem> priced, Double killTime)
+	private void rollTaken(String source, long value, List<BagItem> priced, Double killTime, boolean opening)
 	{
+		int loots = opening ? 1 : 0;
 		for (JsonObject into : new JsonObject[]{dayRoll(), sessionRoll})
 		{
-			bump(into, "loots", 1);
+			bump(into, "loots", loots);
 			bump(into, "value", value);
 			JsonObject bySource = sub(sub(into, "sources"), source);
-			bump(bySource, "loots", 1);
+			bump(bySource, "loots", loots);
 			bump(bySource, "value", value);
 			timeKill(bySource, killTime);
 			JsonObject items = sub(into, "items");
 			JsonObject mine = sub(bySource, "items");
-			bump(bySource, "filed", 1);
+			bump(bySource, "filed", loots);
 			for (BagItem b : priced)
 			{
 				String id = String.valueOf(b.itemId);
