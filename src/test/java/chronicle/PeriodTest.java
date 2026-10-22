@@ -5,6 +5,7 @@ package chronicle;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import java.awt.image.BufferedImage;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -111,5 +112,31 @@ public class PeriodTest
 		List<String> cal = h.period("Month", JUNE).screen("Calendar");
 		assertTrue(cal.toString(), has(cal, "JUNE 2026"));
 		assertTrue(cal.toString(), has(cal, "Written"));
+	}
+
+	@Test
+	public void theRecapPictureIsOnlyAsWideAsWhatItHoldsAndNeverLargerThanTheScreen()
+	{
+		h.login().kill("Vorkath", 8061, 536, 2).tick();
+		LocalDate today = LocalDate.now();
+		int quiet = h.period("Lifetime", today).picture().getWidth();
+		assertTrue(quiet + " wide", quiet < 1920);
+		h.everyTracker(1000);
+		for (int i = 0; i < 30; i++)
+		{
+			h.chat("You have a funny feeling like you're being followed.");
+			h.chat("New item added to your collection log: Pet " + i);
+			h.tick().chat("Your Monster " + i + " kill count is: 5.");
+			h.chat("Fight duration: 1:20.00 (new personal best)");
+			h.kill("Monster " + i, 1000 + i, 526, 1, 1618, i + 1);
+		}
+		h.tick();
+		for (String g : new String[]{"Lifetime", "Year", "Month", "Week", "Day", "Session"})
+		{
+			BufferedImage full = h.period(g, today).picture();
+			assertTrue(g + " is " + full.getWidth() + " wide", full.getWidth() <= 1920);
+			assertTrue(g + " is " + full.getHeight() + " tall", full.getHeight() <= 1080);
+		}
+		assertEquals(1920, h.period("Lifetime", today).picture().getWidth());
 	}
 }

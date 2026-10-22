@@ -9,6 +9,8 @@ import java.util.List;
 import net.runelite.api.TileItem;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.GameState;
+import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.http.api.loottracker.LootRecordType;
 import org.junit.Test;
 import static chronicle.Harness.has;
@@ -216,5 +218,79 @@ public class LootTest
 		assertTrue(fresh.said().stream().anyMatch(s -> s.startsWith("Chronicle: adopted 2 sources")));
 		fresh.logout().login();
 		assertEquals(430, fresh.journal().getAsJsonObject("drops").getAsJsonObject("Zulrah").get("loots").getAsInt());
+	}
+
+	private Harness wilderness(boolean hardDiary)
+	{
+		return h.varbit(VarbitID.INSIDE_WILDERNESS, 1).varbit(VarbitID.WILDERNESS_DIARY_HARD_COMPLETE, hardDiary ? 1 : 0);
+	}
+
+	private int chestLoots()
+	{
+		JsonObject chest = drops().getAsJsonObject("Rogues' Chest");
+		return chest == null ? 0 : chest.get("loots").getAsInt();
+	}
+
+	private JsonObject chestItems()
+	{
+		return drops().getAsJsonObject("Rogues' Chest").getAsJsonObject("items");
+	}
+
+	private static int qty(JsonObject items, int id)
+	{
+		JsonObject it = items.getAsJsonObject(String.valueOf(id));
+		return it == null ? 0 : it.get("qty").getAsInt();
+	}
+
+	@Test
+	public void aRoguesChestOpeningTheLootingBagSwallowedIsFiledFromItsLine()
+	{
+		wilderness(true).chat("You find some death runes inside.").ticks(8);
+		assertEquals(1, chestLoots());
+		assertEquals(62, qty(chestItems(), ItemID.DEATHRUNE));
+		wilderness(false).chat("You find some coins inside.").ticks(8);
+		assertEquals(2, chestLoots());
+		assertEquals(4500, qty(chestItems(), ItemID.COINS));
+	}
+
+	@Test
+	public void aRoguesChestOpeningTheTrackerAlsoReportsIsFiledOnce()
+	{
+		h.noted(ItemID.UNCUT_EMERALD + 1, ItemID.UNCUT_EMERALD);
+		wilderness(true).chat("You find some uncut emeralds inside.").ticks(4);
+		h.loot("Rogues' Chest", LootRecordType.EVENT, ItemID.UNCUT_EMERALD + 1, 12).ticks(8);
+		assertEquals(1, chestLoots());
+		assertEquals(12, qty(chestItems(), ItemID.UNCUT_EMERALD + 1));
+		h.loot("Rogues' Chest", LootRecordType.EVENT, ItemID.COINS, 5625);
+		h.chat("You find some coins inside.").ticks(8);
+		assertEquals(2, chestLoots());
+		assertEquals(5625, qty(chestItems(), ItemID.COINS));
+	}
+
+	@Test
+	public void theLootingBagAndAVialAreNotChestLootAndOtherChestsLoseOnlyTheBag()
+	{
+		wilderness(true).chat("You find a prayer potion inside.");
+		h.loot("Rogues' Chest", LootRecordType.EVENT, ItemID.LOOTING_BAG, 1, ItemID.VIAL_EMPTY, 1).ticks(8);
+		assertEquals(1, chestLoots());
+		assertEquals(1, chestItems().size());
+		assertEquals(1, qty(chestItems(), ItemID._2DOSEPRAYERRESTORE));
+		h.loot("Larran's big chest", LootRecordType.EVENT, ItemID.LOOTING_BAG_OPEN, 1, ItemID.COINS, 900);
+		JsonObject larran = drops().getAsJsonObject("Larran's big chest").getAsJsonObject("items");
+		assertEquals(1, larran.size());
+		assertEquals(900, qty(larran, ItemID.COINS));
+	}
+
+	@Test
+	public void onlyAKnownChestLineInTheWildernessIsLootAndEachOpeningCounts()
+	{
+		wilderness(true).chat("You find a clue scroll inside.").ticks(8);
+		h.varbit(VarbitID.INSIDE_WILDERNESS, 0).chat("You find some coins inside.").ticks(8);
+		assertEquals(0, chestLoots());
+		wilderness(true).chat("You find some law runes inside.").ticks(2);
+		h.chat("You find some coal inside.").ticks(8);
+		assertEquals(2, chestLoots());
+		assertEquals(50, qty(chestItems(), ItemID.LAWRUNE));
+		assertEquals(25, qty(chestItems(), ItemID.COAL));
 	}
 }

@@ -207,7 +207,17 @@ final class Harness
 		when(c.getId()).thenReturn(id);
 		when(c.getPrice()).thenReturn(price);
 		when(c.getInventoryActions()).thenReturn(actions.length == 0 ? new String[]{"Eat"} : actions);
+		when(c.getNote()).thenReturn(-1);
+		when(c.getLinkedNoteId()).thenReturn(-1);
 		comps.put(id, c);
+		return this;
+	}
+
+	Harness noted(int id, int of)
+	{
+		ItemComposition c = comp(id);
+		when(c.getNote()).thenReturn(799);
+		when(c.getLinkedNoteId()).thenReturn(of);
 		return this;
 	}
 
@@ -218,6 +228,8 @@ final class Harness
 			ItemComposition c = mock(ItemComposition.class);
 			when(c.getName()).thenReturn("Item " + k);
 			when(c.getId()).thenReturn(k);
+			when(c.getNote()).thenReturn(-1);
+			when(c.getLinkedNoteId()).thenReturn(-1);
 			return c;
 		});
 	}
@@ -792,6 +804,30 @@ final class Harness
 		store().load(DIR, rsn);
 		call(plugin, "reloadHistory", rsn);
 		return this;
+	}
+
+	Harness everyTracker(long value)
+	{
+		JsonObject table = chronicle.counters.Tables.load("stat_registry.json");
+		List<String> keys = new ArrayList<>(table.getAsJsonObject("labels").keySet());
+		for (String group : new String[]{"combat", "livingFlat", "ledger"})
+		{
+			table.getAsJsonArray(group).forEach(k -> keys.add(k.getAsString()));
+		}
+		table.getAsJsonArray("skills").forEach(s -> s.getAsJsonArray().get(2).getAsJsonArray()
+			.forEach(k -> keys.add(k.getAsString())));
+		return edit(j ->
+		{
+			JsonObject t = j.getAsJsonObject("trackers");
+			keys.forEach(k -> t.addProperty(k, value));
+		});
+	}
+
+	BufferedImage picture()
+	{
+		screen("Recap");
+		ChroniclePanel p = (ChroniclePanel) get(plugin, "panel");
+		return (BufferedImage) onEdt(() -> p.recapImage(((Build) get(p, "build")).summary.facts()));
 	}
 
 	JsonArray feed()
