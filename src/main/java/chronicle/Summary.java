@@ -47,7 +47,7 @@ import static chronicle.Json.keyOf;
 import static chronicle.Json.low;
 import static chronicle.Json.obj;
 import static chronicle.Json.safeLong;
-import static chronicle.LocalStore.kindOf;
+import static chronicle.LocalStore.chatKind;
 import static chronicle.Period.noon;
 import static chronicle.Text.climb;
 import static chronicle.Text.count;
@@ -264,10 +264,10 @@ final class Summary
 		{
 			return false;
 		}
-		String kind = kindOf(name);
+		String kind = chatKind(name);
 		for (Kills.Boss b : Kills.bossRoster(build.gson))
 		{
-			if (kindOf(b.name).equals(kind) || Kills.namesInBrackets(name, b.name)
+			if (chatKind(b.name).equals(kind) || Kills.namesInBrackets(name, b.name)
 				|| Kills.paysOutThrough(b.name, name))
 			{
 				return false;
@@ -277,7 +277,7 @@ final class Summary
 		{
 			for (String npc : npcs)
 			{
-				if (kindOf(npc).equals(kind))
+				if (chatKind(npc).equals(kind))
 				{
 					return false;
 				}
@@ -921,7 +921,7 @@ final class Summary
 	static long paidFor(Map<String, Long> worth, Map<String, Long> loose, String name)
 	{
 		Long exact = worth.get(name);
-		return exact != null ? exact : loose.getOrDefault(kindOf(name), 0L);
+		return exact != null ? exact : loose.getOrDefault(chatKind(name), 0L);
 	}
 
 	static Map<String, Long> loosely(Map<String, Long> worth)
@@ -929,7 +929,7 @@ final class Summary
 		Map<String, Long> out = new LinkedHashMap<>();
 		for (Entry<String, Long> e : worth.entrySet())
 		{
-			out.merge(kindOf(e.getKey()), e.getValue(), Long::sum);
+			out.merge(chatKind(e.getKey()), e.getValue(), Long::sum);
 		}
 		return out;
 	}

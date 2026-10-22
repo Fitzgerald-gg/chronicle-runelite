@@ -39,6 +39,7 @@ import static chronicle.Json.safeLong;
 import static chronicle.Json.strMap;
 import static chronicle.Json.strs;
 import static chronicle.Json.table;
+import static chronicle.LocalStore.chatKind;
 import static chronicle.LocalStore.kindOf;
 import static chronicle.Period.dayOf;
 
@@ -154,7 +155,7 @@ final class Kills
 		Map<String, Long> out = new LinkedHashMap<>(chatKcByKind());
 		for (SourceRow r : build.sources())
 		{
-			out.merge(kindOf(r.name), (long) r.kc, Math::max);
+			out.merge(chatKind(r.name), (long) r.kc, Math::max);
 		}
 		kcByKind = out;
 		return out;
@@ -164,7 +165,7 @@ final class Kills
 	{
 		JsonObject cl = build.clog();
 		long best = Math.max(0, lookup(cl, "slayer_kcs", name));
-		String kind = kindOf(name);
+		String kind = chatKind(name);
 		Long byKind = kcByKind().get(kind);
 		if (byKind != null)
 		{
@@ -251,11 +252,11 @@ final class Kills
 			{
 				if (r.qty > 0)
 				{
-					rolledKcs.put(kindOf(r.name), r.qty);
+					rolledKcs.put(chatKind(r.name), r.qty);
 				}
 			}
 		}
-		return rolledKcs.get(kindOf(name));
+		return rolledKcs.get(chatKind(name));
 	}
 
 	LocalDate rollShortOf()
@@ -310,7 +311,7 @@ final class Kills
 
 	boolean isKillSource(String name)
 	{
-		return killKinds().contains(kindOf(name))
+		return killKinds().contains(chatKind(name))
 			|| taskKillsEver().containsKey(name);
 	}
 
@@ -325,14 +326,14 @@ final class Kills
 		Set<String> out = new HashSet<>();
 		for (Boss b : bossRoster(build.gson))
 		{
-			out.add(kindOf(b.name));
+			out.add(chatKind(b.name));
 		}
 		JsonObject cl = build.clog();
 		if (cl != null)
 		{
 			for (String said : obj(cl, "slayer_kcs").keySet())
 			{
-				out.add(kindOf(said));
+				out.add(chatKind(said));
 			}
 		}
 		killKinds = out;
@@ -344,8 +345,8 @@ final class Kills
 		int open = source.lastIndexOf('(');
 		int close = source.lastIndexOf(')');
 		return open > 0 && close > open
-			&& kindOf(source.substring(open + 1, close))
-				.equals(kindOf(boss));
+			&& chatKind(source.substring(open + 1, close))
+				.equals(chatKind(boss));
 	}
 
 	static String beforeBracket(String source)
@@ -438,10 +439,10 @@ final class Kills
 
 	String bossLootSource(Boss b)
 	{
-		String kind = kindOf(b.name);
+		String kind = chatKind(b.name);
 		for (SourceRow r : build.sources())
 		{
-			if (kindOf(r.name).equals(kind))
+			if (chatKind(r.name).equals(kind))
 			{
 				return r.name;
 			}
@@ -461,7 +462,7 @@ final class Kills
 	long standingKills(SourceRow sr)
 	{
 		long own = sr.kc > 0 ? sr.kc : sr.loots;
-		Long said = chatKcByKind().get(LocalStore.chatKind(sr.name));
+		Long said = chatKcByKind().get(chatKind(sr.name));
 		return said == null ? own : Math.max(own, said);
 	}
 
@@ -474,7 +475,7 @@ final class Kills
 			Map<String, Long> out = new LinkedHashMap<>();
 			for (Entry<String, Long> e : build.store.killCounts().entrySet())
 			{
-				out.merge(LocalStore.chatKind(e.getKey()), e.getValue(), Math::max);
+				out.merge(chatKind(e.getKey()), e.getValue(), Math::max);
 			}
 			chatKcByKind = out;
 		}
@@ -483,7 +484,7 @@ final class Kills
 
 	Map<String, Long> killCountSources(SourceRow sr)
 	{
-		String want = LocalStore.chatKind(sr.name);
+		String want = chatKind(sr.name);
 		Map<String, Long> rows = new LinkedHashMap<>();
 		putKind(rows, "Kill Log", LocalStore.killLogCounts(build.clog()), want);
 		putKind(rows, "Chat message", build.store.chatKillCounts(), want);
@@ -506,7 +507,7 @@ final class Kills
 	{
 		for (Entry<String, Long> e : from.entrySet())
 		{
-			if (LocalStore.chatKind(e.getKey()).equals(want) && e.getValue() > 0)
+			if (chatKind(e.getKey()).equals(want) && e.getValue() > 0)
 			{
 				rows.put(label, e.getValue());
 				return;

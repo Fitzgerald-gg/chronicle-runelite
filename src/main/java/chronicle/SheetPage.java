@@ -68,7 +68,7 @@ import static chronicle.Kit.tile;
 import static chronicle.Kit.tip;
 import static chronicle.Kit.value;
 import static chronicle.Kit.vgap;
-import static chronicle.LocalStore.kindOf;
+import static chronicle.LocalStore.chatKind;
 import static chronicle.Period.FULL_DAY;
 import static chronicle.Text.climb;
 import static chronicle.Text.count;
@@ -315,12 +315,12 @@ final class SheetPage
 	private String bossTip(Kills.Boss b)
 	{
 		List<String> lines = new ArrayList<>();
-		String kind = kindOf(b.name);
+		String kind = chatKind(b.name);
 		SourceRow src = null;
 		List<SourceRow> paidOut = new ArrayList<>();
 		for (SourceRow r : panel.build.sources())
 		{
-			if (kindOf(r.name).equals(kind))
+			if (chatKind(r.name).equals(kind))
 			{
 				if (src == null)
 				{

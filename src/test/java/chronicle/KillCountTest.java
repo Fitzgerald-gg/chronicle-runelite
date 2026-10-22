@@ -4,9 +4,11 @@
 package chronicle;
 
 import com.google.gson.JsonObject;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import net.runelite.http.api.loottracker.LootRecordType;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -180,5 +182,18 @@ public class KillCountTest
 		JsonObject adj = lastSpine().getAsJsonObject("adj");
 		assertEquals(-30, adj.getAsJsonObject("kcs").get("Wintertodt").getAsLong());
 		assertEquals(Long.valueOf(20), kc("Wintertodt"));
+	}
+
+	@Test
+	public void aBossNamedWithTheMeetsItsChatCountAndLoot()
+	{
+		h.chat("Your Leviathan kill count is: 30.");
+		h.chat("Your completed Fractured Archive count is: 12.");
+		h.loot("Fractured Archive", LootRecordType.EVENT, 995, 5000);
+		List<String> sheet = h.period("Lifetime", LocalDate.now()).screen("Standing");
+		assertEquals("Kills tracked: 30", Harness.after(sheet, "The Leviathan"));
+		int raid = sheet.lastIndexOf("The Fractured Archive");
+		assertEquals("Kills tracked: 12", sheet.get(raid + 1));
+		assertEquals("Drops: 5,000 \u00b7 5,000 gp", sheet.get(raid + 2));
 	}
 }
