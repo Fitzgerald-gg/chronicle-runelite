@@ -36,7 +36,7 @@ import net.runelite.api.Skill;
 import net.runelite.client.util.AsyncBufferedImage;
 import static chronicle.ChroniclePanel.ACTIVITIES;
 import static chronicle.ChroniclePanel.UNDATED;
-import static chronicle.ChroniclePanel.perOne;
+import static chronicle.LootPage.perOne;
 import static chronicle.Copy.COPY_MOST;
 import static chronicle.Json.has;
 import static chronicle.Json.keyOf;
@@ -654,7 +654,7 @@ final class DetailPage
 			}
 			p.add(group("Loot"));
 			int cap = panel.drawingCopy ? COPY_MOST : panel.drillShown.getOrDefault(name, 25);
-			panel.addBagRows(p, Sources.firstN(bag, cap));
+			panel.loot.addBagRows(p, Sources.firstN(bag, cap));
 			if (bag.size() > cap)
 			{
 				p.add(vgap(3));
@@ -767,8 +767,8 @@ final class DetailPage
 				+ (panel.wholeRecord() ? "." : " in " + panel.window().inSentence() + "."));
 		}
 		rows.sort(StatRegistry::compareRows);
-		panel.addPaceLine(p, craft);
-		panel.statRows(p, rows);
+		panel.ledger.addPaceLine(p, craft);
+		panel.ledger.statRows(p, rows);
 		if (!ground.isEmpty())
 		{
 			p.add(vgap(6));

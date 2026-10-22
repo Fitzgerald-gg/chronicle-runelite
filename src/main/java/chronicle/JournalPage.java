@@ -194,7 +194,7 @@ final class JournalPage
 			plate.add(row("Total level", fmt(overall[0])
 				+ (combat > 0 ? " · combat " + combat : "")));
 		}
-		int[] logStanding = panel.clogStanding();
+		int[] logStanding = panel.clog.clogStanding();
 		int fin = panel.live.clogFinished();
 		if (logStanding != null)
 		{

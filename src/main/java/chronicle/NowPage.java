@@ -122,7 +122,7 @@ final class NowPage
 		ChronicleEventCapture.SlayerView task = panel.live.slayerView();
 		if (task != null && panel.live.slayerSeenThisSession())
 		{
-			panel.addTaskCard(p, task, "Slayer task", ACCENT_SESSION);
+			panel.slayer.addTaskCard(p, task, "Slayer task", ACCENT_SESSION);
 		}
 
 		long began = panel.live.sessionStart();

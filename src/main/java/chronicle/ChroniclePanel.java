@@ -10,7 +10,6 @@ package chronicle;
 
 import chronicle.HistoryLog.Baseline;
 import chronicle.Kit.ScrollColumn;
-import chronicle.LocalStore.BagItem;
 import chronicle.LocalStore.SlayerJourney;
 import chronicle.LocalStore.SlayerTask;
 import chronicle.panel.StatRegistry;
@@ -32,8 +31,6 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -91,43 +88,33 @@ import static chronicle.Kit.ROW_CAP;
 import static chronicle.Kit.card;
 import static chronicle.Kit.clicker;
 import static chronicle.Kit.column;
-import static chronicle.Kit.copyHeader;
 import static chronicle.Kit.copyLabel;
 import static chronicle.Kit.day;
 import static chronicle.Kit.dim;
-import static chronicle.Kit.ghostRow;
 import static chronicle.Kit.link;
 import static chronicle.Kit.linkRow;
 import static chronicle.Kit.menuItem;
 import static chronicle.Kit.moreRow;
 import static chronicle.Kit.nested;
 import static chronicle.Kit.note;
-import static chronicle.Kit.noted;
 import static chronicle.Kit.overlayBar;
 import static chronicle.Kit.pad;
 import static chronicle.Kit.part;
-import static chronicle.Kit.progress;
 import static chronicle.Kit.reportCopy;
 import static chronicle.Kit.row;
 import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
 import static chronicle.Kit.styled;
 import static chronicle.Kit.sumOf;
-import static chronicle.Kit.tallyCard;
 import static chronicle.Kit.tip;
 import static chronicle.Kit.unlight;
-import static chronicle.Kit.value;
 import static chronicle.Kit.wash;
-import static chronicle.LocalStore.kindOf;
-import static chronicle.Period.TASK_DAY;
 import static chronicle.Period.dayOf;
 import static chronicle.Text.count;
 import static chronicle.Text.fmt;
 import static chronicle.Text.gp;
-import static chronicle.Text.gps;
 import static chronicle.Text.hoursMinutes;
 import static chronicle.Text.named;
-import static chronicle.Text.qtyGp;
 
 class ChroniclePanel extends PluginPanel
 {
@@ -883,55 +870,12 @@ class ChroniclePanel extends PluginPanel
 
 	boolean onTaskOnly;
 
-	boolean everOnTask()
-	{
-		return !build.taskItems().isEmpty();
-	}
-
 
 	boolean dropsLeftBehind;
 	String lootKind;
 	String lootTask;
 
 	boolean dropsByKind;
-
-	static String perOne(long value, long n, boolean killed)
-	{
-		return gp(value / Math.max(1, n)) + (killed ? " gp/drop" : " gp each");
-	}
-
-	void addKindRows(JPanel p, List<BagItem> bag)
-	{
-		for (Kind k : kindsOf(bag))
-		{
-			JPanel r = row(k.name, qtyGp(k.qty, k.value), ACCENT_LIFETIME);
-			r.setToolTipText(count(k.distinct, "distinct item"));
-			link(r, () ->
-			{
-				lootKind = k.name;
-				rebuildInPlace();
-			});
-			p.add(r);
-		}
-	}
-
-	JPanel kindDrill(JPanel p, List<BagItem> bag, String key)
-	{
-		final List<BagItem> kept = ofKind(bag);
-		final long[] mine = LocalStore.tallyOf(kept);
-		spaced(p, bagCard(lootKind, kept, mine));
-		p.add(backToKinds(kept.size()));
-		if (kept.isEmpty())
-		{
-			return noted(p, "Nothing of this kind here.");
-		}
-		p.add(copyHeader(lootKind, () -> copyPicture(
-			lootPicture(lootKind, kept, mine, false), true)));
-		int cap = drillShown.getOrDefault(key + lootKind, ROW_CAP);
-		addBagRows(p, Sources.firstN(kept, cap));
-		drillMore(p, key + lootKind, kept.size(), cap);
-		return p;
-	}
 
 	List<GrindBook.GrindRow> grindsCache;
 	boolean grindsFetching;
@@ -989,20 +933,7 @@ class ChroniclePanel extends PluginPanel
 	String slayerLens = "Tasks";
 	int slayerShown = ROW_CAP;
 
-	void addTaskCard(JPanel p, ChronicleEventCapture.SlayerView task, String title, Color ink)
-	{
-		JPanel card = card(title);
-		card.add(row(task.task, task.remaining + " left", ink));
-		if (task.initial > 0)
-		{
-			card.add(progress(1f - (float) task.remaining / task.initial));
-		}
-		card.setToolTipText("Open this task's page");
-		link(card, this::openCurrentTask);
-		spaced(p, card);
-	}
-
-	private void openCurrentTask()
+	void openCurrentTask()
 	{
 		ChronicleEventCapture.SlayerView live = this.live.slayerView();
 		if (live == null)
@@ -1058,21 +989,6 @@ class ChroniclePanel extends PluginPanel
 		applyTab(View.SLAYER);
 	}
 
-	JPanel lootPicture(String title, List<BagItem> bag, long[] sum, boolean kinds)
-	{
-		JPanel page = column();
-		spaced(page, bagCard(title, bag, sum));
-		if (kinds)
-		{
-			addKindRows(page, bag);
-		}
-		else
-		{
-			addBagRows(page, bag);
-		}
-		return page;
-	}
-
 	Runnable relens(Runnable change)
 	{
 		return () ->
@@ -1101,37 +1017,6 @@ class ChroniclePanel extends PluginPanel
 		more(p, size, cap, false, n -> drillShown.put(key, n));
 	}
 
-	private static final class Kind
-	{
-		final String name;
-		long qty;
-		long value;
-		int distinct;
-
-		Kind(String name)
-		{
-			this.name = name;
-		}
-	}
-
-	static final String UNFILED = "Everything else";
-
-	private List<Kind> kindsOf(List<BagItem> bag)
-	{
-		Map<String, Kind> by = new LinkedHashMap<>();
-		for (BagItem b : bag)
-		{
-			String k = ItemKinds.kindOf(b.name);
-			Kind row = by.computeIfAbsent(k == null ? UNFILED : k, Kind::new);
-			row.qty += b.qty;
-			row.value += b.value;
-			row.distinct++;
-		}
-		List<Kind> out = new ArrayList<>(by.values());
-		out.sort(Comparator.comparingLong((Kind k) -> k.value).reversed());
-		return out;
-	}
-
 	JLabel sprite(int itemId, String name, long qty)
 	{
 		JLabel slot = new JLabel();
@@ -1141,68 +1026,6 @@ class ChroniclePanel extends PluginPanel
 		link(slot, () -> openItem(name));
 		store.items().getImage(itemId, (int) Math.min(Integer.MAX_VALUE, qty), qty > 1).addTo(slot);
 		return slot;
-	}
-
-	JPanel bagCard(String title, List<BagItem> bag, long[] sum)
-	{
-		JPanel head = tallyCard(title, "Items", fmt(sum[0]), ACCENT_LIFETIME, sum[1]);
-		head.add(row("Distinct items", fmt(bag.size())));
-		return head;
-	}
-
-	private JPanel backToKinds(int held)
-	{
-		return linkRow("< All kinds", count(held, "item"), () ->
-		{
-			lootKind = null;
-			rebuildInPlace();
-		});
-	}
-
-	void addBagRows(JPanel p, List<BagItem> bag)
-	{
-		for (BagItem b : bag)
-		{
-			JPanel r = row(named(b.name, b.qty),
-				b.value > 0 ? gps(b.value) : "");
-			link(r, () -> openItem(b.name));
-			p.add(r);
-		}
-	}
-
-	private List<BagItem> ofKind(List<BagItem> bag)
-	{
-		if (lootKind == null)
-		{
-			return bag;
-		}
-		List<BagItem> kept = new ArrayList<>();
-		for (BagItem b : bag)
-		{
-			String k = ItemKinds.kindOf(b.name);
-			if (UNFILED.equals(lootKind) ? k == null : lootKind.equals(k))
-			{
-				kept.add(b);
-			}
-		}
-		return kept;
-	}
-
-	static boolean journeyMoved(SlayerJourney was,
-		SlayerJourney now)
-	{
-		if (was == null)
-		{
-			return true;
-		}
-		if (was.completedTasks != now.completedTasks
-			|| was.totalKills != now.totalKills
-			|| was.tasks.size() != now.tasks.size())
-		{
-			return true;
-		}
-		return !was.tasks.isEmpty()
-			&& was.tasks.get(0).kills != now.tasks.get(0).kills;
 	}
 
 	final Map<String, Integer> drillShown = new LinkedHashMap<>();
@@ -1401,44 +1224,6 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	int[] clogStanding()
-	{
-		int avail = live.clogAvailable();
-		return avail > 0 ? new int[]{live.clogFinished(), avail} : null;
-	}
-
-	void addPaceLine(JPanel p, String section)
-	{
-		PaceBook.Pace pace;
-		try
-		{
-			pace = live.pace(section);
-		}
-		catch (RuntimeException e)
-		{
-			return;
-		}
-		if (pace == null)
-		{
-			return;
-		}
-		if (pace.hasHorizon())
-		{
-			String target = pace.targetLevel != null
-				? String.valueOf(pace.targetLevel) : "200m";
-			p.add(ghostRow(target + " in " + count(pace.daysOfPlay, "day") + " of play",
-				gp((long) pace.xpPerActiveDay) + "/day"));
-			if (pace.activeDays < 3)
-			{
-				p.add(ghostRow("measured over " + count(pace.activeDays, "day"), ""));
-			}
-		}
-		else if (pace.dormant() && pace.lastActive != null)
-		{
-			p.add(ghostRow("last moved " + pace.lastActive.format(TASK_DAY), ""));
-		}
-	}
-
 	private final Set<String> openFolds = new HashSet<>();
 
 	boolean foldOpen(String key)
@@ -1482,25 +1267,6 @@ class ChroniclePanel extends PluginPanel
 	Map<String, Long> consumVals = new LinkedHashMap<>();
 
 	long resourcesDropped;
-
-	void statRows(JPanel p, List<Entry<String, Long>> rows)
-	{
-		for (Entry<String, Long> e : rows)
-		{
-			p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
-		}
-	}
-
-	String rowValue(Entry<String, Long> e)
-	{
-		String base = value(e);
-		if (e.getKey().equals("resourcesGatheredValue") && resourcesDropped > 0)
-		{
-			return base + " · " + gp(resourcesDropped) + " dropped";
-		}
-		Long cv = wholeRecord() ? consumVals.get(e.getKey()) : null;
-		return cv != null && cv > 0 ? base + " · " + gps(cv) : base;
-	}
 
 	JPanel subHead(String label, String totalStr, String stateKey)
 	{

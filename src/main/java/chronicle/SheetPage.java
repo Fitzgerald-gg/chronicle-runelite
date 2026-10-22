@@ -174,7 +174,7 @@ final class SheetPage
 		else if ("Collections".equals(label))
 		{
 			figure = panel.live.clogFinished();
-			int[] logStanding = panel.clogStanding();
+			int[] logStanding = panel.clog.clogStanding();
 			hover = tip("Collection log",
 				"Obtained", fmt(figure),
 				"Available", logStanding != null ? fmt(logStanding[1]) : "not yet",

@@ -17,10 +17,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BooleanSupplier;
 import javax.swing.JPanel;
 import static chronicle.ChroniclePanel.UNDATED;
-import static chronicle.ChroniclePanel.perOne;
 import static chronicle.Copy.copyPicture;
 import static chronicle.Feed.most;
 import static chronicle.Kit.ACCENT_LIFETIME;
@@ -30,6 +30,7 @@ import static chronicle.Kit.ROW_CAP;
 import static chronicle.Kit.column;
 import static chronicle.Kit.copyHeader;
 import static chronicle.Kit.link;
+import static chronicle.Kit.linkRow;
 import static chronicle.Kit.listCard;
 import static chronicle.Kit.noted;
 import static chronicle.Kit.row;
@@ -37,12 +38,15 @@ import static chronicle.Kit.spaced;
 import static chronicle.Kit.tallyCard;
 import static chronicle.Kit.toggle;
 import static chronicle.Kit.value;
+import static chronicle.LocalStore.kindOf;
 import static chronicle.Period.FULL_DAY;
 import static chronicle.Period.dayOf;
 import static chronicle.Period.startMs;
 import static chronicle.Text.count;
 import static chronicle.Text.fmt;
+import static chronicle.Text.gp;
 import static chronicle.Text.gps;
+import static chronicle.Text.named;
 import static chronicle.Text.pb;
 import static chronicle.Text.qtyGp;
 
@@ -134,7 +138,7 @@ final class LootPage
 			axes.add(toggle(panel.dropsByKind
 				? (panel.dropsLeftBehind ? "By item" : "By kind") : "By source", panel.relens(() -> panel.dropsByKind = !panel.dropsByKind)));
 		}
-		final boolean canAskOnTask = !panel.dropsLeftBehind && panel.dropsByKind && panel.everOnTask();
+		final boolean canAskOnTask = !panel.dropsLeftBehind && panel.dropsByKind && everOnTask();
 		if (canAskOnTask)
 		{
 			axes.add(toggle(panel.onTaskOnly ? "On task" : "All", panel.relens(() -> panel.onTaskOnly = !panel.onTaskOnly)));
@@ -227,17 +231,17 @@ final class LootPage
 		final long[] sum = LocalStore.tallyOf(bag);
 		if (panel.lootKind != null)
 		{
-			return panel.kindDrill(p, bag, key);
+			return kindDrill(p, bag, key);
 		}
-		JPanel head = panel.bagCard(title, bag, sum);
+		JPanel head = bagCard(title, bag, sum);
 		dearestRow(head, bag);
 		spaced(p, head);
 		LinkedHashMap<String, BooleanSupplier> ways =
 			new LinkedHashMap<>();
-		ways.put("These kinds", () -> copyPicture(panel.lootPicture(title, bag, sum, true)));
-		ways.put("Every item", () -> copyPicture(panel.lootPicture(title, bag, sum, false), true));
+		ways.put("These kinds", () -> copyPicture(lootPicture(title, bag, sum, true)));
+		ways.put("Every item", () -> copyPicture(lootPicture(title, bag, sum, false), true));
 		p.add(copyHeader("Drops", ways));
-		panel.addKindRows(p, bag);
+		addKindRows(p, bag);
 		return p;
 	}
 
@@ -279,5 +283,139 @@ final class LootPage
 		}
 		panel.drillMore(p, key, list.size(), cap);
 		return p;
+	}
+
+	boolean everOnTask()
+	{
+		return !panel.build.taskItems().isEmpty();
+	}
+
+	static String perOne(long value, long n, boolean killed)
+	{
+		return gp(value / Math.max(1, n)) + (killed ? " gp/drop" : " gp each");
+	}
+
+	void addKindRows(JPanel p, List<BagItem> bag)
+	{
+		for (Kind k : kindsOf(bag))
+		{
+			JPanel r = row(k.name, qtyGp(k.qty, k.value), ACCENT_LIFETIME);
+			r.setToolTipText(count(k.distinct, "distinct item"));
+			link(r, () ->
+			{
+				panel.lootKind = k.name;
+				panel.rebuildInPlace();
+			});
+			p.add(r);
+		}
+	}
+
+	JPanel kindDrill(JPanel p, List<BagItem> bag, String key)
+	{
+		final List<BagItem> kept = ofKind(bag);
+		final long[] mine = LocalStore.tallyOf(kept);
+		spaced(p, bagCard(panel.lootKind, kept, mine));
+		p.add(backToKinds(kept.size()));
+		if (kept.isEmpty())
+		{
+			return noted(p, "Nothing of this kind here.");
+		}
+		p.add(copyHeader(panel.lootKind, () -> copyPicture(
+			lootPicture(panel.lootKind, kept, mine, false), true)));
+		int cap = panel.drillShown.getOrDefault(key + panel.lootKind, ROW_CAP);
+		addBagRows(p, Sources.firstN(kept, cap));
+		panel.drillMore(p, key + panel.lootKind, kept.size(), cap);
+		return p;
+	}
+
+	JPanel lootPicture(String title, List<BagItem> bag, long[] sum, boolean kinds)
+	{
+		JPanel page = column();
+		spaced(page, bagCard(title, bag, sum));
+		if (kinds)
+		{
+			addKindRows(page, bag);
+		}
+		else
+		{
+			addBagRows(page, bag);
+		}
+		return page;
+	}
+
+	private static final class Kind
+	{
+		final String name;
+		long qty;
+		long value;
+		int distinct;
+
+		Kind(String name)
+		{
+			this.name = name;
+		}
+	}
+
+	static final String UNFILED = "Everything else";
+
+	private List<Kind> kindsOf(List<BagItem> bag)
+	{
+		Map<String, Kind> by = new LinkedHashMap<>();
+		for (BagItem b : bag)
+		{
+			String k = ItemKinds.kindOf(b.name);
+			Kind row = by.computeIfAbsent(k == null ? UNFILED : k, Kind::new);
+			row.qty += b.qty;
+			row.value += b.value;
+			row.distinct++;
+		}
+		List<Kind> out = new ArrayList<>(by.values());
+		out.sort(Comparator.comparingLong((Kind k) -> k.value).reversed());
+		return out;
+	}
+
+	JPanel bagCard(String title, List<BagItem> bag, long[] sum)
+	{
+		JPanel head = tallyCard(title, "Items", fmt(sum[0]), ACCENT_LIFETIME, sum[1]);
+		head.add(row("Distinct items", fmt(bag.size())));
+		return head;
+	}
+
+	private JPanel backToKinds(int held)
+	{
+		return linkRow("< All kinds", count(held, "item"), () ->
+		{
+			panel.lootKind = null;
+			panel.rebuildInPlace();
+		});
+	}
+
+	void addBagRows(JPanel p, List<BagItem> bag)
+	{
+		for (BagItem b : bag)
+		{
+			JPanel r = row(named(b.name, b.qty),
+				b.value > 0 ? gps(b.value) : "");
+			link(r, () -> panel.openItem(b.name));
+			p.add(r);
+		}
+	}
+
+	private List<BagItem> ofKind(List<BagItem> bag)
+	{
+		if (panel.lootKind == null)
+		{
+			return bag;
+		}
+		List<BagItem> kept = new ArrayList<>();
+		for (BagItem b : bag)
+		{
+			String k = ItemKinds.kindOf(b.name);
+			if (UNFILED.equals(panel.lootKind) ? k == null : panel.lootKind.equals(k))
+			{
+				kept.add(b);
+			}
+		}
+		return kept;
 	}
 }

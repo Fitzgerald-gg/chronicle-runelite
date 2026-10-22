@@ -130,7 +130,7 @@ final class LogPage
 		{
 			return logInWindow(p);
 		}
-		int[] standing = panel.clogStanding();
+		int[] standing = clogStanding();
 		int fin = panel.live.clogFinished();
 		JPanel head = card("Collection log");
 		if (standing != null)
@@ -426,5 +426,11 @@ final class LogPage
 			out.putIfAbsent(low(r.name), r);
 		}
 		return out;
+	}
+
+	int[] clogStanding()
+	{
+		int avail = panel.live.clogAvailable();
+		return avail > 0 ? new int[]{panel.live.clogFinished(), avail} : null;
 	}
 }

@@ -43,7 +43,11 @@ import static chronicle.Kit.spaced;
 import static chronicle.Kit.sumOf;
 import static chronicle.Kit.value;
 import static chronicle.Kit.vgap;
+import static chronicle.Period.TASK_DAY;
+import static chronicle.Text.count;
 import static chronicle.Text.fmt;
+import static chronicle.Text.gp;
+import static chronicle.Text.gps;
 import static chronicle.Text.tail;
 
 final class LedgerPage
@@ -109,7 +113,7 @@ final class LedgerPage
 				{
 					p.add(ghostRow(sec.getKey(), ""));
 				}
-				panel.statRows(p, rows);
+				statRows(p, rows);
 			}
 			p.add(vgap(4));
 		}
@@ -236,10 +240,10 @@ final class LedgerPage
 				{
 					if ("deaths".equals(e.getKey()) && e.getValue() > 0)
 					{
-						addDeathsFold(p, panel.rowValue(e));
+						addDeathsFold(p, rowValue(e));
 						continue;
 					}
-					p.add(row(StatRegistry.rowLabel(e.getKey()), panel.rowValue(e)));
+					p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
 				}
 				continue;
 			}
@@ -275,7 +279,7 @@ final class LedgerPage
 			if (!foldable)
 			{
 				p.add(group(sec));
-				panel.statRows(p, rows);
+				statRows(p, rows);
 				continue;
 			}
 
@@ -308,13 +312,13 @@ final class LedgerPage
 			{
 				if (panel.statsFamily.equals("Skilling"))
 				{
-					panel.addPaceLine(p, sec);
+					addPaceLine(p, sec);
 				}
 				boolean nested = panel.statsFamily.equals("Skilling")
 					&& addCraftNested(p, sec, rows, counters);
 				if (!nested)
 				{
-					panel.statRows(p, rows);
+					statRows(p, rows);
 					if (rows.isEmpty() && floor > 0)
 					{
 						List<Entry<String, Long>> floors = new ArrayList<>();
@@ -429,7 +433,7 @@ final class LedgerPage
 				fmt(verbTotal.getOrDefault(verb, 0L)), stateKey));
 			if (open)
 			{
-				panel.statRows(p, byVerb.get(verb));
+				statRows(p, byVerb.get(verb));
 				long verbGhost = verbTotal.get(verb) - sumOf(byVerb.get(verb));
 				if (verbGhost >= 1)
 				{
@@ -454,5 +458,56 @@ final class LedgerPage
 				p.add(row(StatRegistry.label(e.getKey()), value(e)));
 			}
 		}
+	}
+
+	void addPaceLine(JPanel p, String section)
+	{
+		PaceBook.Pace pace;
+		try
+		{
+			pace = panel.live.pace(section);
+		}
+		catch (RuntimeException e)
+		{
+			return;
+		}
+		if (pace == null)
+		{
+			return;
+		}
+		if (pace.hasHorizon())
+		{
+			String target = pace.targetLevel != null
+				? String.valueOf(pace.targetLevel) : "200m";
+			p.add(ghostRow(target + " in " + count(pace.daysOfPlay, "day") + " of play",
+				gp((long) pace.xpPerActiveDay) + "/day"));
+			if (pace.activeDays < 3)
+			{
+				p.add(ghostRow("measured over " + count(pace.activeDays, "day"), ""));
+			}
+		}
+		else if (pace.dormant() && pace.lastActive != null)
+		{
+			p.add(ghostRow("last moved " + pace.lastActive.format(TASK_DAY), ""));
+		}
+	}
+
+	void statRows(JPanel p, List<Entry<String, Long>> rows)
+	{
+		for (Entry<String, Long> e : rows)
+		{
+			p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
+		}
+	}
+
+	String rowValue(Entry<String, Long> e)
+	{
+		String base = value(e);
+		if (e.getKey().equals("resourcesGatheredValue") && panel.resourcesDropped > 0)
+		{
+			return base + " · " + gp(panel.resourcesDropped) + " dropped";
+		}
+		Long cv = panel.wholeRecord() ? panel.consumVals.get(e.getKey()) : null;
+		return cv != null && cv > 0 ? base + " · " + gps(cv) : base;
 	}
 }

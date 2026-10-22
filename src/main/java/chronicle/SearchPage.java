@@ -35,8 +35,8 @@ import java.util.Set;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import net.runelite.api.Skill;
-import static chronicle.ChroniclePanel.UNFILED;
-import static chronicle.ChroniclePanel.journeyMoved;
+import static chronicle.LootPage.UNFILED;
+import static chronicle.SlayerPage.journeyMoved;
 import static chronicle.Json.has;
 import static chronicle.Json.low;
 import static chronicle.Json.obj;
@@ -259,7 +259,7 @@ final class SearchPage
 			ks = ks < 0 || ks > 2 ? 2 : ks;
 			go.add(new Hit(kind, "every one you have had", null, null,
 				() -> panel.openLootKind(pick, false), ks, 0));
-			if (panel.everOnTask() && hasKindOnTask(pick))
+			if (panel.loot.everOnTask() && hasKindOnTask(pick))
 			{
 				go.add(new Hit(kind, "from slayer tasks", null, null, () -> panel.openLootKind(pick, true), ks, -1));
 			}
