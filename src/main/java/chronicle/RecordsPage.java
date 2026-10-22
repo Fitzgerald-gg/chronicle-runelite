@@ -26,11 +26,12 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
-import static chronicle.ChroniclePanel.stepStrip;
+import static chronicle.Kit.stepStrip;
 import static chronicle.Feed.most;
 import static chronicle.Kit.ACCENT_LIFETIME;
 import static chronicle.Kit.DARK;
 import static chronicle.Kit.DARKER;
+import static chronicle.Kit.arrows;
 import static chronicle.Kit.card;
 import static chronicle.Kit.column;
 import static chronicle.Kit.day;
@@ -136,7 +137,7 @@ final class RecordsPage
 		JLabel title = styled(new JLabel(MONTH_YEAR.format(panel.calendarMonth.atDay(1)
 			.atStartOfDay(ZoneId.systemDefault()).toInstant()).toUpperCase(Locale.ROOT), JLabel.CENTER),
 			FontManager.getRunescapeFont(), ACCENT_LIFETIME);
-		panel.arrows(head, () ->
+		arrows(head, () ->
 		{
 			panel.calendarMonth = panel.calendarMonth.minusMonths(1);
 			panel.rebuildInPlace();

@@ -53,11 +53,11 @@ import static chronicle.Text.plural;
 import static chronicle.Text.qtyGp;
 import static chronicle.panel.StatRegistry.prettify;
 
-final class NowPage
+final class HomePage
 {
 	private final ChroniclePanel panel;
 
-	NowPage(ChroniclePanel panel)
+	HomePage(ChroniclePanel panel)
 	{
 		this.panel = panel;
 	}

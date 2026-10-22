@@ -72,12 +72,16 @@ import static chronicle.Kit.day;
 import static chronicle.Kit.dim;
 import static chronicle.Kit.ghostRow;
 import static chronicle.Kit.link;
+import static chronicle.Kit.linkRow;
+import static chronicle.Kit.menuItem;
+import static chronicle.Kit.moreRow;
 import static chronicle.Kit.nested;
 import static chronicle.Kit.note;
 import static chronicle.Kit.noted;
 import static chronicle.Kit.overlayBar;
 import static chronicle.Kit.pad;
 import static chronicle.Kit.part;
+import static chronicle.Kit.reportCopy;
 import static chronicle.Kit.row;
 import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
@@ -1010,5 +1014,47 @@ final class Kit
 		cell.add(l, BorderLayout.CENTER);
 		link(cell, flip);
 		return cell;
+	}
+
+	static JPanel fixedPeriod(JPanel r, String scope)
+	{
+		JLabel fixed = styled(new JLabel(scope, JLabel.CENTER), FontManager.getRunescapeFont(),
+			dim());
+		r.add(fixed, BorderLayout.CENTER);
+		return r;
+	}
+
+	static JPanel stepStrip()
+	{
+		JPanel r = new JPanel(new BorderLayout());
+		r.setBackground(DARKER);
+		r.setBorder(pad(3, 8, 3, 8));
+		r.setAlignmentX(Component.LEFT_ALIGNMENT);
+		r.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+		return r;
+	}
+
+	static void arrows(JPanel r, Runnable back, boolean ahead, Runnable forward, JLabel title)
+	{
+		JLabel b = new JLabel("<");
+		JLabel fwd = new JLabel(">");
+		for (JLabel arrow : new JLabel[]{b, fwd})
+		{
+			arrow.setFont(FontManager.getRunescapeBoldFont());
+			arrow.setBorder(pad(0, 6, 0, 6));
+		}
+		b.setForeground(ACCENT_LIFETIME);
+		link(b, back);
+		fwd.setForeground(ahead ? ACCENT_LIFETIME : dim());
+		if (ahead)
+		{
+			link(fwd, forward);
+		}
+		r.add(b, BorderLayout.WEST);
+		if (title != null)
+		{
+			r.add(title, BorderLayout.CENTER);
+		}
+		r.add(fwd, BorderLayout.EAST);
 	}
 }
