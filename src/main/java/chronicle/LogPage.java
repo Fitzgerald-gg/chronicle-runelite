@@ -30,6 +30,7 @@ import static chronicle.Json.low;
 import static chronicle.Json.obj;
 import static chronicle.Json.safeLong;
 import static chronicle.Json.str;
+import static chronicle.Kit.ACCENT_LIFETIME;
 import static chronicle.Kit.ACCENT_RED;
 import static chronicle.Kit.ACCENT_SESSION;
 import static chronicle.Kit.DARK;
@@ -41,9 +42,11 @@ import static chronicle.Kit.column;
 import static chronicle.Kit.day;
 import static chronicle.Kit.fitLine;
 import static chronicle.Kit.ghostRow;
+import static chronicle.Kit.group;
 import static chronicle.Kit.link;
 import static chronicle.Kit.note;
 import static chronicle.Kit.noted;
+import static chronicle.Kit.progress;
 import static chronicle.Kit.row;
 import static chronicle.Kit.rowMetrics;
 import static chronicle.Kit.spaced;
@@ -107,7 +110,7 @@ final class LogPage
 			return noted(p, panel.window().phrase("Nothing new was logged"));
 		}
 		JPanel head = card("Collection log");
-		head.add(row("Slots logged", fmt(got.size()), panel.accent()));
+		head.add(row("Slots logged", fmt(got.size()), ACCENT_LIFETIME));
 		spaced(p, head);
 		for (JsonObject e : got)
 		{
@@ -133,12 +136,12 @@ final class LogPage
 		if (standing != null)
 		{
 			head.add(row(fmt(standing[0]) + " / " + fmt(standing[1]),
-				Math.round(100f * standing[0] / standing[1]) + "%", panel.accent()));
-			head.add(panel.progress((float) standing[0] / standing[1]));
+				Math.round(100f * standing[0] / standing[1]) + "%", ACCENT_LIFETIME));
+			head.add(progress((float) standing[0] / standing[1]));
 		}
 		else if (fin > 0)
 		{
-			head.add(row("Slots obtained", fmt(fin), panel.accent()));
+			head.add(row("Slots obtained", fmt(fin), ACCENT_LIFETIME));
 			head.add(row("Open your log in game once for the total", ""));
 		}
 		else
@@ -250,7 +253,7 @@ final class LogPage
 			if (!strangers.isEmpty())
 			{
 				p.add(vgap(6));
-				p.add(panel.group("NEW SINCE THIS RELEASE"));
+				p.add(group("NEW SINCE THIS RELEASE"));
 				for (String pageName : strangers)
 				{
 					Map<String, Long> held = book.byPage.get(pageName);

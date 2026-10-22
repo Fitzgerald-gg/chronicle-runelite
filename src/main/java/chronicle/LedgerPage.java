@@ -26,13 +26,16 @@ import static chronicle.Feed.typeOf;
 import static chronicle.Json.has;
 import static chronicle.Json.obj;
 import static chronicle.Json.safeLong;
+import static chronicle.Kit.ACCENT_LIFETIME;
 import static chronicle.Kit.DARK;
 import static chronicle.Kit.card;
 import static chronicle.Kit.column;
 import static chronicle.Kit.day;
 import static chronicle.Kit.figure;
 import static chronicle.Kit.ghostRow;
+import static chronicle.Kit.group;
 import static chronicle.Kit.link;
+import static chronicle.Kit.moreRow;
 import static chronicle.Kit.nested;
 import static chronicle.Kit.noted;
 import static chronicle.Kit.row;
@@ -84,7 +87,7 @@ final class LedgerPage
 			kept++;
 		}
 		JPanel head = card("Trackers");
-		head.add(row("Counters", fmt(kept), panel.accent()));
+		head.add(row("Counters", fmt(kept), ACCENT_LIFETIME));
 		head.add(row("Reading", panel.wholeRecord() ? "Lifetime" : panel.window().label));
 		spaced(p, head);
 		if (kept == 0)
@@ -97,7 +100,7 @@ final class LedgerPage
 			{
 				continue;
 			}
-			p.add(panel.group(fam.getKey()));
+			p.add(group(fam.getKey()));
 			for (Entry<String, List<Entry<String, Long>>> sec : fam.getValue().entrySet())
 			{
 				List<Entry<String, Long>> rows = sec.getValue();
@@ -173,7 +176,7 @@ final class LedgerPage
 		p.add(pills);
 		if (panel.tab == Tab.TRACKERS && !panel.allTrackers)
 		{
-			p.add(panel.moreRow("every counter in one place", panel::openAllTrackers));
+			p.add(moreRow("every counter in one place", panel::openAllTrackers));
 		}
 		p.add(vgap(4));
 
@@ -271,7 +274,7 @@ final class LedgerPage
 				|| sec.equals("Thralls");
 			if (!foldable)
 			{
-				p.add(panel.group(sec));
+				p.add(group(sec));
 				panel.statRows(p, rows);
 				continue;
 			}

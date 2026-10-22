@@ -23,16 +23,19 @@ import static chronicle.ChroniclePanel.UNDATED;
 import static chronicle.ChroniclePanel.perOne;
 import static chronicle.Copy.copyPicture;
 import static chronicle.Feed.most;
+import static chronicle.Kit.ACCENT_LIFETIME;
 import static chronicle.Kit.ACCENT_RED;
 import static chronicle.Kit.DARK;
 import static chronicle.Kit.ROW_CAP;
 import static chronicle.Kit.column;
+import static chronicle.Kit.copyHeader;
 import static chronicle.Kit.link;
 import static chronicle.Kit.listCard;
 import static chronicle.Kit.noted;
 import static chronicle.Kit.row;
 import static chronicle.Kit.spaced;
 import static chronicle.Kit.tallyCard;
+import static chronicle.Kit.toggle;
 import static chronicle.Kit.value;
 import static chronicle.Period.FULL_DAY;
 import static chronicle.Period.dayOf;
@@ -82,7 +85,7 @@ final class LootPage
 			return noted(p, panel.window().phrase("Nothing " + (panel.dropsLeftBehind ? "left behind" : "taken")));
 		}
 		JPanel head = panel.dropsLeftBehind ? tallyCard("Left behind", "Items", fmt(w.left), ACCENT_RED, w.leftValue)
-			: tallyCard("Drops received", "Drops", fmt(w.loots), panel.accent(), w.value);
+			: tallyCard("Drops received", "Drops", fmt(w.loots), ACCENT_LIFETIME, w.value);
 		if (panel.dropsLeftBehind)
 		{
 			head.add(row("Kills that left one", fmt(w.leftKills)));
@@ -125,16 +128,16 @@ final class LootPage
 	{
 		JPanel p = column();
 		List<JPanel> axes = new ArrayList<>();
-		axes.add(panel.toggle(panel.dropsLeftBehind ? "Left behind" : "Received", panel.relens(() -> panel.dropsLeftBehind = !panel.dropsLeftBehind)));
+		axes.add(toggle(panel.dropsLeftBehind ? "Left behind" : "Received", panel.relens(() -> panel.dropsLeftBehind = !panel.dropsLeftBehind)));
 		if (!panel.dropsLeftBehind || panel.wholeRecord())
 		{
-			axes.add(panel.toggle(panel.dropsByKind
+			axes.add(toggle(panel.dropsByKind
 				? (panel.dropsLeftBehind ? "By item" : "By kind") : "By source", panel.relens(() -> panel.dropsByKind = !panel.dropsByKind)));
 		}
 		final boolean canAskOnTask = !panel.dropsLeftBehind && panel.dropsByKind && panel.everOnTask();
 		if (canAskOnTask)
 		{
-			axes.add(panel.toggle(panel.onTaskOnly ? "On task" : "All", panel.relens(() -> panel.onTaskOnly = !panel.onTaskOnly)));
+			axes.add(toggle(panel.onTaskOnly ? "On task" : "All", panel.relens(() -> panel.onTaskOnly = !panel.onTaskOnly)));
 		}
 		JPanel lens = new JPanel(new GridLayout(1, axes.size(), 3, 3));
 		lens.setBackground(DARK);
@@ -180,7 +183,7 @@ final class LootPage
 			everyDrop += r.loots;
 			everyValue += r.value;
 		}
-		JPanel lifeHead = tallyCard("Drops received", "Drops", fmt(everyDrop), panel.accent(), everyValue);
+		JPanel lifeHead = tallyCard("Drops received", "Drops", fmt(everyDrop), ACCENT_LIFETIME, everyValue);
 		lifeHead.add(row("Sources", fmt(sources.size())));
 		spaced(p, lifeHead);
 		for (SourceRow r : Sources.firstN(sources, panel.dropsShown))
@@ -188,7 +191,7 @@ final class LootPage
 			boolean killed = panel.build.kills.isKillSource(r.name);
 			String sub = (killed ? fmt(panel.build.kills.standingKills(r)) + " kc" : count(r.loots, "drop"))
 				+ (r.pb != null ? " · PB " + pb(r.pb) : "");
-			listCard(p, row(r.name, gps(r.value), panel.accent()), sub,
+			listCard(p, row(r.name, gps(r.value), ACCENT_LIFETIME), sub,
 				r.loots > 0 ? perOne(r.value, r.loots, killed) : "", () -> panel.openSource(r.name));
 		}
 		panel.more(p, sources.size(), panel.dropsShown, false, n -> panel.dropsShown = n);
@@ -233,7 +236,7 @@ final class LootPage
 			new LinkedHashMap<>();
 		ways.put("These kinds", () -> copyPicture(panel.lootPicture(title, bag, sum, true)));
 		ways.put("Every item", () -> copyPicture(panel.lootPicture(title, bag, sum, false), true));
-		p.add(panel.copyHeader("Drops", ways));
+		p.add(copyHeader("Drops", ways));
 		panel.addKindRows(p, bag);
 		return p;
 	}

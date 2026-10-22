@@ -29,6 +29,7 @@ import static chronicle.Feed.typeOf;
 import static chronicle.Json.low;
 import static chronicle.Json.safeLong;
 import static chronicle.Json.str;
+import static chronicle.Kit.ACCENT_LIFETIME;
 import static chronicle.Kit.DARK;
 import static chronicle.Kit.boardRowRoom;
 import static chronicle.Kit.card;
@@ -36,6 +37,7 @@ import static chronicle.Kit.column;
 import static chronicle.Kit.day;
 import static chronicle.Kit.ghostRow;
 import static chronicle.Kit.link;
+import static chronicle.Kit.moreRow;
 import static chronicle.Kit.note;
 import static chronicle.Kit.noted;
 import static chronicle.Kit.pad;
@@ -127,7 +129,7 @@ final class JournalPage
 			if (!day.equals(lastDay))
 			{
 				lastDay = day;
-				JLabel g = styled(new JLabel(day.toUpperCase(Locale.ROOT)), small(), panel.accent());
+				JLabel g = styled(new JLabel(day.toUpperCase(Locale.ROOT)), small(), ACCENT_LIFETIME);
 				g.setAlignmentX(Component.LEFT_ALIGNMENT);
 				g.setBorder(pad(7, 2, 3, 0));
 				p.add(g);
@@ -155,7 +157,7 @@ final class JournalPage
 		if (feed.size() > panel.journalShown)
 		{
 			p.add(vgap(6));
-			p.add(panel.moreRow("Read further back", () ->
+			p.add(moreRow("Read further back", () ->
 			{
 				panel.journalShown += 60;
 				panel.rebuildInPlace();
@@ -175,7 +177,7 @@ final class JournalPage
 		if (since > 0)
 		{
 			plate.add(row("Kept since",
-				day(since), panel.accent()));
+				day(since), ACCENT_LIFETIME));
 		}
 		if (spine != null && !spine.isEmpty())
 		{
@@ -210,7 +212,7 @@ final class JournalPage
 			plate.add(row("Last milestone", str(last.getAsJsonObject("data"), "text", "")
 				+ " · " + day(safeLong(last.get("ts")))));
 		}
-		plate.add(panel.moreRow("what the journal holds", panel::openInfo));
+		plate.add(moreRow("what the journal holds", panel::openInfo));
 		p.add(plate);
 
 		String note = frontispieceNote();

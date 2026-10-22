@@ -41,6 +41,7 @@ import static chronicle.Json.has;
 import static chronicle.Json.low;
 import static chronicle.Json.obj;
 import static chronicle.Json.safeLong;
+import static chronicle.Kit.ACCENT_LIFETIME;
 import static chronicle.Kit.ACCENT_RED;
 import static chronicle.Kit.ACCENT_SESSION;
 import static chronicle.Kit.NAME_FLOOR;
@@ -50,6 +51,7 @@ import static chronicle.Kit.column;
 import static chronicle.Kit.day;
 import static chronicle.Kit.figure;
 import static chronicle.Kit.ghostRow;
+import static chronicle.Kit.group;
 import static chronicle.Kit.link;
 import static chronicle.Kit.note;
 import static chronicle.Kit.part;
@@ -144,7 +146,7 @@ final class SearchPage
 		}
 		hits.sort((a, b) -> a.score != b.score ? Integer.compare(a.score, b.score)
 			: Long.compare(b.weight, a.weight));
-		p.add(panel.group(title));
+		p.add(group(title));
 		String key = "search:" + title;
 		int cap = panel.drillShown.getOrDefault(key, SEARCH_CAP);
 		FontMetrics fm = rowMetrics();
@@ -543,7 +545,7 @@ final class SearchPage
 			final String near = Search.nearest(panel.build, ql);
 			if (near != null)
 			{
-				JPanel r = row("Did you mean", near, panel.accent());
+				JPanel r = row("Did you mean", near, ACCENT_LIFETIME);
 				door(r, () -> panel.searchField.setText(near));
 				p.add(r);
 			}

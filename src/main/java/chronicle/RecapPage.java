@@ -33,11 +33,13 @@ import static chronicle.Kit.NAME_FLOOR;
 import static chronicle.Kit.card;
 import static chronicle.Kit.chaseRoom;
 import static chronicle.Kit.column;
+import static chronicle.Kit.copyHeaderLater;
 import static chronicle.Kit.day;
 import static chronicle.Kit.facts;
 import static chronicle.Kit.fitLine;
 import static chronicle.Kit.link;
 import static chronicle.Kit.note;
+import static chronicle.Kit.reportCopy;
 import static chronicle.Kit.row;
 import static chronicle.Kit.rowMetrics;
 import static chronicle.Kit.value;
@@ -64,7 +66,7 @@ final class RecapPage
 	JPanel buildRecap()
 	{
 		JPanel p = column();
-		p.add(panel.copyHeaderLater("Recap", take ->
+		p.add(copyHeaderLater("Recap", take ->
 		{
 			take.setText("copying");
 			copyRecapPicture(take);
@@ -82,7 +84,7 @@ final class RecapPage
 		}
 		catch (Throwable t)
 		{
-			panel.reportCopy(take, false);
+			reportCopy(take, false);
 			return;
 		}
 		Set<Integer> want = new LinkedHashSet<>();
@@ -109,7 +111,7 @@ final class RecapPage
 			if (all || System.currentTimeMillis() > deadline)
 			{
 				wait.stop();
-				panel.reportCopy(take, toClipboard(recapImage(facts)));
+				reportCopy(take, toClipboard(recapImage(facts)));
 			}
 		});
 		wait.setInitialDelay(want.isEmpty() ? 0 : 100);

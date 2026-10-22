@@ -25,14 +25,17 @@ import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
 import static chronicle.ChroniclePanel.journeyMoved;
 import static chronicle.Copy.copyPicture;
+import static chronicle.Kit.ACCENT_LIFETIME;
 import static chronicle.Kit.DARK;
 import static chronicle.Kit.ROW_CAP;
 import static chronicle.Kit.card;
 import static chronicle.Kit.column;
+import static chronicle.Kit.copyHeader;
 import static chronicle.Kit.day;
 import static chronicle.Kit.dim;
 import static chronicle.Kit.link;
 import static chronicle.Kit.listCard;
+import static chronicle.Kit.menuItem;
 import static chronicle.Kit.note;
 import static chronicle.Kit.noted;
 import static chronicle.Kit.part;
@@ -63,7 +66,7 @@ final class SlayerPage
 		ChronicleEventCapture.SlayerView task = panel.live.slayerView();
 		if (task != null)
 		{
-			panel.addTaskCard(p, task, "Current task", panel.accent());
+			panel.addTaskCard(p, task, "Current task", ACCENT_LIFETIME);
 		}
 
 		JPanel lens = new JPanel(new GridLayout(1, 3, 3, 3));
@@ -149,7 +152,7 @@ final class SlayerPage
 		ways.put("Every item", () -> copyPicture(
 			panel.lootPicture(panel.lootTask == null ? "On-task loot" : panel.lootTask, bag,
 				new long[]{qty, value}, false), true));
-		p.add(panel.copyHeader("Drops", ways));
+		p.add(copyHeader("Drops", ways));
 		panel.addKindRows(p, bag);
 		return p;
 	}
@@ -161,7 +164,7 @@ final class SlayerPage
 		spaced(page, onTaskHead(qty, value, tally));
 		if (panel.lootTask != null)
 		{
-			spaced(page, row("Task", panel.lootTask, panel.accent()), 4);
+			spaced(page, row("Task", panel.lootTask, ACCENT_LIFETIME), 4);
 		}
 		panel.addKindRows(page, bag);
 		return page;
@@ -169,7 +172,7 @@ final class SlayerPage
 
 	private JPanel onTaskHead(long qty, long value, long[] tally)
 	{
-		JPanel head = tallyCard("On-task loot", "Items", fmt(qty), panel.accent(), value);
+		JPanel head = tallyCard("On-task loot", "Items", fmt(qty), ACCENT_LIFETIME, value);
 		head.add(row("Tasks", fmt(tally[2])));
 		if (tally[0] > 0)
 		{
@@ -248,7 +251,7 @@ final class SlayerPage
 			}
 		}
 		JPanel head = card("The journey");
-		head.add(row("Tasks done", fmt(tasksDone), panel.accent()));
+		head.add(row("Tasks done", fmt(tasksDone), ACCENT_LIFETIME));
 		head.add(row("Kills on task", fmt(killsOnTask)));
 		head.add(row("On-task loot", gps(onTaskLoot)));
 		if (j.totalXpEst > 0)
@@ -267,7 +270,7 @@ final class SlayerPage
 			{
 				kills += " · " + fmt(t.noLootKills) + " no-drop";
 			}
-			listCard(p, row(t.task, t.totalValue > 0 ? gps(t.totalValue) : "", panel.accent(), t.inProgress),
+			listCard(p, row(t.task, t.totalValue > 0 ? gps(t.totalValue) : "", ACCENT_LIFETIME, t.inProgress),
 				kills, t.ts > 0 ? day((long) (t.ts * 1000)) : "", () -> panel.showTask(at));
 		}
 		if (shown.size() > panel.slayerShown)
@@ -280,11 +283,11 @@ final class SlayerPage
 	private JPopupMenu taskMenu()
 	{
 		JPopupMenu menu = new JPopupMenu();
-		panel.menuItem(menu, "Every task", panel.lootTask == null, () -> pickTask(null));
+		menuItem(menu, "Every task", panel.lootTask == null, () -> pickTask(null));
 		menu.addSeparator();
 		for (String task : panel.store.allTasks().names())
 		{
-			panel.menuItem(menu, task, task.equals(panel.lootTask), () -> pickTask(task));
+			menuItem(menu, task, task.equals(panel.lootTask), () -> pickTask(task));
 		}
 		return menu;
 	}
@@ -298,7 +301,7 @@ final class SlayerPage
 
 	private JPanel taskPicker()
 	{
-		JPanel r = row("Task", panel.lootTask == null ? "Every task" : panel.lootTask, panel.accent());
+		JPanel r = row("Task", panel.lootTask == null ? "Every task" : panel.lootTask, ACCENT_LIFETIME);
 		styled(part(r, BorderLayout.CENTER), small(), dim());
 		JLabel pick = part(r, BorderLayout.EAST);
 		pick.setFont(small());

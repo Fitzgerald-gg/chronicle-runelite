@@ -20,7 +20,6 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.MouseInfo;
 import java.awt.Point;
@@ -56,7 +55,6 @@ import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
-import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
@@ -93,17 +91,23 @@ import static chronicle.Kit.ROW_CAP;
 import static chronicle.Kit.card;
 import static chronicle.Kit.clicker;
 import static chronicle.Kit.column;
+import static chronicle.Kit.copyHeader;
 import static chronicle.Kit.copyLabel;
 import static chronicle.Kit.day;
 import static chronicle.Kit.dim;
 import static chronicle.Kit.ghostRow;
 import static chronicle.Kit.link;
+import static chronicle.Kit.linkRow;
+import static chronicle.Kit.menuItem;
+import static chronicle.Kit.moreRow;
 import static chronicle.Kit.nested;
 import static chronicle.Kit.note;
 import static chronicle.Kit.noted;
 import static chronicle.Kit.overlayBar;
 import static chronicle.Kit.pad;
 import static chronicle.Kit.part;
+import static chronicle.Kit.progress;
+import static chronicle.Kit.reportCopy;
 import static chronicle.Kit.row;
 import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
@@ -372,7 +376,7 @@ class ChroniclePanel extends PluginPanel
 		pill.setBorder(pad(2, side, 2, side));
 		pill.setFont(small());
 		pill.setBackground(DARKER);
-		pill.setForeground(on ? accent() : dim());
+		pill.setForeground(on ? ACCENT_LIFETIME : dim());
 		if (tip != null)
 		{
 			pill.setToolTipText(tip);
@@ -540,11 +544,6 @@ class ChroniclePanel extends PluginPanel
 		clogPageSel = page;
 		rebuild();
 		return true;
-	}
-
-	Color accent()
-	{
-		return ACCENT_LIFETIME;
 	}
 
 	private void clearSearch()
@@ -835,7 +834,7 @@ class ChroniclePanel extends PluginPanel
 			return;
 		}
 		boolean red = stalled != null;
-		Color ink = red ? ColorScheme.PROGRESS_ERROR_COLOR : accent();
+		Color ink = red ? ColorScheme.PROGRESS_ERROR_COLOR : ACCENT_LIFETIME;
 		bandFixes = !red;
 		for (MouseListener l : band.getMouseListeners())
 		{
@@ -866,7 +865,7 @@ class ChroniclePanel extends PluginPanel
 		JLabel name = part(head, BorderLayout.CENTER);
 		if (foldOpen(fold))
 		{
-			name.setForeground(accent());
+			name.setForeground(ACCENT_LIFETIME);
 		}
 		head.setToolTipText(tip);
 		folds(head, fold);
@@ -905,7 +904,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		for (Kind k : kindsOf(bag))
 		{
-			JPanel r = row(k.name, qtyGp(k.qty, k.value), accent());
+			JPanel r = row(k.name, qtyGp(k.qty, k.value), ACCENT_LIFETIME);
 			r.setToolTipText(count(k.distinct, "distinct item"));
 			link(r, () ->
 			{
@@ -1074,18 +1073,6 @@ class ChroniclePanel extends PluginPanel
 		return page;
 	}
 
-	JPanel moreRow(long remaining, Runnable reveal)
-	{
-		return moreRow("Show " + fmt(remaining) + " more", reveal);
-	}
-
-	JPanel moreRow(String label, Runnable reveal)
-	{
-		JPanel more = ghostRow(label, "");
-		link(more, reveal);
-		return more;
-	}
-
 	Runnable relens(Runnable change)
 	{
 		return () ->
@@ -1158,14 +1145,14 @@ class ChroniclePanel extends PluginPanel
 
 	JPanel bagCard(String title, List<BagItem> bag, long[] sum)
 	{
-		JPanel head = tallyCard(title, "Items", fmt(sum[0]), accent(), sum[1]);
+		JPanel head = tallyCard(title, "Items", fmt(sum[0]), ACCENT_LIFETIME, sum[1]);
 		head.add(row("Distinct items", fmt(bag.size())));
 		return head;
 	}
 
 	private JPanel backToKinds(int held)
 	{
-		return backRow("< All kinds", count(held, "item"), () ->
+		return linkRow("< All kinds", count(held, "item"), () ->
 		{
 			lootKind = null;
 			rebuildInPlace();
@@ -1199,44 +1186,6 @@ class ChroniclePanel extends PluginPanel
 			}
 		}
 		return kept;
-	}
-
-	void reportCopy(JLabel take, boolean ok)
-	{
-		take.setText(ok ? "copied" : "cannot copy");
-		take.setForeground(ok ? accent() : ColorScheme.PROGRESS_ERROR_COLOR);
-	}
-
-	JPanel copyHeader(String title,
-		LinkedHashMap<String, BooleanSupplier> choices)
-	{
-		return copyHeaderLater(title, take ->
-		{
-			JPopupMenu menu = new JPopupMenu();
-			for (Entry<String, BooleanSupplier> e
-				: choices.entrySet())
-			{
-				menuItem(menu, e.getKey(), false, () -> reportCopy(take, e.getValue().getAsBoolean()));
-			}
-			menu.show(take, 0, take.getHeight());
-		});
-	}
-
-	JPanel copyHeaderLater(String title, Consumer<JLabel> copy)
-	{
-		JPanel r = row(title, "copy");
-		styled(part(r, BorderLayout.CENTER), small(), accent());
-		JLabel take = copyLabel(r, "Copy this board as a picture");
-		if (take != null)
-		{
-			take.addMouseListener(clicker(() -> copy.accept(take)));
-		}
-		return r;
-	}
-
-	JPanel copyHeader(String title, BooleanSupplier copy)
-	{
-		return copyHeaderLater(title, take -> reportCopy(take, copy.getAsBoolean()));
 	}
 
 	static boolean journeyMoved(SlayerJourney was,
@@ -1417,14 +1366,6 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	JPanel backRow(String label, String right, Runnable go)
-	{
-		JPanel r = row(label, right);
-		styled(part(r, BorderLayout.CENTER), small(), accent());
-		link(r, go);
-		return r;
-	}
-
 	JPanel backRow()
 	{
 		return backRow(null);
@@ -1432,7 +1373,7 @@ class ChroniclePanel extends PluginPanel
 
 	JPanel backRow(BooleanSupplier copy)
 	{
-		JPanel r = backRow("< Back", copy == null ? "" : "copy", this::backDetail);
+		JPanel r = linkRow("< Back", copy == null ? "" : "copy", this::backDetail);
 		JLabel take = copy == null ? null : copyLabel(r, "Copy this page as a picture");
 		if (take != null)
 		{
@@ -1698,18 +1639,6 @@ class ChroniclePanel extends PluginPanel
 		return menu;
 	}
 
-	void menuItem(JPopupMenu menu, String text, boolean on, Runnable go)
-	{
-		JMenuItem item = new JMenuItem(text);
-		item.setFont(small());
-		if (on)
-		{
-			item.setForeground(accent());
-		}
-		item.addActionListener(e -> go.run());
-		menu.add(item);
-	}
-
 	private void freshBuild()
 	{
 		build = new Build(store, live, gson, this::window, () -> historySpine, () -> historyJourney,
@@ -1758,7 +1687,7 @@ class ChroniclePanel extends PluginPanel
 			arrows(r, () -> stepPeriod(-1), canStepForward(), () -> stepPeriod(1), null);
 		}
 		JLabel lbl = styled(new JLabel(w.label, JLabel.CENTER), FontManager.getRunescapeFont(),
-			accent());
+			ACCENT_LIFETIME);
 		lbl.setToolTipText("Choose the period");
 		link(lbl, () -> periodMenu().show(r, 0, r.getHeight()));
 		r.add(lbl, BorderLayout.CENTER);
@@ -1784,9 +1713,9 @@ class ChroniclePanel extends PluginPanel
 			arrow.setFont(FontManager.getRunescapeBoldFont());
 			arrow.setBorder(pad(0, 6, 0, 6));
 		}
-		b.setForeground(accent());
+		b.setForeground(ACCENT_LIFETIME);
 		link(b, back);
-		fwd.setForeground(ahead ? accent() : dim());
+		fwd.setForeground(ahead ? ACCENT_LIFETIME : dim());
 		if (ahead)
 		{
 			link(fwd, forward);
@@ -1944,49 +1873,11 @@ class ChroniclePanel extends PluginPanel
 
 	Runnable searchFirst;
 
-	JPanel progress(float frac)
-	{
-		JPanel outer = new JPanel(new BorderLayout());
-		outer.setBackground(ColorScheme.SCROLL_TRACK_COLOR);
-		outer.setPreferredSize(new Dimension(10, 4));
-		outer.setMinimumSize(new Dimension(10, 4));
-		outer.setMaximumSize(new Dimension(Integer.MAX_VALUE, 4));
-		outer.setAlignmentX(Component.LEFT_ALIGNMENT);
-		JPanel inner = new JPanel();
-		inner.setBackground(accent());
-		inner.setPreferredSize(new Dimension(
-			Math.max(1, Math.round(frac * (PluginPanel.PANEL_WIDTH - 40))), 4));
-		JPanel holder = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-		holder.setOpaque(false);
-		holder.add(inner);
-		outer.add(holder, BorderLayout.WEST);
-		return outer;
-	}
-
-	JLabel group(String name)
-	{
-		JLabel g = styled(new JLabel(name.toUpperCase(Locale.ROOT)), small(), accent());
-		g.setAlignmentX(Component.LEFT_ALIGNMENT);
-		g.setBorder(pad(8, 2, 3, 0));
-		return g;
-	}
-
 	JPanel backPage()
 	{
 		JPanel p = column();
 		spaced(p, backRow(), 4);
 		return p;
-	}
-
-	JPanel toggle(String reading, Runnable flip)
-	{
-		JPanel cell = new JPanel(new BorderLayout());
-		cell.setBackground(DARKER);
-		cell.setBorder(pad(2, 4, 2, 4));
-		JLabel l = styled(new JLabel(reading, JLabel.CENTER), small(), accent());
-		cell.add(l, BorderLayout.CENTER);
-		link(cell, flip);
-		return cell;
 	}
 
 }

@@ -8,6 +8,7 @@
  */
 package chronicle;
 
+import chronicle.Kit.ScrollColumn;
 import chronicle.panel.HistoryProgress;
 import chronicle.panel.StatRegistry;
 import java.awt.AlphaComposite;
@@ -16,6 +17,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
@@ -31,17 +33,22 @@ import java.awt.event.MouseEvent;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.Scrollable;
@@ -52,6 +59,35 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import static chronicle.Feed.most;
+import static chronicle.Kit.ACCENT_LIFETIME;
+import static chronicle.Kit.DARK;
+import static chronicle.Kit.DARKER;
+import static chronicle.Kit.PANEL_INSET;
+import static chronicle.Kit.ROW_CAP;
+import static chronicle.Kit.card;
+import static chronicle.Kit.clicker;
+import static chronicle.Kit.column;
+import static chronicle.Kit.copyLabel;
+import static chronicle.Kit.day;
+import static chronicle.Kit.dim;
+import static chronicle.Kit.ghostRow;
+import static chronicle.Kit.link;
+import static chronicle.Kit.nested;
+import static chronicle.Kit.note;
+import static chronicle.Kit.noted;
+import static chronicle.Kit.overlayBar;
+import static chronicle.Kit.pad;
+import static chronicle.Kit.part;
+import static chronicle.Kit.row;
+import static chronicle.Kit.small;
+import static chronicle.Kit.spaced;
+import static chronicle.Kit.styled;
+import static chronicle.Kit.sumOf;
+import static chronicle.Kit.tallyCard;
+import static chronicle.Kit.tip;
+import static chronicle.Kit.unlight;
+import static chronicle.Kit.value;
+import static chronicle.Kit.wash;
 import static chronicle.Period.TASK_DAY;
 import static chronicle.Text.fmt;
 import static chronicle.Text.gp;
@@ -866,5 +902,113 @@ final class Kit
 			sum += e.getValue();
 		}
 		return sum;
+	}
+
+	static JPanel moreRow(long remaining, Runnable reveal)
+	{
+		return moreRow("Show " + fmt(remaining) + " more", reveal);
+	}
+
+	static JPanel moreRow(String label, Runnable reveal)
+	{
+		JPanel more = ghostRow(label, "");
+		link(more, reveal);
+		return more;
+	}
+
+	static void reportCopy(JLabel take, boolean ok)
+	{
+		take.setText(ok ? "copied" : "cannot copy");
+		take.setForeground(ok ? ACCENT_LIFETIME : ColorScheme.PROGRESS_ERROR_COLOR);
+	}
+
+	static JPanel copyHeader(String title,
+		LinkedHashMap<String, BooleanSupplier> choices)
+	{
+		return copyHeaderLater(title, take ->
+		{
+			JPopupMenu menu = new JPopupMenu();
+			for (Entry<String, BooleanSupplier> e
+				: choices.entrySet())
+			{
+				menuItem(menu, e.getKey(), false, () -> reportCopy(take, e.getValue().getAsBoolean()));
+			}
+			menu.show(take, 0, take.getHeight());
+		});
+	}
+
+	static JPanel copyHeaderLater(String title, Consumer<JLabel> copy)
+	{
+		JPanel r = row(title, "copy");
+		styled(part(r, BorderLayout.CENTER), small(), ACCENT_LIFETIME);
+		JLabel take = copyLabel(r, "Copy this board as a picture");
+		if (take != null)
+		{
+			take.addMouseListener(clicker(() -> copy.accept(take)));
+		}
+		return r;
+	}
+
+	static JPanel copyHeader(String title, BooleanSupplier copy)
+	{
+		return copyHeaderLater(title, take -> reportCopy(take, copy.getAsBoolean()));
+	}
+
+	static JPanel linkRow(String label, String right, Runnable go)
+	{
+		JPanel r = row(label, right);
+		styled(part(r, BorderLayout.CENTER), small(), ACCENT_LIFETIME);
+		link(r, go);
+		return r;
+	}
+
+	static void menuItem(JPopupMenu menu, String text, boolean on, Runnable go)
+	{
+		JMenuItem item = new JMenuItem(text);
+		item.setFont(small());
+		if (on)
+		{
+			item.setForeground(ACCENT_LIFETIME);
+		}
+		item.addActionListener(e -> go.run());
+		menu.add(item);
+	}
+
+	static JPanel progress(float frac)
+	{
+		JPanel outer = new JPanel(new BorderLayout());
+		outer.setBackground(ColorScheme.SCROLL_TRACK_COLOR);
+		outer.setPreferredSize(new Dimension(10, 4));
+		outer.setMinimumSize(new Dimension(10, 4));
+		outer.setMaximumSize(new Dimension(Integer.MAX_VALUE, 4));
+		outer.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JPanel inner = new JPanel();
+		inner.setBackground(ACCENT_LIFETIME);
+		inner.setPreferredSize(new Dimension(
+			Math.max(1, Math.round(frac * (PluginPanel.PANEL_WIDTH - 40))), 4));
+		JPanel holder = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+		holder.setOpaque(false);
+		holder.add(inner);
+		outer.add(holder, BorderLayout.WEST);
+		return outer;
+	}
+
+	static JLabel group(String name)
+	{
+		JLabel g = styled(new JLabel(name.toUpperCase(Locale.ROOT)), small(), ACCENT_LIFETIME);
+		g.setAlignmentX(Component.LEFT_ALIGNMENT);
+		g.setBorder(pad(8, 2, 3, 0));
+		return g;
+	}
+
+	static JPanel toggle(String reading, Runnable flip)
+	{
+		JPanel cell = new JPanel(new BorderLayout());
+		cell.setBackground(DARKER);
+		cell.setBorder(pad(2, 4, 2, 4));
+		JLabel l = styled(new JLabel(reading, JLabel.CENTER), small(), ACCENT_LIFETIME);
+		cell.add(l, BorderLayout.CENTER);
+		link(cell, flip);
+		return cell;
 	}
 }

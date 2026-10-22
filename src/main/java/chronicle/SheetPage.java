@@ -43,6 +43,7 @@ import static chronicle.Feed.newestTs;
 import static chronicle.Json.has;
 import static chronicle.Json.low;
 import static chronicle.Json.obj;
+import static chronicle.Kit.ACCENT_LIFETIME;
 import static chronicle.Kit.ACCENT_RED;
 import static chronicle.Kit.ACCENT_SESSION;
 import static chronicle.Kit.DARK;
@@ -57,6 +58,7 @@ import static chronicle.Kit.dim;
 import static chronicle.Kit.dimLine;
 import static chronicle.Kit.figure;
 import static chronicle.Kit.grid3;
+import static chronicle.Kit.group;
 import static chronicle.Kit.levelTile;
 import static chronicle.Kit.link;
 import static chronicle.Kit.note;
@@ -227,7 +229,7 @@ final class SheetPage
 		text.add(fig);
 		if (moved > 0)
 		{
-			text.add(styled(new JLabel("+" + fmt(moved), JLabel.RIGHT), small(), panel.accent()));
+			text.add(styled(new JLabel("+" + fmt(moved), JLabel.RIGHT), small(), ACCENT_LIFETIME));
 		}
 		cell.add(text, BorderLayout.CENTER);
 		return cell;
@@ -589,8 +591,8 @@ final class SheetPage
 			}
 		}
 		JPanel head = card("Clues");
-		head.add(row("Caskets opened", fmt(all), panel.accent()));
-		head.add(row("Worth", gps(allWorth), panel.accent()));
+		head.add(row("Caskets opened", fmt(all), ACCENT_LIFETIME));
+		head.add(row("Worth", gps(allWorth), ACCENT_LIFETIME));
 		head.add(row("Tiers seen", fmt(mine.size()) + " / " + Standings.CLUE_TIERS.length));
 		spaced(p, head);
 		if (mine.isEmpty())
@@ -598,7 +600,7 @@ final class SheetPage
 			p.add(note("No clue casket has been opened while Chronicle was watching."));
 			return;
 		}
-		p.add(panel.group("BY TIER"));
+		p.add(group("BY TIER"));
 		for (String tier : Standings.CLUE_TIERS)
 		{
 			SourceRow r = panel.build.standings.clue(tier);
@@ -608,7 +610,7 @@ final class SheetPage
 				continue;
 			}
 			long n = Standings.caskets(r);
-			JPanel line = row(tier, qtyGp(n, r.value), panel.accent());
+			JPanel line = row(tier, qtyGp(n, r.value), ACCENT_LIFETIME);
 			final String open = r.name;
 			link(line, () -> panel.openSource(open));
 			line.setToolTipText(tip(tier + " clues",
@@ -628,7 +630,7 @@ final class SheetPage
 			return;
 		}
 		JPanel head = card("Quests");
-		head.add(row("Complete", fmt(q.done.size()) + " / " + fmt(q.known), panel.accent()));
+		head.add(row("Complete", fmt(q.done.size()) + " / " + fmt(q.known), ACCENT_LIFETIME));
 		head.add(row("In progress", fmt(q.going.size())));
 		head.add(row("Not started", fmt(q.not.size())));
 		spaced(p, head);
@@ -669,7 +671,7 @@ final class SheetPage
 		if (known)
 		{
 			long[] d = panel.build.standings.diaries();
-			head.add(row("Tiers done", d[0] + " / " + d[1], panel.accent()));
+			head.add(row("Tiers done", d[0] + " / " + d[1], ACCENT_LIFETIME));
 			head.add(row("Regions finished", fmt(d[2]) + " / " + fmt(d[3])));
 		}
 		spaced(p, head);
@@ -682,7 +684,7 @@ final class SheetPage
 		{
 			JsonObject tiers = tasks.getAsJsonObject(region);
 			JsonObject held = panel.build.standings.diaryHeld(region);
-			p.add(panel.group(region.toUpperCase(Locale.ROOT)));
+			p.add(group(region.toUpperCase(Locale.ROOT)));
 			for (String tier : new String[]{"easy", "medium", "hard", "elite"})
 			{
 				if (!tiers.has(tier))
@@ -730,7 +732,7 @@ final class SheetPage
 		long[] c = panel.build.standings.combat();
 		JPanel head = card("Combat achievements");
 		head.add(row("Points", c[1] > 0 ? fmt(c[0]) + " / " + fmt(c[1]) : fmt(c[0]),
-			panel.accent()));
+			ACCENT_LIFETIME));
 		head.add(row("Tiers unlocked", fmt(c[2]) + " / 6"));
 		Set<Integer> headDone = panel.build.standings.caDone();
 		long named = 0;
@@ -744,7 +746,7 @@ final class SheetPage
 		long unnamed = headDone.size() - named;
 		if (!headDone.isEmpty())
 		{
-			head.add(row("Tasks done", fmt(named) + " / " + fmt(all.size()), panel.accent()));
+			head.add(row("Tasks done", fmt(named) + " / " + fmt(all.size()), ACCENT_LIFETIME));
 		}
 		spaced(p, head);
 		if (unnamed > 0)
@@ -826,7 +828,7 @@ final class SheetPage
 		}
 		JLabel fig = new JLabel(figure, JLabel.RIGHT);
 		fig.setFont(small());
-		fig.setForeground(levels > 0 ? panel.accent()
+		fig.setForeground(levels > 0 ? ACCENT_LIFETIME
 			: panel.wholeRecord() ? Color.WHITE : dim());
 		cell.add(fig, BorderLayout.EAST);
 		return cell;
@@ -863,7 +865,7 @@ final class SheetPage
 
 		if (gained != null)
 		{
-			text.add(styled(new JLabel((panel.wholeRecord() ? "" : "+") + xpShort(gained)), small(), panel.accent()));
+			text.add(styled(new JLabel((panel.wholeRecord() ? "" : "+") + xpShort(gained)), small(), ACCENT_LIFETIME));
 		}
 		cell.add(text, BorderLayout.CENTER);
 		return cell;

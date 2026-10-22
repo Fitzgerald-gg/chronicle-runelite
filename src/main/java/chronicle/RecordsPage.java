@@ -28,6 +28,7 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import static chronicle.ChroniclePanel.stepStrip;
 import static chronicle.Feed.most;
+import static chronicle.Kit.ACCENT_LIFETIME;
 import static chronicle.Kit.DARK;
 import static chronicle.Kit.DARKER;
 import static chronicle.Kit.card;
@@ -67,7 +68,7 @@ final class RecordsPage
 		spaced(p, panel.backRow(() -> panel.copyPage(this::buildInfo)), 4);
 		Map<String, Long> f = panel.store.journalFacts();
 
-		JPanel loot = facts(card("Loot"), f, panel.accent(), "Sources", "sources",
+		JPanel loot = facts(card("Loot"), f, ACCENT_LIFETIME, "Sources", "sources",
 			"Item rows", "itemRows", "Loot events", "lootEvents");
 		loot.add(worthRow(f.getOrDefault("lootWorth", 0L)));
 		facts(loot, f, null, "Dated days", "lootDays");
@@ -75,23 +76,23 @@ final class RecordsPage
 			+ fmt(f.getOrDefault("untakenSources", 0L)) + " sources"));
 		spaced(p, loot);
 
-		spaced(p, facts(card("Slayer"), f, panel.accent(), "Assignments", "tasks",
+		spaced(p, facts(card("Slayer"), f, ACCENT_LIFETIME, "Assignments", "tasks",
 			"Closed", "tasksClosed"));
 
 		JPanel log = card("Collection log");
 		long availKnown = f.getOrDefault("clogAvailable", 0L);
 		log.add(row("Slots filled", fmt(f.getOrDefault("clogSlots", 0L))
-			+ (availKnown > 0 ? " of " + fmt(availKnown) : ""), panel.accent()));
+			+ (availKnown > 0 ? " of " + fmt(availKnown) : ""), ACCENT_LIFETIME));
 		spaced(p, facts(log, f, null, "Items named", "clogItems",
 			"Pages with a count", "clogPages", "Kill Log lines", "killLogLines",
 			"Labelled kill lines", "pageKillLines"));
 
-		spaced(p, facts(card("Counted"), f, panel.accent(), "Trackers", "trackers",
+		spaced(p, facts(card("Counted"), f, ACCENT_LIFETIME, "Trackers", "trackers",
 			"Skills", "skills", "Feed entries", "feed", "Chat kill counts", "chatCounts",
 			"Anchored counts", "anchors"));
 
 		JPanel file = card("On disk");
-		file.add(row("Journal", bytes(f.getOrDefault("journalBytes", 0L)), panel.accent()));
+		file.add(row("Journal", bytes(f.getOrDefault("journalBytes", 0L)), ACCENT_LIFETIME));
 		file.add(row("History spine", bytes(f.getOrDefault("spineBytes", 0L))));
 		p.add(facts(file, f, null, "Schema", "schema"));
 		return p;
@@ -134,7 +135,7 @@ final class RecordsPage
 		JPanel head = stepStrip();
 		JLabel title = styled(new JLabel(MONTH_YEAR.format(panel.calendarMonth.atDay(1)
 			.atStartOfDay(ZoneId.systemDefault()).toInstant()).toUpperCase(Locale.ROOT), JLabel.CENTER),
-			FontManager.getRunescapeFont(), panel.accent());
+			FontManager.getRunescapeFont(), ACCENT_LIFETIME);
 		panel.arrows(head, () ->
 		{
 			panel.calendarMonth = panel.calendarMonth.minusMonths(1);
@@ -184,14 +185,14 @@ final class RecordsPage
 				monthMinutes += t[0];
 				written++;
 				float weight = 0.25f + 0.75f * Math.min(1f, (float) t[0] / most);
-				cell.setBackground(wash(panel.accent(), weight));
+				cell.setBackground(wash(ACCENT_LIFETIME, weight));
 				n.setForeground(Color.WHITE);
 				cell.setToolTipText(hoursMinutes(t[0]) + " · " + count(t[1], "sitting"));
 			}
 			else if (onSpine || (t != null && t[1] > 0))
 			{
 				written++;
-				cell.setBackground(wash(panel.accent(), 0.18f));
+				cell.setBackground(wash(ACCENT_LIFETIME, 0.18f));
 				n.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 				cell.setToolTipText("Written");
 			}

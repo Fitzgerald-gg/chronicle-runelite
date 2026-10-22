@@ -42,6 +42,7 @@ import static chronicle.Json.has;
 import static chronicle.Json.keyOf;
 import static chronicle.Json.low;
 import static chronicle.Json.safeLong;
+import static chronicle.Kit.ACCENT_LIFETIME;
 import static chronicle.Kit.ACCENT_RED;
 import static chronicle.Kit.DARK;
 import static chronicle.Kit.ROW_CAP;
@@ -50,12 +51,15 @@ import static chronicle.Kit.column;
 import static chronicle.Kit.day;
 import static chronicle.Kit.figure;
 import static chronicle.Kit.ghostRow;
+import static chronicle.Kit.group;
 import static chronicle.Kit.link;
+import static chronicle.Kit.linkRow;
 import static chronicle.Kit.note;
 import static chronicle.Kit.noted;
 import static chronicle.Kit.row;
 import static chronicle.Kit.spaced;
 import static chronicle.Kit.tallyCard;
+import static chronicle.Kit.toggle;
 import static chronicle.Kit.value;
 import static chronicle.Kit.vgap;
 import static chronicle.Kit.worthRow;
@@ -134,7 +138,7 @@ final class DetailPage
 	JPanel buildTaskDetail(int index)
 	{
 		JPanel p = column();
-		p.add(panel.backRow("< Back", "", () ->
+		p.add(linkRow("< Back", "", () ->
 		{
 			panel.detailTask = -1;
 			panel.rebuild();
@@ -150,7 +154,7 @@ final class DetailPage
 		JPanel head = card(t.task.toUpperCase(Locale.ROOT));
 		String kills = t.inProgress && t.assignment > t.kills
 			? fmt(t.kills) + " / " + fmt(t.assignment) : fmt(t.kills);
-		head.add(row("Kills logged", kills, panel.accent()));
+		head.add(row("Kills logged", kills, ACCENT_LIFETIME));
 		if (t.noLootKills > 0)
 		{
 			head.add(row("Killed without loot", fmt(t.noLootKills)));
@@ -168,7 +172,7 @@ final class DetailPage
 		List<UntakenRow> monsters = seg.fought();
 		if (!monsters.isEmpty())
 		{
-			p.add(panel.group("Killed"));
+			p.add(group("Killed"));
 			for (UntakenRow m : monsters)
 			{
 				JPanel r = row(m.name, "×" + fmt(m.qty));
@@ -185,7 +189,7 @@ final class DetailPage
 		}
 		else
 		{
-			p.add(panel.group("Loot from this task"));
+			p.add(group("Loot from this task"));
 			for (BagItem it : bag)
 			{
 				JPanel r = row(named(it.name, it.qty),
@@ -195,7 +199,7 @@ final class DetailPage
 			}
 		}
 		p.add(vgap(8));
-		JPanel all = row("All kills of " + t.task, "", panel.accent(), true);
+		JPanel all = row("All kills of " + t.task, "", ACCENT_LIFETIME, true);
 		link(all, () ->
 		{
 			panel.detailTask = -1;
@@ -209,7 +213,7 @@ final class DetailPage
 	{
 		JPanel p = column();
 		LocalStore.Untaken untaken = panel.store.untaken();
-		p.add(panel.backRow("< Back", "", () -> panel.showLeftBehind(null, null)));
+		p.add(linkRow("< Back", "", () -> panel.showLeftBehind(null, null)));
 		p.add(vgap(4));
 
 		if (panel.leftBehindSource != null)
@@ -223,7 +227,7 @@ final class DetailPage
 				return noted(p, "The count above is older than the itemised record. "
 					+ "What this source leaves behind is listed here from now on.");
 			}
-			p.add(panel.group("Declined"));
+			p.add(group("Declined"));
 			for (BagItem b : bag)
 			{
 				JPanel r = row(named(b.name, b.qty),
@@ -242,7 +246,7 @@ final class DetailPage
 		{
 			return noted(p, "No source itemised for this yet.");
 		}
-		p.add(panel.group("Left where"));
+		p.add(group("Left where"));
 		for (UntakenRow r : sources)
 		{
 			JPanel row = row(r.name, "×" + qtyGp(r.qty, r.value), ACCENT_RED);
@@ -322,7 +326,7 @@ final class DetailPage
 			: panel.store.tasks(tw[0], tw[1], null, true).items().getOrDefault(properName(name), new long[2]);
 		if (hasTask && panel.onTaskOnly)
 		{
-			head.add(row("Obtained on task", "×" + fmt(mine[0]), panel.accent()));
+			head.add(row("Obtained on task", "×" + fmt(mine[0]), ACCENT_LIFETIME));
 			if (inWindow == null || lootSince() == null)
 			{
 				head.add(row("All sources", "×" + fmt(qty)));
@@ -334,7 +338,7 @@ final class DetailPage
 		}
 		else
 		{
-			head.add(row("Obtained", "×" + fmt(qty), panel.accent()));
+			head.add(row("Obtained", "×" + fmt(qty), ACCENT_LIFETIME));
 			if (value > 0)
 			{
 				head.add(worthRow(value));
@@ -366,7 +370,7 @@ final class DetailPage
 		if (hasTask)
 		{
 			JPanel hold = column();
-			hold.add(panel.toggle(panel.onTaskOnly ? "On task" : "All", panel.relens(() -> panel.onTaskOnly = !panel.onTaskOnly)));
+			hold.add(toggle(panel.onTaskOnly ? "On task" : "All", panel.relens(() -> panel.onTaskOnly = !panel.onTaskOnly)));
 			hold.add(vgap(6));
 			p.add(hold);
 		}
@@ -379,7 +383,7 @@ final class DetailPage
 			return inWindow != null ? nothing(p, "dropped", since)
 				: noted(p, "The journal hasn't seen this item drop yet.");
 		}
-		p.add(panel.group("From"));
+		p.add(group("From"));
 		final int srcCap = Math.max(panel.drawingCopy ? COPY_MOST : 40, panel.drillShown.getOrDefault("item:src:" + name, 0));
 		for (Object[] s : Sources.firstN(srcs, srcCap))
 		{
@@ -440,7 +444,7 @@ final class DetailPage
 		{
 			return noted(p, panel.window().phrase("No task paid this"));
 		}
-		p.add(panel.group("By task"));
+		p.add(group("By task"));
 		final int taskCap = Math.max(panel.drawingCopy ? COPY_MOST : 40, panel.drillShown.getOrDefault("item:task:" + name, 0));
 		for (LocalStore.Row t : Sources.firstN(split, taskCap))
 		{
@@ -486,7 +490,7 @@ final class DetailPage
 		{
 			return;
 		}
-		p.add(panel.group("Killed on task"));
+		p.add(group("Killed on task"));
 		int cap = panel.drillShown.getOrDefault("ontask:src:" + npc, ROW_CAP);
 		for (LocalStore.Assignment a : Sources.firstN(was, cap))
 		{
@@ -537,7 +541,7 @@ final class DetailPage
 			boolean killed = panel.build.kills.isKillSource(sr.name);
 			long shown = inWindow != null ? inWindow[0]
 				: killed ? panel.build.kills.standingKills(sr) : sr.loots;
-			head.add(row(killed ? "Kills" : "Times looted", fmt(shown), panel.accent()));
+			head.add(row(killed ? "Kills" : "Times looted", fmt(shown), ACCENT_LIFETIME));
 			long worth = inWindow != null ? inWindow[1] : sr.value;
 			long over = inWindow != null ? inWindow[0] : sr.loots;
 			head.add(row("Worth", gps(worth)
@@ -648,7 +652,7 @@ final class DetailPage
 			{
 				spaced(p, grid, 5);
 			}
-			p.add(panel.group("Loot"));
+			p.add(group("Loot"));
 			int cap = panel.drawingCopy ? COPY_MOST : panel.drillShown.getOrDefault(name, 25);
 			panel.addBagRows(p, Sources.firstN(bag, cap));
 			if (bag.size() > cap)
@@ -716,11 +720,11 @@ final class DetailPage
 			: (s == null ? null : s.opening.skills.get(key));
 		if (now != null && now > 0)
 		{
-			head.add(row("Level", String.valueOf(PaceBook.levelAt(now)), panel.accent()));
+			head.add(row("Level", String.valueOf(PaceBook.levelAt(now)), ACCENT_LIFETIME));
 			head.add(row("Experience", gp(now)));
 			if (!panel.wholeRecord() && was != null && now > was)
 			{
-				head.add(row("Gained", "+" + gp(now - was), panel.accent()));
+				head.add(row("Gained", "+" + gp(now - was), ACCENT_LIFETIME));
 			}
 		}
 		else
@@ -768,10 +772,10 @@ final class DetailPage
 		if (!ground.isEmpty())
 		{
 			p.add(vgap(6));
-			p.add(panel.group("WHAT IT HAS EVER PAID"));
+			p.add(group("WHAT IT HAS EVER PAID"));
 			for (SourceRow r : ground)
 			{
-				JPanel line = row(r.name, gps(r.value), panel.accent());
+				JPanel line = row(r.name, gps(r.value), ACCENT_LIFETIME);
 				link(line, () -> panel.openSource(r.name));
 				p.add(line);
 			}
