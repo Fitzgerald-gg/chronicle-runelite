@@ -70,7 +70,7 @@ final class Records
 		}
 		if (best[0][0] > 0)
 		{
-			add("Longest sitting", hoursMinutes(best[0][0]), best[0][1],
+			add("Longest session", hoursMinutes(best[0][0]), best[0][1],
 				best[1][0] > 0 ? "Was " + hoursMinutes(best[1][0]) + " · " + dated(best[1][1]) : null);
 		}
 
@@ -129,7 +129,7 @@ final class Records
 			}
 			if (longest > 1 && runEnd != null)
 			{
-				add("Longest run of days written",
+				add("Longest streak of days played",
 					fmt(longest) + " days", noon(runEnd), null);
 			}
 		}

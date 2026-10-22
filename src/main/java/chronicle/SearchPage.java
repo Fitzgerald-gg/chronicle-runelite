@@ -212,7 +212,7 @@ final class SearchPage
 			"clue", "clue scrolls", "caskets", "treasure trails");
 		goTo(go, ql, "Records", "", panel::openRecords, 1,
 			"record", "best", "bests", "pb", "personal best");
-		goTo(go, ql, "Calendar", "", panel::openCalendar, 1, "days", "days written");
+		goTo(go, ql, "Calendar", "", panel::openCalendar, 1, "days", "days written", "days recorded");
 		goTo(go, ql, "Recap", "", () ->
 		{
 			panel.subByTab.put(Tab.RECORD, "Recap");
@@ -227,14 +227,14 @@ final class SearchPage
 			panel.dropsLeftBehind = true;
 			panel.rebuild();
 		}, 1, "untaken", "left on the floor");
-		goTo(go, ql, "Info", "what the journal holds", panel::openInfo, 1, "journal holds");
+		goTo(go, ql, "Info", "about this journal", panel::openInfo, 1, "journal holds");
 		String kind = ItemKinds.named(q);
 		if (kind != null && !ql.isEmpty())
 		{
 			final String pick = kind;
 			int ks = Search.matchScore(ql, kind);
 			ks = ks < 0 || ks > 2 ? 2 : ks;
-			go.add(new Hit(kind, "every one you have had", null, null,
+			go.add(new Hit(kind, "all drops", null, null,
 				() -> panel.openLootKind(pick, false), ks, 0));
 			if (panel.loot.everOnTask() && hasKindOnTask(pick))
 			{
@@ -530,7 +530,7 @@ final class SearchPage
 		else
 		{
 			p.add(vgap(6));
-			p.add(ghostRow("enter opens the first row", ""));
+			p.add(ghostRow("Enter opens the first result", ""));
 		}
 		return p;
 	}

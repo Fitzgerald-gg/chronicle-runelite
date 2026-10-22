@@ -132,7 +132,7 @@ final class RecapPage
 
 	private JPanel recapCard()
 	{
-		JPanel recap = card(panel.wholeRecord() ? "The whole record" : panel.window().label);
+		JPanel recap = card(panel.wholeRecord() ? "Lifetime" : panel.window().label);
 		int held = recap.getComponentCount();
 
 		long[] sat = panel.build.summary.played();
@@ -180,7 +180,7 @@ final class RecapPage
 			Line said = new Line();
 			said.name(item);
 			said.fixed(" · " + gps(dearest.value));
-			cardRow(recap, "Dearest drop", said, () -> panel.openItem(item));
+			cardRow(recap, "Most valuable drop", said, () -> panel.openItem(item));
 		}
 		if (loot[2] > 0)
 		{
@@ -245,7 +245,7 @@ final class RecapPage
 
 		if (recap.getComponentCount() == held)
 		{
-			recap.add(note(panel.wholeRecord() ? "Nothing on the record yet."
+			recap.add(note(panel.wholeRecord() ? "Nothing recorded yet."
 				: panel.window().phrase("Nothing")));
 		}
 		return recap;

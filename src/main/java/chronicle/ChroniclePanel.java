@@ -1313,8 +1313,8 @@ class ChroniclePanel extends PluginPanel
 	{
 		return note(historySpine == null
 			? "Reading your history..."
-			: "Nothing closed inside " + window().inSentence() + ". A period is the distance "
-				+ "between two baselines, and this window holds fewer than two.");
+			: "Not enough history for " + window().inSentence() + ". A period compares two "
+				+ "saved days, and this one has fewer than two.");
 	}
 
 	private JPanel periodRow()
@@ -1394,7 +1394,7 @@ class ChroniclePanel extends PluginPanel
 		if (f == null || t == null)
 		{
 			JOptionPane.showMessageDialog(this,
-				"Dates read as yyyy-mm-dd (or d/m/yyyy). Nothing changed.");
+				"Enter dates as yyyy-mm-dd or d/m/yyyy. Nothing changed.");
 			return;
 		}
 		if (t.isBefore(f))

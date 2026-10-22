@@ -142,7 +142,7 @@ public class PanelTest
 		assertTrue(loot.indexOf("Barrows") < loot.indexOf("Dust devil"));
 		assertTrue(loot.indexOf("Dust devil") < loot.indexOf("Zulrah"));
 		assertEquals("51 kc · PB 1:20", after(loot, "3.0M gp"));
-		assertEquals("Draconic visage · 3.0M gp", after(screen("Loot", "kinds"), "Dearest"));
+		assertEquals("Draconic visage · 3.0M gp", after(screen("Loot", "kinds"), "Most valuable"));
 	}
 
 	@Test

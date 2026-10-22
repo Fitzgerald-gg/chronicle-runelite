@@ -205,7 +205,7 @@ final class Copy
 		g.fillRect(0, h - band, w, band);
 		g.setColor(ColorScheme.LIGHT_GRAY_COLOR);
 		g.setFont(small());
-		String said = fmt(lost) + " more, past the height a picture can hold";
+		String said = fmt(lost) + " more did not fit";
 		g.drawString(said, 6, h - 6);
 	}
 

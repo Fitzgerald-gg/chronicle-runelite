@@ -254,8 +254,8 @@ final class Build
 			if (!(kills ? e.getValue().kcs : e.getValue().counters).isEmpty())
 			{
 				return w.end.isBefore(e.getKey())
-					? "The record keeps no " + (kills ? "kill counts" : "counters")
-					+ " before " + e.getKey().format(Period.FULL_DAY) + "."
+					? "No " + (kills ? "kill count" : "tracker") + " history before "
+					+ e.getKey().format(Period.FULL_DAY) + "."
 					: null;
 			}
 		}

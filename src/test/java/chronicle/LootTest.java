@@ -105,7 +105,7 @@ public class LootTest
 		assertTrue(day.toString(), day.indexOf("Zulrah") < day.indexOf("Vorkath"));
 		List<String> before = h.period("Day", today.minusDays(1)).screen("Loot");
 		assertFalse(has(before, "Zulrah"));
-		assertTrue(has(before, "The dated loot roll begins"));
+		assertTrue(has(before, "Loot is recorded by day from"));
 
 		LocalDate then = today.minusDays(20);
 		h.edit(j ->
@@ -114,7 +114,7 @@ public class LootTest
 			days.add(then.toString(), days.remove(today.toString()));
 		});
 		assertTrue(has(h.period("Day", then).screen("Loot"), "Zulrah"));
-		assertTrue(has(h.period("Month", then).screen("Loot"), "The dated loot roll begins"));
+		assertTrue(has(h.period("Month", then).screen("Loot"), "Loot is recorded by day from"));
 		assertFalse(has(h.period("Day", today).screen("Loot"), "Zulrah"));
 		assertFalse(has(h.period("Week", today).screen("Loot"), "Zulrah"));
 		assertTrue(has(h.period("Lifetime", today).screen("Loot"), "Zulrah"));
@@ -215,7 +215,7 @@ public class LootTest
 		assertTrue(drops.has("Barrows"));
 		assertFalse(drops.has("Some Player"));
 		assertFalse(drops.has("Thing"));
-		assertTrue(fresh.said().stream().anyMatch(s -> s.startsWith("Chronicle: adopted 2 sources")));
+		assertTrue(fresh.said().stream().anyMatch(s -> s.startsWith("Chronicle: added 2 sources")));
 		fresh.logout().login();
 		assertEquals(430, fresh.journal().getAsJsonObject("drops").getAsJsonObject("Zulrah").get("loots").getAsInt());
 	}

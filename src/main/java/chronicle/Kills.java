@@ -486,7 +486,7 @@ final class Kills
 		String want = LocalStore.chatKind(sr.name);
 		Map<String, Long> rows = new LinkedHashMap<>();
 		putKind(rows, "Kill Log", LocalStore.killLogCounts(build.clog()), want);
-		putKind(rows, "Said in chat", build.store.chatKillCounts(), want);
+		putKind(rows, "Chat message", build.store.chatKillCounts(), want);
 		putKind(rows, "Collection log", LocalStore.pageKillLines(build.clog()), want);
 		putKind(rows, "Running count", build.store.anchoredKills(), want);
 		if (sr.loots > 0)

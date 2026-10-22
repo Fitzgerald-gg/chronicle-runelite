@@ -69,8 +69,8 @@ import net.runelite.http.api.loottracker.LootRecordType;
 @Slf4j
 @PluginDescriptor(
 	name = "Chronicle",
-	description = "A comprehensive journal of your OSRS account - loot, levels, kill "
-		+ "counts, collection log, slayer, clues, quests, diaries and lifetime counters.",
+	description = "A journal of your OSRS account: loot, levels, kill counts, collection log, "
+		+ "slayer, clues, quests, diaries and lifetime counters.",
 	tags = {"chronicle", "journal", "stats", "tracker", "loot", "slayer", "collection", "osrs"}
 )
 @PluginDependency(SlayerPlugin.class)
@@ -423,7 +423,7 @@ public class ChroniclePlugin extends Plugin implements Live
 			if (priorName != null && !LocalStore.slug(priorName).equals(LocalStore.slug(who))
 				&& LocalStore.migrateJournalFiles(localDir(), priorName, who))
 			{
-				chat("Chronicle: your journal followed the rename. "
+				chat("Chronicle: moved your journal to your new name. "
 					+ priorName + " is now " + who + ".");
 			}
 			configManager.setRSProfileConfiguration(GROUP, KEY_JOURNAL_NAME, who);
@@ -1135,7 +1135,7 @@ public class ChroniclePlugin extends Plugin implements Live
 			if (!seeds.isEmpty())
 			{
 				localStore.floorLootTracker(seeds, rsn);
-				chat("Chronicle: adopted " + seeds.size() + " sources · "
+				chat("Chronicle: added " + seeds.size() + " sources · "
 					+ String.format(Locale.UK, "%,d", events)
 					+ " loot events from your Loot Tracker.");
 				refreshPanel();
@@ -1193,7 +1193,7 @@ public class ChroniclePlugin extends Plugin implements Live
 		final String rsn = localName;
 		if (!ready())
 		{
-			chat("Chronicle: log in first. An import lands in the logged-in account's journal.");
+			chat("Chronicle: log in first. Imports go into the logged-in account's journal.");
 			return;
 		}
 		if (file == null || !file.isFile())

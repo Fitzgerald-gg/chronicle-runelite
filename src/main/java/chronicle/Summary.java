@@ -68,7 +68,7 @@ final class Summary
 		RecapPicture.Facts f = new RecapPicture.Facts();
 		f.whole = build.period().whole;
 		f.session = build.period().session;
-		f.title = f.whole ? "The whole record" : build.period().label;
+		f.title = f.whole ? "Lifetime" : build.period().label;
 		Span s = f.whole || f.session ? null : build.span();
 		recapSkills(f, s);
 		recapBosses(f, s);
@@ -90,9 +90,9 @@ final class Summary
 			if (s == null)
 			{
 				f.skillsNote = build.notCounting(false) != null
-					? "The record keeps no experience this far back."
-					: "Nothing closed inside " + build.period().inSentence()
-						+ ": a period is the distance between two baselines, and this one holds fewer than two.";
+					? "No xp history this far back."
+					: "Not enough history for " + build.period().inSentence()
+						+ ". A period compares two saved days, and this one has fewer than two.";
 				return;
 			}
 			closing = build.closingSkills(s.closing.skills, build.period().reachesToday());
@@ -218,13 +218,13 @@ final class Summary
 		}
 		if (build.kills.rollUsed())
 		{
-			f.notes.add("Kill counts without a start and an end are read from loot, and count only the kills that dropped something.");
+			f.notes.add("Kill counts with no start and end are taken from loot, so they only count kills that dropped something.");
 		}
 		if (f.bosses.isEmpty() && !f.whole)
 		{
 			f.bossesNote = build.notCounting(true) != null
-				? "The record keeps no kill counts this far back."
-				: build.period().phrase("No boss was killed");
+				? "No kill count history this far back."
+				: build.period().phrase("No bosses killed");
 		}
 	}
 
@@ -254,7 +254,7 @@ final class Summary
 		}
 		if (f.session && !f.monsters.isEmpty())
 		{
-			f.monstersNote = "A sitting counts the kills that dropped something.";
+			f.monstersNote = "A session only counts kills that dropped something.";
 		}
 	}
 
@@ -290,7 +290,7 @@ final class Summary
 	{
 		if (!lootDated())
 		{
-			f.lootNote = "Loot is not dated this far back, so this period's cannot be told from the rest.";
+			f.lootNote = "Loot is not dated this far back, so this period's loot cannot be shown.";
 			return;
 		}
 		long[] loot = loot();
@@ -400,8 +400,8 @@ final class Summary
 		if (counters == null)
 		{
 			f.trackersNote = build.notCounting(false) != null
-				? "The record keeps no counters this far back."
-				: build.period().phrase("Nothing closed");
+				? "No tracker history this far back."
+				: build.period().phrase("Nothing recorded");
 			return;
 		}
 		for (Entry<String, Integer> fam : RECAP_TRACKER_ROWS.entrySet())
@@ -984,15 +984,14 @@ final class Summary
 			String empty;
 			if (hist.isEmpty())
 			{
-				empty = "The record starts today: baselines close at each login, "
-					+ "day rollover and logout, and a period is the distance "
-					+ "between two of them.";
+				empty = "History starts today. A day is saved at each login, midnight "
+					+ "and logout, and a period compares two saved days.";
 			}
 			else if (hist.firstKey().isBefore(pStart)
 				&& ("Day".equals(w.granularity) || "Week".equals(w.granularity)))
 			{
-				empty = "The imported past resolves by month. Switch to Month "
-					+ "or Year to read this era. Daily detail begins with the plugin.";
+				empty = "Imported history is kept by month. Switch to Month or Year "
+					+ "for this time. Daily detail starts when the plugin was installed.";
 			}
 			else
 			{
@@ -1004,12 +1003,12 @@ final class Summary
 		if (before == null)
 		{
 			b.measuredSince = "Measured since " + from.getKey().format(FULL_DAY)
-				+ ", the earliest baseline on record.";
+				+ ", the earliest saved day.";
 		}
 		else if (before.getKey().isBefore(pStart.minusDays(1)))
 		{
 			b.measuredSince = "Measured since " + before.getKey().format(FULL_DAY)
-				+ ", the nearest earlier baseline.";
+				+ ", the nearest earlier saved day.";
 		}
 		Baseline earliest = HistoryLog.earliest(hist, at.getKey());
 		Baseline closing = HistoryLog.stateAt(hist, at.getKey());

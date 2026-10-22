@@ -22,9 +22,8 @@ public interface ChronicleConfig extends Config
 
 	@ConfigSection(
 		name = "Advanced",
-		description = "Cloud sync and how often the journal is written. "
-			+ "Every network feature here is OFF/blank by default. Chronicle is a "
-			+ "local journal unless you point it somewhere.",
+		description = "Cloud sync and how often the journal is saved. "
+			+ "Nothing here uses the network until you turn it on and set a server.",
 		position = 1,
 		closedByDefault = true
 	)
@@ -33,19 +32,14 @@ public interface ChronicleConfig extends Config
 	@ConfigItem(
 		keyName = "cloudSync",
 		name = "Enable cloud sync",
-		description = "ALSO send a copy of your journal UPWARD to the server below: "
-			+ "loot both taken and left on the ground, levels and a per-skill "
-			+ "level/xp snapshot, kill counts and the rest of your lifetime "
-			+ "counters, collection log, clues, quests, diaries, combat "
-			+ "achievements, slayer tasks, pets, deaths and group-storage "
-			+ "movements, each stamped with your display name, your account type "
-			+ "(ironman, GIM and so on) and your RuneLite account hash. One-way: "
-			+ "nothing is ever read back, and every feature works identically with "
-			+ "this off. Off by default: without this, Chronicle never touches the "
-			+ "network. Requires a server URL and a token.",
-		warning = "This feature submits your IP address, and your own account's activity, "
-			+ "to the 3rd-party server you configure below: a server not controlled or "
-			+ "verified by the RuneLite developers",
+		description = "Also send your journal to the server below: loot taken and left behind, "
+			+ "levels and xp, kill counts and other counters, collection log, clues, quests, "
+			+ "diaries, combat achievements, slayer tasks, pets, deaths and group storage "
+			+ "changes, with your display name, account type and RuneLite account hash. "
+			+ "Nothing is read back and the plugin works the same with this off. "
+			+ "Off by default. Needs a server and a token.",
+		warning = "This sends your IP address and your account's activity to the third-party "
+			+ "server you set below. The RuneLite developers do not control or check that server.",
 		position = 10,
 		section = advancedSection
 	)
@@ -57,9 +51,8 @@ public interface ChronicleConfig extends Config
 	@ConfigItem(
 		keyName = "serverBaseUrl",
 		name = "Cloud server",
-		description = "Base URL of a Chronicle-compatible server to sync to (e.g. a "
-			+ "server you run yourself). Blank by default. Cloud sync does nothing "
-			+ "until this is set.",
+		description = "Address of a Chronicle server to sync to, such as one you run yourself. "
+			+ "Cloud sync does nothing while this is blank.",
 		position = 11,
 		section = advancedSection
 	)
@@ -71,9 +64,8 @@ public interface ChronicleConfig extends Config
 	@ConfigItem(
 		keyName = "manualToken",
 		name = "Cloud token",
-		description = "The push token for this account on the configured server "
-			+ "(issued by that server's operator). Cloud sync sends nothing "
-			+ "without one.",
+		description = "This account's token, from whoever runs the server. "
+			+ "Cloud sync sends nothing without one.",
 		position = 12,
 		section = advancedSection
 	)
@@ -85,12 +77,9 @@ public interface ChronicleConfig extends Config
 	@ConfigItem(
 		keyName = "pushIntervalMinutes",
 		name = "Journal write interval",
-		description = "How often the running session is folded into the on-disk "
-			+ "journal and written out (the day's history baseline lands on the same "
-			+ "beat). This is the most a crash or a power cut can cost you. The "
-			+ "journal is also written at logout and when the plugin stops. With "
-			+ "cloud sync on, the upward push rides this same cadence; with it off, "
-			+ "the setting is purely local.",
+		description = "How often the session and the day's history are saved to disk. "
+			+ "A crash loses at most this much. The journal is also saved at logout and "
+			+ "when the plugin stops. Cloud sync sends on the same schedule.",
 		position = 14,
 		section = advancedSection
 	)
@@ -104,11 +93,10 @@ public interface ChronicleConfig extends Config
 	@ConfigItem(
 		keyName = "importJournal",
 		name = "Import a journal",
-		description = "Tick to choose a journal file to merge into THIS account's "
-			+ "record: a backup, another computer, a copy kept for you elsewhere. "
-			+ "Your journal is plain JSON in .runelite/chronicle/. Everything "
-			+ "floors, so importing twice changes nothing. The tick clears itself "
-			+ "when the file chooser opens.",
+		description = "Tick to choose a journal file, such as a backup or one from another "
+			+ "computer, to merge into this account's journal. Journals are JSON files in "
+			+ ".runelite/chronicle/. Importing the same file twice changes nothing. "
+			+ "The tick clears when the file chooser opens.",
 		position = 40,
 		section = advancedSection
 	)
@@ -120,9 +108,8 @@ public interface ChronicleConfig extends Config
 	@ConfigItem(
 		keyName = "pushNow",
 		name = "Push stats now",
-		description = "Tick to send the journal upward immediately rather than "
-			+ "waiting for the next flush. Does nothing unless cloud sync is on "
-			+ "above. The tick clears itself.",
+		description = "Tick to send to the server now instead of at the next save. "
+			+ "Needs cloud sync on. The tick clears itself.",
 		position = 41,
 		section = advancedSection
 	)

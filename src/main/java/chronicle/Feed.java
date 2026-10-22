@@ -596,7 +596,7 @@ final class Feed
 		switch (type)
 		{
 			case "PET":
-				return "Pet: " + str(d, "petName", "a new companion");
+				return "Pet: " + str(d, "petName", "new pet");
 			case "COLLECTION":
 				return "Log slot: " + str(d, "itemName", "new item");
 			case "RECORD":

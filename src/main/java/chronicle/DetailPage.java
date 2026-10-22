@@ -124,7 +124,7 @@ final class DetailPage
 		{
 			return;
 		}
-		head.add(row("Usual", gp(sumValue / earlier) + " gp · " + fmt(sumKills / earlier)
+		head.add(row("Average", gp(sumValue / earlier) + " gp · " + fmt(sumKills / earlier)
 			+ " kills · over " + earlier + " tasks"));
 		SlayerTask best = j.tasks.get(bestAt);
 		JPanel bestRow = row("Best", gp(best.totalValue) + " gp · "
@@ -184,7 +184,7 @@ final class DetailPage
 		List<BagItem> bag = seg.bag();
 		if (bag.isEmpty())
 		{
-			p.add(note("No loot recorded against this task."));
+			p.add(note("No loot recorded for this task."));
 		}
 		else
 		{
@@ -223,10 +223,10 @@ final class DetailPage
 				count(left == null ? 0 : left.qty, "item"), ACCENT_RED, left == null ? 0 : left.value));
 			if (bag.isEmpty())
 			{
-				return noted(p, "The count above is older than the itemised record. "
-					+ "What this source leaves behind is listed here from now on.");
+				return noted(p, "The count above is from before items were tracked. "
+					+ "Items left from this source are listed here from now on.");
 			}
-			p.add(group("Declined"));
+			p.add(group("Items left"));
 			for (BagItem b : bag)
 			{
 				JPanel r = row(named(b.name, b.qty),
@@ -243,9 +243,9 @@ final class DetailPage
 			"×" + fmt(held == null ? 0 : held.qty), ACCENT_RED, held == null ? 0 : held.value));
 		if (sources.isEmpty())
 		{
-			return noted(p, "No source itemised for this yet.");
+			return noted(p, "No source recorded for this yet.");
 		}
-		p.add(group("Left where"));
+		p.add(group("Where it was left"));
 		for (UntakenRow r : sources)
 		{
 			JPanel row = row(r.name, "×" + qtyGp(r.qty, r.value), ACCENT_RED);
@@ -331,8 +331,7 @@ final class DetailPage
 				head.add(row("All sources", "×" + fmt(qty)));
 			}
 			JPanel priced = worthRow(mine[1]);
-			priced.setToolTipText("Priced as the drop landed, or in bulk on the day "
-				+ "the history was imported");
+			priced.setToolTipText("Priced when it dropped, or on the day the history was imported");
 			head.add(priced);
 		}
 		else
@@ -355,7 +354,7 @@ final class DetailPage
 			{
 				head.add(row("First dropped", dated(days[0])));
 				head.add(row("Last dropped", dated(days[1])));
-				head.add(row("Days it landed", fmt(days[2])));
+				head.add(row("Days it dropped", fmt(days[2])));
 			}
 		}
 		p.add(head);
@@ -380,7 +379,7 @@ final class DetailPage
 		if (srcs.isEmpty() && other <= 0)
 		{
 			return inWindow != null ? nothing(p, "dropped", since)
-				: noted(p, "The journal hasn't seen this item drop yet.");
+				: noted(p, "No drops of this item recorded yet.");
 		}
 		p.add(group("From"));
 		final int srcCap = Math.max(panel.drawingCopy ? COPY_MOST : 40, panel.drillShown.getOrDefault("item:src:" + name, 0));
@@ -404,14 +403,14 @@ final class DetailPage
 		return panel.sessionPeriod() || from > 0 && from <= startMs(w.start) ? null
 			: from <= 0 ? UNDATED
 			: !panel.drawingCopy ? "Loot since " + dayOf(from).format(FULL_DAY)
-			: "Loot is dated for " + (dayOf(from).isAfter(w.end) ? "none" : "only part") + " of "
+			: "Dated loot covers " + (dayOf(from).isAfter(w.end) ? "none" : "only part") + " of "
 			+ panel.window().inSentence() + ".";
 	}
 
 	private String sinceLine(String since)
 	{
 		return since != null || panel.wholeRecord() || !panel.drawingCopy ? since
-			: "The figures above are " + panel.window().inSentence() + "'s.";
+			: "The figures above are for " + panel.window().inSentence() + ".";
 	}
 
 	private JPanel nothing(JPanel p, String what, String since)
@@ -424,7 +423,7 @@ final class DetailPage
 		if (show)
 		{
 			JPanel r = ghostRow("Other", figure);
-			r.setToolTipText("Dropped on days the record kept whole rather than by source");
+			r.setToolTipText("Dropped on days recorded only as totals, not by source");
 			p.add(r);
 		}
 	}
@@ -441,7 +440,7 @@ final class DetailPage
 		List<LocalStore.Row> split = panel.store.tasks(w[0], w[1], null, true).byTask(name);
 		if (split.isEmpty())
 		{
-			return noted(p, panel.window().phrase("No task paid this"));
+			return noted(p, panel.window().phrase("No task dropped this"));
 		}
 		p.add(group("By task"));
 		final int taskCap = Math.max(panel.drawingCopy ? COPY_MOST : 40, panel.drillShown.getOrDefault("item:task:" + name, 0));
@@ -470,7 +469,7 @@ final class DetailPage
 			return;
 		}
 		final String key = "kcsrc:" + sr.name;
-		head.add(panel.quietHead("What says so", "", key));
+		head.add(panel.quietHead("Kill count sources", "", key));
 		if (!panel.foldOpen(key))
 		{
 			return;
@@ -507,7 +506,7 @@ final class DetailPage
 			{
 				JPanel r = row("Left behind", qtyGp(u.qty, u.value)
 					+ (u.kills > 0 ? " · " + count(u.kills, "kill") : ""));
-				r.setToolTipText("Open what was left on the floor");
+				r.setToolTipText("Show what was left on the floor");
 				link(r, () ->
 				{
 					panel.detailSource = null;
@@ -662,10 +661,9 @@ final class DetailPage
 			addOther(p, gps(Math.max(0, other)), unfiled);
 			return p;
 		}
-		return sr == null ? noted(p, "The journal has no drops from this source yet.")
+		return sr == null ? noted(p, "No drops from this source yet.")
 			: inWindow != null ? nothing(p, "from " + name, since)
-			: noted(p, "Items fill in as you play. The journal prices each drop the "
-			+ "moment it lands.");
+			: noted(p, "Items appear as you play. Each drop is priced when it lands.");
 	}
 
 	private List<SourceRow> skillGround(String craft)
@@ -771,7 +769,7 @@ final class DetailPage
 		if (!ground.isEmpty())
 		{
 			p.add(vgap(6));
-			p.add(group("WHAT IT HAS EVER PAID"));
+			p.add(group("ALL-TIME LOOT"));
 			for (SourceRow r : ground)
 			{
 				JPanel line = row(r.name, gps(r.value), ACCENT_LIFETIME);

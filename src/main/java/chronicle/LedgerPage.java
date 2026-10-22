@@ -94,7 +94,7 @@ final class LedgerPage
 		}
 		JPanel head = card("Trackers");
 		head.add(row("Counters", fmt(kept), ACCENT_LIFETIME));
-		head.add(row("Reading", panel.wholeRecord() ? "Lifetime" : panel.window().label));
+		head.add(row("Period", panel.wholeRecord() ? "Lifetime" : panel.window().label));
 		spaced(p, head);
 		if (kept == 0)
 		{
@@ -125,7 +125,7 @@ final class LedgerPage
 	private void addDeathsFold(JPanel p, String figure)
 	{
 		JPanel head = row("Deaths", figure);
-		panel.foldHead(head, FOLD_DEATHS, "Who dealt them");
+		panel.foldHead(head, FOLD_DEATHS, "What killed you");
 		p.add(head);
 		if (!panel.foldOpen(FOLD_DEATHS))
 		{
@@ -180,7 +180,7 @@ final class LedgerPage
 		p.add(pills);
 		if (panel.tab == Tab.TRACKERS && !panel.allTrackers)
 		{
-			p.add(moreRow("every counter in one place", panel::openAllTrackers));
+			p.add(moreRow("All trackers on one page", panel::openAllTrackers));
 		}
 		p.add(vgap(4));
 

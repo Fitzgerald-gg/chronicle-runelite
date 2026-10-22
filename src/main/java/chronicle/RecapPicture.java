@@ -365,12 +365,12 @@ final class RecapPicture
 			b.pieces.addAll(lines(f.loot));
 			if (!f.sources.isEmpty())
 			{
-				b.pieces.add(subhead("Where it came from"));
+				b.pieces.add(subhead("Sources"));
 				b.pieces.addAll(lines(f.sources));
 			}
 			if (!f.items.isEmpty())
 			{
-				b.pieces.add(subhead("Dearest"));
+				b.pieces.add(subhead("Most valuable"));
 				b.pieces.addAll(lines(f.items));
 			}
 			if (f.lootNote != null)

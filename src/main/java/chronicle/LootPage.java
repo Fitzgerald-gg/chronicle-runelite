@@ -53,8 +53,7 @@ final class LootPage
 {
 	static final String UNFILED = "Everything else";
 
-	static final String UNDATED = "No loot has been dated yet. The roll keeps one entry a "
-		+ "day and starts with the next drop that lands.";
+	static final String UNDATED = "No dated loot yet. Loot is recorded by day from the next drop on.";
 
 	private final ChroniclePanel panel;
 
@@ -74,9 +73,9 @@ final class LootPage
 		if (!win.session && rollFrom > startMs(win.start))
 		{
 			LocalDate began = dayOf(rollFrom);
-			return noted(p, "The dated loot roll begins " + began.format(FULL_DAY)
-				+ ", which is inside " + panel.window().inSentence() + ". Naming the part it can see "
-				+ "as the whole period would be worse than saying nothing.");
+			return noted(p, "Loot is recorded by day from " + began.format(FULL_DAY)
+				+ ", which falls in " + panel.window().inSentence() + ", so this period cannot be "
+				+ "shown in full.");
 		}
 		LocalStore.LootWindow w = panel.build.lootWindow();
 		if (!panel.dropsLeftBehind && panel.dropsByKind)
@@ -96,7 +95,7 @@ final class LootPage
 			: tallyCard("Drops received", "Drops", fmt(w.loots), ACCENT_LIFETIME, w.value);
 		if (panel.dropsLeftBehind)
 		{
-			head.add(row("Kills that left one", fmt(w.leftKills)));
+			head.add(row("Kills with loot left", fmt(w.leftKills)));
 		}
 		spaced(p, head);
 		final String key = panel.dropsLeftBehind ? "win:left" : "win:source";
@@ -182,7 +181,7 @@ final class LootPage
 		sources.sort(Comparator.comparingLong((SourceRow r) -> r.value).reversed());
 		if (sources.isEmpty())
 		{
-			return noted(p, "Drops appear here as you play: every kill, priced as it lands.");
+			return noted(p, "Drops appear here as you play, priced when they land.");
 		}
 		long everyDrop = 0;
 		long everyValue = 0;
@@ -211,7 +210,7 @@ final class LootPage
 		final List<BagItem> bag = panel.store.allLoot();
 		if (bag.isEmpty())
 		{
-			return noted(p, "Drops appear here as you play: every kill, priced as it lands.");
+			return noted(p, "Drops appear here as you play, priced when they land.");
 		}
 		return kindLens(p, "Everything dropped", bag, "all:");
 	}
@@ -224,7 +223,7 @@ final class LootPage
 			return;
 		}
 		final String name = top.name;
-		JPanel r = row("Dearest", name + " · " + gps(top.value));
+		JPanel r = row("Most valuable", name + " · " + gps(top.value));
 		link(r, () -> panel.openItem(name));
 		head.add(r);
 	}
@@ -262,8 +261,7 @@ final class LootPage
 		}
 		if (rows.isEmpty())
 		{
-			return noted(p, "What you walk past gets counted here, priced at the "
-				+ "moment you declined it.");
+			return noted(p, "Loot you leave on the floor is counted here, priced when you left it.");
 		}
 		List<UntakenRow> items = panel.store.untaken().items;
 		items.sort(Comparator.comparingLong((UntakenRow r) -> r.value).reversed());
@@ -273,7 +271,7 @@ final class LootPage
 		spaced(p, head);
 		if (panel.dropsByKind && items.isEmpty())
 		{
-			return noted(p, "Nothing walked past has been priced yet.");
+			return noted(p, "No loot left behind yet.");
 		}
 		final boolean byItem = panel.dropsByKind;
 		List<UntakenRow> list = byItem ? items : rows;

@@ -272,7 +272,7 @@ final class SheetPage
 			if (had.isEmpty())
 			{
 				String unkept = panel.build.notCounting(true);
-				return noted(p, unkept != null ? unkept : panel.window().phrase("Nothing on the boss sheet was killed"));
+				return noted(p, unkept != null ? unkept : panel.window().phrase("No bosses killed"));
 			}
 			roster = had;
 		}
@@ -284,9 +284,8 @@ final class SheetPage
 		LocalDate shortFrom = panel.build.kills.rollUsed() ? panel.build.kills.rollShortOf() : null;
 		if (shortFrom != null)
 		{
-			spaced(p, note("Kills the journal cannot date are counted from loot "
-				+ "instead, which reaches back only to " + shortFrom.format(FULL_DAY)
-				+ " and sees a kill only where it dropped something."), 4);
+			spaced(p, note("Undated kills are counted from loot, which only goes back to "
+				+ shortFrom.format(FULL_DAY) + " and only counts kills that dropped something."), 4);
 		}
 		spaced(p, grid);
 		return p;
@@ -606,7 +605,7 @@ final class SheetPage
 		spaced(p, head);
 		if (mine.isEmpty())
 		{
-			p.add(note("No clue casket has been opened while Chronicle was watching."));
+			p.add(note("No clue caskets recorded yet."));
 			return;
 		}
 		p.add(group("BY TIER"));
@@ -635,7 +634,7 @@ final class SheetPage
 		Standings.Quests q = panel.build.standings.quests();
 		if (q.known == 0)
 		{
-			p.add(note("The quest list arrives when you next log in."));
+			p.add(note("Quests load the next time you log in."));
 			return;
 		}
 		JPanel head = card("Quests");
@@ -686,8 +685,8 @@ final class SheetPage
 		spaced(p, head);
 		if (!known)
 		{
-			spaced(p, note("Which tiers you have finished arrives when you next log in. "
-				+ "Until then this is what each one asks for."), 4);
+			spaced(p, note("Your finished tiers load the next time you log in. "
+				+ "Until then this shows what each tier needs."), 4);
 		}
 		for (String region : tasks.keySet())
 		{
@@ -761,16 +760,15 @@ final class SheetPage
 		if (unnamed > 0)
 		{
 			spaced(p, note("You have also done " + count(unnamed, "combat achievement")
-				+ " added to the game since this copy of"
-				+ " Chronicle was built. They are counted by the game, not named"
-				+ " here, until the plugin updates."), 4);
+				+ " added to the game after this version of Chronicle. They count,"
+				+ " but are not named until the plugin updates."), 4);
 		}
 		Set<Integer> done = headDone;
 		boolean known = !done.isEmpty();
 		if (!known)
 		{
-			spaced(p, note("Which tasks you have done arrives when you next log in. "
-				+ "Until then this is what each tier asks for."), 4);
+			spaced(p, note("Your finished tasks load the next time you log in. "
+				+ "Until then this shows what each tier needs."), 4);
 		}
 		for (Entry<String, List<JsonObject>> e : Standings.caBySource().entrySet())
 		{
@@ -909,7 +907,7 @@ final class SheetPage
 	private String periodTip(long[] played, List<Entry<String, Long>> gains)
 	{
 		long xp = sumOf(gains);
-		return tip(panel.sessionPeriod() ? "This sitting"
+		return tip(panel.sessionPeriod() ? "This session"
 			: panel.wholeRecord() ? "Lifetime" : "The period",
 			"Time played", hoursMinutes(played[0]),
 			"Sessions", fmt(played[1]),

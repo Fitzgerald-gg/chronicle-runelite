@@ -204,7 +204,7 @@ final class HomePage
 		mounted += addSessionCounters(strip, sessionDisplayCounters(), shownKeys);
 		if (mounted == 0)
 		{
-			strip.add(row("A fresh page", ""));
+			strip.add(row("Nothing yet", ""));
 		}
 		spaced(p, strip);
 

@@ -89,11 +89,11 @@ final class RecordsPage
 
 		spaced(p, facts(card("Counted"), f, ACCENT_LIFETIME, "Trackers", "trackers",
 			"Skills", "skills", "Feed entries", "feed", "Chat kill counts", "chatCounts",
-			"Anchored counts", "anchors"));
+			"Running counts", "anchors"));
 
 		JPanel file = card("On disk");
 		file.add(row("Journal", bytes(f.getOrDefault("journalBytes", 0L)), ACCENT_LIFETIME));
-		file.add(row("History spine", bytes(f.getOrDefault("spineBytes", 0L))));
+		file.add(row("History file", bytes(f.getOrDefault("spineBytes", 0L))));
 		p.add(facts(file, f, null, "Schema", "schema"));
 		return p;
 	}
@@ -194,7 +194,7 @@ final class RecordsPage
 				written++;
 				cell.setBackground(wash(ACCENT_LIFETIME, 0.18f));
 				n.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-				cell.setToolTipText("Written");
+				cell.setToolTipText("Recorded");
 			}
 			else
 			{
@@ -215,8 +215,8 @@ final class RecordsPage
 			grid.add(blankCell());
 		}
 		spaced(p, grid, 4);
-		p.add(ghostRow(written == 0 ? "nothing written this month"
-			: count(written, "day") + " written"
+		p.add(ghostRow(written == 0 ? "nothing recorded this month"
+			: count(written, "day") + " recorded"
 			+ (monthMinutes > 0 ? " · " + hoursMinutes(monthMinutes) : ""), ""));
 		return p;
 	}

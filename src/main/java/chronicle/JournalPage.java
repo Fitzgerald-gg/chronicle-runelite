@@ -118,9 +118,8 @@ final class JournalPage
 		if (feed.isEmpty())
 		{
 			return noted(p, "All".equals(panel.journalLens)
-				? "Milestones (pets, log slots, tasks, quests, deaths) are noted "
-					+ "here as they happen."
-				: "Nothing of that kind on the record yet.");
+				? "Pets, log slots, tasks, quests and deaths appear here as they happen."
+				: "Nothing of this kind yet.");
 		}
 
 		String lastDay = null;
@@ -159,7 +158,7 @@ final class JournalPage
 		if (feed.size() > panel.journalShown)
 		{
 			p.add(vgap(6));
-			p.add(moreRow("Read further back", () ->
+			p.add(moreRow("Show older entries", () ->
 			{
 				panel.journalShown += 60;
 				panel.rebuildInPlace();
@@ -172,19 +171,19 @@ final class JournalPage
 	{
 		String rsn = panel.live.displayRsn();
 		JPanel plate = card(rsn != null && !rsn.isEmpty()
-			? "The journal of " + rsn : "The journal");
+			? rsn + "'s journal" : "Journal");
 
 		long since = panel.store.keptSince();
 		TreeMap<LocalDate, Baseline> spine = panel.historySpine;
 		if (since > 0)
 		{
-			plate.add(row("Kept since",
+			plate.add(row("Started",
 				day(since), ACCENT_LIFETIME));
 		}
 		if (spine != null && !spine.isEmpty())
 		{
-			JPanel days = row("Days written", fmt(spine.size()));
-			days.setToolTipText("The days, as a calendar");
+			JPanel days = row("Days recorded", fmt(spine.size()));
+			days.setToolTipText("Open the calendar");
 			link(days, panel::openCalendar);
 			plate.add(days);
 		}
@@ -214,7 +213,7 @@ final class JournalPage
 			plate.add(row("Last milestone", str(last.getAsJsonObject("data"), "text", "")
 				+ " · " + day(safeLong(last.get("ts")))));
 		}
-		plate.add(moreRow("what the journal holds", panel::openInfo));
+		plate.add(moreRow("about this journal", panel::openInfo));
 		p.add(plate);
 
 		String note = titleNote();
@@ -233,8 +232,8 @@ final class JournalPage
 			{
 				if (g.percentileDry >= 90)
 				{
-					return "still owed a " + low(g.item)
-						+ " at " + fmt(g.kc) + " " + low(g.boss);
+					return "no " + low(g.item) + " yet after "
+						+ fmt(g.kc) + " " + low(g.boss);
 				}
 			}
 		}

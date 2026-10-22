@@ -215,8 +215,7 @@ final class LogPage
 				}
 				if (anyDetail)
 				{
-					spaced(drill, note("Click pet to see odds. Skilling odds are based "
-						+ "on current level."), 3);
+					spaced(drill, note("Click a pet to see its odds. Skilling odds use your current level."), 3);
 				}
 				Map<String, Long> slotDates = panel.build.feed.slotDates();
 				for (int i = 0; i < slots.size(); i++)
@@ -267,7 +266,7 @@ final class LogPage
 				}
 				p.add(ghostRow("Chronicle has no slot list for "
 					+ (unknownPages.size() == 1 ? "this page" : "these pages")
-					+ " yet, so only what you hold is known.", ""));
+					+ " yet, so only the slots you hold are shown.", ""));
 			}
 		}
 		return p;
@@ -350,15 +349,15 @@ final class LogPage
 	private static String chaseTip(GrindBook.PetChase chase)
 	{
 		StringBuilder sb = new StringBuilder(pct(chase.percentileDry, "Under ", "Over ") + " of players have " + chase.pet
-			+ " by this point. " + chaseSources(chase));
+			+ " by now. " + chaseSources(chase));
 		if (chase.activity != null && chase.sources.size() > 1)
 		{
 			sb.append(", mostly ").append(low(chase.sources.get(0).boss));
 		}
 		if (chase.level > 0)
 		{
-			sb.append(". Priced at ").append(chase.level)
-				.append(", the level you hold now, not the level each one was rolled at");
+			sb.append(". Odds use level ").append(chase.level)
+				.append(", your current level, not the level at each roll");
 		}
 		return sb.append(".").toString();
 	}

@@ -89,7 +89,7 @@ public class PeriodTest
 	{
 		h.login();
 		List<String> week = h.period("Week", LocalDate.of(2026, 3, 4)).screen("Recap");
-		assertTrue(week.toString(), week.stream().anyMatch(s -> s.startsWith("Nothing inside ")));
+		assertTrue(week.toString(), week.stream().anyMatch(s -> s.startsWith("Nothing in ")));
 	}
 
 	@Test
@@ -111,7 +111,7 @@ public class PeriodTest
 		june();
 		List<String> cal = h.period("Month", JUNE).screen("Calendar");
 		assertTrue(cal.toString(), has(cal, "JUNE 2026"));
-		assertTrue(cal.toString(), has(cal, "Written"));
+		assertTrue(cal.toString(), has(cal, "Recorded"));
 	}
 
 	@Test

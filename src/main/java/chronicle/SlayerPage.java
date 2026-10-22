@@ -116,7 +116,7 @@ final class SlayerPage
 		}
 		else
 		{
-			p.add(note("Reading the task journey from the journal…"));
+			p.add(note("Loading slayer tasks…"));
 		}
 		return p;
 	}
@@ -132,7 +132,7 @@ final class SlayerPage
 			return noted(p, panel.lootTask != null
 				? panel.window().phrase("No loot logged on " + panel.lootTask)
 				: panel.wholeRecord()
-					? "No task loot in the journal yet. It collects as tasks close."
+					? "No task loot yet. It is added as tasks finish."
 					: panel.window().phrase("No task loot"));
 		}
 		final long[] sum = LocalStore.tallyOf(bag);
@@ -192,8 +192,7 @@ final class SlayerPage
 		List<Entry<String, Long>> kcs = new ArrayList<>(LocalStore.killLogCounts(panel.build.clog()).entrySet());
 		if (kcs.isEmpty())
 		{
-			return noted(p, "No kill log yet. It copies itself the next time you open "
-				+ "the Slayer Kill Log in game.");
+			return noted(p, "No kill log yet. It is read the next time you open the Slayer Kill Log in game.");
 		}
 		kcs.sort(Entry.<String, Long>comparingByValue().reversed());
 		JPanel card = card("Kill log");
@@ -214,8 +213,7 @@ final class SlayerPage
 	{
 		if (j.tasks.isEmpty() && j.completedTasks == 0)
 		{
-			p.add(note("No tasks in the journal yet. They collect as "
-				+ "you play with the Slayer plugin on."));
+			p.add(note("No tasks yet. They are recorded while the Slayer plugin is on."));
 			return;
 		}
 		List<SlayerTask> shown = new ArrayList<>();
@@ -252,7 +250,7 @@ final class SlayerPage
 				onTaskLoot += t.totalValue;
 			}
 		}
-		JPanel head = card("The journey");
+		JPanel head = card("Task history");
 		head.add(row("Tasks done", fmt(tasksDone), ACCENT_LIFETIME));
 		head.add(row("Kills on task", fmt(killsOnTask)));
 		head.add(row("On-task loot", gps(onTaskLoot)));
@@ -307,7 +305,7 @@ final class SlayerPage
 		styled(part(r, BorderLayout.CENTER), small(), dim());
 		JLabel pick = part(r, BorderLayout.EAST);
 		pick.setFont(small());
-		pick.setToolTipText("Narrow this board to one task");
+		pick.setToolTipText("Show one task only");
 		link(pick, () -> taskMenu().show(r, 0, r.getHeight()));
 		link(r, () -> taskMenu().show(r, 0, r.getHeight()));
 		return r;

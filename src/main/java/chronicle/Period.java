@@ -131,7 +131,7 @@ final class Period
 
 	String phrase(String said)
 	{
-		return said + " inside " + inSentence() + ".";
+		return said + " in " + inSentence() + ".";
 	}
 
 	boolean reachesToday()
