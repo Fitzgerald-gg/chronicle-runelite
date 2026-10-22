@@ -444,7 +444,7 @@ public class AuditCrawlTest
 			Component door = now.get(i);
 			String label = doorLabel(door);
 			if (label.startsWith("copy") || label.equals("copied") || label.equals("cannot copy")
-				|| "Choose the period".equals(tipOf(door)))
+				|| "Choose the period".equals(tipOf(door)) || label.equals("end"))
 			{
 				continue;
 			}

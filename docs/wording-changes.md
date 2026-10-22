@@ -12,6 +12,7 @@ period's name (for example `22 Oct 2026` or `this session`), `{date}` a date, `{
 | Recap, same case | `Nothing closed inside {P}: a period is the distance between two baselines, and this one holds fewer than two.` | `Not enough history for {P}. A period compares two saved days, and this one has fewer than two.` |
 | Exact dates, bad input | `Dates read as yyyy-mm-dd (or d/m/yyyy). Nothing changed.` | `Enter dates as yyyy-mm-dd or d/m/yyyy. Nothing changed.` |
 | Now, empty session | `A fresh page` | `Nothing yet` |
+| Now, session card header | `since {time} · {duration}` | `{time} · {duration}  end` (end starts a new session) |
 | Journal, empty lens | `Nothing of that kind on the record yet.` | `Nothing of this kind yet.` |
 | Journal, Feats lens note | `Milestones (pets, log slots, tasks, quests, deaths) are noted here as they happen.` | `Pets, log slots, tasks, quests and deaths appear here as they happen.` |
 | Journal, more entries | `Read further back` | `Show older entries` |

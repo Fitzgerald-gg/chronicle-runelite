@@ -983,20 +983,25 @@ final class Harness
 
 	private static Component linkLabelled(Component c, String label)
 	{
-		if (!(c instanceof Container))
+		if (c instanceof JLabel && label.equals(((JLabel) c).getText()))
 		{
-			return null;
-		}
-		for (Component k : ((Container) c).getComponents())
-		{
-			if (c.getMouseListeners().length > 0 && k instanceof JLabel && label.equals(((JLabel) k).getText()))
+			for (Component k = c; k != null; k = k.getParent())
 			{
-				return c;
+				if (k.getMouseListeners().length > 0)
+				{
+					return k;
+				}
 			}
-			Component found = linkLabelled(k, label);
-			if (found != null)
+		}
+		if (c instanceof Container)
+		{
+			for (Component k : ((Container) c).getComponents())
 			{
-				return found;
+				Component found = linkLabelled(k, label);
+				if (found != null)
+				{
+					return found;
+				}
 			}
 		}
 		return null;
