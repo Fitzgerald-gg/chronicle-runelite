@@ -3,7 +3,6 @@
   "generated": "2026-09-20",
   "source": "oldschool.runescape.wiki, Combat Achievements/<tier>",
   "schema": 1,
-  "note": "Keyed by the game's own combat achievement task id, which the wiki carries as data-ca-task-id and which survives a task being renamed. `task` is what the player must DO and is the line the panel shows. The totals are the wiki's own tier table, kept here so the bundle can be checked against the count it claims rather than against itself.",
   "points": {
    "easy": 1,
    "medium": 2,

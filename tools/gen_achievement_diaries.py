@@ -1,9 +1,4 @@
-"""Build the achievement diary table from the wiki's twelve region pages.
-
-RuneLite core ships these as compiled per-region classes, but DiaryRequirement is
-package private, so reading them means reflecting into another plugin's internals.
-Bundled instead, and checked the same way the combat achievements are.
-"""
+"""Build osrs_achievement_diaries.json from the wiki's twelve region pages."""
 import json, re, html, subprocess, sys, time
 
 UA = 'Chronicle-plugin-dev/1.0 (cjrfitzgerald@gmail.com)'
@@ -13,14 +8,11 @@ REGIONS = ["Ardougne", "Desert", "Falador", "Fremennik", "Kandarin", "Karamja",
 TIERS = ["Easy", "Medium", "Hard", "Elite"]
 API = ("https://oldschool.runescape.wiki/api.php?action=parse&page={page}"
        "&prop=text&format=json&formatversion=2")
-# The panel paints in the RuneScape pixel font, which has no glyph for a bullet,
-# an en dash, a curly quote or an arrow: each would paint .notdef, a hollow box,
-# in the middle of a requirement. Mapped to the nearest character the font DOES
-# carry. This changes how a line looks, never what it says.
+# Characters the RuneScape font cannot draw
 PAINTABLE = {
-    "\u2022": "\u00b7",   # bullet -> middot
-    "\u2013": "-",        # en dash
-    "\u2014": "-",        # em dash, which the font has but the house style bans
+    "\u2022": "\u00b7",
+    "\u2013": "-",
+    "\u2014": "-",
     "\u2018": "'", "\u2019": "'",
     "\u201c": '"', "\u201d": '"',
     "\u2192": "->",
@@ -33,30 +25,17 @@ def paintable(s):
 
 WS = re.compile(r"\s+")
 LEAD = re.compile(r"^\d+\.\s*")
-# A wiki footnote reference, "[a]" or "[d 1]", pointing at a note that is not on
-# the row and so means nothing once the row is on its own. "[sic]" stays: that one
-# is the wiki telling the reader the GAME has the typo, which is worth keeping.
+# footnote markers like [a] or [d 1], but not [sic]
 FOOTNOTE = re.compile(r"\[(?!sic\])[a-z]{0,2}\s?\d*\]")
 
-# What survives FOOTNOTE is a note that says something: "[sic]", and the
-# "[boostable]" / "[not boostable]" that tells a reader whether a level can be
-# reached with a potion. The wiki carries them in a <sup>, so stripping tags
-# leaves them welded to the preceding word - "70 Defence[not boostable]" - which
-# reads as a typo rather than as a note. Give them the space the markup was.
+# "70 Defence[not boostable]" gets its space back
 GLUED_NOTE = re.compile(r"(?<=\S)\[")
 
 def text(cell):
-    # tags out with NO space, so "<a>mine</a>." stays "mine."
     s = paintable(WS.sub(" ", html.unescape(re.sub(r"<[^>]+>", "", cell))).strip())
     return GLUED_NOTE.sub(" [", FOOTNOTE.sub("", s)).strip()
 
 def outer_tables(body, attr_pat):
-    """Every table matching attr_pat, with nested tables removed.
-
-    A diary cell can hold a hidden tooltip that is itself a table, and a
-    non-greedy match ends at ITS closing tag while a row scan picks up ITS rows.
-    That is how three dialogue-option digits became three Fremennik tasks.
-    """
     out = []
     for m in re.finditer(attr_pat, body):
         depth, i = 1, m.end()
@@ -72,7 +51,6 @@ def outer_tables(body, attr_pat):
                 depth -= 1
                 i = nxt_close + 8
         chunk = body[m.end():i]
-        # drop whole nested tables, innermost first
         prev = None
         while prev != chunk:
             prev = chunk
@@ -87,9 +65,6 @@ for region in REGIONS:
                          capture_output=True, text=True).stdout
     body = json.loads(raw).get("parse", {}).get("text", "")
     got = 0
-    # The task tables name themselves. Scanning forward from the tier HEADING
-    # instead found whatever table came first, which on Karamja is the audio
-    # player and cost that region 45 of its 50 tasks without a word.
     tables = outer_tables(
         body, r'<table[^>]*data-diary-name="[^"]*"[^>]*data-diary-tier="([^"]*)"[^>]*>')
     for tier, chunk in tables:
@@ -114,9 +89,6 @@ doc = {
         "generated": time.strftime("%Y-%m-%d"),
         "source": "oldschool.runescape.wiki, <region> Diary",
         "schema": 1,
-        "note": ("Region -> tier -> the tasks in the order the diary lists them, each "
-                 "with what the wiki states it requires. `task` is what the player must "
-                 "DO and is the line the panel shows."),
     },
     "diaries": out,
 }

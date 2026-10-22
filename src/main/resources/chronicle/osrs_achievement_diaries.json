@@ -2,8 +2,7 @@
  "_meta": {
   "generated": "2026-09-20",
   "source": "oldschool.runescape.wiki, <region> Diary",
-  "schema": 1,
-  "note": "Region -> tier -> the tasks in the order the diary lists them, each with what the wiki states it requires. `task` is what the player must DO and is the line the panel shows."
+  "schema": 1
  },
  "diaries": {
   "Ardougne": {
