@@ -8,8 +8,6 @@
  */
 package chronicle;
 
-import chronicle.counters.ExperienceStatTracker;
-import chronicle.counters.StatKeys;
 import chronicle.HistoryLog.Baseline;
 import chronicle.Kit.Line;
 import chronicle.Kit.ScrollColumn;
@@ -18,9 +16,11 @@ import chronicle.LocalStore.SlayerJourney;
 import chronicle.LocalStore.SlayerTask;
 import chronicle.LocalStore.SourceRow;
 import chronicle.LocalStore.UntakenRow;
+import chronicle.Period.Span;
+import chronicle.counters.ExperienceStatTracker;
+import chronicle.counters.StatKeys;
 import chronicle.panel.HistoryProgress;
 import chronicle.panel.StatRegistry;
-import chronicle.Period.Span;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -30,23 +30,22 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
-import java.awt.event.HierarchyEvent;
-import java.awt.event.MouseListener;
 import java.awt.FlowLayout;
 import java.awt.FontMetrics;
 import java.awt.GridLayout;
-import java.awt.Image;
-import java.awt.image.BufferedImage;
 import java.awt.MouseInfo;
 import java.awt.Point;
 import java.awt.PointerInfo;
 import java.awt.Rectangle;
-import java.time.format.DateTimeFormatter;
+import java.awt.event.HierarchyEvent;
+import java.awt.event.MouseListener;
+import java.awt.image.BufferedImage;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.AbstractMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -54,16 +53,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.EnumMap;
-import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
-import java.util.function.IntConsumer;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -74,11 +64,16 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
+import java.util.function.Supplier;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
@@ -96,6 +91,9 @@ import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import javax.swing.ToolTipManager;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Skill;
 import net.runelite.api.SpriteID;
@@ -103,11 +101,11 @@ import net.runelite.client.game.SkillIconManager;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.hiscore.HiscoreSkill;
 import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.ui.FontManager;
+import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.ui.components.IconTextField;
 import net.runelite.client.ui.components.materialtabs.MaterialTab;
 import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
-import net.runelite.client.ui.FontManager;
-import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 import static chronicle.Copy.COPY_MOST;
@@ -129,6 +127,15 @@ import static chronicle.Json.str;
 import static chronicle.Kit.ACCENT_LIFETIME;
 import static chronicle.Kit.ACCENT_RED;
 import static chronicle.Kit.ACCENT_SESSION;
+import static chronicle.Kit.DARK;
+import static chronicle.Kit.DARKER;
+import static chronicle.Kit.NAME_FLOOR;
+import static chronicle.Kit.PANEL_INSET;
+import static chronicle.Kit.ROW_CAP;
+import static chronicle.Kit.ROW_GAP;
+import static chronicle.Kit.TILE_LIT;
+import static chronicle.Kit.TIP_CLOSE;
+import static chronicle.Kit.TIP_OPEN;
 import static chronicle.Kit.boardRowRoom;
 import static chronicle.Kit.card;
 import static chronicle.Kit.cardPlain;
@@ -137,8 +144,6 @@ import static chronicle.Kit.clicker;
 import static chronicle.Kit.clip;
 import static chronicle.Kit.column;
 import static chronicle.Kit.copyLabel;
-import static chronicle.Kit.DARK;
-import static chronicle.Kit.DARKER;
 import static chronicle.Kit.day;
 import static chronicle.Kit.dim;
 import static chronicle.Kit.dimLine;
@@ -150,17 +155,13 @@ import static chronicle.Kit.grid3;
 import static chronicle.Kit.levelTile;
 import static chronicle.Kit.link;
 import static chronicle.Kit.listCard;
-import static chronicle.Kit.NAME_FLOOR;
 import static chronicle.Kit.nested;
 import static chronicle.Kit.note;
 import static chronicle.Kit.noted;
 import static chronicle.Kit.overlayBar;
 import static chronicle.Kit.pad;
-import static chronicle.Kit.PANEL_INSET;
 import static chronicle.Kit.part;
 import static chronicle.Kit.row;
-import static chronicle.Kit.ROW_CAP;
-import static chronicle.Kit.ROW_GAP;
 import static chronicle.Kit.rowMetrics;
 import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
@@ -169,10 +170,7 @@ import static chronicle.Kit.styled;
 import static chronicle.Kit.sumOf;
 import static chronicle.Kit.tallyCard;
 import static chronicle.Kit.tile;
-import static chronicle.Kit.TILE_LIT;
 import static chronicle.Kit.tip;
-import static chronicle.Kit.TIP_CLOSE;
-import static chronicle.Kit.TIP_OPEN;
 import static chronicle.Kit.unlight;
 import static chronicle.Kit.value;
 import static chronicle.Kit.vgap;
@@ -181,14 +179,13 @@ import static chronicle.Kit.worthRow;
 import static chronicle.Kit.wrapClauses;
 import static chronicle.Kit.wrappedTip;
 import static chronicle.LocalStore.kindOf;
-import static chronicle.panel.StatRegistry.prettify;
 import static chronicle.Period.DAY;
-import static chronicle.Period.dayOf;
 import static chronicle.Period.FULL_DAY;
 import static chronicle.Period.MONTH_YEAR;
+import static chronicle.Period.TASK_DAY;
+import static chronicle.Period.dayOf;
 import static chronicle.Period.noon;
 import static chronicle.Period.startMs;
-import static chronicle.Period.TASK_DAY;
 import static chronicle.Text.climb;
 import static chronicle.Text.count;
 import static chronicle.Text.dated;
@@ -204,6 +201,7 @@ import static chronicle.Text.rateText;
 import static chronicle.Text.share;
 import static chronicle.Text.tail;
 import static chronicle.Text.xpShort;
+import static chronicle.panel.StatRegistry.prettify;
 
 class ChroniclePanel extends PluginPanel
 {
@@ -229,15 +227,16 @@ class ChroniclePanel extends PluginPanel
 		SUBS.put(Tab.TRACKERS, new String[0]);
 	}
 
-	private final LocalStore store;
+	final LocalStore store;
 	private final Live live;
 	private final ScheduledExecutorService executor;
 	private final Gson gson;
-	private final SpriteManager sprites;
-	private final SkillIconManager skillIcons;
+	final SpriteManager sprites;
+	final SkillIconManager skillIcons;
 	private final GrindBook grindBook;
-	private Build build;
-	private final ItemNames itemNames;
+	Build build;
+	final Art art = new Art(this);
+	final ItemNames itemNames;
 	private final Search search;
 
 	private final JPanel display = new JPanel(new BorderLayout());
@@ -759,7 +758,7 @@ class ChroniclePanel extends PluginPanel
 			figure = named > 0 ? named : build.kills.bossKills(source);
 			hover = tip(label, "Count", fmt(figure));
 		}
-		wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
+		art.wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
 		cell.setToolTipText(hover);
 		if (!page.isEmpty())
 		{
@@ -846,7 +845,7 @@ class ChroniclePanel extends PluginPanel
 		JLabel icon = new JLabel();
 		if (b.sprite > 0)
 		{
-			wearSprite(icon, b.sprite, 24, 24);
+			art.wearSprite(icon, b.sprite, 24, 24);
 		}
 		cell.add(icon, BorderLayout.WEST);
 
@@ -1138,7 +1137,7 @@ class ChroniclePanel extends PluginPanel
 		buildsRun++;
 		freshBuild();
 		resourcesDropped = 0;
-		artWaiting.clear();
+		art.forgetWaiting();
 		paintBand(store.journalWarning(), live.captureWarning(),
 			live.captureWarningWhy());
 		if (aboveBoard != null)
@@ -2014,7 +2013,7 @@ class ChroniclePanel extends PluginPanel
 		histListShown.clear();
 		openFolds.clear();
 		itemNames.forget();
-		scaledIcons.clear();
+		art.forgetScaled();
 		gatherHistory();
 		rebuild();
 	}
@@ -4444,8 +4443,8 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	private static final int BAND_CAP = 12;
-	private static final int ICON_W = 22;
-	private static final int ICON_H = 18;
+	static final int ICON_W = 22;
+	static final int ICON_H = 18;
 
 	private JPanel kindRow(String name, long figure, long worth, boolean withIcon)
 	{
@@ -4457,7 +4456,7 @@ class ChroniclePanel extends PluginPanel
 		{
 			JLabel icon = new JLabel();
 			icon.setPreferredSize(new Dimension(ICON_W, ICON_H));
-			mountKindIcon(icon, name);
+			art.mountKindIcon(icon, name);
 			r.add(icon, BorderLayout.WEST);
 		}
 
@@ -4474,48 +4473,6 @@ class ChroniclePanel extends PluginPanel
 
 		link(r, () -> openSourceLoose(name));
 		return r;
-	}
-
-	private void mountKindIcon(JLabel label, String name)
-	{
-		int item = itemNames.signature(name);
-		if (item > 0)
-		{
-			mountItem(label, item);
-			return;
-		}
-		Skill skill = Sources.skillOf(name);
-		if (skill != null)
-		{
-			BufferedImage img = skillIcon(skill);
-			if (img != null)
-			{
-				dress(label, "skill:" + skill.name(), img, ICON_W, ICON_H);
-				return;
-			}
-		}
-		wearSprite(label, kindSprite(build.names().kind(name)), ICON_W, ICON_H);
-	}
-
-	private void mountItem(JLabel label, int itemId)
-	{
-		wear(label, "item:" + itemId, ICON_W, ICON_H, done ->
-		{
-			AsyncBufferedImage img = store.items().getImage(itemId, 1, false);
-			if (img != null)
-			{
-				img.onLoaded(() -> done.accept(img));
-			}
-			return img != null;
-		});
-	}
-	private static int kindSprite(String kind)
-	{
-		if (Sources.ACTIVITY.equals(kind))
-		{
-			return 1053;
-		}
-		return Sources.SKILLING.equals(kind) ? 775 : 774;
 	}
 
 	private static final String[] HEADLINE_KEYS = {"kills", "slayerTasksCompleted"};
@@ -5072,7 +5029,7 @@ class ChroniclePanel extends PluginPanel
 		link(cell, slayer ? () -> openSlayer("Tasks") : () -> openSkill(craft));
 
 		JLabel icon = new JLabel();
-		BufferedImage img = skillIcon(sk);
+		BufferedImage img = art.skillIcon(sk);
 		if (img != null)
 		{
 			icon.setIcon(new ImageIcon(img));
@@ -5100,107 +5057,10 @@ class ChroniclePanel extends PluginPanel
 		return cell;
 	}
 
-	private static final Map<Skill, BufferedImage> SKILL_ICONS =
-		new EnumMap<>(Skill.class);
-
-	private BufferedImage skillIcon(Skill sk)
-	{
-		return SKILL_ICONS.computeIfAbsent(sk, s ->
-		{
-			try
-			{
-				return skillIcons.getSkillImage(s, true);
-			}
-			catch (Throwable e)
-			{
-				return null;
-			}
-		});
-	}
-
 	private String histFacet = "Skills";
 	private String periodTip;
 	private String sheetPage;
 	private String measuredSince;
-
-	private final Map<String, BufferedImage> art = new HashMap<>();
-	private final Set<String> artAsked = new HashSet<>();
-	private final Map<String, List<Object[]>> artWaiting = new LinkedHashMap<>();
-
-	private void wearSprite(JLabel label, int spriteId, int w, int h)
-	{
-		wear(label, "sprite:" + spriteId, w, h, done ->
-		{
-			SpriteManager sm = sprites;
-			if (sm != null)
-			{
-				sm.getSpriteAsync(spriteId, 0, done);
-			}
-			return sm != null;
-		});
-	}
-
-	private void wear(JLabel label, String key, int w, int h,
-		Predicate<Consumer<BufferedImage>> fetch)
-	{
-		BufferedImage have = art.get(key);
-		if (have != null)
-		{
-			dress(label, key + "@" + w, have, w, h);
-			return;
-		}
-		artWaiting.computeIfAbsent(key, k -> new ArrayList<>()).add(new Object[]{label, w, h});
-		if (!artAsked.add(key))
-		{
-			return;
-		}
-		try
-		{
-			if (!fetch.test(img -> SwingUtilities.invokeLater(() -> landed(key, img))))
-			{
-				artAsked.remove(key);
-			}
-		}
-		catch (Throwable ignored)
-		{
-		}
-	}
-
-	private void landed(String key, BufferedImage img)
-	{
-		if (img == null)
-		{
-			return;
-		}
-		art.put(key, img);
-		for (Object[] want : artWaiting.getOrDefault(key, Collections.emptyList()))
-		{
-			dress((JLabel) want[0], key + "@" + want[1], img, (Integer) want[1], (Integer) want[2]);
-		}
-		artWaiting.remove(key);
-	}
-	private final Map<String, ImageIcon> scaledIcons = new LinkedHashMap<>();
-
-	private void dress(JLabel label, String key, BufferedImage img, int w, int h)
-	{
-		ImageIcon icon = scaledIcons.get(key);
-		if (icon == null)
-		{
-			icon = w <= 0 || h <= 0 ? new ImageIcon(img) : fit(img, w, h);
-			scaledIcons.put(key, icon);
-		}
-		label.setIcon(icon);
-		label.setText("");
-	}
-
-	private static ImageIcon fit(BufferedImage img, int w, int h)
-	{
-		double scale = Math.min(w / (double) img.getWidth(), h / (double) img.getHeight());
-		return new ImageIcon(img.getScaledInstance(
-			Math.max(1, (int) Math.round(img.getWidth() * scale)),
-			Math.max(1, (int) Math.round(img.getHeight() * scale)),
-			Image.SCALE_SMOOTH));
-	}
 
 	private boolean wholeRecord()
 	{
@@ -5708,14 +5568,14 @@ class ChroniclePanel extends PluginPanel
 		Set<Integer> want = new LinkedHashSet<>();
 		for (RecapPicture.BossLine b : facts.bosses)
 		{
-			if (b.sprite > 0 && !art.containsKey("sprite:" + b.sprite))
+			if (b.sprite > 0 && art.sprite(b.sprite) == null)
 			{
 				want.add(b.sprite);
 			}
 		}
 		for (int id : want)
 		{
-			wearSprite(new JLabel(), id, 22, 22);
+			art.wearSprite(new JLabel(), id, 22, 22);
 		}
 		long deadline = System.currentTimeMillis() + 1500;
 		Timer wait = new Timer(100, null);
@@ -5724,7 +5584,7 @@ class ChroniclePanel extends PluginPanel
 			boolean all = true;
 			for (int id : want)
 			{
-				all &= art.containsKey("sprite:" + id);
+				all &= art.sprite(id) != null;
 			}
 			if (all || System.currentTimeMillis() > deadline)
 			{
@@ -5740,7 +5600,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		try
 		{
-			return RecapPicture.paint(facts, this::skillIcon, id -> art.get("sprite:" + id));
+			return RecapPicture.paint(facts, art::skillIcon, art::sprite);
 		}
 		catch (Throwable t)
 		{
