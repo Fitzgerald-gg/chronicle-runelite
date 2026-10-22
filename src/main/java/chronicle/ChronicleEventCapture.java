@@ -33,6 +33,7 @@ import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Item;
+import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
@@ -55,6 +56,8 @@ import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -83,6 +86,28 @@ public class ChronicleEventCapture
 
 	static final Pattern COMBAT_TASK = Pattern.compile(
 		"^Congratulations, you've completed an? (?<grade>\\w+) combat task: (?<challenge>.+?)\\.?$");
+	private static final Pattern ROGUES_CHEST = Pattern.compile("You find (?:a|some) (.+) inside\\.");
+	private static final String ROGUES_CHEST_NAME = "Rogues' Chest";
+	private static final int ROGUES_REPORT_TICKS = 6;
+	// item, medium-diary amount, hard-diary amount
+	private static final Map<String, int[]> ROGUES_LOOT = Map.ofEntries(
+		Map.entry("nature runes", new int[]{ItemID.NATURERUNE, 40, 50}),
+		Map.entry("red spider eggs", new int[]{ItemID.RED_SPIDERS_EGGS, 6, 7}),
+		Map.entry("law runes", new int[]{ItemID.LAWRUNE, 40, 50}),
+		Map.entry("coal", new int[]{ItemID.COAL, 20, 25}),
+		Map.entry("coins", new int[]{ItemID.COINS, 4500, 5625}),
+		Map.entry("vile ashes", new int[]{ItemID.VILE_ASHES, 15, 18}),
+		Map.entry("uncut diamonds", new int[]{ItemID.UNCUT_DIAMOND, 3, 3}),
+		Map.entry("uncut emeralds", new int[]{ItemID.UNCUT_EMERALD, 10, 12}),
+		Map.entry("blighted ancient ice sacks", new int[]{ItemID.BLIGHTED_SACK_ICEBARRAGE, 13, 16}),
+		Map.entry("iron ore", new int[]{ItemID.IRON_ORE, 40, 50}),
+		Map.entry("chaos runes", new int[]{ItemID.CHAOSRUNE, 60, 75}),
+		Map.entry("death runes", new int[]{ItemID.DEATHRUNE, 50, 62}),
+		Map.entry("blighted manta rays", new int[]{ItemID.BLIGHTED_MANTARAY, 20, 25}),
+		Map.entry("blighted anglerfish", new int[]{ItemID.BLIGHTED_ANGLERFISH, 15, 18}),
+		Map.entry("uncut sapphires", new int[]{ItemID.UNCUT_SAPPHIRE, 15, 18}),
+		Map.entry("prayer potion", new int[]{ItemID._2DOSEPRAYERRESTORE, 1, 1}),
+		Map.entry("dragonstones", new int[]{ItemID.DRAGONSTONE, 2, 2}));
 	private static final Pattern COMBAT_TASK_POINTS = Pattern.compile("\\s*\\(\\d+ points?\\)$");
 
 	static final Pattern CLUE_COMPLETION = Pattern.compile(
@@ -233,8 +258,14 @@ public class ChronicleEventCapture
 		return slayerService != null;
 	}
 
+	private ItemStack roguesPending;
+	private int roguesPendingTick = -1;
+	private int roguesReportTick = -1;
+
 	void reset()
 	{
+		roguesPending = null;
+		roguesReportTick = -1;
 		knownLevels.clear();
 		pendingLevels.clear();
 		recentKc.clear();
@@ -661,11 +692,53 @@ public class ChronicleEventCapture
 		{
 			return;
 		}
+		boolean rogues = ROGUES_CHEST_NAME.equals(event.getName());
+		List<ItemStack> items = new ArrayList<>();
+		for (ItemStack it : event.getItems())
+		{
+			int id = it.getId();
+			if (rogues ? inRoguesTable(unnoted(id)) : id != ItemID.LOOTING_BAG && id != ItemID.LOOTING_BAG_OPEN)
+			{
+				items.add(it);
+			}
+		}
+		if (items.isEmpty())
+		{
+			return;
+		}
+		if (rogues)
+		{
+			roguesPending = null;
+			roguesReportTick = client.getTickCount();
+		}
+		emitLoot(event.getName(), event.getType(), items);
+	}
+
+	private void emitLoot(String source, LootRecordType type, Collection<ItemStack> items)
+	{
 		JsonObject data = new JsonObject();
-		data.addProperty("source", event.getName());
-		data.addProperty("category", event.getType() != null ? event.getType().name() : "EVENT");
-		addLoot(data, event.getName(), event.getItems());
+		data.addProperty("source", source);
+		data.addProperty("category", type != null ? type.name() : "EVENT");
+		addLoot(data, source, items);
 		emit("LOOT", data);
+	}
+
+	private static boolean inRoguesTable(int id)
+	{
+		return ROGUES_LOOT.values().stream().anyMatch(row -> row[0] == id);
+	}
+
+	private int unnoted(int id)
+	{
+		ItemComposition c = client.getItemDefinition(id);
+		return c != null && c.getNote() != -1 ? c.getLinkedNoteId() : id;
+	}
+
+	private void flushRoguesChest()
+	{
+		ItemStack item = roguesPending;
+		roguesPending = null;
+		emitLoot(ROGUES_CHEST_NAME, LootRecordType.EVENT, Collections.singletonList(item));
 	}
 
 	private void addLoot(JsonObject data, String source, Collection<ItemStack> items)
@@ -954,6 +1027,23 @@ public class ChronicleEventCapture
 		}
 		String msg = Text.removeTags(message.getMessage());
 
+		Matcher rogues = ROGUES_CHEST.matcher(msg);
+		int[] row = rogues.matches() ? ROGUES_LOOT.get(rogues.group(1)) : null;
+		if (row != null && client.getVarbitValue(VarbitID.INSIDE_WILDERNESS) == 1)
+		{
+			if (roguesReportTick != client.getTickCount())
+			{
+				if (roguesPending != null)
+				{
+					flushRoguesChest();
+				}
+				boolean hard = client.getVarbitValue(VarbitID.WILDERNESS_DIARY_HARD_COMPLETE) == 1;
+				roguesPending = new ItemStack(row[0], hard ? row[2] : row[1]);
+				roguesPendingTick = client.getTickCount();
+			}
+			return;
+		}
+
 		if (PICKPOCKET.matcher(msg).matches())
 		{
 			pickpocketTick = client.getTickCount();
@@ -1112,6 +1202,10 @@ public class ChronicleEventCapture
 	public void onGameTick(GameTick tick)
 	{
 		reconcileKillLoot();
+		if (roguesPending != null && client.getTickCount() - roguesPendingTick > ROGUES_REPORT_TICKS)
+		{
+			flushRoguesChest();
+		}
 		sweepTimedOutLoot();
 		flushUntakenLoot();
 

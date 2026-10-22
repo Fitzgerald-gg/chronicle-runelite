@@ -77,7 +77,6 @@ import net.runelite.http.api.loottracker.LootRecordType;
 	tags = {"chronicle", "journal", "stats", "tracker", "loot", "slayer", "collection", "osrs"}
 )
 @PluginDependency(SlayerPlugin.class)
-@PluginDependency(LootTrackerPlugin.class)
 public class ChroniclePlugin extends Plugin
 {
 	static final String GROUP = ChronicleConfig.GROUP;
