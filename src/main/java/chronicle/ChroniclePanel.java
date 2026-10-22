@@ -132,7 +132,6 @@ import static chronicle.Kit.DARKER;
 import static chronicle.Kit.NAME_FLOOR;
 import static chronicle.Kit.PANEL_INSET;
 import static chronicle.Kit.ROW_CAP;
-import static chronicle.Kit.ROW_GAP;
 import static chronicle.Kit.TILE_LIT;
 import static chronicle.Kit.TIP_CLOSE;
 import static chronicle.Kit.TIP_OPEN;
@@ -165,7 +164,6 @@ import static chronicle.Kit.row;
 import static chronicle.Kit.rowMetrics;
 import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
-import static chronicle.Kit.stub;
 import static chronicle.Kit.styled;
 import static chronicle.Kit.sumOf;
 import static chronicle.Kit.tallyCard;
@@ -177,7 +175,6 @@ import static chronicle.Kit.vgap;
 import static chronicle.Kit.wash;
 import static chronicle.Kit.worthRow;
 import static chronicle.Kit.wrapClauses;
-import static chronicle.Kit.wrappedTip;
 import static chronicle.LocalStore.kindOf;
 import static chronicle.Period.DAY;
 import static chronicle.Period.FULL_DAY;
@@ -207,12 +204,12 @@ class ChroniclePanel extends PluginPanel
 {
 	private static final DateTimeFormatter CLOCK =
 		DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
-	private enum View
+	enum View
 	{
 		HOME, DROPS, SLAYER, LOG, STATS, HISTORY, JOURNAL, KILLS, SHEET, RECAP
 	}
 
-	private enum Tab
+	enum Tab
 	{
 		RECORD, STANDING, LOOT, TRACKERS
 	}
@@ -228,16 +225,17 @@ class ChroniclePanel extends PluginPanel
 	}
 
 	final LocalStore store;
-	private final Live live;
+	final Live live;
 	private final ScheduledExecutorService executor;
-	private final Gson gson;
+	final Gson gson;
 	final SpriteManager sprites;
 	final SkillIconManager skillIcons;
 	private final GrindBook grindBook;
 	Build build;
+	final SearchPage search = new SearchPage(this);
 	final Art art = new Art(this);
 	final ItemNames itemNames;
-	private final Search search;
+	final Search index;
 
 	private final JPanel display = new JPanel(new BorderLayout());
 
@@ -246,8 +244,8 @@ class ChroniclePanel extends PluginPanel
 		ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
 		ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 	private final MaterialTabGroup tabGroup = new MaterialTabGroup();
-	private final Map<Tab, String> subByTab = new EnumMap<>(Tab.class);
-	private final IconTextField searchField = new IconTextField();
+	final Map<Tab, String> subByTab = new EnumMap<>(Tab.class);
+	final IconTextField searchField = new IconTextField();
 	private final Timer searchDebounce;
 	private final Timer homeTicker;
 
@@ -287,7 +285,7 @@ class ChroniclePanel extends PluginPanel
 		grindBook = new GrindBook(gson);
 		freshBuild();
 		itemNames = new ItemNames(store, gson, n -> build.names().named(n));
-		search = new Search(store);
+		index = new Search(store);
 
 		watchForReturn();
 		setLayout(new BorderLayout());
@@ -540,13 +538,13 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private void applyTab(Tab target)
+	void applyTab(Tab target)
 	{
 		tab = target;
 		applyCommon();
 	}
 
-	private void applyTab(View target)
+	void applyTab(View target)
 	{
 		tab = tabFor(target);
 		subByTab.put(tab, subFor(target));
@@ -677,7 +675,7 @@ class ChroniclePanel extends PluginPanel
 		openSourceLoose(source);
 	}
 
-	private boolean openLogPage(String page)
+	boolean openLogPage(String page)
 	{
 		String tab = build.book().tabOf(page);
 		if (tab == null)
@@ -936,7 +934,7 @@ class ChroniclePanel extends PluginPanel
 		return qtyGp(LocalStore.tallyOf(store.sourceItems(r.name))[0], r.value);
 	}
 
-	private Color accent()
+	Color accent()
 	{
 		return ACCENT_LIFETIME;
 	}
@@ -947,7 +945,7 @@ class ChroniclePanel extends PluginPanel
 		searchDebounce.stop();
 	}
 
-	private String searchQuery()
+	String searchQuery()
 	{
 		return searchField.getText() == null ? "" : searchField.getText().trim();
 	}
@@ -1109,7 +1107,7 @@ class ChroniclePanel extends PluginPanel
 
 	private long buildsRun;
 
-	private void rebuild()
+	void rebuild()
 	{
 		long began = System.nanoTime();
 		try
@@ -1153,7 +1151,7 @@ class ChroniclePanel extends PluginPanel
 		north.invalidate();
 		north.revalidate();
 		north.repaint();
-		JPanel body = !searchQuery().isEmpty() ? buildSearch(searchQuery())
+		JPanel body = !searchQuery().isEmpty() ? search.buildSearch(searchQuery())
 			: detailItem != null ? buildItemDetail(detailItem)
 			: detailSource != null ? buildSourceDetail(detailSource)
 			: detailSkill != null ? buildSkillDetail(detailSkill)
@@ -1715,26 +1713,13 @@ class ChroniclePanel extends PluginPanel
 
 	private boolean onTaskOnly;
 
-	private boolean hasKindOnTask(String kind)
-	{
-		for (String name : build.taskItems().keySet())
-		{
-			String k = ItemKinds.kindOf(name);
-			if (UNFILED.equals(kind) ? k == null : kind.equals(k))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private boolean everOnTask()
+	boolean everOnTask()
 	{
 		return !build.taskItems().isEmpty();
 	}
 
 
-	private boolean dropsLeftBehind;
+	boolean dropsLeftBehind;
 	private String lootKind;
 	private String lootTask;
 
@@ -1938,13 +1923,13 @@ class ChroniclePanel extends PluginPanel
 	private List<GrindBook.GrindRow> grindsCache;
 	private boolean grindsFetching;
 
-	private SlayerJourney journeyCache;
-	private boolean journeyFetching;
+	SlayerJourney journeyCache;
+	boolean journeyFetching;
 	private int detailTask = -1;
 	private String leftBehindSource;
-	private String leftBehindItem;
+	String leftBehindItem;
 
-	private void fetchSlayerJourney(Consumer<SlayerJourney> onDone)
+	void fetchSlayerJourney(Consumer<SlayerJourney> onDone)
 	{
 		if (!live.ready())
 		{
@@ -1994,7 +1979,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		journeyCache = null;
 		journeyFetching = false;
-		search.forget();
+		index.forget();
 		detailTask = -1;
 		leftBehindSource = null;
 		leftBehindItem = null;
@@ -2077,7 +2062,7 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private void showTask(int at)
+	void showTask(int at)
 	{
 		detailTask = at;
 		rebuild();
@@ -2090,7 +2075,7 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	private void openSlayer(String lens)
+	void openSlayer(String lens)
 	{
 		slayerLens = lens;
 		applyTab(View.SLAYER);
@@ -2256,7 +2241,7 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private void drillMore(JPanel p, String key, int size, int cap)
+	void drillMore(JPanel p, String key, int size, int cap)
 	{
 		more(p, size, cap, false, n -> drillShown.put(key, n));
 	}
@@ -2274,7 +2259,7 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private static final String UNFILED = "Everything else";
+	static final String UNFILED = "Everything else";
 
 	private List<Kind> kindsOf(List<BagItem> bag)
 	{
@@ -2424,7 +2409,7 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private static boolean journeyMoved(SlayerJourney was,
+	static boolean journeyMoved(SlayerJourney was,
 		SlayerJourney now)
 	{
 		if (was == null)
@@ -2670,7 +2655,7 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private final Map<String, Integer> drillShown = new LinkedHashMap<>();
+	final Map<String, Integer> drillShown = new LinkedHashMap<>();
 
 	private void leaveSentPage()
 	{
@@ -3735,7 +3720,7 @@ class ChroniclePanel extends PluginPanel
 		rebuildInPlace();
 	}
 
-	private void rebuildInPlace()
+	void rebuildInPlace()
 	{
 		keepScroll = true;
 		try
@@ -4182,7 +4167,7 @@ class ChroniclePanel extends PluginPanel
 
 
 	private TreeMap<LocalDate, Baseline> historySpine;
-	private SlayerJourney historyJourney;
+	SlayerJourney historyJourney;
 	private LocalDate historyDay;
 	private long historyFeedTs;
 	private boolean historyGathering;
@@ -5523,7 +5508,7 @@ class ChroniclePanel extends PluginPanel
 	private String journalLens = "All";
 	private int journalShown = 60;
 
-	private void openJournalOn(long ts)
+	void openJournalOn(long ts)
 	{
 		if (ts > 0)
 		{
@@ -6091,485 +6076,14 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private static final class Hit
-	{
-		final String name;
-		final String figure;
-		final Color color;
-		final String tip;
-		final Runnable go;
-		final int score;
-		final long weight;
-
-		Hit(String name, String figure, Color color, String tip, Runnable go, int score, long weight)
-		{
-			this.name = name;
-			this.figure = figure == null ? "" : figure;
-			this.color = color;
-			this.tip = tip;
-			this.go = go;
-			this.score = score;
-			this.weight = weight;
-		}
-	}
-
-	private static final int SEARCH_CAP = 4;
-
-	private static void goTo(List<Hit> go, String ql, String name, String figure, Runnable to,
-		long weight, String... also)
-	{
-		int sc = Search.matchScore(ql, name);
-		sc = sc > 2 ? -1 : sc;
-		for (String a : also)
-		{
-			if (a.equals(ql))
-			{
-				sc = 0;
-			}
-		}
-		if (sc >= 0)
-		{
-			go.add(new Hit(name, figure, null, null, to, sc, weight));
-		}
-	}
-
-	private int searchGroup(JPanel p, String title, List<Hit> hits)
-	{
-		if (hits.isEmpty())
-		{
-			return 0;
-		}
-		hits.sort((a, b) -> a.score != b.score ? Integer.compare(a.score, b.score)
-			: Long.compare(b.weight, a.weight));
-		p.add(group(title));
-		String key = "search:" + title;
-		int cap = drillShown.getOrDefault(key, SEARCH_CAP);
-		FontMetrics fm = rowMetrics();
-		for (Hit h : Sources.firstN(hits, cap))
-		{
-			int room = boardRowRoom() - ROW_GAP - (h.figure.isEmpty() ? 0 : fm.stringWidth(h.figure));
-			String shown = h.name;
-			for (int keep = shown.length() - 1; fm.stringWidth(shown) > room && keep >= NAME_FLOOR; keep--)
-			{
-				shown = stub(h.name, keep);
-			}
-			JPanel r = row(shown, h.figure, null, false);
-			if (h.color != null)
-			{
-				part(r, BorderLayout.CENTER)
-					.setForeground(h.color);
-			}
-			String tip = h.tip;
-			if (!shown.equals(h.name))
-			{
-				tip = tip == null ? h.name : h.name + ": " + tip;
-			}
-			if (tip != null)
-			{
-				r.setToolTipText(wrappedTip(tip));
-			}
-			door(r, h.go);
-			p.add(r);
-		}
-		drillMore(p, key, hits.size(), cap);
-		return hits.size();
-	}
-
-	private void openSheetPage(String page)
+	void openSheetPage(String page)
 	{
 		applyTab(Tab.STANDING);
 		sheetPage = page;
 		rebuild();
 	}
 
-	private void fetchJourneyForSearch()
-	{
-		if (journeyFetching)
-		{
-			return;
-		}
-		journeyFetching = true;
-		fetchSlayerJourney(j -> SwingUtilities.invokeLater(() ->
-		{
-			journeyFetching = false;
-			if (j == null)
-			{
-				return;
-			}
-			boolean moved = journeyMoved(journeyCache != null ? journeyCache : historyJourney, j);
-			journeyCache = j;
-			if (moved && !searchQuery().isEmpty())
-			{
-				rebuildInPlace();
-			}
-		}));
-	}
-
-	private JPanel buildSearch(String q)
-	{
-		JPanel p = column();
-		String ql = low(q);
-		int total = 0;
-		searchFirst = null;
-
-		List<Hit> go = new ArrayList<>();
-		Map<String, long[]> sheet = live.skillSheet();
-		for (Skill sk : Sources.skillOrder())
-		{
-			String key = low(sk.name());
-			String name = prettify(key);
-			long[] cur = sheet.get(key);
-			Runnable to = sk == Skill.SLAYER ? () -> openSlayer("Tasks") : () -> openSkill(name);
-			goTo(go, ql, name, cur != null && cur[0] > 0 ? "level " + cur[0] : "", to, 2,
-				Search.SKILL_ALIASES.getOrDefault(key, new String[0]));
-		}
-		Standings.Quests quests = build.standings.quests();
-		goTo(go, ql, "Quests", quests.known > 0 ? fmt(quests.done.size()) + " / " + fmt(quests.known) : "",
-			() -> openSheetPage("quests"), 1, "quest");
-		goTo(go, ql, "Collection log", live.clogAvailable() > 0
-			? fmt(live.clogFinished()) + " / " + fmt(live.clogAvailable()) : "",
-			() -> openSheetPage("log"), 1, "clog", "log");
-		goTo(go, ql, "Achievement diaries", "", () -> openSheetPage("diaries"), 1,
-			"diary", "diaries");
-		goTo(go, ql, "Combat achievements", "", () -> openSheetPage("combat"), 1,
-			"ca", "cas", "combat tasks");
-		goTo(go, ql, "Clues", "", () -> openSheetPage("clues"), 1,
-			"clue", "clue scrolls", "caskets", "treasure trails");
-		goTo(go, ql, "Records", "", this::openRecords, 1,
-			"record", "best", "bests", "pb", "personal best");
-		goTo(go, ql, "Calendar", "", this::openCalendar, 1, "days", "days written");
-		goTo(go, ql, "Recap", "", () ->
-		{
-			subByTab.put(Tab.RECORD, "Recap");
-			applyTab(Tab.RECORD);
-			rebuild();
-		}, 1, "summary");
-		goTo(go, ql, "All trackers", "", this::openAllTrackers, 1, "trackers", "counters");
-		goTo(go, ql, "Kill log", "", () -> openSlayer("Monsters"), 1, "killlog", "kill count", "kc");
-		goTo(go, ql, "Left behind", "", () ->
-		{
-			applyTab(View.DROPS);
-			dropsLeftBehind = true;
-			rebuild();
-		}, 1, "untaken", "left on the floor");
-		goTo(go, ql, "Info", "what the journal holds", this::openInfo, 1, "journal holds");
-		String kind = ItemKinds.named(q);
-		if (kind != null && !ql.isEmpty())
-		{
-			final String pick = kind;
-			int ks = Search.matchScore(ql, kind);
-			ks = ks < 0 || ks > 2 ? 2 : ks;
-			go.add(new Hit(kind, "every one you have had", null, null,
-				() -> openLootKind(pick, false), ks, 0));
-			if (everOnTask() && hasKindOnTask(pick))
-			{
-				go.add(new Hit(kind, "from slayer tasks", null, null, () -> openLootKind(pick, true), ks, -1));
-			}
-		}
-		total += searchGroup(p, "Go to", go);
-
-		List<Hit> fights = new ArrayList<>();
-		Set<String> kinds = new HashSet<>();
-		Map<String, SourceRow> ledgerRows = new HashMap<>();
-		for (SourceRow r : build.sources())
-		{
-			ledgerRows.put(r.name, r);
-		}
-		for (Kills.Boss b : Kills.bossRoster(gson))
-		{
-			int sc = Search.matchScore(ql, b.name);
-			if (sc < 0 || !kinds.add(kindOf(b.name)))
-			{
-				continue;
-			}
-			final String open = build.kills.bossLootSource(b);
-			kinds.add(kindOf(open));
-			SourceRow r = ledgerRows.get(open);
-			boolean own = r != null && kindOf(open).equals(kindOf(b.name))
-				&& build.kills.isKillSource(open);
-			long n = own ? build.kills.standingKills(r) : build.kills.bossKills(b.name);
-			fights.add(new Hit(b.name, n > 0 ? fmt(n) + " kc" : "-", null,
-				r == null ? null : gps(r.value) + (r.pb != null ? " · PB " + pb(r.pb) : ""),
-				() -> openSourceLoose(open), sc, n));
-		}
-		for (SourceRow r : build.sources())
-		{
-			int sc = Search.matchScore(ql, r.name);
-			if (sc < 0 || !kinds.add(kindOf(r.name)))
-			{
-				continue;
-			}
-			boolean killed = build.kills.isKillSource(r.name);
-			long n = killed ? build.kills.standingKills(r) : r.loots;
-			fights.add(new Hit(r.name, killed ? fmt(n) + " kc" : count(r.loots, "drop"), null,
-				gps(r.value) + (r.pb != null ? " · PB " + pb(r.pb) : ""),
-				() -> openSource(r.name), sc, n));
-		}
-		JsonObject cl = build.clog();
-		for (Entry<String, JsonElement> e : obj(cl, "slayer_kcs").entrySet())
-		{
-			int sc = Search.matchScore(ql, e.getKey());
-			if (sc < 0 || !kinds.add(kindOf(e.getKey())))
-			{
-				continue;
-			}
-			long n = safeLong(e.getValue());
-			fights.add(new Hit(e.getKey(), fmt(n) + " kc", null, "In the Kill Log", () -> openSlayer("Monsters"), sc, n));
-		}
-		total += searchGroup(p, "Bosses and monsters", fights);
-
-		List<Hit> tasks = new ArrayList<>();
-		final SlayerJourney journey = journeyCache != null ? journeyCache : historyJourney;
-		fetchJourneyForSearch();
-		if (journey != null)
-		{
-			Map<String, int[]> byTask = new LinkedHashMap<>();
-			for (int i = 0; i < journey.tasks.size(); i++)
-			{
-				SlayerTask t = journey.tasks.get(i);
-				if (t.task == null || Search.matchScore(ql, t.task) < 0)
-				{
-					continue;
-				}
-				int[] seen = byTask.computeIfAbsent(low(t.task), k -> new int[]{0, -1});
-				seen[0]++;
-				if (seen[1] < 0)
-				{
-					seen[1] = i;
-				}
-			}
-			for (int[] seen : byTask.values())
-			{
-				final int at = seen[1];
-				String name = journey.tasks.get(at).task;
-				tasks.add(new Hit(name, count(seen[0], "task"), null, "Opens the newest", () ->
-				{
-					if (journeyCache == null)
-					{
-						journeyCache = journey;
-					}
-					applyTab(View.SLAYER);
-					showTask(at);
-				}, Search.matchScore(ql, name), seen[0]));
-			}
-		}
-		total += searchGroup(p, "Slayer tasks", tasks);
-
-		Map<String, long[]> itemAgg = new LinkedHashMap<>();
-		Map<String, List<String>> itemSrcs = new LinkedHashMap<>();
-		for (SourceRow src : build.sources())
-		{
-			for (BagItem b : store.sourceItems(src.name))
-			{
-				if (Search.matchScore(ql, b.name) < 0)
-				{
-					continue;
-				}
-				long[] agg = itemAgg.computeIfAbsent(b.name, k -> new long[2]);
-				agg[0] += b.qty;
-				agg[1] += b.value;
-				itemSrcs.computeIfAbsent(b.name, k -> new ArrayList<>()).add(src.name);
-			}
-		}
-		List<Hit> items = new ArrayList<>();
-		for (Entry<String, long[]> e : itemAgg.entrySet())
-		{
-			final String itm = e.getKey();
-			List<String> from = itemSrcs.get(itm);
-			String tip = (e.getValue()[1] > 0 ? gp(e.getValue()[1]) + " gp · " : "") + "from "
-				+ String.join(", ", from.subList(0, Math.min(4, from.size())))
-				+ (from.size() > 4 ? " and " + (from.size() - 4) + " more" : "");
-			items.add(new Hit(itm, "×" + fmt(e.getValue()[0]), null, tip, () -> openItem(itm),
-				Search.matchScore(ql, itm), e.getValue()[1]));
-		}
-		for (UntakenRow u : store.untaken().items)
-		{
-			if (itemAgg.containsKey(u.name) || Search.matchScore(ql, u.name) < 0)
-			{
-				continue;
-			}
-			items.add(new Hit(u.name, "×" + fmt(u.qty) + " left", ACCENT_RED, "Left on the floor", () ->
-			{
-				applyTab(View.DROPS);
-				dropsLeftBehind = true;
-				leftBehindItem = u.name;
-				rebuild();
-			}, Search.matchScore(ql, u.name), u.value));
-		}
-		total += searchGroup(p, "Items", items);
-
-		List<Hit> log = new ArrayList<>();
-		ClogBook book = build.book();
-		Set<String> slotSeen = new HashSet<>();
-		for (Map<String, List<String>> tab : book.tax.values())
-		{
-			for (Entry<String, List<String>> pg : tab.entrySet())
-			{
-				final String page = pg.getKey();
-				int ps = Search.matchScore(ql, page);
-				boolean[] lit = null;
-				if (ps >= 0)
-				{
-					lit = book.lit(page, pg.getValue());
-					log.add(new Hit(page, ClogBook.held(lit) + " / " + pg.getValue().size(), null, "The page",
-						() -> openLogPage(page), Math.max(0, ps - 1), 2));
-				}
-				for (String slot : pg.getValue())
-				{
-					int sc = Search.matchScore(ql, slot);
-					if (sc < 0 || !slotSeen.add(slot))
-					{
-						continue;
-					}
-					if (lit == null)
-					{
-						lit = book.lit(page, pg.getValue());
-					}
-					boolean got = false;
-					for (int i = 0; i < lit.length; i++)
-					{
-						got |= lit[i] && pg.getValue().get(i).equalsIgnoreCase(slot);
-					}
-					log.add(new Hit(slot, page, got ? ACCENT_SESSION : ACCENT_RED,
-						got ? "Held" : "Missing", () -> openLogPage(page), sc, got ? 1 : 0));
-				}
-			}
-		}
-		total += searchGroup(p, "Collection log", log);
-
-		List<Hit> questHits = new ArrayList<>();
-		JsonObject states = obj(build.standings.achievements(), "quests");
-		for (String name : states.keySet())
-		{
-			int sc = Search.matchScore(ql, name);
-			if (sc < 0)
-			{
-				continue;
-			}
-			String state = states.get(name).getAsString();
-			boolean done = "FINISHED".equals(state);
-			questHits.add(new Hit(name, done ? "complete" : "IN_PROGRESS".equals(state)
-				? "in progress" : "not started", done ? ACCENT_SESSION : ACCENT_RED, null,
-				() -> openSheetPage("quests"), sc, done ? 1 : 0));
-		}
-		total += searchGroup(p, "Quests", questHits);
-
-		if (ql.length() >= 3)
-		{
-			Set<Integer> done = build.standings.caDone();
-			JsonObject cas = Standings.CA_TASKS;
-			List<Hit> caHits = new ArrayList<>();
-			for (String id : cas.keySet())
-			{
-				JsonObject t = cas.getAsJsonObject(id);
-				String name = t.get("name").getAsString();
-				String task = t.get("task").getAsString();
-				int sc = Search.matchScore(ql, name);
-				if (sc < 0 && low(task).contains(ql))
-				{
-					sc = 3;
-				}
-				if (sc < 0)
-				{
-					continue;
-				}
-				boolean has = done.contains(Integer.parseInt(id));
-				caHits.add(new Hit(name, Text.capital(low(t.get("tier").getAsString())),
-					done.isEmpty() ? null : has ? ACCENT_SESSION : ACCENT_RED,
-					t.get("monster").getAsString() + ": " + task, () -> openSheetPage("combat"), sc,
-					has ? 1 : 0));
-			}
-			total += searchGroup(p, "Combat achievements", caHits);
-
-			JsonObject diaries = Standings.DIARY_TASKS;
-			List<Hit> diaryHits = new ArrayList<>();
-			for (String region : diaries.keySet())
-			{
-				JsonObject tiers = diaries.getAsJsonObject(region);
-				for (String tier : tiers.keySet())
-				{
-					for (JsonElement e : tiers.getAsJsonArray(tier))
-					{
-						JsonObject t = e.getAsJsonObject();
-						String task = t.get("task").getAsString();
-						if (!low(task).contains(ql))
-						{
-							continue;
-						}
-						String needs = t.has("requirements") ? t.get("requirements").getAsString() : "";
-						diaryHits.add(new Hit(Search.firstSentence(task), low(tier), null,
-							region + " " + low(tier) + ": " + task
-								+ (needs.isEmpty() || "None".equalsIgnoreCase(needs) ? "" : " Needs: " + needs),
-							() -> openSheetPage("diaries"), 3, 0));
-					}
-				}
-			}
-			total += searchGroup(p, "Diary tasks", diaryHits);
-		}
-
-		List<Hit> stats = new ArrayList<>();
-		for (Entry<String, Long> e : build.withLedgerSpend(build.lifetime()).entrySet())
-		{
-			if (e.getValue() == 0 || StatRegistry.hidden(e.getKey()))
-			{
-				continue;
-			}
-			String label = StatRegistry.label(e.getKey());
-			int sc = Search.bestScore(ql, label, e.getKey());
-			if (sc < 0)
-			{
-				continue;
-			}
-			stats.add(new Hit(label, StatRegistry.isGp(e.getKey()) ? gps(e.getValue()) : fmt(e.getValue()),
-				null, null, this::openAllTrackers, sc, e.getValue()));
-		}
-		total += searchGroup(p, "Trackers", stats);
-
-		List<Hit> journal = new ArrayList<>();
-		int thisYear = LocalDate.now().getYear();
-		String qj = ql.replace("'", "");
-		for (Search.Line line : search.feed(build))
-		{
-			if (qj.trim().isEmpty() || !line.key.contains(qj))
-			{
-				continue;
-			}
-			final long at = line.at;
-			String day = at <= 0 ? "" : (dayOf(at).getYear() == thisYear ? DAY : TASK_DAY)
-				.format(Instant.ofEpochMilli(at));
-			journal.add(new Hit(line.text, day, null, null, () -> openJournalOn(at), 0, at));
-		}
-		total += searchGroup(p, "Journal", journal);
-
-		if (total == 0)
-		{
-			p.add(note("Nothing matches \"" + q + "\" yet."));
-			final String near = Search.nearest(build, ql);
-			if (near != null)
-			{
-				JPanel r = row("Did you mean", near, accent());
-				door(r, () -> searchField.setText(near));
-				p.add(r);
-			}
-		}
-		else
-		{
-			p.add(vgap(6));
-			p.add(ghostRow("enter opens the first row", ""));
-		}
-		return p;
-	}
-
-	private Runnable searchFirst;
-
-	private void door(JPanel r, Runnable go)
-	{
-		link(r, go);
-		if (searchFirst == null)
-		{
-			searchFirst = go;
-		}
-	}
+	Runnable searchFirst;
 
 	private JPanel progress(float frac)
 	{
@@ -6590,7 +6104,7 @@ class ChroniclePanel extends PluginPanel
 		return outer;
 	}
 
-	private JLabel group(String name)
+	JLabel group(String name)
 	{
 		JLabel g = styled(new JLabel(name.toUpperCase(Locale.ROOT)), small(), accent());
 		g.setAlignmentX(Component.LEFT_ALIGNMENT);
