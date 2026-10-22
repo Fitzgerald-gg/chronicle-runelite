@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
 import javax.swing.JPanel;
-import static chronicle.ChroniclePanel.UNDATED;
 import static chronicle.Copy.copyPicture;
 import static chronicle.Feed.most;
 import static chronicle.Kit.ACCENT_LIFETIME;
@@ -53,6 +52,9 @@ import static chronicle.Text.qtyGp;
 final class LootPage
 {
 	static final String UNFILED = "Everything else";
+
+	static final String UNDATED = "No loot has been dated yet. The roll keeps one entry a "
+		+ "day and starts with the next drop that lands.";
 
 	private final ChroniclePanel panel;
 

@@ -123,15 +123,6 @@ class ChroniclePanel extends PluginPanel
 {
 	private static final Map<Tab, String[]> SUBS = new EnumMap<>(Tab.class);
 
-	static final String[][] ACTIVITIES = {
-		{"Clues", "", "clues"},
-		{"Rifts closed", "Guardians of the Rift", ""},
-		{"Soul Wars", "Soul Wars", ""},
-		{"Collections", "", "log"},
-		{"Quests", "", "quests"},
-		{"Diaries", "", "diaries"},
-	};
-
 	static final int MOVED_RECORD = 1;
 	static final int MOVED_COUNTERS = 2;
 	static final int MOVED_SKILLS = 4;
@@ -140,13 +131,7 @@ class ChroniclePanel extends PluginPanel
 	private static final int MOVED_ANY = MOVED_RECORD | MOVED_COUNTERS
 		| MOVED_SKILLS | MOVED_CLOG;
 
-	static final String UNDATED = "No loot has been dated yet. The roll keeps one entry a "
-		+ "day and starts with the next drop that lands.";
-
 	private static final int HIST_LIST_CAP = 6;
-	static final int ICON_W = 22;
-	static final int ICON_H = 18;
-
 	static final String[] PERIODS = {"Lifetime", "Year", "Month", "Week", "Day",
 		"Session"};
 

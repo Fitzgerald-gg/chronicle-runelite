@@ -111,11 +111,6 @@ final class Build
 		return names;
 	}
 
-	void forgetNames()
-	{
-		names = null;
-	}
-
 	Span span()
 	{
 		if (!spanAsked)

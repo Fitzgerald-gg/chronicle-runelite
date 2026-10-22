@@ -26,9 +26,6 @@ import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
 import net.runelite.api.Skill;
 import net.runelite.client.game.SpriteManager;
-import net.runelite.client.util.AsyncBufferedImage;
-import static chronicle.ChroniclePanel.ICON_H;
-import static chronicle.ChroniclePanel.ICON_W;
 
 final class Art
 {
@@ -44,49 +41,6 @@ final class Art
 	Art(ChroniclePanel panel)
 	{
 		this.panel = panel;
-	}
-
-	void mountKindIcon(JLabel label, String name)
-	{
-		int item = panel.itemNames.signature(name);
-		if (item > 0)
-		{
-			mountItem(label, item);
-			return;
-		}
-		Skill skill = Sources.skillOf(name);
-		if (skill != null)
-		{
-			BufferedImage img = skillIcon(skill);
-			if (img != null)
-			{
-				dress(label, "skill:" + skill.name(), img, ICON_W, ICON_H);
-				return;
-			}
-		}
-		wearSprite(label, kindSprite(panel.build.names().kind(name)), ICON_W, ICON_H);
-	}
-
-	private void mountItem(JLabel label, int itemId)
-	{
-		wear(label, "item:" + itemId, ICON_W, ICON_H, done ->
-		{
-			AsyncBufferedImage img = panel.store.items().getImage(itemId, 1, false);
-			if (img != null)
-			{
-				img.onLoaded(() -> done.accept(img));
-			}
-			return img != null;
-		});
-	}
-
-	private static int kindSprite(String kind)
-	{
-		if (Sources.ACTIVITY.equals(kind))
-		{
-			return 1053;
-		}
-		return Sources.SKILLING.equals(kind) ? 775 : 774;
 	}
 
 	BufferedImage skillIcon(Skill sk)

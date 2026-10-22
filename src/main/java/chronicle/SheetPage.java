@@ -36,9 +36,6 @@ import javax.swing.JPanel;
 import net.runelite.api.Skill;
 import net.runelite.api.SpriteID;
 import net.runelite.client.hiscore.HiscoreSkill;
-import static chronicle.ChroniclePanel.ACTIVITIES;
-import static chronicle.ChroniclePanel.ICON_H;
-import static chronicle.ChroniclePanel.ICON_W;
 import static chronicle.Feed.newestTs;
 import static chronicle.Json.has;
 import static chronicle.Json.low;
@@ -89,6 +86,18 @@ import static chronicle.panel.StatRegistry.prettify;
 
 final class SheetPage
 {
+	static final String[][] ACTIVITIES = {
+		{"Clues", "", "clues"},
+		{"Rifts closed", "Guardians of the Rift", ""},
+		{"Soul Wars", "Soul Wars", ""},
+		{"Collections", "", "log"},
+		{"Quests", "", "quests"},
+		{"Diaries", "", "diaries"},
+	};
+
+	static final int ICON_W = 22;
+	static final int ICON_H = 18;
+
 	private final ChroniclePanel panel;
 
 	SheetPage(ChroniclePanel panel)

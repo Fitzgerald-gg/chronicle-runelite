@@ -97,13 +97,4 @@ final class SlayerTaskBook
 		return r;
 	}
 
-	int idCount()
-	{
-		return npcToTask.size();
-	}
-
-	int taskCount()
-	{
-		return variants.size();
-	}
 }
