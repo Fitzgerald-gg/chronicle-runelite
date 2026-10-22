@@ -70,7 +70,7 @@ The search box searches everything as you type: skills and pages, bosses and mon
 
 ## Dependencies
 
-Some features rely on two of RuneLite's built-in plugins, Slayer and Loot Tracker. Chronicle declares both, so RuneLite loads them with it. If either is turned off, a bar under the search box says so, and clicking it turns the plugin back on.
+Some features rely on two of RuneLite's built-in plugins, Slayer and Loot Tracker. Chronicle declares Slayer, so RuneLite loads it with Chronicle. Loot Tracker has to be turned on in RuneLite. If either is off, a bar under the search box says so, and clicking it turns the plugin back on.
 
 **Slayer** lets Chronicle tag kills as on task, so you can see your tasks and their loot.
 
