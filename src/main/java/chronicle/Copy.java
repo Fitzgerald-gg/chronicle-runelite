@@ -165,7 +165,7 @@ final class Copy
 			layOut(page);
 
 			int h = Math.min(full, COPY_MAX_HEIGHT);
-			int lost = h < full ? pastTheEdge(page, h) : 0;
+			int lost = h < full ? countCut(page, h) : 0;
 			BufferedImage img = new BufferedImage(
 				w, h, BufferedImage.TYPE_INT_RGB);
 			Graphics2D g = img.createGraphics();
@@ -174,7 +174,7 @@ final class Copy
 			page.printAll(g);
 			if (lost > 0)
 			{
-				sayWhatDidNotFit(g, w, h, lost);
+				drawCutNote(g, w, h, lost);
 			}
 			g.dispose();
 			return img;
@@ -185,7 +185,7 @@ final class Copy
 		}
 	}
 
-	private static int pastTheEdge(JPanel page, int cut)
+	private static int countCut(JPanel page, int cut)
 	{
 		int n = 0;
 		for (Component k : page.getComponents())
@@ -198,7 +198,7 @@ final class Copy
 		return n;
 	}
 
-	private static void sayWhatDidNotFit(Graphics2D g, int w, int h, int lost)
+	private static void drawCutNote(Graphics2D g, int w, int h, int lost)
 	{
 		int band = 20;
 		g.setColor(DARKER);

@@ -45,23 +45,23 @@ final class Art
 		return SKILL_ICONS.computeIfAbsent(sk, s -> panel.skillIcons.getSkillImage(s, true));
 	}
 
-	void wearSprite(JLabel label, int spriteId, int w, int h)
+	void loadSprite(JLabel label, int spriteId, int w, int h)
 	{
 		String key = "sprite:" + spriteId;
 		BufferedImage have = images.get(key);
 		if (have != null)
 		{
-			dress(label, key + "@" + w, have, w, h);
+			showIcon(label, key + "@" + w, have, w, h);
 			return;
 		}
 		waiting.computeIfAbsent(key, k -> new ArrayList<>()).add(new Waiting(label, w, h));
 		if (asked.add(key))
 		{
-			panel.sprites.getSpriteAsync(spriteId, 0, img -> SwingUtilities.invokeLater(() -> landed(key, img)));
+			panel.sprites.getSpriteAsync(spriteId, 0, img -> SwingUtilities.invokeLater(() -> spriteLoaded(key, img)));
 		}
 	}
 
-	private void landed(String key, BufferedImage img)
+	private void spriteLoaded(String key, BufferedImage img)
 	{
 		if (img == null)
 		{
@@ -70,12 +70,12 @@ final class Art
 		images.put(key, img);
 		for (Waiting want : waiting.getOrDefault(key, Collections.emptyList()))
 		{
-			dress(want.label, key + "@" + want.w, img, want.w, want.h);
+			showIcon(want.label, key + "@" + want.w, img, want.w, want.h);
 		}
 		waiting.remove(key);
 	}
 
-	private void dress(JLabel label, String key, BufferedImage img, int w, int h)
+	private void showIcon(JLabel label, String key, BufferedImage img, int w, int h)
 	{
 		label.setIcon(scaled.computeIfAbsent(key, k -> fit(img, w, h)));
 		label.setText("");

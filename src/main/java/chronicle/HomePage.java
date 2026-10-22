@@ -200,8 +200,8 @@ final class HomePage
 			strip.add(row("Left behind", qtyGp(untaken[0], untaken[1])));
 			mounted++;
 		}
-		mounted += addSittingFeats(strip);
-		mounted += addSessionMovers(strip, sessionDisplayCounters(), shownKeys);
+		mounted += addSessionFeats(strip);
+		mounted += addSessionCounters(strip, sessionDisplayCounters(), shownKeys);
 		if (mounted == 0)
 		{
 			strip.add(row("A fresh page", ""));
@@ -254,7 +254,7 @@ final class HomePage
 		return null;
 	}
 
-	private int addSittingFeats(JPanel strip)
+	private int addSessionFeats(JPanel strip)
 	{
 		long since = panel.live.sessionStart();
 		if (since <= 0)
@@ -329,7 +329,7 @@ final class HomePage
 		return r;
 	}
 
-	private int addSessionMovers(JPanel strip, Map<String, Integer> sess,
+	private int addSessionCounters(JPanel strip, Map<String, Integer> sess,
 		Set<String> shownKeys)
 	{
 		Map<String, List<Entry<String, Long>>> byFamily = new LinkedHashMap<>();
@@ -373,14 +373,14 @@ final class HomePage
 			}
 			for (Entry<String, Long> e : rows)
 			{
-				mounted += addMoverRow(strip, e.getKey(), e.getValue(),
+				mounted += addCounterRow(strip, e.getKey(), e.getValue(),
 					under.get(e.getKey()));
 			}
 		}
 		return mounted;
 	}
 
-	private int addMoverRow(JPanel strip, String key, long value,
+	private int addCounterRow(JPanel strip, String key, long value,
 		List<Entry<String, Long>> kids)
 	{
 		if (kids == null || kids.isEmpty())

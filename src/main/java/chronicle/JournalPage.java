@@ -75,7 +75,7 @@ final class JournalPage
 	JPanel buildJournal()
 	{
 		JPanel p = column();
-		addFrontispiece(p);
+		addTitleCard(p);
 
 		JPanel lenses = new JPanel(new GridLayout(0, 3, 3, 3));
 		lenses.setBackground(DARK);
@@ -168,7 +168,7 @@ final class JournalPage
 		return p;
 	}
 
-	private void addFrontispiece(JPanel p)
+	private void addTitleCard(JPanel p)
 	{
 		String rsn = panel.live.displayRsn();
 		JPanel plate = card(rsn != null && !rsn.isEmpty()
@@ -217,7 +217,7 @@ final class JournalPage
 		plate.add(moreRow("what the journal holds", panel::openInfo));
 		p.add(plate);
 
-		String note = frontispieceNote();
+		String note = titleNote();
 		if (note != null)
 		{
 			p.add(ghostRow(note, ""));
@@ -225,7 +225,7 @@ final class JournalPage
 		p.add(vgap(6));
 	}
 
-	private String frontispieceNote()
+	private String titleNote()
 	{
 		if (panel.grindsCache != null)
 		{

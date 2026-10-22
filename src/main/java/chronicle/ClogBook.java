@@ -94,7 +94,7 @@ final class ClogBook
 		return null;
 	}
 
-	List<String> strangers()
+	List<String> unknownPages()
 	{
 		Set<String> known = new HashSet<>();
 		for (Map<String, List<String>> pages : tax.values())

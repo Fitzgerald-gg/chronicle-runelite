@@ -91,7 +91,7 @@ import static chronicle.Kit.styled;
 import static chronicle.Kit.sumOf;
 import static chronicle.Kit.tallyCard;
 import static chronicle.Kit.tip;
-import static chronicle.Kit.unlight;
+import static chronicle.Kit.clearHover;
 import static chronicle.Kit.value;
 import static chronicle.Kit.wash;
 import static chronicle.Period.TASK_DAY;
@@ -120,7 +120,7 @@ final class Kit
 	static final String TIP_CLOSE = "</body></html>";
 	private static final int NOTE_WIDTH = 190;
 	private static final int HOVER_LIFT = 15;
-	private static Runnable litNow;
+	private static Runnable hovered;
 
 	private Kit()
 	{
@@ -545,7 +545,7 @@ final class Kit
 		return p;
 	}
 
-	private static Color behind(Component c)
+	private static Color backgroundOf(Component c)
 	{
 		for (Component p = c.getParent(); p != null; p = p.getParent())
 		{
@@ -573,7 +573,7 @@ final class Kit
 			Math.min(255, ground.getBlue() + HOVER_LIFT));
 	}
 
-	private static boolean stillUnder(MouseEvent e)
+	private static boolean pointerOver(MouseEvent e)
 	{
 		boolean over = false;
 		boolean pointerKnown = false;
@@ -585,10 +585,10 @@ final class Kit
 		catch (RuntimeException ignored)
 		{
 		}
-		return stillUnder(over, pointerKnown, e.getComponent().contains(e.getPoint()));
+		return pointerOver(over, pointerKnown, e.getComponent().contains(e.getPoint()));
 	}
 
-	private static boolean stillUnder(boolean overComponent, boolean pointerKnown,
+	private static boolean pointerOver(boolean overComponent, boolean pointerKnown,
 		boolean eventSaysInside)
 	{
 		if (overComponent)
@@ -602,10 +602,10 @@ final class Kit
 		return eventSaysInside;
 	}
 
-	static void unlight()
+	static void clearHover()
 	{
-		Runnable was = litNow;
-		litNow = null;
+		Runnable was = hovered;
+		hovered = null;
 		if (was != null)
 		{
 			was.run();
@@ -634,18 +634,18 @@ final class Kit
 				{
 					return;
 				}
-				unlight();
+				clearHover();
 				JComponent c = (JComponent) e.getComponent();
 				target = c;
 				wasOpaque = c.isOpaque();
 				wasBackground = c.getBackground();
 				Color ground = wasOpaque && wasBackground != null
-					? wasBackground : behind(c);
+					? wasBackground : backgroundOf(c);
 				c.setBackground(hoverOf(ground));
 				c.setOpaque(true);
 				c.repaint();
 				lit = true;
-				litNow = this::putBack;
+				hovered = this::putBack;
 			}
 
 			private void putBack()
@@ -667,11 +667,11 @@ final class Kit
 				{
 					return;
 				}
-				if (stillUnder(e))
+				if (pointerOver(e))
 				{
 					return;
 				}
-				litNow = null;
+				hovered = null;
 				putBack();
 			}
 		};

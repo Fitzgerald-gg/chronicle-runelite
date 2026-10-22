@@ -71,7 +71,7 @@ final class RecapPage
 			take.setText("copying");
 			copyRecapPicture(take);
 		}));
-		p.add(recapPlate());
+		p.add(recapCard());
 		return p;
 	}
 
@@ -97,7 +97,7 @@ final class RecapPage
 		}
 		for (int id : want)
 		{
-			panel.art.wearSprite(new JLabel(), id, 22, 22);
+			panel.art.loadSprite(new JLabel(), id, 22, 22);
 		}
 		long deadline = System.currentTimeMillis() + 1500;
 		Timer wait = new Timer(100, null);
@@ -130,22 +130,22 @@ final class RecapPage
 		}
 	}
 
-	private JPanel recapPlate()
+	private JPanel recapCard()
 	{
-		JPanel plate = card(panel.wholeRecord() ? "The whole record" : panel.window().label);
-		int held = plate.getComponentCount();
+		JPanel recap = card(panel.wholeRecord() ? "The whole record" : panel.window().label);
+		int held = recap.getComponentCount();
 
 		long[] sat = panel.build.summary.played();
 		if (sat[1] > 0)
 		{
-			plateRow(plate, "Played", hoursMinutes(sat[0]) + " · " + count(sat[1], "sitting"),
+			cardRow(recap, "Played", hoursMinutes(sat[0]) + " · " + count(sat[1], "sitting"),
 				() -> panel.openJournal("Sessions"));
 		}
 		Entry<LocalDate, Long> busiest = sat[1] > 1 ? panel.build.summary.busiest() : null;
 		if (busiest != null)
 		{
 			final LocalDate day = busiest.getKey();
-			plateRow(plate, "Busiest day", TASK_DAY.format(day.atStartOfDay(
+			cardRow(recap, "Busiest day", TASK_DAY.format(day.atStartOfDay(
 				ZoneId.systemDefault()).toInstant()) + " · " + hoursMinutes(busiest.getValue()),
 				() -> panel.openJournalOn(noon(day)));
 		}
@@ -154,7 +154,7 @@ final class RecapPage
 		if (xp != null && xp[0] > 0)
 		{
 			String most = panel.build.summary.xpMost();
-			plateRow(plate, panel.wholeRecord() ? "Xp" : "Xp gained",
+			cardRow(recap, panel.wholeRecord() ? "Xp" : "Xp gained",
 				(panel.wholeRecord() ? "" : "+") + gp(xp[0]) + " xp"
 					+ (most != null ? ", most in " + most : ""),
 				() -> panel.applyTab(View.SHEET));
@@ -162,7 +162,7 @@ final class RecapPage
 		long[] levels = panel.build.summary.levels();
 		if (levels != null && (panel.wholeRecord() || levels[1] > levels[0]))
 		{
-			plateRow(plate, panel.wholeRecord() ? "Total level" : "Levels",
+			cardRow(recap, panel.wholeRecord() ? "Total level" : "Levels",
 				panel.wholeRecord() ? fmt(levels[1]) : "+" + fmt(levels[1] - levels[0]) + " · " + fmt(levels[1]) + " now",
 				() -> panel.applyTab(View.SHEET));
 		}
@@ -170,7 +170,7 @@ final class RecapPage
 		long[] loot = panel.build.summary.loot();
 		if (loot[0] > 0)
 		{
-			plateRow(plate, "Drops", qtyGp(loot[0], loot[1]),
+			cardRow(recap, "Drops", qtyGp(loot[0], loot[1]),
 				() -> panel.applyTab(View.DROPS));
 		}
 		LocalStore.Row dearest = panel.build.summary.dearest();
@@ -180,11 +180,11 @@ final class RecapPage
 			Line said = new Line();
 			said.name(item);
 			said.fixed(" · " + gps(dearest.value));
-			plateRow(plate, "Dearest drop", said, () -> panel.openItem(item));
+			cardRow(recap, "Dearest drop", said, () -> panel.openItem(item));
 		}
 		if (loot[2] > 0)
 		{
-			plateRow(plate, "Left behind", qtyGp(loot[2], loot[3]), () ->
+			cardRow(recap, "Left behind", qtyGp(loot[2], loot[3]), () ->
 			{
 				panel.dropsLeftBehind = true;
 				panel.applyTab(View.DROPS);
@@ -201,13 +201,13 @@ final class RecapPage
 		long food = counters.getOrDefault("foodEaten", 0L);
 		if (food > 0)
 		{
-			plateRow(plate, "Food", fmt(food)
+			cardRow(recap, "Food", fmt(food)
 				+ splitSpend("foodConsumedValue", counters), toLiving);
 		}
 		long doses = counters.getOrDefault("potionDoses", 0L);
 		if (doses > 0)
 		{
-			plateRow(plate, "Potions", count(doses, "dose")
+			cardRow(recap, "Potions", count(doses, "dose")
 				+ splitSpend("potionsConsumedValue", counters), toLiving);
 		}
 
@@ -218,12 +218,12 @@ final class RecapPage
 			Line said = new Line();
 			said.name(who);
 			said.fixed(" · " + killed[1]);
-			plateRow(plate, "Killed most", said, () -> panel.openSourceLoose(who));
+			cardRow(recap, "Killed most", said, () -> panel.openSourceLoose(who));
 		}
 		long[] tally = panel.build.taskTally();
 		if (tally[2] > 0)
 		{
-			plateRow(plate, "Tasks", fmt(tally[2]) + tail(tally[3]), () -> panel.openSlayer("Tasks"));
+			cardRow(recap, "Tasks", fmt(tally[2]) + tail(tally[3]), () -> panel.openSlayer("Tasks"));
 		}
 
 		Map<String, String> firstNamed = new LinkedHashMap<>();
@@ -235,20 +235,20 @@ final class RecapPage
 				firstNamed.putIfAbsent(typeOf(e), name);
 			}
 		}
-		feedPlateRow(plate, firstNamed, "COLLECTION", "Log slot", "Log slots", "Log");
-		feedPlateRow(plate, firstNamed, "PET", "Pet", "Pets", "Feats");
-		feedPlateRow(plate, firstNamed, "QUEST", "Quest", "Quests", "Feats");
-		feedPlateRow(plate, firstNamed, "DIARY", "Diary", "Diaries", "Feats");
-		feedPlateRow(plate, firstNamed, "COMBAT_ACHIEVEMENT", "Combat achievement",
+		feedCardRow(recap, firstNamed, "COLLECTION", "Log slot", "Log slots", "Log");
+		feedCardRow(recap, firstNamed, "PET", "Pet", "Pets", "Feats");
+		feedCardRow(recap, firstNamed, "QUEST", "Quest", "Quests", "Feats");
+		feedCardRow(recap, firstNamed, "DIARY", "Diary", "Diaries", "Feats");
+		feedCardRow(recap, firstNamed, "COMBAT_ACHIEVEMENT", "Combat achievement",
 			"Combat achievements", "Feats");
-		feedPlateRow(plate, firstNamed, "DEATH", "Death", "Deaths", "Deaths");
+		feedCardRow(recap, firstNamed, "DEATH", "Death", "Deaths", "Deaths");
 
-		if (plate.getComponentCount() == held)
+		if (recap.getComponentCount() == held)
 		{
-			plate.add(note(panel.wholeRecord() ? "Nothing on the record yet."
+			recap.add(note(panel.wholeRecord() ? "Nothing on the record yet."
 				: panel.window().phrase("Nothing")));
 		}
-		return plate;
+		return recap;
 	}
 
 	private String splitSpend(String key, Map<String, Long> counters)
@@ -262,27 +262,27 @@ final class RecapPage
 		return tail(spend);
 	}
 
-	private void plateRow(JPanel plate, String left, String right, Runnable go)
+	private void cardRow(JPanel recap, String left, String right, Runnable go)
 	{
 		JPanel r = row(left, right);
 		link(r, go);
-		plate.add(r);
+		recap.add(r);
 	}
 
-	private void plateRow(JPanel plate, String left, Line right, Runnable go)
+	private void cardRow(JPanel recap, String left, Line right, Runnable go)
 	{
 		String whole = right.whole();
 		String fitted = fitLine(right, right.names, NAME_FLOOR, rowMetrics(),
 			chaseRoom(left, rowMetrics()));
-		plateRow(plate, left, fitted != null ? fitted : whole, go);
+		cardRow(recap, left, fitted != null ? fitted : whole, go);
 		if (fitted != null && !fitted.equals(whole))
 		{
-			((JPanel) plate.getComponent(plate.getComponentCount() - 1))
+			((JPanel) recap.getComponent(recap.getComponentCount() - 1))
 				.setToolTipText(left + ": " + whole);
 		}
 	}
 
-	private void feedPlateRow(JPanel plate, Map<String, String> named,
+	private void feedCardRow(JPanel recap, Map<String, String> named,
 		String type, String one, String many, String lens)
 	{
 		long n = panel.build.feed.inWindow(type);
@@ -298,6 +298,6 @@ final class RecapPage
 			right.fixed(" · ");
 			right.name(name);
 		}
-		plateRow(plate, n == 1 ? one : many, right, () -> panel.openJournal(lens));
+		cardRow(recap, n == 1 ? one : many, right, () -> panel.openJournal(lens));
 	}
 }

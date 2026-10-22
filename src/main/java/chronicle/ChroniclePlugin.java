@@ -246,7 +246,7 @@ public class ChroniclePlugin extends Plugin implements Live
 		pendingLoginSetup = false;
 		if (ready())
 		{
-			bankSitting();
+			saveSession();
 			localStore.rebase(localName);
 			if (SwingUtilities.isEventDispatchThread())
 			{
@@ -363,7 +363,7 @@ public class ChroniclePlugin extends Plugin implements Live
 	{
 		if (client.getGameState() == GameState.LOGGED_IN)
 		{
-			takeLiveSkills();
+			refreshLiveSkills();
 			watchPlaytime();
 			boolean turned = localName != null && historyLog.dayTurned(localName)
 				&& System.currentTimeMillis() - lastRollAttempt >= 60_000L;
@@ -407,7 +407,7 @@ public class ChroniclePlugin extends Plugin implements Live
 			refreshPanel();
 			if (cloudActive())
 			{
-				adoptToken(name);
+				useToken(name);
 			}
 			return;
 		}
@@ -438,7 +438,7 @@ public class ChroniclePlugin extends Plugin implements Live
 		});
 		if (cloudActive())
 		{
-			adoptToken(name);
+			useToken(name);
 		}
 	}
 
@@ -506,7 +506,7 @@ public class ChroniclePlugin extends Plugin implements Live
 		}
 	}
 
-	private void adoptToken(String name)
+	private void useToken(String name)
 	{
 		String override = trimToNull(config.manualToken());
 		String token = trimToNull(configManager.getRSProfileConfiguration(GROUP, KEY_TOKEN));
@@ -571,7 +571,7 @@ public class ChroniclePlugin extends Plugin implements Live
 			return;
 		}
 		localStore.setTrackers(sessionView(), localName);
-		Map<String, Integer> snapshot = journalAbsolutes(name);
+		Map<String, Integer> snapshot = journalCounters(name);
 		if (snapshot.isEmpty())
 		{
 			return;
@@ -584,7 +584,7 @@ public class ChroniclePlugin extends Plugin implements Live
 
 		log.debug("pushing {} counters for {}", snapshot.size(), name);
 		api.pushStats(config.serverBaseUrl(), token, name, snapshot, cachedAccountType,
-			harvestSkills(), this::refreshPanel);
+			skillsJson(), this::refreshPanel);
 	}
 
 	private static String accountTypeTag(int varbit)
@@ -601,7 +601,7 @@ public class ChroniclePlugin extends Plugin implements Live
 		}
 	}
 
-	private Map<String, Integer> journalAbsolutes(String rsn)
+	private Map<String, Integer> journalCounters(String rsn)
 	{
 		Map<String, Integer> out = new HashMap<>();
 		if (!localStore.isReadyFor(rsn))
@@ -626,7 +626,7 @@ public class ChroniclePlugin extends Plugin implements Live
 		return rsn != null && localStore.isReadyFor(rsn);
 	}
 
-	private void bankSitting()
+	private void saveSession()
 	{
 		localStore.setCharacter(localName, null, 0, clogCapture.snapshot(), null);
 		localStore.setTrackers(sessionView(), localName);
@@ -636,10 +636,10 @@ public class ChroniclePlugin extends Plugin implements Live
 	{
 		if (ready())
 		{
-			bankSitting();
+			saveSession();
 			appendHistoryBaseline();
 			recordSessionLine();
-			Map<String, Integer> fresh = journalAbsolutes(localName);
+			Map<String, Integer> fresh = journalCounters(localName);
 			if (!fresh.isEmpty())
 			{
 				cachedSnapshot = fresh;
@@ -684,7 +684,7 @@ public class ChroniclePlugin extends Plugin implements Live
 		return out;
 	}
 
-	private JsonObject harvestSkills()
+	private JsonObject skillsJson()
 	{
 		JsonObject skills = new JsonObject();
 		for (Map.Entry<String, long[]> e : readSkills().entrySet())
@@ -986,7 +986,7 @@ public class ChroniclePlugin extends Plugin implements Live
 		if (client.getGameState() == GameState.LOGGED_IN && name != null)
 		{
 			Player lp = client.getLocalPlayer();
-			localStore.setCharacter(name, harvestSkills(), lp.getCombatLevel(),
+			localStore.setCharacter(name, skillsJson(), lp.getCombatLevel(),
 				clogCapture.snapshot(), achievementSync.snapshot());
 		}
 		if (ready())
@@ -1037,7 +1037,7 @@ public class ChroniclePlugin extends Plugin implements Live
 				log.debug("loot tracker archive read failed", e);
 				return;
 			}
-			clientThread.invoke(() -> adoptLootTrackerArchive(who, parsed));
+			clientThread.invoke(() -> mergeLootTracker(who, parsed));
 		});
 	}
 
@@ -1101,7 +1101,7 @@ public class ChroniclePlugin extends Plugin implements Live
 		return out;
 	}
 
-	private void adoptLootTrackerArchive(String rsn, List<RawSource> parsed)
+	private void mergeLootTracker(String rsn, List<RawSource> parsed)
 	{
 		try
 		{
@@ -1236,7 +1236,7 @@ public class ChroniclePlugin extends Plugin implements Live
 		});
 	}
 
-	private void takeLiveSkills()
+	private void refreshLiveSkills()
 	{
 		Map<String, long[]> out = readSkills();
 		Map<String, long[]> was = liveSkills;

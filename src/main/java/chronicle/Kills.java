@@ -481,7 +481,7 @@ final class Kills
 		return chatKcByKind;
 	}
 
-	Map<String, Long> sayers(SourceRow sr)
+	Map<String, Long> killCountSources(SourceRow sr)
 	{
 		String want = LocalStore.chatKind(sr.name);
 		Map<String, Long> rows = new LinkedHashMap<>();

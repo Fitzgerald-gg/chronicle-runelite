@@ -109,7 +109,7 @@ import static chronicle.Kit.spaced;
 import static chronicle.Kit.stepStrip;
 import static chronicle.Kit.styled;
 import static chronicle.Kit.tip;
-import static chronicle.Kit.unlight;
+import static chronicle.Kit.clearHover;
 import static chronicle.Kit.wash;
 import static chronicle.Period.dayOf;
 import static chronicle.Text.count;
@@ -196,15 +196,15 @@ class ChroniclePanel extends PluginPanel
 	private final AtomicBoolean queued = new AtomicBoolean();
 	private final AtomicInteger movedMask = new AtomicInteger();
 	private boolean everShown;
-	private boolean staleWhileHidden;
+	private boolean stale;
 	private Point lastPointer;
 	private boolean keepScroll;
 	private final JPanel periodHolder = new JPanel(new BorderLayout());
 	private final JPanel north = new JPanel();
 	private long lastBuildNanos;
 	private long lastBuildAt;
-	private JPanel aboveBoard;
-	private boolean bandFixes;
+	private JPanel subBar;
+	private boolean bandClickable;
 	boolean onTaskOnly;
 	boolean dropsLeftBehind;
 	String lootKind;
@@ -251,7 +251,7 @@ class ChroniclePanel extends PluginPanel
 		freshBuild();
 		index = new Search(store);
 
-		watchForReturn();
+		watchShowing();
 		setLayout(new BorderLayout());
 		setBorder(pad(
 			PANEL_INSET, PANEL_INSET, PANEL_INSET, PANEL_INSET));
@@ -327,10 +327,10 @@ class ChroniclePanel extends PluginPanel
 
 		homeTicker = new Timer(3000, e ->
 		{
-			if (staleWhileHidden && everShown && getWrappedPanel().isShowing()
+			if (stale && everShown && getWrappedPanel().isShowing()
 				&& !popupShowing())
 			{
-				staleWhileHidden = false;
+				stale = false;
 				update();
 				return;
 			}
@@ -515,7 +515,7 @@ class ChroniclePanel extends PluginPanel
 		detailItem = null;
 		detailSource = null;
 		detailSkill = null;
-		leaveSentPage();
+		closePages();
 		detailTask = -1;
 		leftBehindSource = null;
 		leftBehindItem = null;
@@ -598,12 +598,12 @@ class ChroniclePanel extends PluginPanel
 			int mask = movedMask.getAndSet(0);
 			if (everShown && !getWrappedPanel().isShowing())
 			{
-				staleWhileHidden = true;
+				stale = true;
 				return;
 			}
-			if (popupShowing() || scrollHeld() || beingRead())
+			if (popupShowing() || scrollHeld() || pointerResting())
 			{
-				staleWhileHidden = true;
+				stale = true;
 				return;
 			}
 			if (!viewCares(mask))
@@ -613,14 +613,14 @@ class ChroniclePanel extends PluginPanel
 			long floor = redrawFloorMs();
 			if (floor > 0 && System.currentTimeMillis() - lastBuildAt < floor)
 			{
-				staleWhileHidden = true;
+				stale = true;
 				return;
 			}
 			rebuildInPlace();
 		});
 	}
 
-	private boolean beingRead()
+	private boolean pointerResting()
 	{
 		Point was = lastPointer;
 		Point now = null;
@@ -659,7 +659,7 @@ class ChroniclePanel extends PluginPanel
 		return path != null && path.length > 0;
 	}
 
-	private void watchForReturn()
+	private void watchShowing()
 	{
 		getWrappedPanel().addHierarchyListener(e ->
 		{
@@ -669,9 +669,9 @@ class ChroniclePanel extends PluginPanel
 				return;
 			}
 			everShown = true;
-			if (staleWhileHidden)
+			if (stale)
 			{
-				staleWhileHidden = false;
+				stale = false;
 				update();
 			}
 		});
@@ -704,10 +704,10 @@ class ChroniclePanel extends PluginPanel
 		art.forgetWaiting();
 		paintBand(store.journalWarning(), live.captureWarning(),
 			live.captureWarningWhy());
-		if (aboveBoard != null)
+		if (subBar != null)
 		{
-			display.remove(aboveBoard);
-			aboveBoard = null;
+			display.remove(subBar);
+			subBar = null;
 		}
 		measuredSince = null;
 		periodHolder.removeAll();
@@ -730,7 +730,7 @@ class ChroniclePanel extends PluginPanel
 			: sheetPage != null ? sheet.buildSheetPage()
 			: buildView();
 		periodHolder.setToolTipText(measuredSince);
-		unlight();
+		clearHover();
 		canvas.removeAll();
 		canvas.add(body, BorderLayout.NORTH);
 		JPanel above = new JPanel();
@@ -743,7 +743,7 @@ class ChroniclePanel extends PluginPanel
 		}
 		if (above.getComponentCount() > 0)
 		{
-			aboveBoard = above;
+			subBar = above;
 			display.add(above, BorderLayout.NORTH);
 		}
 		canvas.revalidate();
@@ -789,17 +789,17 @@ class ChroniclePanel extends PluginPanel
 		if (stalled == null && capture == null)
 		{
 			band.setVisible(false);
-			bandFixes = false;
+			bandClickable = false;
 			return;
 		}
 		boolean red = stalled != null;
 		Color ink = red ? ColorScheme.PROGRESS_ERROR_COLOR : ACCENT_LIFETIME;
-		bandFixes = !red;
+		bandClickable = !red;
 		for (MouseListener l : band.getMouseListeners())
 		{
 			band.removeMouseListener(l);
 		}
-		if (bandFixes)
+		if (bandClickable)
 		{
 			band.addMouseListener(clicker(() ->
 			{
@@ -813,7 +813,7 @@ class ChroniclePanel extends PluginPanel
 		band.setBackground(wash(ink));
 		band.setOpaque(true);
 		band.setToolTipText(red ? stalled : captureWhy);
-		band.setCursor(bandFixes
+		band.setCursor(bandClickable
 			? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
 			: Cursor.getDefaultCursor());
 		band.setVisible(true);
@@ -975,7 +975,7 @@ class ChroniclePanel extends PluginPanel
 		return slot;
 	}
 
-	private void leaveSentPage()
+	private void closePages()
 	{
 		allTrackers = false;
 		showInfo = false;
@@ -983,9 +983,9 @@ class ChroniclePanel extends PluginPanel
 		showCalendar = false;
 	}
 
-	private void leaveAll()
+	private void closeAll()
 	{
-		leaveSentPage();
+		closePages();
 		detailItem = null;
 		detailSource = null;
 		detailSkill = null;
@@ -995,14 +995,14 @@ class ChroniclePanel extends PluginPanel
 
 	void openRecords()
 	{
-		leaveAll();
+		closeAll();
 		showRecords = true;
 		rebuild();
 	}
 
 	void openCalendar()
 	{
-		leaveAll();
+		closeAll();
 		showCalendar = true;
 		calendarMonth = YearMonth.from(histCursor);
 		rebuild();
@@ -1010,7 +1010,7 @@ class ChroniclePanel extends PluginPanel
 
 	void openItem(String name)
 	{
-		leaveSentPage();
+		closePages();
 		pushDetail();
 		detailItem = name;
 		detailSource = null;
@@ -1020,14 +1020,14 @@ class ChroniclePanel extends PluginPanel
 
 	void openInfo()
 	{
-		leaveAll();
+		closeAll();
 		showInfo = true;
 		rebuild();
 	}
 
 	void openAllTrackers()
 	{
-		leaveAll();
+		closeAll();
 		allTrackers = true;
 		rebuild();
 	}
@@ -1046,14 +1046,14 @@ class ChroniclePanel extends PluginPanel
 
 	void openSkill(String craft)
 	{
-		leaveAll();
+		closeAll();
 		detailSkill = craft;
 		rebuild();
 	}
 
 	void openSource(String name)
 	{
-		leaveSentPage();
+		closePages();
 		pushDetail();
 		detailSource = name;
 		detailItem = null;

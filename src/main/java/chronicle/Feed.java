@@ -226,13 +226,13 @@ final class Feed
 		return out;
 	}
 
-	private Map<String, Long> landed;
+	private Map<String, Long> slotDates;
 
-	Map<String, Long> landed()
+	Map<String, Long> slotDates()
 	{
-		if (landed == null)
+		if (slotDates == null)
 		{
-			landed = new LinkedHashMap<>();
+			slotDates = new LinkedHashMap<>();
 			for (JsonObject e : all())
 			{
 				if (!"COLLECTION".equals(typeOf(e)))
@@ -242,12 +242,12 @@ final class Feed
 				JsonObject d = obj(e, "data");
 				if (has(d, "itemName"))
 				{
-					landed.put(low(d.get("itemName").getAsString()),
+					slotDates.put(low(d.get("itemName").getAsString()),
 						safeLong(e.get("ts")));
 				}
 			}
 		}
-		return landed;
+		return slotDates;
 	}
 
 	private Map<String, JsonObject> records;

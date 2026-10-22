@@ -214,7 +214,7 @@ final class SheetPage
 			figure = named > 0 ? named : panel.build.kills.bossKills(source);
 			hover = tip(label, "Count", fmt(figure));
 		}
-		panel.art.wearSprite(icon, activitySprite(label), ICON_W, ICON_H);
+		panel.art.loadSprite(icon, activitySprite(label), ICON_W, ICON_H);
 		cell.setToolTipText(hover);
 		if (!page.isEmpty())
 		{
@@ -301,7 +301,7 @@ final class SheetPage
 		JLabel icon = new JLabel();
 		if (b.sprite > 0)
 		{
-			panel.art.wearSprite(icon, b.sprite, 24, 24);
+			panel.art.loadSprite(icon, b.sprite, 24, 24);
 		}
 		cell.add(icon, BorderLayout.WEST);
 

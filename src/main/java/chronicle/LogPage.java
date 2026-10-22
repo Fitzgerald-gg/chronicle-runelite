@@ -218,14 +218,14 @@ final class LogPage
 					spaced(drill, note("Click pet to see odds. Skilling odds are based "
 						+ "on current level."), 3);
 				}
-				Map<String, Long> landed = panel.build.feed.landed();
+				Map<String, Long> slotDates = panel.build.feed.slotDates();
 				for (int i = 0; i < slots.size(); i++)
 				{
 					String slot = slots.get(i);
 					JPanel r = row(slot, "",
 						lit[i] || known.get(low(slot)) != null
 							? ACCENT_SESSION : ACCENT_RED, true);
-					Long when = landed.get(low(slot));
+					Long when = slotDates.get(low(slot));
 					if (when != null)
 					{
 						r.setToolTipText(tip(slot, "Landed", dated(when)));
@@ -252,12 +252,12 @@ final class LogPage
 
 		if ("Other".equals(panel.clogTab))
 		{
-			List<String> strangers = book.strangers();
-			if (!strangers.isEmpty())
+			List<String> unknownPages = book.unknownPages();
+			if (!unknownPages.isEmpty())
 			{
 				p.add(vgap(6));
 				p.add(group("NEW SINCE THIS RELEASE"));
-				for (String pageName : strangers)
+				for (String pageName : unknownPages)
 				{
 					Map<String, Long> held = book.byPage.get(pageName);
 					Long kc = book.kcs.get(pageName);
@@ -266,7 +266,7 @@ final class LogPage
 							+ (kc != null && kc > 0 ? " \u00b7 " + fmt(kc) + " kc" : "")));
 				}
 				p.add(ghostRow("Chronicle has no slot list for "
-					+ (strangers.size() == 1 ? "this page" : "these pages")
+					+ (unknownPages.size() == 1 ? "this page" : "these pages")
 					+ " yet, so only what you hold is known.", ""));
 			}
 		}

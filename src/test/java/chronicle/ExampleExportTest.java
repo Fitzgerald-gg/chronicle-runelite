@@ -76,7 +76,7 @@ public class ExampleExportTest
 	private static Map<String, String> notState()
 	{
 		Map<String, String> m = new LinkedHashMap<>();
-		for (String n : new String[]{"build", "aboveBoard", "bandFixes",
+		for (String n : new String[]{"build", "subBar", "bandClickable",
 			"grindsCache", "journeyCache", "consumVals",
 			"resourcesDropped", "historySpine", "historyJourney",
 			"historyDay", "historyFeedTs", "historyEpoch", "searchFirst", "measuredSince"})
@@ -88,7 +88,7 @@ public class ExampleExportTest
 		{
 			m.put(n, "DERIVED: whether a read is in flight, which the crawl never waits on");
 		}
-		for (String n : new String[]{"everShown", "staleWhileHidden", "keepScroll",
+		for (String n : new String[]{"everShown", "stale", "keepScroll",
 			"lastPointer", "lastBuildNanos", "lastBuildAt"})
 		{
 			m.put(n, "PLUMBING: about drawing, not about where the reader is");

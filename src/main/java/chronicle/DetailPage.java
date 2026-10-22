@@ -459,7 +459,7 @@ final class DetailPage
 		{
 			return;
 		}
-		Map<String, Long> rows = panel.build.kills.sayers(sr);
+		Map<String, Long> rows = panel.build.kills.killCountSources(sr);
 		boolean accounted = false;
 		for (Long v : rows.values())
 		{
