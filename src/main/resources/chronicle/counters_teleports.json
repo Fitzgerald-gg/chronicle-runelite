@@ -1,9 +1,4 @@
 {
- "_comment": [
-  "Read by MovementStatTracker. destinations: click-label or menu-row substring -> teleport counter key. The FIRST substring that occurs wins, so ORDER IS LOAD-BEARING: a substring that contains another comes first (ape atoll dungeon, west ardougne, fortis colosseum, house on the hill, draynor manor), a diary switch destination (grand exchange, seers, yanille) comes before its base town, barbarian before outpost, lithkren and fossil island before digsite, and the district tokens before kharedst.",
-  "Aliases where the nexus row and the spell or item name differ: marim (POH portal chamber), lunar isle, stony/icy basalt, teleport crystal, poh, duel arena and pvp arena (older wordings), dondakan (ring of wealth), eyrie (necklace of passage), slepe (Drakan's medallion), seed pod (its option is Commune), chronicle (lands at the Champions' Guild door), and capes whose own name carries the destination.",
-  "jewellery: the teleport-jewellery family, matched by item name."
- ],
  "destinations": {
   "ape atoll dungeon": "teleportsApeAtollDungeon",
   "ape atoll": "teleportsApeAtoll",

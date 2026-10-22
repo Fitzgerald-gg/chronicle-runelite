@@ -1,25 +1,4 @@
 {
- "_comment": {
-  "file": "Read by StatRegistry. What each table is for is said where the Java declares it; the notes below are about particular rows.",
-  "livingFlat": "potionsConsumedValue and foodConsumedValue are the same spend split by what it went on, written at the bite and the dose.",
-  "hide": "The Food and Potions fold heads carry foodConsumedValue and potionsConsumedValue beside their counts. bowsFletched predates bowsStrung and still sits in older journals; nothing writes it now, but family() would give it a row if it showed up.",
-  "skills": [
-   "Each craft is [name, suffixes, floors, named keys]. matchedSuffix takes the first hit, so this order and the order inside each suffix list are load-bearing (FailedPickpockets before Pickpockets).",
-   "Woodcutting: the two Vampyrium keys are chat-counted; a tap is a chop with a bucket.",
-   "Firemaking sits above Cooking so LogsBurned is claimed before the broader Burned sweep could take a log for a burnt meal. Cooking: a burn is typed by the food the chat line names, under its own floor.",
-   "Herblore: Sacked is the herb sack, typed by herb off the chat line.",
-   "Fletching: logsFletched is the total the typed logs reconcile to, not a row beside them: it counts every log cut to a bow, and mapleLogsFletched and its siblings are that same count typed by log.",
-   "Crafting: Tanned is the tanner's line, typed by hide; no xp behind it.",
-   "Runecraft: essenceCrafted is claimed by name so the Runecrafted sweep leaves it alone: it counts crafts, not runes, and can't reconcile against the floor.",
-   "Farming: Planted is one to a patch; Harvested is one to an item pulled out of it. Hunter's explicit claim on herbiboarsHarvested keeps Farming's Harvested sweep off it."
-  ],
-  "labels": [
-   "resourcesGatheredValue is short because this row carries two figures (gathered and dropped) and they have to fit the 214px panel.",
-   "portTasksCompleted: courier and bounty tasks both land on this one key. essenceCrafted: the essence spent, not the runes it came back as.",
-   "slayerKills is read off the slayer journey on the History tab alone, and petsObtained through levelsGained are counted off the feed's dated entries there; none is ever on the spine.",
-   "lootLeftKills, the kills that left at least one stack, is never a line of its own: it is what Drops taken subtracts. lootKept is derived on the History tab from lootValue and lootLeftValue, and dropsTaken from dropsReceived and lootLeftKills on the History tab and the Home strip alike; they are named here so every figure on that tab reads off one table."
-  ]
- },
  "combat": [
   "damageDealt",
   "damageTaken",

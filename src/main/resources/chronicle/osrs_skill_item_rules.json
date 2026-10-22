@@ -1,5 +1,4 @@
 {
- "_comment": "Chat-free PRODUCTION-skill item\u2192counter rules. Per skill, ORDERED, first match wins. Resolved from the gained itemId (name via item_mapping). NO generic floor \u2014 the produced item IS the identity. match types: endswith|contains (compared LOWERCASE) | regex|in_set (compared ORIGINAL case) | default. qty:true multiplies by the gained quantity (arrows/bolts/darts made in batches). No itemId / no match \u2192 skill_unmapped (uncounted, surfaces for a later rule). Hot-reloaded by mtime. Verified vs OSRS Wiki 2026-07-19. Residual gaps (\u2192 unmapped): fired pottery, amulet stringing, non-metal-set arrows, snakeskin, farming harvest, hunter byproducts (feathers/bones \u2014 deliberately excluded so catches count once). SMITHING is NOT here \u2014 it is derived per-metal in code (_skill_smithing): <metal>BarsSmelted / <metal>ItemsSmithed, aligned to the ore tokens; non-metal products \u2192 itemsSmithed catch-all.",
  "FLETCHING": [
   {
    "match": "in_set",
@@ -10,7 +9,6 @@
    "qty": true
   },
   {
-   "_comment": "Achey-log shafts (1.6 xp/shaft): the code Arrow-shaft fast-path is exact-name so these fell through.",
    "match": "in_set",
    "value": [
     "Ogre arrow shaft"
@@ -19,7 +17,6 @@
    "qty": true
   },
   {
-   "_comment": "Knife on logs, 15 shafts / 5 xp per log.",
    "match": "in_set",
    "value": [
     "Javelin shaft"
@@ -36,7 +33,6 @@
    "qty": true
   },
   {
-   "_comment": "Feathering step of the chompy chain (5.4 xp): mirrors Headless arrow. MUST sit before the endswith 'ogre arrow' rule, which still catches the finished Ogre arrow.",
    "match": "in_set",
    "value": [
     "Flighted ogre arrow"
@@ -81,7 +77,6 @@
    "qty": true
   },
   {
-   "_comment": "Grapple tip + mithril bolt, 11 xp; the roped final step gives 0 xp so never fires.",
    "match": "in_set",
    "value": [
     "Mith grapple (unf)"
@@ -95,7 +90,6 @@
    "qty": true
   },
   {
-   "_comment": "Chisel on wolf bones (chompy chain) rides the tip-cutting method key.",
    "match": "in_set",
    "value": [
     "Wolfbone arrowtips"
@@ -125,13 +119,11 @@
    "key": "crossbowsStrung"
   },
   {
-   "_comment": "Incomplete/Unstrung/finished light+heavy ballista.",
    "match": "contains",
    "value": "ballista",
    "key": "ballistaeFletched"
   },
   {
-   "_comment": "Chisel on tanzanite fang, 120 xp.",
    "match": "in_set",
    "value": [
     "Toxic blowpipe",
@@ -147,7 +139,6 @@
  ],
  "CRAFTING": [
   {
-   "_comment": "Crushed gem = failed semi-precious cut - still a cutting action.",
    "match": "in_set",
    "key": "gemsCut",
    "value": [
@@ -165,7 +156,6 @@
    ]
   },
   {
-   "_comment": "Chisel on amethyst: tips x5-15 per gem, 60 xp; contains is rename-proof.",
    "match": "contains",
    "value": "amethyst",
    "key": "amethystCut",
@@ -188,7 +178,6 @@
    ]
   },
   {
-   "_comment": "Furnace glass-making, 20 xp; qty for Superglass Make batches.",
    "match": "in_set",
    "value": [
     "Molten glass"
@@ -202,19 +191,16 @@
    "key": "dhideCrafted"
   },
   {
-   "_comment": "Snakeskin bandana/body/boots/chaps/vambraces/shield.",
    "match": "contains",
    "value": "snakeskin",
    "key": "snakeskinCrafted"
   },
   {
-   "_comment": "Broodoo shields: tribal mask + 2 snakeskins, 100 xp.",
    "match": "contains",
    "value": "broodoo",
    "key": "snakeskinCrafted"
   },
   {
-   "_comment": "Yak-hide armour - hide-working, joins the leather family.",
    "match": "contains",
    "value": "yak-hide",
    "key": "leatherCrafted"
@@ -235,13 +221,11 @@
    ]
   },
   {
-   "_comment": "Xerician hat/top/robe from Xerician fabric.",
    "match": "contains",
    "value": "xerician",
    "key": "xericianCrafted"
   },
   {
-   "_comment": "Slayer ring (8)/(eternal) end in a charge suffix so the ' ring' rule misses them.",
    "match": "contains",
    "value": "slayer ring",
    "key": "jewelleryCrafted"
@@ -267,7 +251,6 @@
    "key": "jewelleryCrafted"
   },
   {
-   "_comment": "Gold-bar mould product like rings.",
    "match": "in_set",
    "value": [
     "Gold tiara"
@@ -275,14 +258,12 @@
    "key": "jewelleryCrafted"
   },
   {
-   "_comment": "Stringing (manual or String Jewellery), 4 xp. Must sit AFTER the 'amulet (u)' rule.",
    "match": "endswith",
    "value": " amulet",
    "key": "amuletsStrung",
    "qty": true
   },
   {
-   "_comment": "Strung holy symbol, 4 xp.",
    "match": "in_set",
    "value": [
     "Unblessed symbol"
@@ -290,7 +271,6 @@
    "key": "amuletsStrung"
   },
   {
-   "_comment": "Silver-bar mould casting.",
    "match": "in_set",
    "value": [
     "Tiara",
@@ -301,7 +281,6 @@
    "key": "silverCrafted"
   },
   {
-   "_comment": "50 xp, batch of 10 per bar.",
    "match": "in_set",
    "value": [
     "Silver bolts (unf)"
@@ -310,14 +289,12 @@
    "qty": true
   },
   {
-   "_comment": "qty: one soft clay wheels FOUR Unfired cups in one action.",
    "match": "contains",
    "value": "unfired",
    "key": "potteryMade",
    "qty": true
   },
   {
-   "_comment": "Pottery-oven firing stage. Fired plant pot is 'Empty plant pot', fired cup 'Empty cup'.",
    "match": "in_set",
    "value": [
     "Pot",
@@ -336,13 +313,11 @@
    "key": "battlestavesCrafted"
   },
   {
-   "_comment": "Clockwork-free hammer+chisel birdhouses.",
    "match": "endswith",
    "value": "bird house",
    "key": "birdHousesCrafted"
   },
   {
-   "_comment": "Rope = yak hair at the wheel; yarns are the sailing-era wheel products.",
    "match": "in_set",
    "key": "itemsSpun",
    "value": [
@@ -357,7 +332,6 @@
    ]
   },
   {
-   "_comment": "Loom products.",
    "match": "in_set",
    "key": "itemsWoven",
    "value": [
@@ -373,7 +347,6 @@
  ],
  "HERBLORE": [
   {
-   "_comment": "Jungle Potion / Zogre herbs clean at 2.5 xp under their bare names. CoX herbs deliberately excluded - raid-internal.",
    "match": "in_set",
    "key": "herbsCleaned",
    "value": [
@@ -400,20 +373,17 @@
    ]
   },
   {
-   "_comment": "One action = 15 tars, one xp drop.",
    "match": "endswith",
    "value": " tar",
    "key": "herbTarsMade",
    "qty": true
   },
   {
-   "_comment": "The vial step pays no xp, so no tuple ever reaches this row; SkillDeriver.applyChat counts the chat line instead. Kept so the weapon poison rule below still sees '(unf)' poisons first.",
    "match": "endswith",
    "value": " (unf)",
    "key": "unfinishedPotionsMade"
   },
   {
-   "_comment": "Doseless so the [1-4] regex misses them. MUST sit after ' (unf)': 'Weapon poison(+) (unf)' is an unfinished potion.",
    "match": "contains",
    "value": "weapon poison",
    "key": "weaponPoisonsMade"
@@ -464,7 +434,6 @@
    ]
   },
   {
-   "_comment": "Net-trap catches (salamanders/swamp lizards): checking the trap returns the net/rope as the inventory gain, and the plugin captures THAT as the gained item, not the creature. A HUNTER xp drop gaining these only happens on a successful net-trap check, so it IS a catch.",
    "match": "in_set",
    "key": "creaturesTrapped",
    "value": [

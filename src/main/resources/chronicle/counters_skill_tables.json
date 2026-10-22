@@ -1,10 +1,4 @@
 {
- "_comment": {
-  "file": "Read by SkillDeriver. What each table is for is said where the Java declares it.",
-  "prayerBaseXp": "Ashes carry their scatter base and bones their bury base, written as the decimal the xp is. The empty key is plain Ashes.",
-  "reanimXp": "Keyed by the whole xp a reanimation pays, as written in decimal.",
-  "netTrap": "Keyed by the catch xp as a decimal, in the order the species are tried."
- },
  "smithOreAlias": {
   "adamant": "adamantite",
   "rune": "runite"

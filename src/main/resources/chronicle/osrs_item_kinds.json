@@ -1,5 +1,4 @@
 {
- "_comment": "Item name -> KIND, for the loot board's kind filter. ORDERED and the first match wins, compared case-insensitively against the display name; same matcher as osrs_skill_item_rules. The order is the whole trick: a name that reads as one kind and is another (Rune arrow, Crystal tool seed, Amulet of glory(6), Black mask (8), Rock-shell legs) is claimed by its real kind before the obvious rule can see it. Held against every item name in the cache; the traps are asserted in ItemKindsTest.",
  "_kinds": [
   "Runes",
   "Herbs",

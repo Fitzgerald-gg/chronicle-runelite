@@ -1,5 +1,4 @@
 {
- "_comment": "Read by FoodStatTracker. singleHpHeals: the consumables that heal exactly one hitpoint, matched as a substring of the menu target.",
  "singleHpHeals": [
   "Anchovies",
   "Cabbage",
