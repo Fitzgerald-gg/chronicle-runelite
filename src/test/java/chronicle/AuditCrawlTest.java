@@ -511,7 +511,7 @@ public class AuditCrawlTest
 		if (rosterKinds == null)
 		{
 			rosterKinds = new LinkedHashSet<>();
-			Method r = Kills.class.getDeclaredMethod("bossRoster", com.google.gson.Gson.class);
+			Method r = ChroniclePanel.class.getDeclaredMethod("bossRoster", com.google.gson.Gson.class);
 			r.setAccessible(true);
 			for (Object b : (List<?>) r.invoke(null, new com.google.gson.Gson()))
 			{
@@ -529,7 +529,7 @@ public class AuditCrawlTest
 		{
 			return;
 		}
-		Field po = Kills.class.getDeclaredField("PAYS_OUT");
+		Field po = ChroniclePanel.class.getDeclaredField("PAYS_OUT");
 		po.setAccessible(true);
 		List<String> paid = ((Map<String, List<String>>) po.get(null)).getOrDefault(boss, new ArrayList<>());
 		boolean own = LocalStore.kindOf(dest).equals(LocalStore.kindOf(boss))
@@ -672,7 +672,7 @@ public class AuditCrawlTest
 				: null;
 		}
 		Set<String> roster = new LinkedHashSet<>();
-		Method r = Kills.class.getDeclaredMethod("bossRoster", com.google.gson.Gson.class);
+		Method r = ChroniclePanel.class.getDeclaredMethod("bossRoster", com.google.gson.Gson.class);
 		r.setAccessible(true);
 		for (Object boss : (List<?>) r.invoke(null, new com.google.gson.Gson()))
 		{

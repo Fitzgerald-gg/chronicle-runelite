@@ -35,7 +35,6 @@ import javax.swing.Icon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import net.runelite.client.game.ItemManager;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class ExampleExportTest
@@ -43,8 +42,7 @@ public class ExampleExportTest
 	private static final int STATE_BUDGET =
 		Integer.getInteger("chronicle.exampleStates", 400);
 
-	@BeforeClass
-	public static void headless() throws Exception
+	private static void headless() throws Exception
 	{
 		System.setProperty("java.awt.headless", "true");
 		try
@@ -157,6 +155,7 @@ public class ExampleExportTest
 		{
 			return;
 		}
+		headless();
 		File out = new File(outDir);
 		File icons = new File(out, "icons");
 		icons.mkdirs();
@@ -507,20 +506,35 @@ public class ExampleExportTest
 			}
 			corpus.put("rows", rows);
 
-			ClogBook book = new ClogBook(plugin.clogSnapshot(), plugin.gson());
+			Method obtained = ChroniclePanel.class.getDeclaredMethod("obtained",
+				com.google.gson.JsonObject.class);
+			Method slotHeld = ChroniclePanel.class.getDeclaredMethod("slotHeld", String.class,
+				String.class, List.class, Class.forName("chronicle.ChroniclePanel$Obtained"),
+				java.util.Set.class);
+			Method sharedNames = ChroniclePanel.class.getDeclaredMethod(
+				"sharedSlotNames", Gson.class);
+			sharedNames.setAccessible(true);
+			java.util.Set<String> shared =
+				(java.util.Set<String>) sharedNames.invoke(null, plugin.gson());
+			Method taxonomy = ChroniclePanel.class.getDeclaredMethod("taxonomy", Gson.class);
+			obtained.setAccessible(true);
+			slotHeld.setAccessible(true);
+			taxonomy.setAccessible(true);
+			Object ob = obtained.invoke(null, plugin.clogSnapshot());
+			Map<String, Map<String, List<String>>> tax =
+				(Map<String, Map<String, List<String>>>) taxonomy.invoke(null, plugin.gson());
 			List<Object> slots = new ArrayList<>();
 			java.util.Set<String> seenSlot = new java.util.LinkedHashSet<>();
-			for (Map<String, List<String>> tab : book.tax.values())
+			for (Map<String, List<String>> tab : tax.values())
 			{
 				for (Map.Entry<String, List<String>> page : tab.entrySet())
 				{
-					boolean[] lit = book.lit(page.getKey(), page.getValue());
-					for (int i = 0; i < page.getValue().size(); i++)
+					for (String slot : page.getValue())
 					{
-						String slot = page.getValue().get(i);
 						if (seenSlot.add(slot))
 						{
-							boolean got = lit[i];
+							boolean got = (Boolean) slotHeld.invoke(null, slot, page.getKey(),
+								page.getValue(), ob, shared);
 							slots.add(java.util.Arrays.asList(slot, page.getKey(), got ? 1 : 0));
 						}
 					}
@@ -528,10 +542,16 @@ public class ExampleExportTest
 			}
 			corpus.put("slots", slots);
 
+			Method feedLine = ChroniclePanel.class.getDeclaredMethod("feedLine",
+				com.google.gson.JsonObject.class);
+			Method stamp = ChroniclePanel.class.getDeclaredMethod("stamp",
+				com.google.gson.JsonObject.class);
+			feedLine.setAccessible(true);
+			stamp.setAccessible(true);
 			List<Object> feed = new ArrayList<>();
 			for (com.google.gson.JsonObject e : plugin.feedNewest(500))
 			{
-				feed.add(java.util.Arrays.asList(Feed.line(e), Feed.stamp(e)));
+				feed.add(java.util.Arrays.asList(feedLine.invoke(null, e), stamp.invoke(null, e)));
 			}
 			corpus.put("feed", feed);
 
