@@ -34,6 +34,7 @@ import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Item;
+import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
@@ -57,6 +58,8 @@ import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -110,6 +113,38 @@ public class ChronicleEventCapture
 	// the tier is one word; the challenge is the rest of the line, trailing stop optional.
 	static final Pattern COMBAT_TASK = Pattern.compile(
 		"^Congratulations, you've completed an? (?<grade>\\w+) combat task: (?<challenge>.+?)\\.?$");
+	// The Rogues' Chest gives one item per opening, named in this line, in a fixed
+	// amount set by the Wilderness Diary tier. An open looting bag swallows it
+	// without the inventory change the Loot Tracker watches for, so the line and
+	// the table below are the only record of it.
+	private static final Pattern ROGUES_CHEST = Pattern.compile("You find (?:a|some) (.+) inside\\.");
+	private static final String ROGUES_CHEST_NAME = "Rogues' Chest";
+	private static final int ROGUES_REPORT_TICKS = 6;
+	private static final Map<String, int[]> ROGUES_LOOT = new HashMap<>();
+
+	static
+	{
+		// item, medium-diary amount, hard-diary amount. Uncut diamonds also come as
+		// 5 or 6, which the line can't tell apart, so they take the commoner 3.
+		ROGUES_LOOT.put("nature runes", new int[]{ItemID.NATURERUNE, 40, 50});
+		ROGUES_LOOT.put("red spider eggs", new int[]{ItemID.RED_SPIDERS_EGGS, 6, 7});
+		ROGUES_LOOT.put("law runes", new int[]{ItemID.LAWRUNE, 40, 50});
+		ROGUES_LOOT.put("coal", new int[]{ItemID.COAL, 20, 25});
+		ROGUES_LOOT.put("coins", new int[]{ItemID.COINS, 4500, 5625});
+		ROGUES_LOOT.put("vile ashes", new int[]{ItemID.VILE_ASHES, 15, 18});
+		ROGUES_LOOT.put("uncut diamonds", new int[]{ItemID.UNCUT_DIAMOND, 3, 3});
+		ROGUES_LOOT.put("uncut emeralds", new int[]{ItemID.UNCUT_EMERALD, 10, 12});
+		ROGUES_LOOT.put("blighted ancient ice sacks", new int[]{ItemID.BLIGHTED_SACK_ICEBARRAGE, 13, 16});
+		ROGUES_LOOT.put("iron ore", new int[]{ItemID.IRON_ORE, 40, 50});
+		ROGUES_LOOT.put("chaos runes", new int[]{ItemID.CHAOSRUNE, 60, 75});
+		ROGUES_LOOT.put("death runes", new int[]{ItemID.DEATHRUNE, 50, 62});
+		ROGUES_LOOT.put("blighted manta rays", new int[]{ItemID.BLIGHTED_MANTARAY, 20, 25});
+		ROGUES_LOOT.put("blighted anglerfish", new int[]{ItemID.BLIGHTED_ANGLERFISH, 15, 18});
+		ROGUES_LOOT.put("uncut sapphires", new int[]{ItemID.UNCUT_SAPPHIRE, 15, 18});
+		ROGUES_LOOT.put("prayer potion", new int[]{ItemID._2DOSEPRAYERRESTORE, 1, 1});
+		ROGUES_LOOT.put("dragonstones", new int[]{ItemID.DRAGONSTONE, 2, 2});
+	}
+
 	private static final Pattern COMBAT_TASK_POINTS = Pattern.compile("\\s*\\(\\d+ points?\\)$");
 
 	// "You have completed 87 hard Treasure Trails." Explicit tier set, required closing
@@ -359,9 +394,16 @@ public class ChronicleEventCapture
 		return slayerService != null;
 	}
 
+	// the chest item a line named, waiting to see if the Loot Tracker reports it
+	private ItemStack roguesPending;
+	private int roguesPendingTick = -1;
+	private int roguesReportTick = -1;
+
 	// clear per-login state so nothing from the last session leaks into this one.
 	void reset()
 	{
+		roguesPending = null;
+		roguesReportTick = -1;
 		knownLevels.clear();
 		pendingLevels.clear();
 		recentKc.clear();
@@ -937,17 +979,73 @@ public class ChronicleEventCapture
 		{
 			return;
 		}
+		// The Loot Tracker reads chest loot off the inventory, so opening or closing
+		// the looting bag (it swaps item ids) or drinking a dose (a vial appears) in
+		// that window passes for loot. A Rogues' Chest keeps only what its table can
+		// give; every chest drops the looting bag.
+		boolean rogues = ROGUES_CHEST_NAME.equals(event.getName());
+		List<ItemStack> items = new ArrayList<>();
+		for (ItemStack it : event.getItems())
+		{
+			int id = it.getId();
+			boolean keep = rogues ? inRoguesTable(unnoted(id))
+				: id != ItemID.LOOTING_BAG && id != ItemID.LOOTING_BAG_OPEN;
+			if (keep)
+			{
+				items.add(it);
+			}
+		}
+		if (items.isEmpty())
+		{
+			return;   // nothing real; a pending chest line still records its item
+		}
+		if (rogues)
+		{
+			roguesPending = null;
+			roguesReportTick = client.getTickCount();
+		}
+		emitLoot(event.getName(), event.getType(), items);
+	}
+
+	private void emitLoot(String source, LootRecordType type, Collection<ItemStack> items)
+	{
 		JsonObject data = new JsonObject();
-		data.addProperty("source", event.getName());
-		data.addProperty("category", event.getType() != null ? event.getType().name() : "EVENT");
-		Integer kc = recentKc.get(cleanKey(event.getName()));
+		data.addProperty("source", source);
+		data.addProperty("category", type != null ? type.name() : "EVENT");
+		Integer kc = recentKc.get(cleanKey(source));
 		if (kc != null)
 		{
 			data.addProperty("killCount", kc);
 		}
 		attachKillTime(data);
-		data.add("items", itemsToJson(event.getItems()));
+		data.add("items", itemsToJson(items));
 		emit("LOOT", data);
+	}
+
+	private static boolean inRoguesTable(int id)
+	{
+		for (int[] row : ROGUES_LOOT.values())
+		{
+			if (row[0] == id)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private int unnoted(int id)
+	{
+		ItemComposition c = client.getItemDefinition(id);
+		return c != null && c.getNote() != -1 ? c.getLinkedNoteId() : id;
+	}
+
+	// A chest line the Loot Tracker never reported went into the looting bag.
+	private void flushRoguesChest()
+	{
+		ItemStack item = roguesPending;
+		roguesPending = null;
+		emitLoot(ROGUES_CHEST_NAME, LootRecordType.EVENT, Collections.singletonList(item));
 	}
 
 	// Annotate a kill's loot with the boss-timer chat seen moments before. Pairing is
@@ -1254,6 +1352,23 @@ public class ChronicleEventCapture
 		}
 		String msg = Text.removeTags(message.getMessage());
 
+		Matcher rogues = ROGUES_CHEST.matcher(msg);
+		int[] row = rogues.matches() ? ROGUES_LOOT.get(rogues.group(1)) : null;
+		if (row != null && client.getVarbitValue(VarbitID.INSIDE_WILDERNESS) == 1)
+		{
+			if (roguesReportTick != client.getTickCount())
+			{
+				if (roguesPending != null)
+				{
+					flushRoguesChest();
+				}
+				boolean hard = client.getVarbitValue(VarbitID.WILDERNESS_DIARY_HARD_COMPLETE) == 1;
+				roguesPending = new ItemStack(row[0], hard ? row[2] : row[1]);
+				roguesPendingTick = client.getTickCount();
+			}
+			return;
+		}
+
 		// A pickpocket line only marks its tick, for onServerNpcLoot. The PICKPOCKET
 		// entry itself arrives from the Loot Tracker through onLootReceived.
 		if (PICKPOCKET.matcher(msg).matches())
@@ -1520,6 +1635,10 @@ public class ChronicleEventCapture
 		reconcileKillLoot();
 		sweepTimedOutLoot();
 		flushUntakenLoot();
+		if (roguesPending != null && client.getTickCount() - roguesPendingTick > ROGUES_REPORT_TICKS)
+		{
+			flushRoguesChest();
+		}
 
 		// expire a pet prime that never got a name.
 		if (petPendingTicks >= 0 && ++petPendingTicks > 3)
