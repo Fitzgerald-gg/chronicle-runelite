@@ -293,4 +293,39 @@ public class LootTest
 		assertEquals(50, qty(chestItems(), ItemID.LAWRUNE));
 		assertEquals(25, qty(chestItems(), ItemID.COAL));
 	}
+
+	@Test
+	public void aClosedBagGivesTheExactDiamondsAndAStrayInventoryChangeIsNotChestLoot()
+	{
+		h.noted(ItemID.UNCUT_DIAMOND + 1, ItemID.UNCUT_DIAMOND);
+		wilderness(true).chat("You find some uncut diamonds inside.").tick();
+		h.loot("Rogues' Chest", LootRecordType.EVENT, ItemID.UNCUT_DIAMOND + 1, 6).ticks(8);
+		assertEquals(1, chestLoots());
+		assertEquals(6, qty(chestItems(), ItemID.UNCUT_DIAMOND + 1));
+		h.chat("You find some uncut diamonds inside.").tick();
+		h.loot("Rogues' Chest", LootRecordType.EVENT, ItemID._2DOSEPRAYERRESTORE, 1).ticks(8);
+		assertEquals(2, chestLoots());
+		assertEquals(3, qty(chestItems(), ItemID.UNCUT_DIAMOND));
+		assertEquals(0, qty(chestItems(), ItemID._2DOSEPRAYERRESTORE));
+	}
+
+	@Test
+	public void aReportAfterTheLineWasFiledIsNotCountedAgain()
+	{
+		wilderness(true).chat("You find some law runes inside.").ticks(8);
+		h.loot("Rogues' Chest", LootRecordType.EVENT, ItemID.LAWRUNE, 50).ticks(2);
+		assertEquals(1, chestLoots());
+		assertEquals(50, qty(chestItems(), ItemID.LAWRUNE));
+	}
+
+	@Test
+	public void anOpeningStillWaitingWhenThePlayerHopsOrLogsOutIsKept()
+	{
+		wilderness(true).chat("You find some uncut diamonds inside.").tick();
+		h.state(GameState.HOPPING).state(GameState.LOGGED_IN).tick();
+		assertEquals(1, chestLoots());
+		h.chat("You find some coal inside.").tick().logout().login().ticks(2);
+		assertEquals(2, chestLoots());
+		assertEquals(25, qty(chestItems(), ItemID.COAL));
+	}
 }

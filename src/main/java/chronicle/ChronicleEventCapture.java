@@ -260,12 +260,12 @@ public class ChronicleEventCapture
 
 	private ItemStack roguesPending;
 	private int roguesPendingTick = -1;
-	private int roguesReportTick = -1;
+	private String roguesOwner;
+	private boolean roguesCarried;
 
 	void reset()
 	{
-		roguesPending = null;
-		roguesReportTick = -1;
+		roguesCarried = roguesPending != null;
 		knownLevels.clear();
 		pendingLevels.clear();
 		recentKc.clear();
@@ -693,11 +693,15 @@ public class ChronicleEventCapture
 			return;
 		}
 		boolean rogues = ROGUES_CHEST_NAME.equals(event.getName());
+		if (rogues && roguesPending == null)
+		{
+			return;
+		}
 		List<ItemStack> items = new ArrayList<>();
 		for (ItemStack it : event.getItems())
 		{
 			int id = it.getId();
-			if (rogues ? inRoguesTable(unnoted(id)) : id != ItemID.LOOTING_BAG && id != ItemID.LOOTING_BAG_OPEN)
+			if (rogues ? unnoted(id) == roguesPending.getId() : id != ItemID.LOOTING_BAG && id != ItemID.LOOTING_BAG_OPEN)
 			{
 				items.add(it);
 			}
@@ -709,7 +713,6 @@ public class ChronicleEventCapture
 		if (rogues)
 		{
 			roguesPending = null;
-			roguesReportTick = client.getTickCount();
 		}
 		emitLoot(event.getName(), event.getType(), items);
 	}
@@ -723,11 +726,6 @@ public class ChronicleEventCapture
 		emit("LOOT", data);
 	}
 
-	private static boolean inRoguesTable(int id)
-	{
-		return ROGUES_LOOT.values().stream().anyMatch(row -> row[0] == id);
-	}
-
 	private int unnoted(int id)
 	{
 		ItemComposition c = client.getItemDefinition(id);
@@ -736,9 +734,18 @@ public class ChronicleEventCapture
 
 	private void flushRoguesChest()
 	{
+		String who = localName();
+		if (who == null || !localStore.isReadyFor(who))
+		{
+			return;
+		}
 		ItemStack item = roguesPending;
 		roguesPending = null;
-		emitLoot(ROGUES_CHEST_NAME, LootRecordType.EVENT, Collections.singletonList(item));
+		roguesCarried = false;
+		if (who.equals(roguesOwner))
+		{
+			emitLoot(ROGUES_CHEST_NAME, LootRecordType.EVENT, Collections.singletonList(item));
+		}
 	}
 
 	private void addLoot(JsonObject data, String source, Collection<ItemStack> items)
@@ -1031,16 +1038,14 @@ public class ChronicleEventCapture
 		int[] row = rogues.matches() ? ROGUES_LOOT.get(rogues.group(1)) : null;
 		if (row != null && client.getVarbitValue(VarbitID.INSIDE_WILDERNESS) == 1)
 		{
-			if (roguesReportTick != client.getTickCount())
+			if (roguesPending != null)
 			{
-				if (roguesPending != null)
-				{
-					flushRoguesChest();
-				}
-				boolean hard = client.getVarbitValue(VarbitID.WILDERNESS_DIARY_HARD_COMPLETE) == 1;
-				roguesPending = new ItemStack(row[0], hard ? row[2] : row[1]);
-				roguesPendingTick = client.getTickCount();
+				flushRoguesChest();
 			}
+			boolean hard = client.getVarbitValue(VarbitID.WILDERNESS_DIARY_HARD_COMPLETE) == 1;
+			roguesPending = new ItemStack(row[0], hard ? row[2] : row[1]);
+			roguesPendingTick = client.getTickCount();
+			roguesOwner = localName();
 			return;
 		}
 
@@ -1202,7 +1207,8 @@ public class ChronicleEventCapture
 	public void onGameTick(GameTick tick)
 	{
 		reconcileKillLoot();
-		if (roguesPending != null && client.getTickCount() - roguesPendingTick > ROGUES_REPORT_TICKS)
+		if (roguesPending != null
+			&& (roguesCarried || client.getTickCount() - roguesPendingTick > ROGUES_REPORT_TICKS))
 		{
 			flushRoguesChest();
 		}
