@@ -17,7 +17,6 @@ import chronicle.LocalStore.SlayerTask;
 import chronicle.LocalStore.SourceRow;
 import chronicle.LocalStore.UntakenRow;
 import chronicle.Period.Span;
-import chronicle.counters.ExperienceStatTracker;
 import chronicle.counters.StatKeys;
 import chronicle.panel.HistoryProgress;
 import chronicle.panel.StatRegistry;
@@ -40,10 +39,8 @@ import java.awt.Rectangle;
 import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseListener;
 import java.awt.image.BufferedImage;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.AbstractMap;
@@ -54,7 +51,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -111,7 +107,6 @@ import net.runelite.client.util.ImageUtil;
 import static chronicle.Copy.COPY_MOST;
 import static chronicle.Copy.copyPicture;
 import static chronicle.Copy.stripChrome;
-import static chronicle.Feed.filedAt;
 import static chronicle.Feed.most;
 import static chronicle.Feed.newestTs;
 import static chronicle.Feed.typeOf;
@@ -133,7 +128,6 @@ import static chronicle.Kit.ROW_CAP;
 import static chronicle.Kit.TILE_LIT;
 import static chronicle.Kit.TIP_CLOSE;
 import static chronicle.Kit.TIP_OPEN;
-import static chronicle.Kit.boardRowRoom;
 import static chronicle.Kit.card;
 import static chronicle.Kit.cardPlain;
 import static chronicle.Kit.chaseRoom;
@@ -171,9 +165,7 @@ import static chronicle.Kit.value;
 import static chronicle.Kit.vgap;
 import static chronicle.Kit.wash;
 import static chronicle.Kit.worthRow;
-import static chronicle.Kit.wrapClauses;
 import static chronicle.LocalStore.kindOf;
-import static chronicle.Period.DAY;
 import static chronicle.Period.FULL_DAY;
 import static chronicle.Period.TASK_DAY;
 import static chronicle.Period.dayOf;
@@ -187,7 +179,6 @@ import static chronicle.Text.gps;
 import static chronicle.Text.hoursMinutes;
 import static chronicle.Text.named;
 import static chronicle.Text.pb;
-import static chronicle.Text.plural;
 import static chronicle.Text.qtyGp;
 import static chronicle.Text.rateText;
 import static chronicle.Text.share;
@@ -197,8 +188,6 @@ import static chronicle.panel.StatRegistry.prettify;
 
 class ChroniclePanel extends PluginPanel
 {
-	private static final DateTimeFormatter CLOCK =
-		DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
 	enum View
 	{
 		HOME, DROPS, SLAYER, LOG, STATS, HISTORY, JOURNAL, KILLS, SHEET, RECAP
@@ -227,6 +216,8 @@ class ChroniclePanel extends PluginPanel
 	final SkillIconManager skillIcons;
 	private final GrindBook grindBook;
 	Build build;
+	final NowPage now = new NowPage(this);
+	final JournalPage journal = new JournalPage(this);
 	final RecapPage recap = new RecapPage(this);
 	final RecordsPage records = new RecordsPage(this);
 	final SearchPage search = new SearchPage(this);
@@ -429,7 +420,7 @@ class ChroniclePanel extends PluginPanel
 		return strip;
 	}
 
-	private JLabel pill(String name, boolean on, int side, String tip, Runnable pick)
+	JLabel pill(String name, boolean on, int side, String tip, Runnable pick)
 	{
 		JLabel pill = new JLabel(name, JLabel.CENTER);
 		pill.setOpaque(true);
@@ -1206,12 +1197,12 @@ class ChroniclePanel extends PluginPanel
 			case HISTORY:
 				return buildHistory();
 			case JOURNAL:
-				return buildJournal();
+				return journal.buildJournal();
 			case RECAP:
 				return recap.buildRecap();
 			case HOME:
 			default:
-				return buildHome();
+				return now.buildHome();
 		}
 	}
 
@@ -1221,23 +1212,6 @@ class ChroniclePanel extends PluginPanel
 	{
 		drillShown.keySet().removeIf(k -> k.startsWith("search:"));
 		rebuild();
-	}
-
-	private static final String[] HOME_PINNED = {
-		"totalXpGained", "damageDealt", "consumedValue"
-	};
-
-	private static String homeLabel(String key)
-	{
-		switch (key)
-		{
-			case "totalXpGained":
-				return "Xp gained";
-			case "consumedValue":
-				return "Consumed";
-			default:
-				return StatRegistry.label(key);
-		}
 	}
 
 	private boolean bandFixes;
@@ -1277,17 +1251,7 @@ class ChroniclePanel extends PluginPanel
 		band.setVisible(true);
 	}
 
-	private static long splitOf(Map<String, Integer> sess)
-	{
-		long n = 0;
-		for (String k : DAMAGE_SPLIT)
-		{
-			n += sess.getOrDefault(k, 0);
-		}
-		return n;
-	}
-
-	private void foldHead(JPanel head, String fold, String tip)
+	void foldHead(JPanel head, String fold, String tip)
 	{
 		JLabel name = part(head, BorderLayout.CENTER);
 		if (foldOpen(fold))
@@ -1298,342 +1262,11 @@ class ChroniclePanel extends PluginPanel
 		folds(head, fold);
 	}
 
-	private void addXpBySkill(JPanel strip)
-	{
-		List<ExperienceStatTracker.SkillGain> gains = live.sessionSkillXp();
-		if (gains.isEmpty())
-		{
-			strip.add(ghostRow("no skill breakdown yet", ""));
-			return;
-		}
-		for (ExperienceStatTracker.SkillGain g : gains)
-		{
-			String right = "+" + gp(g.xp)
-				+ (g.perHour >= 0 ? " · " + gp(g.perHour) + "/h" : "");
-			JPanel r = row(g.skill.getName(), right);
-			r.setBorder(pad(1, 10, 1, 2));
-			strip.add(r);
-		}
-	}
-
-	private JPanel buildHome()
-	{
-		JPanel p = column();
-		String stalled = store.journalWarning();
-		if (stalled != null)
-		{
-			spaced(p, note(stalled));
-		}
-
-		ChronicleEventCapture.SlayerView task = live.slayerView();
-		if (task != null && live.slayerSeenThisSession())
-		{
-			addTaskCard(p, task, "Slayer task", ACCENT_SESSION);
-		}
-
-		long began = live.sessionStart();
-		long ran = live.sessionElapsedMinutes();
-		JPanel strip = began > 0 && ran > 0
-			? card("This session", "since " + CLOCK.format(Instant.ofEpochMilli(began))
-				+ " · " + hoursMinutes(ran))
-			: card("This session");
-		Map<String, Integer> sess = live.sessionView();
-		int mounted = 0;
-		Set<String> shownKeys = new HashSet<>();
-		for (String key : HOME_PINNED)
-		{
-			long v = sess.getOrDefault(key, 0);
-			if (v > 0)
-			{
-				boolean isXp = "totalXpGained".equals(key);
-				boolean isDamage = "damageDealt".equals(key) && splitOf(sess) > 0;
-				JPanel r = row(homeLabel(key),
-					StatRegistry.isGp(key) ? gps(v)
-						: (isXp ? "+" + gp(v) : fmt(v)),
-					ACCENT_SESSION);
-				if (isXp)
-				{
-					foldHead(r, FOLD_HOME_XP, "Each skill's xp and xp per hour this session");
-				}
-				if (isDamage)
-				{
-					foldHead(r, FOLD_HOME_DAMAGE, "The damage this session, by style");
-				}
-				strip.add(r);
-				if (isXp && foldOpen(FOLD_HOME_XP))
-				{
-					addXpBySkill(strip);
-				}
-				if (isDamage && foldOpen(FOLD_HOME_DAMAGE))
-				{
-					for (String split : DAMAGE_SPLIT)
-					{
-						long sv = sess.getOrDefault(split, 0);
-						if (sv > 0)
-						{
-							strip.add(row(StatRegistry.label(split), fmt(sv)));
-							mounted++;
-						}
-					}
-				}
-				shownKeys.add(key);
-				mounted++;
-			}
-		}
-		if (store.sessionLoots() > 0)
-		{
-			strip.add(row("Drops received",
-				store.sessionLoots() + " · " + gps(store.sessionLootValue()),
-				ACCENT_SESSION));
-			mounted++;
-			if (store.sessionUntakenKills() > 0)
-			{
-				strip.add(row("Drops taken",
-					fmt(Math.max(0, store.sessionLoots() - store.sessionUntakenKills())),
-					ACCENT_SESSION));
-				mounted++;
-			}
-		}
-		long[] untaken = store.sessionUntakenTally();
-		if (untaken[0] > 0)
-		{
-			strip.add(row("Left behind", qtyGp(untaken[0], untaken[1])));
-			mounted++;
-		}
-		mounted += addSittingFeats(strip);
-		mounted += addSessionMovers(strip, sessionDisplayCounters(), shownKeys);
-		if (mounted == 0)
-		{
-			strip.add(row("A fresh page", ""));
-		}
-		spaced(p, strip);
-
-		List<LocalStore.RecentDrop> recent = store.recentDrops();
-		if (!recent.isEmpty())
-		{
-			JPanel card = card("Recent drops");
-			JPanel grid = new JPanel(new GridLayout(0, 5, 3, 3));
-			grid.setBackground(DARKER);
-			grid.setAlignmentX(Component.LEFT_ALIGNMENT);
-			int shown = 0;
-			for (LocalStore.RecentDrop d : recent)
-			{
-				if (shown++ >= 10)
-				{
-					break;
-				}
-				grid.add(sprite(d.itemId, d.name, d.quantity));
-			}
-			card.add(grid);
-			spaced(p, card);
-		}
-
-		return p;
-	}
-
-	private static String parentOf(String key, Map<String, Integer> sess)
-	{
-		if (StatRegistry.isFloor(key))
-		{
-			return null;
-		}
-		String sec = StatRegistry.subgroup(key);
-		if (sec.isEmpty())
-		{
-			return null;
-		}
-		List<String> floors = StatRegistry.floorKeys(
-			sec.equals("Destinations") ? "Teleports" : sec);
-		for (String f : floors)
-		{
-			if (sess.getOrDefault(f, 0) > 0)
-			{
-				return f;
-			}
-		}
-		return null;
-	}
-
-	private int addSittingFeats(JPanel strip)
-	{
-		long since = live.sessionStart();
-		if (since <= 0)
-		{
-			return 0;
-		}
-		Map<String, Long> levels = new LinkedHashMap<>();
-		List<String> slots = new ArrayList<>();
-		List<String> pets = new ArrayList<>();
-		for (JsonObject e : build.feed.all())
-		{
-			if (safeLong(e.get("ts")) < since)
-			{
-				continue;
-			}
-			JsonObject d = obj(e, "data");
-			switch (typeOf(e))
-			{
-				case "LEVEL":
-					if (has(d, "skill") && has(d, "level"))
-					{
-						levels.merge(prettify(
-							low(d.get("skill").getAsString())),
-							safeLong(d.get("level")), Math::max);
-					}
-					break;
-				case "COLLECTION":
-					if (has(d, "itemName"))
-					{
-						slots.add(d.get("itemName").getAsString());
-					}
-					break;
-				case "PET":
-					if (has(d, "petName"))
-					{
-						pets.add(d.get("petName").getAsString());
-					}
-					break;
-				default:
-					break;
-			}
-		}
-		int mounted = 0;
-		if (!levels.isEmpty())
-		{
-			List<String> said = new ArrayList<>();
-			for (Entry<String, Long> l : levels.entrySet())
-			{
-				said.add(l.getKey() + " " + l.getValue());
-			}
-			strip.add(namedRow("Levels", said, ACCENT_SESSION));
-			mounted++;
-		}
-		if (!slots.isEmpty())
-		{
-			strip.add(namedRow(plural(slots.size(), "Log slot"), slots, ACCENT_SESSION));
-			mounted++;
-		}
-		if (!pets.isEmpty())
-		{
-			strip.add(namedRow(plural(pets.size(), "Pet"), pets, ACCENT_SESSION));
-			mounted++;
-		}
-		return mounted;
-	}
-
-	private JPanel namedRow(String label, List<String> names, Color color)
-	{
-		String right = names.size() <= 2 ? String.join(" · ", names) : "+" + names.size();
-		JPanel r = row(label, right, color);
-		r.setToolTipText(String.join(" · ", names));
-		return r;
-	}
-
-	private int addSessionMovers(JPanel strip, Map<String, Integer> sess,
-		Set<String> shownKeys)
-	{
-		Map<String, List<Entry<String, Long>>> byFamily = new LinkedHashMap<>();
-		Map<String, List<Entry<String, Long>>> under = new LinkedHashMap<>();
-		for (Entry<String, Integer> e : sess.entrySet())
-		{
-			String key = e.getKey();
-			if (e.getValue() <= 0 || shownKeys.contains(key) || StatRegistry.hidden(key)
-				|| DAMAGE_SPLIT.contains(key))
-			{
-				continue;
-			}
-			Entry<String, Long> moved =
-				new AbstractMap.SimpleEntry<>(key, (long) e.getValue());
-			String parent = parentOf(key, sess);
-			if (parent != null)
-			{
-				under.computeIfAbsent(parent, k -> new ArrayList<>()).add(moved);
-				continue;
-			}
-			byFamily.computeIfAbsent(StatRegistry.family(key), f -> new ArrayList<>())
-				.add(moved);
-		}
-
-		int mounted = 0;
-		for (String family : StatRegistry.FAMILIES)
-		{
-			List<Entry<String, Long>> rows = byFamily.get(family);
-			if (rows == null || rows.isEmpty())
-			{
-				continue;
-			}
-			rows.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
-			String stateKey = "session:" + family;
-			boolean open = foldOpen(stateKey, true);
-			strip.add(quietHead(family, open ? "" : fmt(rows.size()), stateKey));
-			mounted++;
-			if (!open)
-			{
-				continue;
-			}
-			for (Entry<String, Long> e : rows)
-			{
-				mounted += addMoverRow(strip, e.getKey(), e.getValue(),
-					under.get(e.getKey()));
-			}
-		}
-		return mounted;
-	}
-
-	private int addMoverRow(JPanel strip, String key, long value,
-		List<Entry<String, Long>> kids)
-	{
-		if (kids == null || kids.isEmpty())
-		{
-			strip.add(sessionRow(key, value));
-			return 1;
-		}
-		String listKey = "session:row:" + key;
-		boolean open = foldOpen(listKey);
-		strip.add(folds(sessionRow(key, value), listKey));
-		int mounted = 1;
-		if (!open)
-		{
-			return mounted;
-		}
-		kids.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
-		int cap = shownCap(listKey);
-		int shown = 0;
-		long named = 0;
-		for (Entry<String, Long> k : kids)
-		{
-			named += k.getValue();
-			if (shown++ >= cap)
-			{
-				continue;
-			}
-			strip.add(nested(row(StatRegistry.rowLabel(k.getKey()), fmt(k.getValue()))));
-			mounted++;
-		}
-		addMore(strip, listKey, kids.size(), cap, true);
-		if (value - named >= 1)
-		{
-			strip.add(nested(ghostRow(
-				"Teleports".equals(StatRegistry.subgroup(kids.get(0).getKey()))
-					|| "Destinations".equals(StatRegistry.subgroup(kids.get(0).getKey()))
-					? "Other means" : "Other",
-				fmt(value - named))));
-			mounted++;
-		}
-		return mounted;
-	}
-
-	private JPanel quietHead(String name, String count, String stateKey)
+	JPanel quietHead(String name, String count, String stateKey)
 	{
 		JPanel head = subHead(name.toUpperCase(Locale.ROOT), count, stateKey);
 		head.setBorder(pad(7, 2, 1, 2));
 		return head;
-	}
-
-	private JPanel sessionRow(String key, long v)
-	{
-		return row(StatRegistry.label(key),
-			StatRegistry.isGp(key) ? gps(v) : fmt(v));
 	}
 
 	private static final String UNDATED = "No loot has been dated yet. The roll keeps one entry a "
@@ -1917,7 +1550,7 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private List<GrindBook.GrindRow> grindsCache;
+	List<GrindBook.GrindRow> grindsCache;
 	private boolean grindsFetching;
 
 	SlayerJourney journeyCache;
@@ -1958,20 +1591,6 @@ class ChroniclePanel extends PluginPanel
 			store.skillSheet(), store.achievements(), pets);
 	}
 
-	private Map<String, Integer> sessionDisplayCounters()
-	{
-		Map<String, Integer> out = new HashMap<>(live.sessionView());
-		for (String key : LocalStore.MAX_KEYS)
-		{
-			Integer val = out.get(key);
-			if (val != null && val <= store.trackerBase(key))
-			{
-				out.remove(key);
-			}
-		}
-		return out;
-	}
-
 	void resetAccountCaches()
 	{
 		journeyCache = null;
@@ -2009,7 +1628,7 @@ class ChroniclePanel extends PluginPanel
 	private String slayerLens = "Tasks";
 	private int slayerShown = ROW_CAP;
 
-	private void addTaskCard(JPanel p, ChronicleEventCapture.SlayerView task, String title, Color ink)
+	void addTaskCard(JPanel p, ChronicleEventCapture.SlayerView task, String title, Color ink)
 	{
 		JPanel card = card(title);
 		card.add(row(task.task, task.remaining + " left", ink));
@@ -2203,12 +1822,12 @@ class ChroniclePanel extends PluginPanel
 		return page;
 	}
 
-	private JPanel moreRow(long remaining, Runnable reveal)
+	JPanel moreRow(long remaining, Runnable reveal)
 	{
 		return moreRow("Show " + fmt(remaining) + " more", reveal);
 	}
 
-	private JPanel moreRow(String label, Runnable reveal)
+	JPanel moreRow(String label, Runnable reveal)
 	{
 		JPanel more = ghostRow(label, "");
 		link(more, reveal);
@@ -2274,7 +1893,7 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
-	private JLabel sprite(int itemId, String name, long qty)
+	JLabel sprite(int itemId, String name, long qty)
 	{
 		JLabel slot = new JLabel();
 		slot.setPreferredSize(new Dimension(36, 32));
@@ -3602,7 +3221,7 @@ class ChroniclePanel extends PluginPanel
 		return out;
 	}
 
-	private int[] clogStanding()
+	int[] clogStanding()
 	{
 		int avail = live.clogAvailable();
 		return avail > 0 ? new int[]{live.clogFinished(), avail} : null;
@@ -3642,22 +3261,17 @@ class ChroniclePanel extends PluginPanel
 
 	private final Set<String> openFolds = new HashSet<>();
 
-	private static final String FOLD_HOME_XP = "home:xp";
-	private static final String FOLD_HOME_DAMAGE = "home:damage";
-	private static final List<String> DAMAGE_SPLIT = Arrays.asList(
-		"damageDealtMelee", "damageDealtRanged", "damageDealtMagic");
-
-	private boolean foldOpen(String key)
+	boolean foldOpen(String key)
 	{
 		return openFolds.contains(key);
 	}
 
-	private boolean foldOpen(String key, boolean byDefault)
+	boolean foldOpen(String key, boolean byDefault)
 	{
 		return openFolds.contains(key) != byDefault;
 	}
 
-	private JPanel folds(JPanel head, String key)
+	JPanel folds(JPanel head, String key)
 	{
 		link(head, () -> toggleFold(key));
 		return head;
@@ -4277,12 +3891,12 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private int shownCap(String key)
+	int shownCap(String key)
 	{
 		return histListShown.getOrDefault(key, HIST_LIST_CAP);
 	}
 
-	private void addMore(JPanel card, String key, int size, int cap, boolean inset)
+	void addMore(JPanel card, String key, int size, int cap, boolean inset)
 	{
 		more(card, size, cap, inset, n -> histListShown.put(key, n));
 	}
@@ -5448,17 +5062,8 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private static final String[][] JOURNAL_LENSES = {
-		{"All"},
-		{"Log", "COLLECTION"},
-		{"Slayer", "SLAYER"},
-		{"Feats", "COMBAT_ACHIEVEMENT", "QUEST", "DIARY", "CLUE", "PET", "LEVEL", "RECORD",
-			"MILESTONE"},
-		{"Deaths", "DEATH"},
-		{"Sessions", "SESSION"},
-	};
-	private String journalLens = "All";
-	private int journalShown = 60;
+	String journalLens = "All";
+	int journalShown = 60;
 
 	void openJournalOn(long ts)
 	{
@@ -5476,184 +5081,6 @@ class ChroniclePanel extends PluginPanel
 	{
 		journalLens = lens;
 		applyTab(View.JOURNAL);
-	}
-
-	private JPanel buildJournal()
-	{
-		JPanel p = column();
-		addFrontispiece(p);
-
-		JPanel lenses = new JPanel(new GridLayout(0, 3, 3, 3));
-		lenses.setBackground(DARK);
-		for (String[] lens : JOURNAL_LENSES)
-		{
-			lenses.add(pill(lens[0], lens[0].equals(journalLens), 4, null, () ->
-			{
-				journalLens = lens[0];
-				journalShown = 60;
-				rebuild();
-			}));
-		}
-		spaced(p, lenses);
-
-		Set<String> wanted = new HashSet<>();
-		for (String[] lens : JOURNAL_LENSES)
-		{
-			if (lens[0].equals(journalLens))
-			{
-				wanted.addAll(Arrays.asList(lens).subList(1, lens.length));
-			}
-		}
-		List<JsonObject> all = build.feed.withSitting();
-		all = build.feed.withMilestones(all);
-		List<JsonObject> feed = new ArrayList<>();
-		for (JsonObject e : all)
-		{
-			boolean kind = wanted.isEmpty() || wanted.contains(typeOf(e));
-			if (kind && window().inside(filedAt(e)))
-			{
-				feed.add(e);
-			}
-		}
-		feed.sort((a, b) -> dayOf(filedAt(b)).compareTo(dayOf(filedAt(a))));
-		if (feed.isEmpty() && !wholeRecord())
-		{
-			p.add(note(window().phrase("No " + ("All".equals(journalLens) ? "milestones" : low(journalLens)))));
-			return p;
-		}
-		if (feed.isEmpty())
-		{
-			return noted(p, "All".equals(journalLens)
-				? "Milestones (pets, log slots, tasks, quests, deaths) are noted "
-					+ "here as they happen."
-				: "Nothing of that kind on the record yet.");
-		}
-
-		String lastDay = null;
-		for (JsonObject e : Sources.firstN(feed, journalShown))
-		{
-			long ts = filedAt(e);
-			String day = ts > 0 ? DAY.format(Instant.ofEpochMilli(ts)) : "";
-			if (!day.equals(lastDay))
-			{
-				lastDay = day;
-				JLabel g = styled(new JLabel(day.toUpperCase(Locale.ROOT)), small(), accent());
-				g.setAlignmentX(Component.LEFT_ALIGNMENT);
-				g.setBorder(pad(7, 2, 3, 0));
-				p.add(g);
-				String entry = build.feed.dayEntry(dayOf(ts));
-				if (entry != null)
-				{
-					for (String line : wrapClauses(entry, boardRowRoom()))
-					{
-						p.add(ghostRow(line, ""));
-					}
-				}
-			}
-			if ("SESSION".equals(typeOf(e)))
-			{
-				String[] parts = Feed.sessionParts(e);
-				JPanel sr = row(parts[0], parts[1]);
-				sr.setToolTipText(parts[2]);
-				p.add(sr);
-			}
-			else
-			{
-				p.add(row(Feed.line(e), ""));
-			}
-		}
-		if (feed.size() > journalShown)
-		{
-			p.add(vgap(6));
-			p.add(moreRow("Read further back", () ->
-			{
-				journalShown += 60;
-				rebuildInPlace();
-			}));
-		}
-		return p;
-	}
-
-	private void addFrontispiece(JPanel p)
-	{
-		String rsn = live.displayRsn();
-		JPanel plate = card(rsn != null && !rsn.isEmpty()
-			? "The journal of " + rsn : "The journal");
-
-		long since = store.keptSince();
-		TreeMap<LocalDate, Baseline> spine = historySpine;
-		if (since > 0)
-		{
-			plate.add(row("Kept since",
-				day(since), accent()));
-		}
-		if (spine != null && !spine.isEmpty())
-		{
-			JPanel days = row("Days written", fmt(spine.size()));
-			days.setToolTipText("The days, as a calendar");
-			link(days, this::openCalendar);
-			plate.add(days);
-		}
-		Map<String, long[]> sheet = live.skillSheet();
-		long[] overall = sheet.get("overall");
-		int combat = store.combatLevel();
-		if (overall != null && overall[0] > 0)
-		{
-			plate.add(row("Total level", fmt(overall[0])
-				+ (combat > 0 ? " · combat " + combat : "")));
-		}
-		int[] logStanding = clogStanding();
-		int fin = live.clogFinished();
-		if (logStanding != null)
-		{
-			plate.add(row("Collection log",
-				fmt(logStanding[0]) + " / " + fmt(logStanding[1])));
-		}
-		else if (fin > 0)
-		{
-			plate.add(row("Collection log", fmt(fin) + " obtained"));
-		}
-		List<JsonObject> marks = build.feed.milestones();
-		if (!marks.isEmpty())
-		{
-			JsonObject last = marks.get(0);
-			plate.add(row("Last milestone", str(last.getAsJsonObject("data"), "text", "")
-				+ " · " + day(safeLong(last.get("ts")))));
-		}
-		plate.add(moreRow("what the journal holds", this::openInfo));
-		p.add(plate);
-
-		String note = frontispieceNote();
-		if (note != null)
-		{
-			p.add(ghostRow(note, ""));
-		}
-		p.add(vgap(6));
-	}
-
-	private String frontispieceNote()
-	{
-		if (grindsCache != null)
-		{
-			for (GrindBook.GrindRow g : grindsCache)
-			{
-				if (g.percentileDry >= 90)
-				{
-					return "still owed a " + low(g.item)
-						+ " at " + fmt(g.kc) + " " + low(g.boss);
-				}
-			}
-		}
-		List<JsonObject> recent = store.feedNewest(2);
-		if (recent.size() == 2)
-		{
-			long days = (safeLong(recent.get(0).get("ts")) - safeLong(recent.get(1).get("ts"))) / 86_400_000L;
-			if (days >= 30)
-			{
-				return "resumed after " + days + " days away";
-			}
-		}
-		return null;
 	}
 
 	void promptImport()
