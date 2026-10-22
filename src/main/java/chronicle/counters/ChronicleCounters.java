@@ -97,6 +97,15 @@ public class ChronicleCounters
 		return xp == null ? Collections.emptyList() : xp.sessionGains();
 	}
 
+	public void clearSession()
+	{
+		ExperienceStatTracker xp = experience;
+		if (xp != null)
+		{
+			xp.clearSession();
+		}
+	}
+
 	private void fanOut(Consumer<StatTracker> delivery)
 	{
 		for (StatTracker t : trackers())

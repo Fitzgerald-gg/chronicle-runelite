@@ -632,6 +632,29 @@ public class ChroniclePlugin extends Plugin implements Live
 		localStore.setTrackers(sessionView(), localName);
 	}
 
+	@Override
+	public void newSession()
+	{
+		clientThread.invoke(() ->
+		{
+			if (!ready() || client.getGameState() != GameState.LOGGED_IN)
+			{
+				return;
+			}
+			saveSession();
+			appendHistoryBaseline();
+			recordSessionLine();
+			localStore.rebase(localName);
+			localStore.clearSession();
+			statStore.clear();
+			counters.clearSession();
+			eventCapture.resetSessionFlags();
+			sessionStartMs = System.currentTimeMillis();
+			executor.submit(() -> localStore.flush(localDir()));
+			refreshPanel();
+		});
+	}
+
 	private void onLogout()
 	{
 		if (ready())

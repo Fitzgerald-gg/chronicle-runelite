@@ -175,11 +175,19 @@ class LocalStore implements chronicle.counters.GatheredLedger
 	void endSession()
 	{
 		ready = false;
+		clearSession();
+		synchronized (lock)
+		{
+			gatheredItems.clear();
+		}
+	}
+
+	void clearSession()
+	{
 		synchronized (lock)
 		{
 			sessionRoll = new JsonObject();
 			recentDrops.clear();
-			gatheredItems.clear();
 		}
 	}
 

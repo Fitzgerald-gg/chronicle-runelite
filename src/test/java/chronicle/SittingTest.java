@@ -111,4 +111,28 @@ public class SittingTest
 		assertFalse(said.subList(next, began).contains("Session · 2h 32m"));
 		assertTrue(String.join(" · ", said.subList(next + 1, began)).startsWith("1 sitting · 8m · +2,540 xp"));
 	}
+
+	@Test
+	public void aNewSessionWritesTheLastOneAndStartsAgainWithoutLoggingOut()
+	{
+		h.level(Skill.HUNTER, 50, 101333).xp(Skill.HUNTER, 2000);
+		h.kill("Bear", 1, 1618, 1).chat("Oh dear, you are dead!");
+		h.tick().sitting(42).press("Start a new session", "Now");
+		JsonObject first = h.feed("SESSION").get(0);
+		assertEquals(42, first.get("minutes").getAsInt());
+		assertEquals(2000, first.get("xp").getAsInt());
+		assertEquals(1, first.get("drops").getAsInt());
+		List<String> now = h.screen("Now");
+		assertTrue(now.toString(), has(now, "Nothing yet"));
+		assertFalse(now.toString(), has(now, "Drops received"));
+
+		h.xp(Skill.HUNTER, 300).chat("Oh dear, you are dead!").tick().sitting(10).logout().login();
+		List<JsonObject> sessions = h.feed("SESSION");
+		assertEquals(2, sessions.size());
+		JsonObject second = sessions.stream().filter(e -> e.get("minutes").getAsInt() == 10).findFirst().get();
+		assertEquals(300, second.get("xp").getAsInt());
+		assertEquals(0, second.get("drops").getAsInt());
+		assertEquals(2, h.tracker("deaths"));
+		assertEquals(2300, h.tracker("totalXpGained"));
+	}
 }

@@ -91,7 +91,7 @@ public class ExperienceStatTracker implements StatTracker
 		sessionXp.merge(skill, (long) gained, Long::sum);
 	}
 
-	private synchronized void clearSession()
+	synchronized void clearSession()
 	{
 		sessionXp.clear();
 		windowStartMs = 0;

@@ -54,5 +54,7 @@ interface Live
 
 	void turnOnMissingCapture();
 
+	void newSession();
+
 	void actionImport(File file);
 }

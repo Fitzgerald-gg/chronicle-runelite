@@ -326,6 +326,11 @@ public class PanelPreviewTest
 		}
 
 		@Override
+		public void newSession()
+		{
+		}
+
+		@Override
 		public void actionImport(File file)
 		{
 		}

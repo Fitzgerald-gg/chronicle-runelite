@@ -38,6 +38,7 @@ import static chronicle.Kit.DARKER;
 import static chronicle.Kit.card;
 import static chronicle.Kit.column;
 import static chronicle.Kit.ghostRow;
+import static chronicle.Kit.moreRow;
 import static chronicle.Kit.nested;
 import static chronicle.Kit.note;
 import static chronicle.Kit.pad;
@@ -205,6 +206,12 @@ final class HomePage
 		if (mounted == 0)
 		{
 			strip.add(row("Nothing yet", ""));
+		}
+		if (began > 0 && panel.live.ready())
+		{
+			JPanel restart = moreRow("Start a new session", panel.live::newSession);
+			restart.setToolTipText("Save this session to the journal and start a new one without logging out");
+			strip.add(restart);
 		}
 		spaced(p, strip);
 

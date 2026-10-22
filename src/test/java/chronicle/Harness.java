@@ -11,6 +11,8 @@ import com.google.inject.Injector;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Graphics2D;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -957,6 +959,47 @@ final class Harness
 			collect(p, out);
 		});
 		return out;
+	}
+
+	Harness press(String label, String... path)
+	{
+		ChroniclePanel p = (ChroniclePanel) get(plugin, "panel");
+		edt(() ->
+		{
+			go(p, path);
+			Component link = linkLabelled(p, label);
+			if (link == null)
+			{
+				throw new AssertionError("no link " + label);
+			}
+			MouseEvent e = new MouseEvent(link, MouseEvent.MOUSE_PRESSED, 0L, 0, 1, 1, 1, false);
+			for (MouseListener l : link.getMouseListeners())
+			{
+				l.mousePressed(e);
+			}
+		});
+		return this;
+	}
+
+	private static Component linkLabelled(Component c, String label)
+	{
+		if (!(c instanceof Container))
+		{
+			return null;
+		}
+		for (Component k : ((Container) c).getComponents())
+		{
+			if (c.getMouseListeners().length > 0 && k instanceof JLabel && label.equals(((JLabel) k).getText()))
+			{
+				return c;
+			}
+			Component found = linkLabelled(k, label);
+			if (found != null)
+			{
+				return found;
+			}
+		}
+		return null;
 	}
 
 	private void go(ChroniclePanel p, String[] path) throws Exception
