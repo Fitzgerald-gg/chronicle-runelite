@@ -26,3 +26,11 @@ table after a tier heading is the audio player.
 RuneLite has the same data in compiled per-region classes, but `DiaryRequirement`
 is package private and reading it would mean reflecting into another plugin, so
 the plugin bundles its own copy.
+
+## `frame_shot.py`
+
+    python3 tools/frame_shot.py docs/img/*.png
+
+Crops client screenshots of the panel to the panel itself and puts each one on the
+same 480x1130 canvas, fading out anything taller, so the README shots line up.
+Needs Pillow. It rewrites the files in place.
