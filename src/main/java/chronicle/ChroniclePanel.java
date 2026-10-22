@@ -13,13 +13,8 @@ import chronicle.Kit.ScrollColumn;
 import chronicle.LocalStore.BagItem;
 import chronicle.LocalStore.SlayerJourney;
 import chronicle.LocalStore.SlayerTask;
-import chronicle.LocalStore.SourceRow;
-import chronicle.LocalStore.UntakenRow;
-import chronicle.Period.Span;
-import chronicle.counters.StatKeys;
 import chronicle.panel.StatRegistry;
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -78,7 +73,6 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import lombok.RequiredArgsConstructor;
-import net.runelite.api.Skill;
 import net.runelite.client.game.SkillIconManager;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.ui.ColorScheme;
@@ -87,19 +81,11 @@ import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.ui.components.IconTextField;
 import net.runelite.client.ui.components.materialtabs.MaterialTab;
 import net.runelite.client.ui.components.materialtabs.MaterialTabGroup;
-import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
-import static chronicle.Copy.COPY_MOST;
 import static chronicle.Copy.copyPicture;
 import static chronicle.Copy.stripChrome;
-import static chronicle.Feed.most;
 import static chronicle.Feed.newestTs;
-import static chronicle.Json.has;
-import static chronicle.Json.keyOf;
-import static chronicle.Json.low;
-import static chronicle.Json.safeLong;
 import static chronicle.Kit.ACCENT_LIFETIME;
-import static chronicle.Kit.ACCENT_RED;
 import static chronicle.Kit.DARK;
 import static chronicle.Kit.DARKER;
 import static chronicle.Kit.PANEL_INSET;
@@ -110,10 +96,8 @@ import static chronicle.Kit.column;
 import static chronicle.Kit.copyLabel;
 import static chronicle.Kit.day;
 import static chronicle.Kit.dim;
-import static chronicle.Kit.figure;
 import static chronicle.Kit.ghostRow;
 import static chronicle.Kit.link;
-import static chronicle.Kit.listCard;
 import static chronicle.Kit.nested;
 import static chronicle.Kit.note;
 import static chronicle.Kit.noted;
@@ -129,25 +113,17 @@ import static chronicle.Kit.tallyCard;
 import static chronicle.Kit.tip;
 import static chronicle.Kit.unlight;
 import static chronicle.Kit.value;
-import static chronicle.Kit.vgap;
 import static chronicle.Kit.wash;
-import static chronicle.Kit.worthRow;
 import static chronicle.LocalStore.kindOf;
-import static chronicle.Period.FULL_DAY;
 import static chronicle.Period.TASK_DAY;
 import static chronicle.Period.dayOf;
-import static chronicle.Period.startMs;
 import static chronicle.Text.count;
-import static chronicle.Text.dated;
 import static chronicle.Text.fmt;
 import static chronicle.Text.gp;
 import static chronicle.Text.gps;
 import static chronicle.Text.hoursMinutes;
 import static chronicle.Text.named;
-import static chronicle.Text.pb;
 import static chronicle.Text.qtyGp;
-import static chronicle.Text.rateText;
-import static chronicle.Text.tail;
 
 class ChroniclePanel extends PluginPanel
 {
@@ -173,12 +149,15 @@ class ChroniclePanel extends PluginPanel
 
 	final LocalStore store;
 	final Live live;
-	private final ScheduledExecutorService executor;
+	final ScheduledExecutorService executor;
 	final Gson gson;
 	final SpriteManager sprites;
 	final SkillIconManager skillIcons;
 	final GrindBook grindBook;
 	Build build;
+	final DetailPage detail = new DetailPage(this);
+	final SlayerPage slayer = new SlayerPage(this);
+	final LootPage loot = new LootPage(this);
 	final SheetPage sheet = new SheetPage(this);
 	final LedgerPage ledger = new LedgerPage(this);
 	final LogPage clog = new LogPage(this);
@@ -203,10 +182,10 @@ class ChroniclePanel extends PluginPanel
 	private final Timer searchDebounce;
 	private final Timer homeTicker;
 
-	private View view = View.HOME;
+	View view = View.HOME;
 	Tab tab = Tab.RECORD;
 	private String detailItem;
-	private String detailSource;
+	String detailSource;
 	private String detailSkill;
 	boolean allTrackers;
 	private boolean showInfo;
@@ -215,7 +194,7 @@ class ChroniclePanel extends PluginPanel
 	YearMonth calendarMonth = YearMonth.now();
 	private final ArrayDeque<String[]> detailStack = new ArrayDeque<>();
 	String statsFamily = StatRegistry.FAMILIES[0];
-	private int dropsShown = ROW_CAP;
+	int dropsShown = ROW_CAP;
 	String clogTab = "Bosses";
 	String clogPageSel;
 
@@ -777,15 +756,15 @@ class ChroniclePanel extends PluginPanel
 		north.revalidate();
 		north.repaint();
 		JPanel body = !searchQuery().isEmpty() ? search.buildSearch(searchQuery())
-			: detailItem != null ? buildItemDetail(detailItem)
-			: detailSource != null ? buildSourceDetail(detailSource)
-			: detailSkill != null ? buildSkillDetail(detailSkill)
+			: detailItem != null ? detail.buildItemDetail(detailItem)
+			: detailSource != null ? detail.buildSourceDetail(detailSource)
+			: detailSkill != null ? detail.buildSkillDetail(detailSkill)
 			: allTrackers ? ledger.buildAllTrackers()
 			: showRecords ? records.buildRecords()
 			: showCalendar ? records.buildCalendar()
 			: showInfo ? records.buildInfo()
-			: detailTask >= 0 ? buildTaskDetail(detailTask)
-			: leftBehindSource != null || leftBehindItem != null ? buildLeftBehindDetail()
+			: detailTask >= 0 ? detail.buildTaskDetail(detailTask)
+			: leftBehindSource != null || leftBehindItem != null ? detail.buildLeftBehindDetail()
 			: sheetPage != null ? sheet.buildSheetPage()
 			: buildView();
 		periodHolder.setToolTipText(measuredSince);
@@ -822,9 +801,9 @@ class ChroniclePanel extends PluginPanel
 			case SHEET:
 				return sheet.buildSheet();
 			case DROPS:
-				return buildDrops();
+				return loot.buildDrops();
 			case SLAYER:
-				return buildSlayer();
+				return slayer.buildSlayer();
 			case STATS:
 				return ledger.buildStats();
 			case JOURNAL:
@@ -900,79 +879,10 @@ class ChroniclePanel extends PluginPanel
 		return head;
 	}
 
-	private static final String UNDATED = "No loot has been dated yet. The roll keeps one entry a "
+	static final String UNDATED = "No loot has been dated yet. The roll keeps one entry a "
 		+ "day and starts with the next drop that lands.";
 
-	private JPanel dropsInWindow(JPanel p)
-	{
-		Period win = window();
-		long rollFrom = build.lootDays().rollFrom();
-		if (!win.session && rollFrom <= 0)
-		{
-			return noted(p, UNDATED);
-		}
-		if (!win.session && rollFrom > startMs(win.start))
-		{
-			LocalDate began = dayOf(rollFrom);
-			return noted(p, "The dated loot roll begins " + began.format(FULL_DAY)
-				+ ", which is inside " + window().inSentence() + ". Naming the part it can see "
-				+ "as the whole period would be worse than saying nothing.");
-		}
-		LocalStore.LootWindow w = build.lootWindow();
-		if (!dropsLeftBehind && dropsByKind)
-		{
-			if (w.items.isEmpty())
-			{
-				return noted(p, window().phrase("Nothing taken"));
-			}
-			return kindLens(p, win.label, bagOf(w.items), "win:");
-		}
-		List<LocalStore.Row> ranked = dropsLeftBehind ? w.leftItems : w.sources;
-		if (ranked.isEmpty())
-		{
-			return noted(p, window().phrase("Nothing " + (dropsLeftBehind ? "left behind" : "taken")));
-		}
-		JPanel head = dropsLeftBehind ? tallyCard("Left behind", "Items", fmt(w.left), ACCENT_RED, w.leftValue)
-			: tallyCard("Drops received", "Drops", fmt(w.loots), accent(), w.value);
-		if (dropsLeftBehind)
-		{
-			head.add(row("Kills that left one", fmt(w.leftKills)));
-		}
-		spaced(p, head);
-		final String key = dropsLeftBehind ? "win:left" : "win:source";
-		final int cap = drillShown.getOrDefault(key, ROW_CAP);
-		for (LocalStore.Row r : Sources.firstN(ranked, cap))
-		{
-			JPanel line = row(r.name, qtyGp(r.qty, r.value));
-			final String name = r.name;
-			link(line, () ->
-			{
-				if (dropsLeftBehind)
-				{
-					openItem(name);
-				}
-				else
-				{
-					openSourceLoose(name);
-				}
-			});
-			p.add(line);
-		}
-		drillMore(p, key, ranked.size(), cap);
-		return p;
-	}
-
-	private static List<BagItem> bagOf(List<LocalStore.Row> rows)
-	{
-		List<BagItem> bag = new ArrayList<>();
-		for (LocalStore.Row r : rows)
-		{
-			bag.add(new BagItem(0, r.name, r.qty, r.value));
-		}
-		return bag;
-	}
-
-	private boolean onTaskOnly;
+	boolean onTaskOnly;
 
 	boolean everOnTask()
 	{
@@ -981,101 +891,17 @@ class ChroniclePanel extends PluginPanel
 
 
 	boolean dropsLeftBehind;
-	private String lootKind;
-	private String lootTask;
+	String lootKind;
+	String lootTask;
 
-	private JPanel buildDrops()
-	{
-		JPanel p = column();
-		List<JPanel> axes = new ArrayList<>();
-		axes.add(toggle(dropsLeftBehind ? "Left behind" : "Received", relens(() -> dropsLeftBehind = !dropsLeftBehind)));
-		if (!dropsLeftBehind || wholeRecord())
-		{
-			axes.add(toggle(dropsByKind
-				? (dropsLeftBehind ? "By item" : "By kind") : "By source", relens(() -> dropsByKind = !dropsByKind)));
-		}
-		final boolean canAskOnTask = !dropsLeftBehind && dropsByKind && everOnTask();
-		if (canAskOnTask)
-		{
-			axes.add(toggle(onTaskOnly ? "On task" : "All", relens(() -> onTaskOnly = !onTaskOnly)));
-		}
-		JPanel lens = new JPanel(new GridLayout(1, axes.size(), 3, 3));
-		lens.setBackground(DARK);
-		for (JPanel a : axes)
-		{
-			lens.add(a);
-		}
-		spaced(p, lens);
-		if (canAskOnTask && onTaskOnly)
-		{
-			long[] w = window().ms();
-			List<BagItem> taskBag = store.tasks(w[0], w[1], null, wholeRecord()).loot();
-			if (taskBag.isEmpty())
-			{
-				return noted(p, window().phrase("No task closed"));
-			}
-			return kindLens(p, wholeRecord() ? "On-task loot"
-				: "Tasks closed in " + window().label, taskBag, "ontask:");
-		}
-		if (!wholeRecord())
-		{
-			return dropsInWindow(p);
-		}
+	boolean dropsByKind;
 
-		if (dropsLeftBehind)
-		{
-			return buildLeftBehind(p);
-		}
-		if (dropsByKind)
-		{
-			return buildLootByKind(p);
-		}
-		List<SourceRow> sources = new ArrayList<>(build.sources());
-		sources.sort(Comparator.comparingLong((SourceRow r) -> r.value).reversed());
-		if (sources.isEmpty())
-		{
-			return noted(p, "Drops appear here as you play: every kill, priced as it lands.");
-		}
-		long everyDrop = 0;
-		long everyValue = 0;
-		for (SourceRow r : sources)
-		{
-			everyDrop += r.loots;
-			everyValue += r.value;
-		}
-		JPanel lifeHead = tallyCard("Drops received", "Drops", fmt(everyDrop), accent(), everyValue);
-		lifeHead.add(row("Sources", fmt(sources.size())));
-		spaced(p, lifeHead);
-		for (SourceRow r : Sources.firstN(sources, dropsShown))
-		{
-			boolean killed = build.kills.isKillSource(r.name);
-			String sub = (killed ? fmt(build.kills.standingKills(r)) + " kc" : count(r.loots, "drop"))
-				+ (r.pb != null ? " · PB " + pb(r.pb) : "");
-			listCard(p, row(r.name, gps(r.value), accent()), sub,
-				r.loots > 0 ? perOne(r.value, r.loots, killed) : "", () -> openSource(r.name));
-		}
-		more(p, sources.size(), dropsShown, false, n -> dropsShown = n);
-		return p;
-	}
-
-	private boolean dropsByKind;
-
-	private static String perOne(long value, long n, boolean killed)
+	static String perOne(long value, long n, boolean killed)
 	{
 		return gp(value / Math.max(1, n)) + (killed ? " gp/drop" : " gp each");
 	}
 
-	private JPanel buildLootByKind(JPanel p)
-	{
-		final List<BagItem> bag = store.allLoot();
-		if (bag.isEmpty())
-		{
-			return noted(p, "Drops appear here as you play: every kill, priced as it lands.");
-		}
-		return kindLens(p, "Everything dropped", bag, "all:");
-	}
-
-	private void addKindRows(JPanel p, List<BagItem> bag)
+	void addKindRows(JPanel p, List<BagItem> bag)
 	{
 		for (Kind k : kindsOf(bag))
 		{
@@ -1090,40 +916,7 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private void dearestRow(JPanel head, List<BagItem> bag)
-	{
-		BagItem top = most(bag, b -> b.value);
-		if (top == null)
-		{
-			return;
-		}
-		final String name = top.name;
-		JPanel r = row("Dearest", name + " · " + gps(top.value));
-		link(r, () -> openItem(name));
-		head.add(r);
-	}
-
-	private JPanel kindLens(JPanel p, String title, List<BagItem> bag,
-		String key)
-	{
-		final long[] sum = LocalStore.tallyOf(bag);
-		if (lootKind != null)
-		{
-			return kindDrill(p, bag, key);
-		}
-		JPanel head = bagCard(title, bag, sum);
-		dearestRow(head, bag);
-		spaced(p, head);
-		LinkedHashMap<String, BooleanSupplier> ways =
-			new LinkedHashMap<>();
-		ways.put("These kinds", () -> copyPicture(lootPicture(title, bag, sum, true)));
-		ways.put("Every item", () -> copyPicture(lootPicture(title, bag, sum, false), true));
-		p.add(copyHeader("Drops", ways));
-		addKindRows(p, bag);
-		return p;
-	}
-
-	private JPanel kindDrill(JPanel p, List<BagItem> bag, String key)
+	JPanel kindDrill(JPanel p, List<BagItem> bag, String key)
 	{
 		final List<BagItem> kept = ofKind(bag);
 		final long[] mine = LocalStore.tallyOf(kept);
@@ -1141,53 +934,13 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private JPanel buildLeftBehind(JPanel p)
-	{
-		List<UntakenRow> rows = store.untaken().sources;
-		rows.sort(Comparator.comparingLong((UntakenRow r) -> r.value).reversed());
-		long totalQty = 0;
-		long totalVal = 0;
-		for (UntakenRow r : rows)
-		{
-			totalQty += r.qty;
-			totalVal += r.value;
-		}
-		if (rows.isEmpty())
-		{
-			return noted(p, "What you walk past gets counted here, priced at the "
-				+ "moment you declined it.");
-		}
-		List<UntakenRow> items = store.untaken().items;
-		items.sort(Comparator.comparingLong((UntakenRow r) -> r.value).reversed());
-		JPanel head = tallyCard("Left behind", "Items", fmt(totalQty), ACCENT_RED, totalVal);
-		head.add(row(dropsByKind ? "Distinct items" : "Sources",
-			fmt(dropsByKind ? items.size() : rows.size())));
-		spaced(p, head);
-		if (dropsByKind && items.isEmpty())
-		{
-			return noted(p, "Nothing walked past has been priced yet.");
-		}
-		final boolean byItem = dropsByKind;
-		List<UntakenRow> list = byItem ? items : rows;
-		String key = byItem ? "left:item" : "left:source";
-		final int cap = drillShown.getOrDefault(key, ROW_CAP);
-		for (UntakenRow r : Sources.firstN(list, cap))
-		{
-			listCard(p, row(r.name, gps(r.value), ACCENT_RED),
-				byItem ? "\u00d7" + fmt(r.qty) : fmt(r.qty) + " left", r.qty > 0 ? perOne(r.value, r.qty, false) : "",
-				() -> showLeftBehind(byItem ? null : r.name, byItem ? r.name : null));
-		}
-		drillMore(p, key, list.size(), cap);
-		return p;
-	}
-
 	List<GrindBook.GrindRow> grindsCache;
-	private boolean grindsFetching;
+	boolean grindsFetching;
 
 	SlayerJourney journeyCache;
 	boolean journeyFetching;
-	private int detailTask = -1;
-	private String leftBehindSource;
+	int detailTask = -1;
+	String leftBehindSource;
 	String leftBehindItem;
 
 	void fetchSlayerJourney(Consumer<SlayerJourney> onDone)
@@ -1198,18 +951,6 @@ class ChroniclePanel extends PluginPanel
 			return;
 		}
 		executor.submit(() -> onDone.accept(store.slayerJourney()));
-	}
-
-	private void fetchGrinds(Consumer<List<GrindBook.GrindRow>> onDone)
-	{
-		if (!live.ready())
-		{
-			onDone.accept(null);
-			return;
-		}
-		final JsonObject clog = store.clogSnapshot();
-		final List<SourceRow> sources = store.dropSources();
-		executor.submit(() -> onDone.accept(grindBook.grinds(clog, sources)));
 	}
 
 	void resetAccountCaches()
@@ -1246,8 +987,8 @@ class ChroniclePanel extends PluginPanel
 		searchDebounce.stop();
 	}
 
-	private String slayerLens = "Tasks";
-	private int slayerShown = ROW_CAP;
+	String slayerLens = "Tasks";
+	int slayerShown = ROW_CAP;
 
 	void addTaskCard(JPanel p, ChronicleEventCapture.SlayerView task, String title, Color ink)
 	{
@@ -1305,7 +1046,7 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	private void showLeftBehind(String source, String item)
+	void showLeftBehind(String source, String item)
 	{
 		leftBehindSource = source;
 		leftBehindItem = item;
@@ -1318,104 +1059,7 @@ class ChroniclePanel extends PluginPanel
 		applyTab(View.SLAYER);
 	}
 
-	private JPanel buildSlayer()
-	{
-		JPanel p = column();
-		ChronicleEventCapture.SlayerView task = live.slayerView();
-		if (task != null)
-		{
-			addTaskCard(p, task, "Current task", accent());
-		}
-
-		JPanel lens = new JPanel(new GridLayout(1, 3, 3, 3));
-		lens.setBackground(DARK);
-		for (String l : new String[]{"Tasks", "Monsters", "Drops"})
-		{
-			lens.add(pill(l, l.equals(slayerLens), 4, null, () ->
-			{
-				slayerLens = l;
-				rebuildInPlace();
-			}));
-		}
-		spaced(p, lens);
-
-		if (!journeyFetching)
-		{
-			journeyFetching = true;
-			fetchSlayerJourney(j -> SwingUtilities.invokeLater(() ->
-			{
-				journeyFetching = false;
-				if (j == null)
-				{
-					return;
-				}
-				boolean moved = journeyMoved(journeyCache, j);
-				journeyCache = j;
-				if (moved && view == View.SLAYER && "Tasks".equals(slayerLens))
-				{
-					rebuildInPlace();
-				}
-			}));
-		}
-		if ("Monsters".equals(slayerLens))
-		{
-			return addKillLog(p);
-		}
-		if ("Drops".equals(slayerLens))
-		{
-			return addOnTaskLoot(p);
-		}
-
-		if (journeyCache != null)
-		{
-			addJourney(p, journeyCache);
-		}
-		else
-		{
-			p.add(note("Reading the task journey from the journal…"));
-		}
-		return p;
-	}
-
-	private JPanel addOnTaskLoot(JPanel p)
-	{
-		long[] ms = window().ms();
-		final LocalStore.Tasks tasks = store.tasks(ms[0], ms[1], lootTask, wholeRecord());
-		final List<BagItem> bag = tasks.loot();
-		if (bag.isEmpty())
-		{
-			p.add(taskPicker());
-			return noted(p, lootTask != null
-				? window().phrase("No loot logged on " + lootTask)
-				: wholeRecord()
-					? "No task loot in the journal yet. It collects as tasks close."
-					: window().phrase("No task loot"));
-		}
-		final long[] sum = LocalStore.tallyOf(bag);
-		final long qty = sum[0];
-		final long value = sum[1];
-
-		if (lootKind != null)
-		{
-			p.add(taskPicker());
-			return kindDrill(p, bag, "task:");
-		}
-		final long[] tally = tasks.tally();
-		spaced(p, onTaskHead(qty, value, tally));
-		p.add(taskPicker());
-
-		LinkedHashMap<String, BooleanSupplier> ways =
-			new LinkedHashMap<>();
-		ways.put("These kinds", () -> copyPicture(kindsPicture(bag, qty, value, tally)));
-		ways.put("Every item", () -> copyPicture(
-			lootPicture(lootTask == null ? "On-task loot" : lootTask, bag,
-				new long[]{qty, value}, false), true));
-		p.add(copyHeader("Drops", ways));
-		addKindRows(p, bag);
-		return p;
-	}
-
-	private JPanel lootPicture(String title, List<BagItem> bag, long[] sum, boolean kinds)
+	JPanel lootPicture(String title, List<BagItem> bag, long[] sum, boolean kinds)
 	{
 		JPanel page = column();
 		spaced(page, bagCard(title, bag, sum));
@@ -1427,19 +1071,6 @@ class ChroniclePanel extends PluginPanel
 		{
 			addBagRows(page, bag);
 		}
-		return page;
-	}
-
-	private JPanel kindsPicture(List<BagItem> bag, long qty, long value,
-		long[] tally)
-	{
-		JPanel page = column();
-		spaced(page, onTaskHead(qty, value, tally));
-		if (lootTask != null)
-		{
-			spaced(page, row("Task", lootTask, accent()), 4);
-		}
-		addKindRows(page, bag);
 		return page;
 	}
 
@@ -1455,7 +1086,7 @@ class ChroniclePanel extends PluginPanel
 		return more;
 	}
 
-	private Runnable relens(Runnable change)
+	Runnable relens(Runnable change)
 	{
 		return () ->
 		{
@@ -1465,7 +1096,7 @@ class ChroniclePanel extends PluginPanel
 		};
 	}
 
-	private void more(JPanel p, int size, int cap, boolean inset, IntConsumer show)
+	void more(JPanel p, int size, int cap, boolean inset, IntConsumer show)
 	{
 		if (size > cap)
 		{
@@ -1525,7 +1156,7 @@ class ChroniclePanel extends PluginPanel
 		return slot;
 	}
 
-	private JPanel bagCard(String title, List<BagItem> bag, long[] sum)
+	JPanel bagCard(String title, List<BagItem> bag, long[] sum)
 	{
 		JPanel head = tallyCard(title, "Items", fmt(sum[0]), accent(), sum[1]);
 		head.add(row("Distinct items", fmt(bag.size())));
@@ -1541,7 +1172,7 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 
-	private void addBagRows(JPanel p, List<BagItem> bag)
+	void addBagRows(JPanel p, List<BagItem> bag)
 	{
 		for (BagItem b : bag)
 		{
@@ -1570,28 +1201,13 @@ class ChroniclePanel extends PluginPanel
 		return kept;
 	}
 
-	private JPanel onTaskHead(long qty, long value, long[] tally)
-	{
-		JPanel head = tallyCard("On-task loot", "Items", fmt(qty), accent(), value);
-		head.add(row("Tasks", fmt(tally[2])));
-		if (tally[0] > 0)
-		{
-			head.add(row("Kills logged", fmt(tally[0])));
-		}
-		if (tally[1] > 0)
-		{
-			head.add(row("Superiors", fmt(tally[1])));
-		}
-		return head;
-	}
-
 	void reportCopy(JLabel take, boolean ok)
 	{
 		take.setText(ok ? "copied" : "cannot copy");
 		take.setForeground(ok ? accent() : ColorScheme.PROGRESS_ERROR_COLOR);
 	}
 
-	private JPanel copyHeader(String title,
+	JPanel copyHeader(String title,
 		LinkedHashMap<String, BooleanSupplier> choices)
 	{
 		return copyHeaderLater(title, take ->
@@ -1618,32 +1234,9 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	private JPanel copyHeader(String title, BooleanSupplier copy)
+	JPanel copyHeader(String title, BooleanSupplier copy)
 	{
 		return copyHeaderLater(title, take -> reportCopy(take, copy.getAsBoolean()));
-	}
-
-	private JPanel addKillLog(JPanel p)
-	{
-		List<Entry<String, Long>> kcs = new ArrayList<>(LocalStore.killLogCounts(build.clog()).entrySet());
-		if (kcs.isEmpty())
-		{
-			return noted(p, "No kill log yet. It copies itself the next time you open "
-				+ "the Slayer Kill Log in game.");
-		}
-		kcs.sort(Entry.<String, Long>comparingByValue().reversed());
-		JPanel card = card("Kill log");
-		final int cap = drillShown.getOrDefault("killlog", ROW_CAP);
-		for (Entry<String, Long> e : Sources.firstN(kcs, cap))
-		{
-			JPanel r = row(e.getKey(), fmt(e.getValue()));
-			final String mob = e.getKey();
-			link(r, () -> openSourceLoose(mob));
-			card.add(r);
-		}
-		drillMore(card, "killlog", kcs.size(), cap);
-		p.add(card);
-		return p;
 	}
 
 	static boolean journeyMoved(SlayerJourney was,
@@ -1661,235 +1254,6 @@ class ChroniclePanel extends PluginPanel
 		}
 		return !was.tasks.isEmpty()
 			&& was.tasks.get(0).kills != now.tasks.get(0).kills;
-	}
-
-	private void addTaskAgainstRecord(JPanel head, SlayerJourney j, int index,
-		SlayerTask t)
-	{
-		int earlier = 0;
-		long sumValue = 0;
-		long sumKills = 0;
-		int bestAt = -1;
-		for (int i = 0; i < j.tasks.size(); i++)
-		{
-			SlayerTask o = j.tasks.get(i);
-			if (i == index || o.inProgress || o.ts >= t.ts || !o.task.equalsIgnoreCase(t.task))
-			{
-				continue;
-			}
-			earlier++;
-			sumValue += o.totalValue;
-			sumKills += o.kills;
-			if (bestAt < 0 || o.totalValue > j.tasks.get(bestAt).totalValue)
-			{
-				bestAt = i;
-			}
-		}
-		if (earlier < 2)
-		{
-			return;
-		}
-		head.add(row("Usual", gp(sumValue / earlier) + " gp · " + fmt(sumKills / earlier)
-			+ " kills · over " + earlier + " tasks"));
-		SlayerTask best = j.tasks.get(bestAt);
-		JPanel bestRow = row("Best", gp(best.totalValue) + " gp · "
-			+ day((long) (best.ts * 1000)));
-		final int at = bestAt;
-		link(bestRow, () -> showTask(at));
-		head.add(bestRow);
-	}
-
-	private JPanel buildTaskDetail(int index)
-	{
-		JPanel p = column();
-		p.add(backRow("< Back", "", () ->
-		{
-			detailTask = -1;
-			rebuild();
-		}));
-		p.add(vgap(4));
-		SlayerJourney j = journeyCache;
-		SlayerTask t = j != null && index >= 0 && index < j.tasks.size()
-			? j.tasks.get(index) : null;
-		if (t == null)
-		{
-			return noted(p, "That task is no longer in the journal.");
-		}
-		JPanel head = card(t.task.toUpperCase(Locale.ROOT));
-		String kills = t.inProgress && t.assignment > t.kills
-			? fmt(t.kills) + " / " + fmt(t.assignment) : fmt(t.kills);
-		head.add(row("Kills logged", kills, accent()));
-		if (t.noLootKills > 0)
-		{
-			head.add(row("Killed without loot", fmt(t.noLootKills)));
-		}
-		head.add(worthRow(t.totalValue));
-		if (t.ts > 0)
-		{
-			head.add(row(t.inProgress ? "Started" : "Finished",
-				day((long) (t.ts * 1000))));
-		}
-		addTaskAgainstRecord(head, j, index, t);
-		spaced(p, head);
-
-		LocalStore.TaskView seg = store.allTasks().at(index);
-		List<UntakenRow> monsters = seg.fought();
-		if (!monsters.isEmpty())
-		{
-			p.add(group("Killed"));
-			for (UntakenRow m : monsters)
-			{
-				JPanel r = row(m.name, "×" + fmt(m.qty));
-				link(r, () -> openSourceLoose(m.name));
-				p.add(r);
-			}
-			p.add(vgap(6));
-		}
-
-		List<BagItem> bag = seg.bag();
-		if (bag.isEmpty())
-		{
-			p.add(note("No loot recorded against this task."));
-		}
-		else
-		{
-			p.add(group("Loot from this task"));
-			for (BagItem it : bag)
-			{
-				JPanel r = row(named(it.name, it.qty),
-					gps(it.value));
-				link(r, () -> openItem(it.name));
-				p.add(r);
-			}
-		}
-		p.add(vgap(8));
-		JPanel all = row("All kills of " + t.task, "", accent(), true);
-		link(all, () ->
-		{
-			detailTask = -1;
-			openSourceLoose(t.task);
-		});
-		p.add(all);
-		return p;
-	}
-
-	private JPanel buildLeftBehindDetail()
-	{
-		JPanel p = column();
-		LocalStore.Untaken untaken = store.untaken();
-		p.add(backRow("< Back", "", () -> showLeftBehind(null, null)));
-		p.add(vgap(4));
-
-		if (leftBehindSource != null)
-		{
-			List<BagItem> bag = untaken.itemsOf(leftBehindSource);
-			UntakenRow left = Sources.find(untaken.sources, u -> u.name, leftBehindSource, true);
-			spaced(p, tallyCard(leftBehindSource.toUpperCase(Locale.ROOT), "Left on the floor",
-				count(left == null ? 0 : left.qty, "item"), ACCENT_RED, left == null ? 0 : left.value));
-			if (bag.isEmpty())
-			{
-				return noted(p, "The count above is older than the itemised record. "
-					+ "What this source leaves behind is listed here from now on.");
-			}
-			p.add(group("Declined"));
-			for (BagItem b : bag)
-			{
-				JPanel r = row(named(b.name, b.qty),
-					gps(b.value), ACCENT_RED);
-				link(r, () -> showLeftBehind(null, b.name));
-				p.add(r);
-			}
-			return p;
-		}
-
-		List<UntakenRow> sources = untaken.sourcesOf(leftBehindItem);
-		UntakenRow held = Sources.find(untaken.items, u -> u.name, leftBehindItem, true);
-		spaced(p, tallyCard(leftBehindItem.toUpperCase(Locale.ROOT), "Left behind",
-			"×" + fmt(held == null ? 0 : held.qty), ACCENT_RED, held == null ? 0 : held.value));
-		if (sources.isEmpty())
-		{
-			return noted(p, "No source itemised for this yet.");
-		}
-		p.add(group("Left where"));
-		for (UntakenRow r : sources)
-		{
-			JPanel row = row(r.name, "×" + qtyGp(r.qty, r.value), ACCENT_RED);
-			link(row, () -> showLeftBehind(r.name, null));
-			p.add(row);
-		}
-		return p;
-	}
-
-	private void addJourney(JPanel p, SlayerJourney j)
-	{
-		if (j.tasks.isEmpty() && j.completedTasks == 0)
-		{
-			p.add(note("No tasks in the journal yet. They collect as "
-				+ "you play with the Slayer plugin on."));
-			return;
-		}
-		List<SlayerTask> shown = new ArrayList<>();
-		List<Integer> where = new ArrayList<>();
-		for (int i = 0; i < j.tasks.size(); i++)
-		{
-			SlayerTask t = j.tasks.get(i);
-			if (window().inside((long) (t.ts * 1000)) && (wholeRecord() || !t.inProgress))
-			{
-				shown.add(t);
-				where.add(i);
-			}
-		}
-		if (shown.isEmpty() && !wholeRecord())
-		{
-			p.add(note(window().phrase("No tasks closed")));
-			return;
-		}
-		long tasksDone = j.completedTasks;
-		long killsOnTask = j.totalKills;
-		long onTaskLoot = j.totalValueGp;
-		if (!wholeRecord())
-		{
-			tasksDone = 0;
-			killsOnTask = 0;
-			onTaskLoot = 0;
-			for (SlayerTask t : shown)
-			{
-				if (!t.inProgress)
-				{
-					tasksDone++;
-				}
-				killsOnTask += t.kills;
-				onTaskLoot += t.totalValue;
-			}
-		}
-		JPanel head = card("The journey");
-		head.add(row("Tasks done", fmt(tasksDone), accent()));
-		head.add(row("Kills on task", fmt(killsOnTask)));
-		head.add(row("On-task loot", gps(onTaskLoot)));
-		if (j.totalXpEst > 0)
-		{
-			head.add(row("Slayer xp (est.)", gp(j.totalXpEst)));
-		}
-		spaced(p, head);
-		for (int k = 0; k < Math.min(shown.size(), slayerShown); k++)
-		{
-			SlayerTask t = shown.get(k);
-			final int at = where.get(k);
-			String kills = t.inProgress && t.assignment > t.kills
-				? fmt(t.kills) + " / " + fmt(t.assignment)
-				: count(t.kills, "kill");
-			if (t.noLootKills > 0)
-			{
-				kills += " · " + fmt(t.noLootKills) + " no-drop";
-			}
-			listCard(p, row(t.task, t.totalValue > 0 ? gps(t.totalValue) : "", accent(), t.inProgress),
-				kills, t.ts > 0 ? day((long) (t.ts * 1000)) : "", () -> showTask(at));
-		}
-		if (shown.size() > slayerShown)
-		{
-			more(p, shown.size(), slayerShown, false, n -> slayerShown = n);
-			p.add(vgap(4));
-		}
 	}
 
 	final Map<String, Integer> drillShown = new LinkedHashMap<>();
@@ -2077,7 +1441,7 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	private boolean drawingCopy;
+	boolean drawingCopy;
 
 	boolean copyPage(Supplier<JPanel> page)
 	{
@@ -2094,419 +1458,6 @@ class ChroniclePanel extends PluginPanel
 		{
 			drawingCopy = false;
 		}
-	}
-
-	private JPanel buildItemDetail(String name)
-	{
-		JPanel p = column();
-		long got = 0;
-		long worth = 0;
-		int found = 0;
-		final List<Object[]> srcs = new ArrayList<>();
-		for (SourceRow r : build.sources())
-		{
-			for (BagItem b : store.sourceItems(r.name))
-			{
-				if (b.name.equalsIgnoreCase(name))
-				{
-					got += b.qty;
-					worth += b.value;
-					if (found == 0 && b.itemId > 0)
-					{
-						found = b.itemId;
-					}
-					srcs.add(new Object[]{r.name, b.qty, b.value});
-				}
-			}
-		}
-		final LocalStore.LootWindow win = wholeRecord() ? null : build.lootWindow();
-		final LocalStore.Row headRow = win == null ? null : win.item(name);
-		final long[] inWindow = win == null ? null
-			: headRow == null ? new long[2] : new long[]{headRow.qty, headRow.value};
-		long other = 0;
-		long otherValue = 0;
-		if (inWindow != null)
-		{
-			srcs.clear();
-			other = inWindow[0];
-			otherValue = inWindow[1];
-			String spelled = headRow != null ? headRow.name : name;
-			for (Map.Entry<String, List<BagItem>> e : win.bySource.entrySet())
-			{
-				for (BagItem b : e.getValue())
-				{
-					if (b.name.equals(spelled))
-					{
-						srcs.add(new Object[]{e.getKey(), b.qty, b.value});
-						other -= b.qty;
-						otherValue -= b.value;
-					}
-				}
-			}
-		}
-		srcs.sort((a, b) -> Long.compare((long) b[1], (long) a[1]));
-		final long qty = inWindow != null ? inWindow[0] : got;
-		final long value = inWindow != null ? inWindow[1] : worth;
-		final int itemId = found;
-		spaced(p, backRow(() -> copyPage(() -> buildItemDetail(name))), 4);
-		JPanel head = card(name);
-		if (itemId > 0)
-		{
-			JLabel slot = new JLabel();
-			slot.setPreferredSize(new Dimension(36, 32));
-			slot.setAlignmentX(Component.LEFT_ALIGNMENT);
-			AsyncBufferedImage img = store.items().getImage(itemId,
-				(int) Math.min(Integer.MAX_VALUE, Math.max(1, qty)), qty > 1);
-			img.addTo(slot);
-			head.add(slot);
-		}
-		final boolean hasTask = build.taskItems().containsKey(properName(name));
-		long[] tw = window().ms();
-		long[] mine = inWindow == null ? build.taskItems().get(properName(name))
-			: store.tasks(tw[0], tw[1], null, true).items().getOrDefault(properName(name), new long[2]);
-		if (hasTask && onTaskOnly)
-		{
-			head.add(row("Obtained on task", "×" + fmt(mine[0]), accent()));
-			if (inWindow == null || lootSince() == null)
-			{
-				head.add(row("All sources", "×" + fmt(qty)));
-			}
-			JPanel priced = worthRow(mine[1]);
-			priced.setToolTipText("Priced as the drop landed, or in bulk on the day "
-				+ "the history was imported");
-			head.add(priced);
-		}
-		else
-		{
-			head.add(row("Obtained", "×" + fmt(qty), accent()));
-			if (value > 0)
-			{
-				head.add(worthRow(value));
-			}
-		}
-		if (inWindow == null && !drawingCopy)
-		{
-			long[] days = build.lootDays().itemDays(name);
-			days[2] = days.length > 3 && days[3] < got ? 0 : days[2];
-			if (days[2] == 1)
-			{
-				head.add(row("Dropped on", dated(days[0])));
-			}
-			else if (days[2] > 1)
-			{
-				head.add(row("First dropped", dated(days[0])));
-				head.add(row("Last dropped", dated(days[1])));
-				head.add(row("Days it landed", fmt(days[2])));
-			}
-		}
-		p.add(head);
-		String since = inWindow == null || hasTask && onTaskOnly ? null : lootSince();
-		if (inWindow != null && sinceLine(since) != null)
-		{
-			p.add(vgap(4));
-			p.add(note(sinceLine(since)));
-		}
-		p.add(vgap(6));
-		if (hasTask)
-		{
-			JPanel hold = column();
-			hold.add(toggle(onTaskOnly ? "On task" : "All", relens(() -> onTaskOnly = !onTaskOnly)));
-			hold.add(vgap(6));
-			p.add(hold);
-		}
-		if (hasTask && onTaskOnly)
-		{
-			return byTaskRows(p, properName(name));
-		}
-		if (srcs.isEmpty() && other <= 0)
-		{
-			return inWindow != null ? nothing(p, "dropped", since)
-				: noted(p, "The journal hasn't seen this item drop yet.");
-		}
-		p.add(group("From"));
-		final int srcCap = Math.max(drawingCopy ? COPY_MOST : 40, drillShown.getOrDefault("item:src:" + name, 0));
-		for (Object[] s : Sources.firstN(srcs, srcCap))
-		{
-			JPanel r = row((String) s[0], "×" + fmt((long) s[1])
-				+ tail((long) s[2]));
-			final String src = (String) s[0];
-			link(r, () -> openSource(src));
-			p.add(r);
-		}
-		drillMore(p, "item:src:" + name, srcs.size(), srcCap);
-		addOther(p, "×" + fmt(Math.max(0, other)) + tail(Math.max(0, otherValue)), other > 0 || otherValue > 0);
-		return p;
-	}
-
-	private String lootSince()
-	{
-		long from = build.lootDays().detailFrom();
-		Period w = window();
-		return sessionPeriod() || from > 0 && from <= startMs(w.start) ? null
-			: from <= 0 ? UNDATED
-			: !drawingCopy ? "Loot since " + dayOf(from).format(FULL_DAY)
-			: "Loot is dated for " + (dayOf(from).isAfter(w.end) ? "none" : "only part") + " of "
-			+ window().inSentence() + ".";
-	}
-
-	private String sinceLine(String since)
-	{
-		return since != null || wholeRecord() || !drawingCopy ? since
-			: "The figures above are " + window().inSentence() + "'s.";
-	}
-
-	private JPanel nothing(JPanel p, String what, String since)
-	{
-		return since != null ? p : noted(p, window().phrase("Nothing " + what));
-	}
-
-	private static void addOther(JPanel p, String figure, boolean show)
-	{
-		if (show)
-		{
-			JPanel r = ghostRow("Other", figure);
-			r.setToolTipText("Dropped on days the record kept whole rather than by source");
-			p.add(r);
-		}
-	}
-
-	private String properName(String typed)
-	{
-		String key = keyOf(build.taskItems().keySet(), typed);
-		return key == null ? typed : key;
-	}
-
-	private JPanel byTaskRows(JPanel p, String name)
-	{
-		long[] w = window().ms();
-		List<LocalStore.Row> split = store.tasks(w[0], w[1], null, true).byTask(name);
-		if (split.isEmpty())
-		{
-			return noted(p, window().phrase("No task paid this"));
-		}
-		p.add(group("By task"));
-		final int taskCap = Math.max(drawingCopy ? COPY_MOST : 40, drillShown.getOrDefault("item:task:" + name, 0));
-		for (LocalStore.Row t : Sources.firstN(split, taskCap))
-		{
-			p.add(row("Task: " + t.name, "×" + fmt(t.qty) + tail(t.value)));
-		}
-		drillMore(p, "item:task:" + name, split.size(), taskCap);
-		return p;
-	}
-
-	private void addKillSources(JPanel head, SourceRow sr, long headline)
-	{
-		if (headline < 0)
-		{
-			return;
-		}
-		Map<String, Long> rows = build.kills.sayers(sr);
-		boolean accounted = false;
-		for (Long v : rows.values())
-		{
-			accounted |= v != null && v.longValue() == headline;
-		}
-		if (rows.size() < 2 || !accounted)
-		{
-			return;
-		}
-		final String key = "kcsrc:" + sr.name;
-		head.add(quietHead("What says so", "", key));
-		if (!foldOpen(key))
-		{
-			return;
-		}
-		for (Entry<String, Long> e : rows.entrySet())
-		{
-			head.add(row(e.getKey(), fmt(e.getValue())));
-		}
-	}
-
-	private void addAssignments(JPanel p, String npc)
-	{
-		long[] w = window().ms();
-		List<LocalStore.Assignment> was = store.tasks(w[0], w[1], null, true).assignments(npc);
-		if (was.isEmpty())
-		{
-			return;
-		}
-		p.add(group("Killed on task"));
-		int cap = drillShown.getOrDefault("ontask:src:" + npc, ROW_CAP);
-		for (LocalStore.Assignment a : Sources.firstN(was, cap))
-		{
-			p.add(row("Task: " + a.task, fmt(a.killsHere)));
-		}
-		drillMore(p, "ontask:src:" + npc, was.size(), cap);
-		p.add(vgap(6));
-	}
-
-	private void addFloorRow(JPanel head, String name)
-	{
-		for (UntakenRow u : store.untaken().sources)
-		{
-			if (u.qty > 0 && u.name.equalsIgnoreCase(name))
-			{
-				JPanel r = row("Left behind", qtyGp(u.qty, u.value)
-					+ (u.kills > 0 ? " · " + count(u.kills, "kill") : ""));
-				r.setToolTipText("Open what was left on the floor");
-				link(r, () ->
-				{
-					detailSource = null;
-					leftBehindSource = u.name;
-					rebuild();
-				});
-				head.add(r);
-				return;
-			}
-		}
-	}
-
-	private JPanel buildSourceDetail(String name)
-	{
-		JPanel p = column();
-		final SourceRow sr = Sources.find(build.sources(), r -> r.name, name, false);
-		LocalStore.LootWindow win = wholeRecord() ? null : build.lootWindow();
-		LocalStore.Row row = win == null ? null : win.source(sr != null ? sr.name : name, sr != null);
-		long[] inWindow = win == null ? null : row == null ? new long[2] : new long[]{row.qty, row.value};
-		String own = row != null ? row.name : sr != null ? sr.name : name;
-		final List<BagItem> bag = win == null ? store.sourceItems(own)
-			: new ArrayList<>(win.bySource.getOrDefault(own, new ArrayList<>()));
-		bag.sort(Comparator.comparingLong((BagItem b) -> b.value).reversed());
-		final long other = inWindow == null ? 0 : inWindow[1] - LocalStore.tallyOf(bag)[1];
-		final boolean unfiled = other > 0 || win != null && win.unfiled.contains(own);
-		spaced(p, backRow(() -> copyPage(() -> buildSourceDetail(name))), 4);
-		JPanel head = card(name);
-		if (sr != null)
-		{
-			boolean killed = build.kills.isKillSource(sr.name);
-			long shown = inWindow != null ? inWindow[0]
-				: killed ? build.kills.standingKills(sr) : sr.loots;
-			head.add(row(killed ? "Kills" : "Times looted", fmt(shown), accent()));
-			long worth = inWindow != null ? inWindow[1] : sr.value;
-			long over = inWindow != null ? inWindow[0] : sr.loots;
-			head.add(row("Worth", gps(worth)
-				+ (over > 0 ? " · " + perOne(worth, over, killed) : "")));
-			if (inWindow == null)
-			{
-				addKillSources(head, sr, killed ? shown : -1);
-				addFloorRow(head, sr.name);
-			}
-			for (Entry<String, Long> pbLine : build.kills.pageLines(sr.name, "pb_lines"))
-			{
-				head.add(row(pbLine.getKey(), pb(pbLine.getValue())));
-			}
-			for (Entry<String, Long> ln : build.kills.logLines(sr.name))
-			{
-				head.add(row(ln.getKey(), fmt(ln.getValue())));
-			}
-			if (sr.pb != null)
-			{
-				JsonObject rec = build.feed.records().get(low(sr.name));
-				JsonObject recData = rec != null ? rec.getAsJsonObject("data") : null;
-				JPanel best = row("Personal best", pb(sr.pb) + (rec != null
-					? " · set " + day(safeLong(rec.get("ts"))) : ""));
-				if (recData != null && recData.has("was"))
-				{
-					best.setToolTipText("Was " + pb(recData.get("was").getAsDouble()));
-				}
-				head.add(best);
-			}
-			double[] timed = win == null ? new double[]{sr.timed, sr.timeSum}
-				: row == null ? new double[2] : new double[]{row.timed, row.timeSum};
-			if (timed[0] > 0)
-			{
-				head.add(row("Average kill", pb(timed[1] / timed[0]) + " · "
-					+ fmt((long) timed[0]) + " timed"));
-			}
-			long here = build.kills.minutesAt(sr.name, inWindow == null ? build.lifetime() : build.periodCounters());
-			if (here > 0 && build.kills.minutesCoverPeriod())
-			{
-				boolean rate = killed && shown > 0 && here >= 30;
-				head.add(row("Time here", hoursMinutes(here)
-					+ (rate ? " · " + rateText(shown * 60.0 / here) + " kills/h" : "")));
-			}
-			if (sr.firstMs > 0 && !drawingCopy)
-			{
-				head.add(row("Tracked since",
-					day(sr.firstMs)));
-			}
-			if (grindsCache == null && !grindsFetching && !drawingCopy)
-			{
-				grindsFetching = true;
-				fetchGrinds(rows2 -> SwingUtilities.invokeLater(() ->
-				{
-					grindsFetching = false;
-					if (rows2 == null)
-					{
-						return;
-					}
-					grindsCache = rows2;
-					if (sr.name.equals(detailSource))
-					{
-						rebuildInPlace();
-					}
-				}));
-			}
-			if (grindsCache != null && !drawingCopy)
-			{
-				for (GrindBook.GrindRow g : grindsCache)
-				{
-					if (g.boss.equalsIgnoreCase(sr.name))
-					{
-						head.add(row("Chasing " + g.item,
-							fmt(g.kc) + " / " + fmt(g.rate) + " kc",
-							g.percentileDry >= 90 ? ACCENT_RED : null));
-						break;
-					}
-				}
-			}
-		}
-		spaced(p, head);
-		String since = inWindow == null ? null : lootSince();
-		if (sinceLine(since) != null)
-		{
-			spaced(p, note(sinceLine(since)), 5);
-		}
-		if (sr != null)
-		{
-			addAssignments(p, sr.name);
-		}
-		if (!bag.isEmpty() || unfiled)
-		{
-			JPanel grid = new JPanel(new GridLayout(0, 5, 3, 3));
-			grid.setBackground(DARK);
-			int sprites = 0;
-			for (BagItem b : bag)
-			{
-				if (b.itemId <= 0)
-				{
-					continue;
-				}
-				if (sprites++ >= 10)
-				{
-					break;
-				}
-				grid.add(sprite(b.itemId, b.name, b.qty));
-			}
-			if (sprites > 0)
-			{
-				spaced(p, grid, 5);
-			}
-			p.add(group("Loot"));
-			int cap = drawingCopy ? COPY_MOST : drillShown.getOrDefault(name, 25);
-			addBagRows(p, Sources.firstN(bag, cap));
-			if (bag.size() > cap)
-			{
-				p.add(vgap(3));
-			}
-			drillMore(p, name, bag.size(), cap);
-			addOther(p, gps(Math.max(0, other)), unfiled);
-			return p;
-		}
-		return sr == null ? noted(p, "The journal has no drops from this source yet.")
-			: inWindow != null ? nothing(p, "from " + name, since)
-			: noted(p, "Items fill in as you play. The journal prices each drop the "
-			+ "moment it lands.");
 	}
 
 	int[] clogStanding()
@@ -2747,7 +1698,7 @@ class ChroniclePanel extends PluginPanel
 		return menu;
 	}
 
-	private void menuItem(JPopupMenu menu, String text, boolean on, Runnable go)
+	void menuItem(JPopupMenu menu, String text, boolean on, Runnable go)
 	{
 		JMenuItem item = new JMenuItem(text);
 		item.setFont(small());
@@ -2757,37 +1708,6 @@ class ChroniclePanel extends PluginPanel
 		}
 		item.addActionListener(e -> go.run());
 		menu.add(item);
-	}
-
-	private JPopupMenu taskMenu()
-	{
-		JPopupMenu menu = new JPopupMenu();
-		menuItem(menu, "Every task", lootTask == null, () -> pickTask(null));
-		menu.addSeparator();
-		for (String task : store.allTasks().names())
-		{
-			menuItem(menu, task, task.equals(lootTask), () -> pickTask(task));
-		}
-		return menu;
-	}
-
-	private void pickTask(String task)
-	{
-		lootTask = task;
-		lootKind = null;
-		rebuildInPlace();
-	}
-
-	private JPanel taskPicker()
-	{
-		JPanel r = row("Task", lootTask == null ? "Every task" : lootTask, accent());
-		styled(part(r, BorderLayout.CENTER), small(), dim());
-		JLabel pick = part(r, BorderLayout.EAST);
-		pick.setFont(small());
-		pick.setToolTipText("Narrow this board to one task");
-		link(pick, () -> taskMenu().show(r, 0, r.getHeight()));
-		link(r, () -> taskMenu().show(r, 0, r.getHeight()));
-		return r;
 	}
 
 	private void freshBuild()
@@ -2803,120 +1723,6 @@ class ChroniclePanel extends PluginPanel
 		periodFrom = w.start;
 		periodTo = w.end;
 		return w;
-	}
-
-	private List<SourceRow> skillGround(String craft)
-	{
-		Set<String> ownTile = new HashSet<>();
-		for (String[] a : ACTIVITIES)
-		{
-			if (!a[1].isEmpty())
-			{
-				ownTile.add(low(a[1]));
-			}
-		}
-		List<SourceRow> out = new ArrayList<>();
-		for (SourceRow r : build.sources())
-		{
-			if (ownTile.contains(low(r.name)))
-			{
-				continue;
-			}
-			Skill sk = Sources.skillOf(r.name);
-			if (sk != null && sk.name().equalsIgnoreCase(craft) && r.value > 0)
-			{
-				out.add(r);
-			}
-		}
-		out.sort((x, y) -> Long.compare(y.value, x.value));
-		return out;
-	}
-
-	private Long liveXp(String key)
-	{
-		long[] cur = live.skillSheet().get(key);
-		return cur != null && cur.length > 1 && cur[1] > 0 ? cur[1] : null;
-	}
-
-	private JPanel buildSkillDetail(String craft)
-	{
-		JPanel p = backPage();
-		consumVals = store.consumableValues();
-		String key = low(craft);
-
-		JPanel head = card(craft);
-		Span s = build.span();
-		Long now = liveXp(key);
-		if (now == null)
-		{
-			now = s == null ? null : s.closing.skills.get(key);
-		}
-		Long was = sessionPeriod()
-			? (now == null ? null : Math.max(0, now - build.summary.sessionXp(key)))
-			: (s == null ? null : s.opening.skills.get(key));
-		if (now != null && now > 0)
-		{
-			head.add(row("Level", String.valueOf(PaceBook.levelAt(now)), accent()));
-			head.add(row("Experience", gp(now)));
-			if (!wholeRecord() && was != null && now > was)
-			{
-				head.add(row("Gained", "+" + gp(now - was), accent()));
-			}
-		}
-		else
-		{
-			head.add(row("Level", "-"));
-		}
-		long minutes = (wholeRecord() ? build.lifetime() : build.periodCounters())
-			.getOrDefault(StatKeys.timeKey(craft), 0L);
-		if (minutes > 0 && build.kills.minutesCoverPeriod())
-		{
-			long gained = !wholeRecord() && was != null && now != null && now > was ? now - was : 0;
-			boolean rate = gained > 0 && minutes >= 30;
-			head.add(row("Time", hoursMinutes(minutes)
-				+ (rate ? " · " + gp(Math.round(gained * 60.0 / minutes)) + " xp/h" : "")));
-		}
-		spaced(p, head);
-
-		Map<String, Long> counters = build.countersForPeriod();
-		if (counters == null)
-		{
-			p.add(noPeriod());
-			return p;
-		}
-		List<Entry<String, Long>> rows = new ArrayList<>();
-		for (Entry<String, Long> e : counters.entrySet())
-		{
-			if (e.getValue() == null || e.getValue() <= 0
-				|| !"Skilling".equals(StatRegistry.family(e.getKey()))
-				|| !craft.equalsIgnoreCase(StatRegistry.subgroup(e.getKey())))
-			{
-				continue;
-			}
-			rows.add(e);
-		}
-		List<SourceRow> ground = skillGround(craft);
-		if (rows.isEmpty() && ground.isEmpty())
-		{
-			String unkept = build.notCounting(false);
-			return noted(p, unkept != null ? unkept : "Nothing is tracked under " + craft
-				+ (wholeRecord() ? "." : " in " + window().inSentence() + "."));
-		}
-		rows.sort(StatRegistry::compareRows);
-		addPaceLine(p, craft);
-		statRows(p, rows);
-		if (!ground.isEmpty())
-		{
-			p.add(vgap(6));
-			p.add(group("WHAT IT HAS EVER PAID"));
-			for (SourceRow r : ground)
-			{
-				JPanel line = row(r.name, gps(r.value), accent());
-				link(line, () -> openSource(r.name));
-				p.add(line);
-			}
-		}
-		return p;
 	}
 
 	JPanel noPeriod()
@@ -3172,7 +1978,7 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private JPanel toggle(String reading, Runnable flip)
+	JPanel toggle(String reading, Runnable flip)
 	{
 		JPanel cell = new JPanel(new BorderLayout());
 		cell.setBackground(DARKER);
