@@ -49,7 +49,6 @@ import static chronicle.Kit.ROW_GAP;
 import static chronicle.Kit.boardRowRoom;
 import static chronicle.Kit.column;
 import static chronicle.Kit.day;
-import static chronicle.Kit.figure;
 import static chronicle.Kit.ghostRow;
 import static chronicle.Kit.group;
 import static chronicle.Kit.link;

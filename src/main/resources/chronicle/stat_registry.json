@@ -1,6 +1,6 @@
 {
  "_comment": {
-  "file": "Read by StatRegistry (combat through suffixFloors) and HistoryProgress (groupRows, summaryRun). What each table is for is said where the Java declares it; the notes below are about particular rows.",
+  "file": "Read by StatRegistry. What each table is for is said where the Java declares it; the notes below are about particular rows.",
   "livingFlat": "potionsConsumedValue and foodConsumedValue are the same spend split by what it went on, written at the bite and the dose.",
   "hide": "The Food and Potions fold heads carry foodConsumedValue and potionsConsumedValue beside their counts. bowsFletched predates bowsStrung and still sits in older journals; nothing writes it now, but family() would give it a row if it showed up.",
   "skills": [
@@ -18,9 +18,7 @@
    "portTasksCompleted: courier and bounty tasks both land on this one key. essenceCrafted: the essence spent, not the runes it came back as.",
    "slayerKills is read off the slayer journey on the History tab alone, and petsObtained through levelsGained are counted off the feed's dated entries there; none is ever on the spine.",
    "lootLeftKills, the kills that left at least one stack, is never a line of its own: it is what Drops taken subtracts. lootKept is derived on the History tab from lootValue and lootLeftValue, and dropsTaken from dropsReceived and lootLeftKills on the History tab and the Home strip alike; they are named here so every figure on that tab reads off one table."
-  ],
-  "groupRows": "Levels stand under Experience as the feed's dated count, beside the per-skill gains the tab ranks there.",
-  "summaryRun": "The damage split rides under its parent, with the registry's '· by' labels. petsObtained through levelsGained are the feed's dated entries, counted by type on the History tab."
+  ]
  },
  "combat": [
   "damageDealt",
@@ -440,71 +438,5 @@
   "TrialsCompleted": "barracudaTrialsCompleted",
   "Sacked": "herbsSacked",
   "Tanned": "hidesTanned"
- },
- "groupRows": {
-  "Experience": [
-   "levelsGained"
-  ],
-  "Combat": [
-   "kills",
-   "slayerTasksCompleted",
-   "slayerKills",
-   "damageDealt",
-   "damageDealtMelee",
-   "damageDealtRanged",
-   "damageDealtMagic",
-   "deaths"
-  ],
-  "Loot": [
-   "dropsReceived",
-   "dropsTaken",
-   "lootLeftCount",
-   "lootValue",
-   "lootKept",
-   "petsObtained",
-   "clogSlotsObtained"
-  ],
-  "Skilling": [],
-  "Upkeep": [
-   "consumedValue"
-  ],
-  "Travel": [
-   "distanceRan",
-   "distanceWalked"
-  ],
-  "Achievement": [
-   "questsCompleted",
-   "diariesCompleted",
-   "combatAchievements"
-  ],
-  "The rest": [
-   "resourcesGatheredValue",
-   "itemsDroppedValue",
-   "coinsFromAlchemy",
-   "coinsSpentAtShops",
-   "coinsEarnedAtShops"
-  ]
- },
- "summaryRun": [
-  "kills",
-  "slayerTasksCompleted",
-  "slayerKills",
-  "damageDealt",
-  "damageDealtMelee",
-  "damageDealtRanged",
-  "damageDealtMagic",
-  "deaths",
-  "petsObtained",
-  "questsCompleted",
-  "diariesCompleted",
-  "combatAchievements",
-  "levelsGained",
-  "clogSlotsObtained",
-  "distanceRan",
-  "distanceWalked",
-  "coinsSpentAtShops",
-  "coinsEarnedAtShops",
-  "coinsFromAlchemy",
-  "consumedValue"
- ]
+ }
 }

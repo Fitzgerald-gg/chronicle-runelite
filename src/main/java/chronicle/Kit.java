@@ -9,7 +9,6 @@
 package chronicle;
 
 import chronicle.Kit.ScrollColumn;
-import chronicle.panel.HistoryProgress;
 import chronicle.panel.StatRegistry;
 import java.awt.AlphaComposite;
 import java.awt.BorderLayout;
@@ -94,7 +93,6 @@ import static chronicle.Kit.value;
 import static chronicle.Kit.wash;
 import static chronicle.Period.TASK_DAY;
 import static chronicle.Text.fmt;
-import static chronicle.Text.gp;
 import static chronicle.Text.gps;
 import static chronicle.Text.share;
 
@@ -264,12 +262,6 @@ final class Kit
 	{
 		r.setBorder(pad(1, ROW_INSET + 12, 1, ROW_INSET));
 		return r;
-	}
-
-	static String figure(HistoryProgress.Row r)
-	{
-		String base = r.gp() ? gps(r.value()) : fmt(r.value());
-		return r.gpNote() > 0 ? base + " · " + gp(r.gpNote()) + " " + r.gpNoteWord() : base;
 	}
 
 	static String tip(String title, String... lines)

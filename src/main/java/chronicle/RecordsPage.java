@@ -37,7 +37,6 @@ import static chronicle.Kit.column;
 import static chronicle.Kit.day;
 import static chronicle.Kit.dim;
 import static chronicle.Kit.facts;
-import static chronicle.Kit.figure;
 import static chronicle.Kit.ghostRow;
 import static chronicle.Kit.link;
 import static chronicle.Kit.note;

@@ -53,7 +53,6 @@ import static chronicle.Kit.clip;
 import static chronicle.Kit.column;
 import static chronicle.Kit.dim;
 import static chronicle.Kit.dimLine;
-import static chronicle.Kit.figure;
 import static chronicle.Kit.grid3;
 import static chronicle.Kit.group;
 import static chronicle.Kit.levelTile;

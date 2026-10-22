@@ -163,7 +163,6 @@ class ChroniclePanel extends PluginPanel
 	final RecordsPage records = new RecordsPage(this);
 	final SearchPage search = new SearchPage(this);
 	final Art art = new Art(this);
-	final ItemNames itemNames;
 	final Search index;
 	private final JPanel display = new JPanel(new BorderLayout());
 	private final ScrollColumn canvas = new ScrollColumn();
@@ -258,7 +257,6 @@ class ChroniclePanel extends PluginPanel
 		this.skillIcons = skillIcons;
 		grindBook = new GrindBook(gson);
 		freshBuild();
-		itemNames = new ItemNames(store, gson, n -> build.names().named(n));
 		index = new Search(store);
 
 		watchForReturn();
@@ -904,7 +902,6 @@ class ChroniclePanel extends PluginPanel
 		drillShown.clear();
 		histListShown.clear();
 		openFolds.clear();
-		itemNames.forget();
 		art.forgetScaled();
 		gatherHistory();
 		rebuild();
