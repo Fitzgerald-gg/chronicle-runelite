@@ -20,12 +20,16 @@ public class ClogTest
 	private static final int MYSTIC_HAT = 4089;
 	private static final int ANCIENT_PAGE = 11341;
 	private static final int DAGGER = 13265;
+	private static final int ORION = 34646;
+	private static final int ASCENSION_SHARDS = 34669;
 
 	private final Harness h = new Harness().login()
 		.item(CHAINBODY, "Dragon chainbody", 200000)
 		.item(MYSTIC_HAT, "Mystic hat (dark)", 1000)
 		.item(ANCIENT_PAGE, "Ancient page", 0)
-		.item(DAGGER, "Abyssal dagger", 1000000);
+		.item(DAGGER, "Abyssal dagger", 1000000)
+		.item(ORION, "Orion", 0)
+		.item(ASCENSION_SHARDS, "Ascension shards", 0);
 
 	private JsonObject clog()
 	{
@@ -109,5 +113,13 @@ public class ClogTest
 		List<String> other = h.screen("Standing", "log", "clog:Other");
 		assertEquals("1/90", after(other, "Slayer"));
 		assertEquals("3/26", after(other, "My Notes"));
+	}
+
+	@Test
+	public void theFracturedArchiveIsARaidPageWithItsSeventeenSlots()
+	{
+		h.clogPage("The Fractured Archive", Arrays.asList("Obtained: 2/17"), ORION, 1, 0, ASCENSION_SHARDS, 1, 0).save();
+		assertEquals("2/17", after(h.screen("Standing", "log", "clog:Raids"), "The Fractured Archive"));
+		assertFalse(h.screen("Standing", "log", "clog:Other").contains("NEW SINCE THIS RELEASE"));
 	}
 }

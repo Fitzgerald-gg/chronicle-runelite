@@ -24,6 +24,10 @@
   "sprite": 4267
  },
  {
+  "name": "Brutus",
+  "sprite": 6352
+ },
+ {
   "name": "Bryophyta",
   "sprite": 4262
  },
@@ -84,8 +88,16 @@
   "sprite": 5627
  },
  {
+  "name": "Doom of Mokhaiotl",
+  "sprite": 6347
+ },
+ {
   "name": "Duke Sucellus",
   "sprite": 5632
+ },
+ {
+  "name": "The Fractured Archive",
+  "sprite": 8360
  },
  {
   "name": "General Graardor",
@@ -116,7 +128,7 @@
   "sprite": 4275
  },
  {
-  "name": "Kree'arra",
+  "name": "Kree'Arra",
   "sprite": 4285
  },
  {
@@ -126,6 +138,14 @@
  {
   "name": "Lunar Chests",
   "sprite": 5637
+ },
+ {
+  "name": "Mad Angel",
+  "sprite": 8359
+ },
+ {
+  "name": "Maggot King",
+  "sprite": 8358
  },
  {
   "name": "Mimic",
@@ -162,6 +182,10 @@
  {
   "name": "Scurrius",
   "sprite": 5635
+ },
+ {
+  "name": "Shellbane Gryphon",
+  "sprite": 6349
  },
  {
   "name": "Skotizo",
@@ -252,35 +276,15 @@
   "sprite": 4266
  },
  {
+  "name": "Yama",
+  "sprite": 6346
+ },
+ {
   "name": "Zalcano",
   "sprite": 4273
  },
  {
   "name": "Zulrah",
   "sprite": 4279
- },
- {
-  "name": "Brutus",
-  "sprite": 6352
- },
- {
-  "name": "Doom of Mokhaiotl",
-  "sprite": 6347
- },
- {
-  "name": "The Mad Angel",
-  "sprite": 8359
- },
- {
-  "name": "Maggot King",
-  "sprite": 8358
- },
- {
-  "name": "Shellbane Gryphon",
-  "sprite": 6349
- },
- {
-  "name": "Yama",
-  "sprite": 6346
  }
 ]
