@@ -308,7 +308,7 @@ final class LogPage
 		return order;
 	}
 
-	static String fitChase(GrindBook.PetChase chase, String share)
+	private static String fitChase(GrindBook.PetChase chase, String share)
 	{
 		FontMetrics fm = rowMetrics();
 		int avail = chaseRoom(share, fm);

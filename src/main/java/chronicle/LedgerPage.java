@@ -500,7 +500,7 @@ final class LedgerPage
 		}
 	}
 
-	String rowValue(Entry<String, Long> e)
+	private String rowValue(Entry<String, Long> e)
 	{
 		String base = value(e);
 		if (e.getKey().equals("resourcesGatheredValue") && panel.resourcesDropped > 0)

@@ -109,18 +109,18 @@ final class Kit
 	static final Color TILE_LIT = new Color(198, 198, 198);
 	static final int ROW_CAP = 30;
 	static final int PANEL_INSET = 8;
-	static final int CARD_INSET = 8;
-	static final int ROW_INSET = 2;
+	private static final int CARD_INSET = 8;
+	private static final int ROW_INSET = 2;
 	static final int ROW_GAP = 8;
-	static final String ELLIPSIS = "…";
+	private static final String ELLIPSIS = "…";
 	static final int NAME_FLOOR = 3;
-	static final JLabel MEASURE = new JLabel();
-	static final int OVERLAY_BAR_W = 5;
+	private static final JLabel MEASURE = new JLabel();
+	private static final int OVERLAY_BAR_W = 5;
 	static final String TIP_OPEN = "<html><body style='padding:2px'>";
 	static final String TIP_CLOSE = "</body></html>";
-	static final int NOTE_WIDTH = 190;
-	static final int HOVER_LIFT = 15;
-	static Runnable litNow;
+	private static final int NOTE_WIDTH = 190;
+	private static final int HOVER_LIFT = 15;
+	private static Runnable litNow;
 
 	private Kit()
 	{
@@ -179,7 +179,7 @@ final class Kit
 		return MEASURE.getFontMetrics(FontManager.getRunescapeFont());
 	}
 
-	static int scrollbarWidth()
+	private static int scrollbarWidth()
 	{
 		return OVERLAY_BAR_W;
 	}
@@ -297,11 +297,6 @@ final class Kit
 	{
 		return PluginPanel.PANEL_WIDTH + PluginPanel.SCROLLBAR_WIDTH
 			- 2 * PANEL_INSET - scrollbarWidth() - 2 * ROW_INSET;
-	}
-
-	static List<String> wrapClauses(String text, int room)
-	{
-		return wrap(text, " · ", rowMetrics(), room);
 	}
 
 	static List<String> wrap(String text, String sep, FontMetrics fm, int room)
@@ -550,7 +545,7 @@ final class Kit
 		return p;
 	}
 
-	static Color behind(Component c)
+	private static Color behind(Component c)
 	{
 		for (Component p = c.getParent(); p != null; p = p.getParent())
 		{
@@ -562,7 +557,7 @@ final class Kit
 		return DARKER;
 	}
 
-	static Color hoverOf(Color ground)
+	private static Color hoverOf(Color ground)
 	{
 		if (DARKER.equals(ground))
 		{
@@ -578,7 +573,7 @@ final class Kit
 			Math.min(255, ground.getBlue() + HOVER_LIFT));
 	}
 
-	static boolean stillUnder(MouseEvent e)
+	private static boolean stillUnder(MouseEvent e)
 	{
 		boolean over = false;
 		boolean pointerKnown = false;
@@ -593,7 +588,7 @@ final class Kit
 		return stillUnder(over, pointerKnown, e.getComponent().contains(e.getPoint()));
 	}
 
-	static boolean stillUnder(boolean overComponent, boolean pointerKnown,
+	private static boolean stillUnder(boolean overComponent, boolean pointerKnown,
 		boolean eventSaysInside)
 	{
 		if (overComponent)
@@ -848,7 +843,7 @@ final class Kit
 		r.add(fwd, BorderLayout.EAST);
 	}
 
-	static final class OverlayScrollBarUI
+	private static final class OverlayScrollBarUI
 		extends BasicScrollBarUI
 	{
 		private static final int IDLE_MS = 700;

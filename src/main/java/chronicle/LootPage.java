@@ -363,7 +363,7 @@ final class LootPage
 		return out;
 	}
 
-	JPanel bagCard(String title, List<BagItem> bag, long[] sum)
+	private JPanel bagCard(String title, List<BagItem> bag, long[] sum)
 	{
 		JPanel head = tallyCard(title, "Items", fmt(sum[0]), ACCENT_LIFETIME, sum[1]);
 		head.add(row("Distinct items", fmt(bag.size())));

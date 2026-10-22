@@ -96,8 +96,8 @@ final class SheetPage
 		{"Diaries", "", "diaries"},
 	};
 
-	static final int ICON_W = 22;
-	static final int ICON_H = 18;
+	private static final int ICON_W = 22;
+	private static final int ICON_H = 18;
 
 	private final ChroniclePanel panel;
 

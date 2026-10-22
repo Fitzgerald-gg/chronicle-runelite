@@ -119,10 +119,10 @@ class ChroniclePanel extends PluginPanel
 {
 	private static final Map<Tab, String[]> SUBS = new EnumMap<>(Tab.class);
 
-	static final int MOVED_RECORD = 1;
-	static final int MOVED_COUNTERS = 2;
-	static final int MOVED_SKILLS = 4;
-	static final int MOVED_CLOG = 8;
+	private static final int MOVED_RECORD = 1;
+	private static final int MOVED_COUNTERS = 2;
+	private static final int MOVED_SKILLS = 4;
+	private static final int MOVED_CLOG = 8;
 
 	private static final int MOVED_ANY = MOVED_RECORD | MOVED_COUNTERS
 		| MOVED_SKILLS | MOVED_CLOG;
@@ -150,7 +150,7 @@ class ChroniclePanel extends PluginPanel
 	final DetailPage detail = new DetailPage(this);
 	final SlayerPage slayer = new SlayerPage(this);
 	final LootPage loot = new LootPage(this);
-	final SheetPage sheet = new SheetPage(this);
+	private final SheetPage sheet = new SheetPage(this);
 	final LedgerPage ledger = new LedgerPage(this);
 	final LogPage clog = new LogPage(this);
 	final HomePage home = new HomePage(this);

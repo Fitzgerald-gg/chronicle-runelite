@@ -43,11 +43,12 @@ import static chronicle.Kit.noted;
 import static chronicle.Kit.pad;
 import static chronicle.Kit.pill;
 import static chronicle.Kit.row;
+import static chronicle.Kit.rowMetrics;
 import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
 import static chronicle.Kit.styled;
 import static chronicle.Kit.vgap;
-import static chronicle.Kit.wrapClauses;
+import static chronicle.Kit.wrap;
 import static chronicle.Period.DAY;
 import static chronicle.Period.dayOf;
 import static chronicle.Text.fmt;
@@ -137,7 +138,7 @@ final class JournalPage
 				String entry = panel.build.feed.dayEntry(dayOf(ts));
 				if (entry != null)
 				{
-					for (String line : wrapClauses(entry, boardRowRoom()))
+					for (String line : wrap(entry, " · ", rowMetrics(), boardRowRoom()))
 					{
 						p.add(ghostRow(line, ""));
 					}
