@@ -19,24 +19,21 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
+import lombok.RequiredArgsConstructor;
 import net.runelite.api.Skill;
-import net.runelite.client.game.SpriteManager;
 
 final class Art
 {
-	private static final Map<Skill, BufferedImage> SKILL_ICONS =
-		new EnumMap<>(Skill.class);
+	private static final Map<Skill, BufferedImage> SKILL_ICONS = new EnumMap<>(Skill.class);
 
 	private final ChroniclePanel panel;
 	private final Map<String, BufferedImage> images = new HashMap<>();
-	private final Set<String> artAsked = new HashSet<>();
-	private final Map<String, List<Object[]>> artWaiting = new LinkedHashMap<>();
-	private final Map<String, ImageIcon> scaledIcons = new LinkedHashMap<>();
+	private final Set<String> asked = new HashSet<>();
+	private final Map<String, List<Waiting>> waiting = new LinkedHashMap<>();
+	private final Map<String, ImageIcon> scaled = new LinkedHashMap<>();
 
 	Art(ChroniclePanel panel)
 	{
@@ -45,55 +42,22 @@ final class Art
 
 	BufferedImage skillIcon(Skill sk)
 	{
-		return SKILL_ICONS.computeIfAbsent(sk, s ->
-		{
-			try
-			{
-				return panel.skillIcons.getSkillImage(s, true);
-			}
-			catch (Throwable e)
-			{
-				return null;
-			}
-		});
+		return SKILL_ICONS.computeIfAbsent(sk, s -> panel.skillIcons.getSkillImage(s, true));
 	}
 
 	void wearSprite(JLabel label, int spriteId, int w, int h)
 	{
-		wear(label, "sprite:" + spriteId, w, h, done ->
-		{
-			SpriteManager sm = panel.sprites;
-			if (sm != null)
-			{
-				sm.getSpriteAsync(spriteId, 0, done);
-			}
-			return sm != null;
-		});
-	}
-
-	private void wear(JLabel label, String key, int w, int h,
-		Predicate<Consumer<BufferedImage>> fetch)
-	{
+		String key = "sprite:" + spriteId;
 		BufferedImage have = images.get(key);
 		if (have != null)
 		{
 			dress(label, key + "@" + w, have, w, h);
 			return;
 		}
-		artWaiting.computeIfAbsent(key, k -> new ArrayList<>()).add(new Object[]{label, w, h});
-		if (!artAsked.add(key))
+		waiting.computeIfAbsent(key, k -> new ArrayList<>()).add(new Waiting(label, w, h));
+		if (asked.add(key))
 		{
-			return;
-		}
-		try
-		{
-			if (!fetch.test(img -> SwingUtilities.invokeLater(() -> landed(key, img))))
-			{
-				artAsked.remove(key);
-			}
-		}
-		catch (Throwable ignored)
-		{
+			panel.sprites.getSpriteAsync(spriteId, 0, img -> SwingUtilities.invokeLater(() -> landed(key, img)));
 		}
 	}
 
@@ -104,22 +68,16 @@ final class Art
 			return;
 		}
 		images.put(key, img);
-		for (Object[] want : artWaiting.getOrDefault(key, Collections.emptyList()))
+		for (Waiting want : waiting.getOrDefault(key, Collections.emptyList()))
 		{
-			dress((JLabel) want[0], key + "@" + want[1], img, (Integer) want[1], (Integer) want[2]);
+			dress(want.label, key + "@" + want.w, img, want.w, want.h);
 		}
-		artWaiting.remove(key);
+		waiting.remove(key);
 	}
 
 	private void dress(JLabel label, String key, BufferedImage img, int w, int h)
 	{
-		ImageIcon icon = scaledIcons.get(key);
-		if (icon == null)
-		{
-			icon = w <= 0 || h <= 0 ? new ImageIcon(img) : fit(img, w, h);
-			scaledIcons.put(key, icon);
-		}
-		label.setIcon(icon);
+		label.setIcon(scaled.computeIfAbsent(key, k -> fit(img, w, h)));
 		label.setText("");
 	}
 
@@ -139,11 +97,19 @@ final class Art
 
 	void forgetWaiting()
 	{
-		artWaiting.clear();
+		waiting.clear();
 	}
 
 	void forgetScaled()
 	{
-		scaledIcons.clear();
+		scaled.clear();
+	}
+
+	@RequiredArgsConstructor
+	private static final class Waiting
+	{
+		final JLabel label;
+		final int w;
+		final int h;
 	}
 }

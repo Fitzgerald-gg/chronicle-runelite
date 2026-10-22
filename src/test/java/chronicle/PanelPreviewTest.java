@@ -55,6 +55,7 @@ public class PanelPreviewTest
 		StubPlugin s = new StubPlugin(mockItems());
 		s.store.load(dir, rsn);
 		s.spriteManager = mockSprites();
+		s.skillIconManager = Mockito.mock(net.runelite.client.game.SkillIconManager.class);
 		s.rsn = rsn;
 		s.store.lifetime = s.store.trackersSnapshot();
 		s.clogFinished = s.store.clogFraction()[0];
