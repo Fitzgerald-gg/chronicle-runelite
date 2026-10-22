@@ -1349,8 +1349,8 @@ class ChroniclePanel extends PluginPanel
 
 	private void addEndSession(JPanel bar)
 	{
-		JLabel end = new JLabel("X");
-		end.setFont(FontManager.getRunescapeFont());
+		JLabel end = new JLabel("\u00d7");
+		end.setFont(FontManager.getRunescapeBoldFont());
 		end.setForeground(ColorScheme.PROGRESS_ERROR_COLOR);
 		end.setToolTipText("End this session and start a new one. It is saved to the journal.");
 		link(end, live::newSession);
