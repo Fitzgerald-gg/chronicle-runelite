@@ -39,6 +39,7 @@ import static chronicle.Kit.menuItem;
 import static chronicle.Kit.note;
 import static chronicle.Kit.noted;
 import static chronicle.Kit.part;
+import static chronicle.Kit.pill;
 import static chronicle.Kit.progress;
 import static chronicle.Kit.row;
 import static chronicle.Kit.small;
@@ -74,7 +75,7 @@ final class SlayerPage
 		lens.setBackground(DARK);
 		for (String l : new String[]{"Tasks", "Monsters", "Drops"})
 		{
-			lens.add(panel.pill(l, l.equals(panel.slayerLens), 4, null, () ->
+			lens.add(pill(l, l.equals(panel.slayerLens), 4, null, () ->
 			{
 				panel.slayerLens = l;
 				panel.rebuildInPlace();

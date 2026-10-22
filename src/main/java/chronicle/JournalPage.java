@@ -41,6 +41,7 @@ import static chronicle.Kit.moreRow;
 import static chronicle.Kit.note;
 import static chronicle.Kit.noted;
 import static chronicle.Kit.pad;
+import static chronicle.Kit.pill;
 import static chronicle.Kit.row;
 import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
@@ -79,7 +80,7 @@ final class JournalPage
 		lenses.setBackground(DARK);
 		for (String[] lens : JOURNAL_LENSES)
 		{
-			lenses.add(panel.pill(lens[0], lens[0].equals(panel.journalLens), 4, null, () ->
+			lenses.add(pill(lens[0], lens[0].equals(panel.journalLens), 4, null, () ->
 			{
 				panel.journalLens = lens[0];
 				panel.journalShown = 60;

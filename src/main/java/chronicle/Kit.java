@@ -63,12 +63,14 @@ import static chronicle.Kit.DARK;
 import static chronicle.Kit.DARKER;
 import static chronicle.Kit.PANEL_INSET;
 import static chronicle.Kit.ROW_CAP;
+import static chronicle.Kit.arrows;
 import static chronicle.Kit.card;
 import static chronicle.Kit.clicker;
 import static chronicle.Kit.column;
 import static chronicle.Kit.copyLabel;
 import static chronicle.Kit.day;
 import static chronicle.Kit.dim;
+import static chronicle.Kit.fixedPeriod;
 import static chronicle.Kit.ghostRow;
 import static chronicle.Kit.link;
 import static chronicle.Kit.linkRow;
@@ -84,6 +86,7 @@ import static chronicle.Kit.reportCopy;
 import static chronicle.Kit.row;
 import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
+import static chronicle.Kit.stepStrip;
 import static chronicle.Kit.styled;
 import static chronicle.Kit.sumOf;
 import static chronicle.Kit.tallyCard;
@@ -1029,5 +1032,21 @@ final class Kit
 		{
 			return false;
 		}
+	}
+
+	static JLabel pill(String name, boolean on, int side, String tip, Runnable pick)
+	{
+		JLabel pill = new JLabel(name, JLabel.CENTER);
+		pill.setOpaque(true);
+		pill.setBorder(pad(2, side, 2, side));
+		pill.setFont(small());
+		pill.setBackground(DARKER);
+		pill.setForeground(on ? ACCENT_LIFETIME : dim());
+		if (tip != null)
+		{
+			pill.setToolTipText(tip);
+		}
+		link(pill, pick);
+		return pill;
 	}
 }

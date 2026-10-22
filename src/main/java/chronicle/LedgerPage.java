@@ -37,6 +37,7 @@ import static chronicle.Kit.link;
 import static chronicle.Kit.moreRow;
 import static chronicle.Kit.nested;
 import static chronicle.Kit.noted;
+import static chronicle.Kit.pill;
 import static chronicle.Kit.row;
 import static chronicle.Kit.spaced;
 import static chronicle.Kit.sumOf;
@@ -170,7 +171,7 @@ final class LedgerPage
 		pills.setBackground(DARK);
 		for (String fam : families)
 		{
-			pills.add(panel.pill(fam, fam.equals(panel.statsFamily), 7, null, () ->
+			pills.add(pill(fam, fam.equals(panel.statsFamily), 7, null, () ->
 			{
 				panel.statsFamily = fam;
 				panel.rebuildInPlace();

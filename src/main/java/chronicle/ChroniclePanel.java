@@ -37,7 +37,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
@@ -102,21 +101,18 @@ import static chronicle.Kit.note;
 import static chronicle.Kit.overlayBar;
 import static chronicle.Kit.pad;
 import static chronicle.Kit.part;
+import static chronicle.Kit.pill;
 import static chronicle.Kit.reportCopy;
 import static chronicle.Kit.row;
 import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
 import static chronicle.Kit.stepStrip;
 import static chronicle.Kit.styled;
-import static chronicle.Kit.sumOf;
 import static chronicle.Kit.tip;
 import static chronicle.Kit.unlight;
 import static chronicle.Kit.wash;
 import static chronicle.Period.dayOf;
 import static chronicle.Text.count;
-import static chronicle.Text.fmt;
-import static chronicle.Text.gp;
-import static chronicle.Text.hoursMinutes;
 import static chronicle.Text.named;
 
 class ChroniclePanel extends PluginPanel
@@ -205,7 +201,6 @@ class ChroniclePanel extends PluginPanel
 	private boolean keepScroll;
 	private final JPanel periodHolder = new JPanel(new BorderLayout());
 	private final JPanel north = new JPanel();
-	private long buildsRun;
 	private long lastBuildNanos;
 	private long lastBuildAt;
 	private JPanel aboveBoard;
@@ -236,11 +231,8 @@ class ChroniclePanel extends PluginPanel
 	private boolean historyGathering;
 	private int historyEpoch;
 	private final Map<String, Integer> histListShown = new LinkedHashMap<>();
-	String periodTip;
 	String sheetPage;
 	String measuredSince;
-	private LocalDate periodFrom;
-	private LocalDate periodTo;
 	String journalLens = "All";
 	int journalShown = 60;
 	Runnable searchFirst;
@@ -383,7 +375,7 @@ class ChroniclePanel extends PluginPanel
 	private JPanel subStrip()
 	{
 		String[] subs = SUBS.get(tab);
-		if (subs == null || subs.length == 0 || !searchQuery().isEmpty()
+		if (subs.length == 0 || !searchQuery().isEmpty()
 			|| detailItem != null || detailSource != null || detailSkill != null
 			|| allTrackers || showRecords || showCalendar || detailTask >= 0
 			|| leftBehindSource != null || leftBehindItem != null)
@@ -404,26 +396,10 @@ class ChroniclePanel extends PluginPanel
 		return strip;
 	}
 
-	JLabel pill(String name, boolean on, int side, String tip, Runnable pick)
-	{
-		JLabel pill = new JLabel(name, JLabel.CENTER);
-		pill.setOpaque(true);
-		pill.setBorder(pad(2, side, 2, side));
-		pill.setFont(small());
-		pill.setBackground(DARKER);
-		pill.setForeground(on ? ACCENT_LIFETIME : dim());
-		if (tip != null)
-		{
-			pill.setToolTipText(tip);
-		}
-		link(pill, pick);
-		return pill;
-	}
-
 	private String sub()
 	{
 		String[] subs = SUBS.get(tab);
-		if (subs == null || subs.length == 0)
+		if (subs.length == 0)
 		{
 			return "";
 		}
@@ -580,7 +556,7 @@ class ChroniclePanel extends PluginPanel
 
 	String searchQuery()
 	{
-		return searchField.getText() == null ? "" : searchField.getText().trim();
+		return searchField.getText().trim();
 	}
 
 	private boolean viewCares(int moved)
@@ -640,15 +616,7 @@ class ChroniclePanel extends PluginPanel
 				staleWhileHidden = true;
 				return;
 			}
-			keepScroll = true;
-			try
-			{
-				rebuild();
-			}
-			finally
-			{
-				keepScroll = false;
-			}
+			rebuildInPlace();
 		});
 	}
 
@@ -731,7 +699,6 @@ class ChroniclePanel extends PluginPanel
 
 	private void rebuildNow()
 	{
-		buildsRun++;
 		freshBuild();
 		resourcesDropped = 0;
 		art.forgetWaiting();
@@ -915,8 +882,8 @@ class ChroniclePanel extends PluginPanel
 
 	void openCurrentTask()
 	{
-		ChronicleEventCapture.SlayerView live = this.live.slayerView();
-		if (live == null)
+		ChronicleEventCapture.SlayerView task = live.slayerView();
+		if (task == null)
 		{
 			return;
 		}
@@ -937,7 +904,7 @@ class ChroniclePanel extends PluginPanel
 		for (int i = 0; i < journey.tasks.size(); i++)
 		{
 			SlayerTask t = journey.tasks.get(i);
-			if (t.inProgress && t.task.equalsIgnoreCase(live.task))
+			if (t.inProgress && t.task.equalsIgnoreCase(task.task))
 			{
 				at = i;
 				break;
@@ -1299,16 +1266,6 @@ class ChroniclePanel extends PluginPanel
 		more(card, size, cap, inset, n -> histListShown.put(key, n));
 	}
 
-	String periodTip(long[] played, List<Entry<String, Long>> gains)
-	{
-		long xp = sumOf(gains);
-		return tip(sessionPeriod() ? "This sitting"
-			: wholeRecord() ? "Lifetime" : "The period",
-			"Time played", hoursMinutes(played[0]),
-			"Sessions", fmt(played[1]),
-			"Experience", "+" + gp(xp));
-	}
-
 	boolean wholeRecord()
 	{
 		return window().whole;
@@ -1336,9 +1293,8 @@ class ChroniclePanel extends PluginPanel
 			});
 		}
 		menu.addSeparator();
-		menuItem(menu, "Exact dates", histFrom != null, () -> onSetExactDates(
-			periodFrom != null ? periodFrom : LocalDate.now().minusDays(6),
-			periodTo != null ? periodTo : LocalDate.now()));
+		Period w = window();
+		menuItem(menu, "Exact dates", histFrom != null, () -> onSetExactDates(w.start, w.end));
 		return menu;
 	}
 
@@ -1350,11 +1306,7 @@ class ChroniclePanel extends PluginPanel
 
 	Period window()
 	{
-		Period w = Period.of(histGranularity, histCursor, histFrom, histTo, live.sessionStart(),
-			historySpine);
-		periodFrom = w.start;
-		periodTo = w.end;
-		return w;
+		return Period.of(histGranularity, histCursor, histFrom, histTo, live.sessionStart(), historySpine);
 	}
 
 	JPanel noPeriod()
@@ -1458,7 +1410,7 @@ class ChroniclePanel extends PluginPanel
 
 	private static LocalDate parseDate(String text)
 	{
-		String s = text == null ? "" : text.trim();
+		String s = text.trim();
 		try
 		{
 			return LocalDate.parse(s);

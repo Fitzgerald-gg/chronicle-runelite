@@ -63,6 +63,7 @@ import static chronicle.Kit.row;
 import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
 import static chronicle.Kit.styled;
+import static chronicle.Kit.sumOf;
 import static chronicle.Kit.tile;
 import static chronicle.Kit.tip;
 import static chronicle.Kit.value;
@@ -73,6 +74,7 @@ import static chronicle.Text.climb;
 import static chronicle.Text.count;
 import static chronicle.Text.dated;
 import static chronicle.Text.fmt;
+import static chronicle.Text.gp;
 import static chronicle.Text.gps;
 import static chronicle.Text.hoursMinutes;
 import static chronicle.Text.named;
@@ -391,7 +393,7 @@ final class SheetPage
 	}
 
 	private void addSkillGrid(JPanel p, List<Entry<String, Long>> gains, Summary.Stand stand,
-		HistoryLog.Levels opened)
+		HistoryLog.Levels opened, String periodTip)
 	{
 		Map<String, Long> gain = new LinkedHashMap<>();
 		for (Entry<String, Long> g : gains)
@@ -413,8 +415,7 @@ final class SheetPage
 		spaced(p, grid, 3);
 		JPanel combat = combatLevelTile(gain, opened);
 		JPanel total = totalLevelTile(stand, opened);
-		total.setToolTipText(panel.periodTip != null ? panel.periodTip.replace("</body>", dimLine("Opens the records") + "</body>")
-			: tip("Total level", "Opens", "the records"));
+		total.setToolTipText(periodTip.replace("</body>", dimLine("Opens the records") + "</body>"));
 		link(total, panel::openRecords);
 		if (panel.wholeRecord())
 		{
@@ -830,10 +831,6 @@ final class SheetPage
 				+ " · +" + fmt(levels);
 		}
 		JPanel cell = levelTile("Total level");
-		if (panel.periodTip != null)
-		{
-			cell.setToolTipText(panel.periodTip);
-		}
 		JLabel fig = new JLabel(figure, JLabel.RIGHT);
 		fig.setFont(small());
 		fig.setForeground(levels > 0 ? ACCENT_LIFETIME
@@ -900,12 +897,22 @@ final class SheetPage
 		{
 			panel.measuredSince = b.measuredSince;
 		}
-		panel.periodTip = panel.periodTip(b.played, b.gains);
+		String periodTip = periodTip(b.played, b.gains);
 		if (b.since != null)
 		{
 			spaced(p, note(b.since), 5);
 		}
-		addSkillGrid(p, b.gains, b.stand, b.opened);
+		addSkillGrid(p, b.gains, b.stand, b.opened, periodTip);
 		return p;
+	}
+
+	private String periodTip(long[] played, List<Entry<String, Long>> gains)
+	{
+		long xp = sumOf(gains);
+		return tip(panel.sessionPeriod() ? "This sitting"
+			: panel.wholeRecord() ? "Lifetime" : "The period",
+			"Time played", hoursMinutes(played[0]),
+			"Sessions", fmt(played[1]),
+			"Experience", "+" + gp(xp));
 	}
 }

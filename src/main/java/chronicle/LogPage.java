@@ -46,6 +46,7 @@ import static chronicle.Kit.group;
 import static chronicle.Kit.link;
 import static chronicle.Kit.note;
 import static chronicle.Kit.noted;
+import static chronicle.Kit.pill;
 import static chronicle.Kit.progress;
 import static chronicle.Kit.row;
 import static chronicle.Kit.rowMetrics;
@@ -162,7 +163,7 @@ final class LogPage
 				"Obtained", fmt(of[0]),
 				"Available", fmt(of[1]),
 				"Share", share(of[0], of[1]));
-			pills.add(panel.pill(tab, tab.equals(panel.clogTab), 4, hover, () ->
+			pills.add(pill(tab, tab.equals(panel.clogTab), 4, hover, () ->
 			{
 				panel.clogTab = tab;
 				panel.clogPageSel = null;

@@ -79,7 +79,7 @@ public class ExampleExportTest
 		for (String n : new String[]{"build", "aboveBoard", "bandFixes",
 			"grindsCache", "journeyCache", "consumVals",
 			"resourcesDropped", "historySpine", "historyJourney",
-			"historyDay", "historyFeedTs", "historyEpoch", "periodFrom", "periodTo", "searchFirst", "periodTip", "measuredSince"})
+			"historyDay", "historyFeedTs", "historyEpoch", "searchFirst", "measuredSince"})
 		{
 			m.put(n, "DERIVED: rebuilt from the record, and a restored copy would be stale");
 		}
@@ -89,7 +89,7 @@ public class ExampleExportTest
 			m.put(n, "DERIVED: whether a read is in flight, which the crawl never waits on");
 		}
 		for (String n : new String[]{"everShown", "staleWhileHidden", "keepScroll",
-			"buildsRun", "lastPointer", "lastBuildNanos", "lastBuildAt"})
+			"lastPointer", "lastBuildNanos", "lastBuildAt"})
 		{
 			m.put(n, "PLUMBING: about drawing, not about where the reader is");
 		}
