@@ -9,7 +9,6 @@
 package chronicle;
 
 import chronicle.HistoryLog.Baseline;
-import chronicle.Kit.Line;
 import chronicle.Kit.ScrollColumn;
 import chronicle.LocalStore.BagItem;
 import chronicle.LocalStore.SlayerJourney;
@@ -21,7 +20,6 @@ import chronicle.counters.StatKeys;
 import chronicle.panel.StatRegistry;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -29,7 +27,6 @@ import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.FontMetrics;
 import java.awt.GridLayout;
 import java.awt.MouseInfo;
 import java.awt.Point;
@@ -46,13 +43,11 @@ import java.util.AbstractMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -69,7 +64,6 @@ import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
-import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
@@ -107,28 +101,22 @@ import static chronicle.Copy.copyPicture;
 import static chronicle.Copy.stripChrome;
 import static chronicle.Feed.most;
 import static chronicle.Feed.newestTs;
-import static chronicle.Feed.typeOf;
-import static chronicle.Json.getIgnoreCase;
 import static chronicle.Json.has;
 import static chronicle.Json.keyOf;
 import static chronicle.Json.low;
 import static chronicle.Json.obj;
 import static chronicle.Json.safeLong;
-import static chronicle.Json.str;
 import static chronicle.Kit.ACCENT_LIFETIME;
 import static chronicle.Kit.ACCENT_RED;
 import static chronicle.Kit.ACCENT_SESSION;
 import static chronicle.Kit.DARK;
 import static chronicle.Kit.DARKER;
-import static chronicle.Kit.NAME_FLOOR;
 import static chronicle.Kit.PANEL_INSET;
 import static chronicle.Kit.ROW_CAP;
 import static chronicle.Kit.TILE_LIT;
 import static chronicle.Kit.TIP_CLOSE;
 import static chronicle.Kit.TIP_OPEN;
 import static chronicle.Kit.card;
-import static chronicle.Kit.cardPlain;
-import static chronicle.Kit.chaseRoom;
 import static chronicle.Kit.clicker;
 import static chronicle.Kit.clip;
 import static chronicle.Kit.column;
@@ -137,7 +125,6 @@ import static chronicle.Kit.day;
 import static chronicle.Kit.dim;
 import static chronicle.Kit.dimLine;
 import static chronicle.Kit.figure;
-import static chronicle.Kit.fitLine;
 import static chronicle.Kit.ghostRow;
 import static chronicle.Kit.grid3;
 import static chronicle.Kit.levelTile;
@@ -150,7 +137,6 @@ import static chronicle.Kit.overlayBar;
 import static chronicle.Kit.pad;
 import static chronicle.Kit.part;
 import static chronicle.Kit.row;
-import static chronicle.Kit.rowMetrics;
 import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
 import static chronicle.Kit.styled;
@@ -212,8 +198,10 @@ class ChroniclePanel extends PluginPanel
 	final Gson gson;
 	final SpriteManager sprites;
 	final SkillIconManager skillIcons;
-	private final GrindBook grindBook;
+	final GrindBook grindBook;
 	Build build;
+	final LedgerPage ledger = new LedgerPage(this);
+	final LogPage clog = new LogPage(this);
 	final NowPage now = new NowPage(this);
 	final JournalPage journal = new JournalPage(this);
 	final RecapPage recap = new RecapPage(this);
@@ -236,11 +224,11 @@ class ChroniclePanel extends PluginPanel
 	private final Timer homeTicker;
 
 	private View view = View.HOME;
-	private Tab tab = Tab.RECORD;
+	Tab tab = Tab.RECORD;
 	private String detailItem;
 	private String detailSource;
 	private String detailSkill;
-	private boolean allTrackers;
+	boolean allTrackers;
 	private boolean showInfo;
 	private boolean showRecords;
 	private boolean showCalendar;
@@ -248,8 +236,8 @@ class ChroniclePanel extends PluginPanel
 	private final ArrayDeque<String[]> detailStack = new ArrayDeque<>();
 	String statsFamily = StatRegistry.FAMILIES[0];
 	private int dropsShown = ROW_CAP;
-	private String clogTab = "Bosses";
-	private String clogPageSel;
+	String clogTab = "Bosses";
+	String clogPageSel;
 
 	private final JPanel band = new JPanel(new BorderLayout());
 	private final JLabel bandText = new JLabel();
@@ -560,26 +548,6 @@ class ChroniclePanel extends PluginPanel
 		detailStack.clear();
 		clearSearch();
 		rebuild();
-	}
-
-	private static String pageHeaderTip(JsonObject cl, String page)
-	{
-		if (cl == null)
-		{
-			return null;
-		}
-		JsonElement found = getIgnoreCase(obj(cl, "kc_lines"), page);
-		if (found == null || !found.isJsonObject() || found.getAsJsonObject().size() == 0)
-		{
-			return null;
-		}
-		List<String> lines = new ArrayList<>();
-		for (Entry<String, JsonElement> ln : found.getAsJsonObject().entrySet())
-		{
-			lines.add(ln.getKey());
-			lines.add(fmt(safeLong(ln.getValue())));
-		}
-		return tip(page, lines);
 	}
 
 	private JPanel buildSheet()
@@ -1118,7 +1086,7 @@ class ChroniclePanel extends PluginPanel
 			: detailItem != null ? buildItemDetail(detailItem)
 			: detailSource != null ? buildSourceDetail(detailSource)
 			: detailSkill != null ? buildSkillDetail(detailSkill)
-			: allTrackers ? buildAllTrackers()
+			: allTrackers ? ledger.buildAllTrackers()
 			: showRecords ? records.buildRecords()
 			: showCalendar ? records.buildCalendar()
 			: showInfo ? records.buildInfo()
@@ -1164,7 +1132,7 @@ class ChroniclePanel extends PluginPanel
 			case SLAYER:
 				return buildSlayer();
 			case STATS:
-				return buildStats();
+				return ledger.buildStats();
 			case JOURNAL:
 				return journal.buildJournal();
 			case RECAP:
@@ -1548,16 +1516,6 @@ class ChroniclePanel extends PluginPanel
 		final JsonObject clog = store.clogSnapshot();
 		final List<SourceRow> sources = store.dropSources();
 		executor.submit(() -> onDone.accept(grindBook.grinds(clog, sources)));
-	}
-
-	private Map<String, GrindBook.PetChase> petChases(Collection<String> pets)
-	{
-		if (!live.ready())
-		{
-			return Collections.emptyMap();
-		}
-		return grindBook.petChases(store.clogSnapshot(), store.dropSources(), store.trackersSnapshot(),
-			store.skillSheet(), store.achievements(), pets);
 	}
 
 	void resetAccountCaches()
@@ -2857,346 +2815,13 @@ class ChroniclePanel extends PluginPanel
 			+ "moment it lands.");
 	}
 
-	private JPanel logInWindow(JPanel p)
-	{
-		List<JsonObject> got = new ArrayList<>();
-		for (JsonObject e : build.feed.all())
-		{
-			if ("COLLECTION".equals(typeOf(e)) && window().inside(safeLong(e.get("ts"))))
-			{
-				got.add(e);
-			}
-		}
-		if (got.isEmpty())
-		{
-			return noted(p, window().phrase("Nothing new was logged"));
-		}
-		JPanel head = card("Collection log");
-		head.add(row("Slots logged", fmt(got.size()), accent()));
-		spaced(p, head);
-		for (JsonObject e : got)
-		{
-			JsonObject d = obj(e, "data");
-			final String name = str(d, "itemName", "new item");
-			JPanel line = row(name, Feed.stamp(e));
-			link(line, () -> openItem(name));
-			p.add(line);
-		}
-		return p;
-	}
-
-	private JPanel buildLog()
-	{
-		JPanel p = column();
-		if (!wholeRecord())
-		{
-			return logInWindow(p);
-		}
-		int[] standing = clogStanding();
-		int fin = live.clogFinished();
-		JPanel head = card("Collection log");
-		if (standing != null)
-		{
-			head.add(row(fmt(standing[0]) + " / " + fmt(standing[1]),
-				Math.round(100f * standing[0] / standing[1]) + "%", accent()));
-			head.add(progress((float) standing[0] / standing[1]));
-		}
-		else if (fin > 0)
-		{
-			head.add(row("Slots obtained", fmt(fin), accent()));
-			head.add(row("Open your log in game once for the total", ""));
-		}
-		else
-		{
-			head.add(row("Open your log in game once to fill this in", ""));
-		}
-		spaced(p, head);
-
-		ClogBook book = build.book();
-		JPanel pills = new JPanel(new GridLayout(0, 3, 3, 3));
-		pills.setBackground(DARK);
-		for (String tab : book.tax.keySet())
-		{
-			long[] of = book.tabStanding(tab);
-			String hover = of == null ? null : tip(tab,
-				"Obtained", fmt(of[0]),
-				"Available", fmt(of[1]),
-				"Share", share(of[0], of[1]));
-			pills.add(pill(tab, tab.equals(clogTab), 4, hover, () ->
-			{
-				clogTab = tab;
-				clogPageSel = null;
-				rebuild();
-			}));
-		}
-		spaced(p, pills);
-
-		Map<String, List<String>> pages = book.tax.getOrDefault(clogTab, new LinkedHashMap<>());
-		for (Entry<String, List<String>> pg : pages.entrySet())
-		{
-			String page = pg.getKey();
-			List<String> slots = pg.getValue();
-			boolean[] lit = book.lit(page, slots);
-			int got = ClogBook.held(lit);
-			Long kc = book.kcs.get(low(page));
-			boolean open = page.equals(clogPageSel);
-			boolean complete = got == slots.size() && !slots.isEmpty();
-			JPanel rowP = row(page, got + "/" + slots.size()
-				+ (kc != null && kc > 0 ? " · " + fmt(kc) + " kc" : ""),
-				complete ? ACCENT_SESSION : null, complete);
-			String lines = pageHeaderTip(book.clog, page);
-			if (lines != null)
-			{
-				rowP.setToolTipText(lines);
-			}
-			link(rowP, () ->
-			{
-				clogPageSel = open ? null : page;
-				rebuild();
-			});
-			p.add(rowP);
-			if (open)
-			{
-				JPanel drill = cardPlain();
-				boolean petPage = low(page).contains("pet");
-				Map<String, LocalStore.PetRow> known = petPage
-					? petsByName() : Collections.emptyMap();
-				Map<String, GrindBook.PetChase> chases = petPage
-					? petChases(slots) : Collections.emptyMap();
-				List<List<JPanel>> detail = new ArrayList<>();
-				boolean anyDetail = false;
-				for (int i = 0; i < slots.size(); i++)
-				{
-					String key = low(slots.get(i));
-					List<JPanel> d = petDetail(lit[i], known.get(key), chases.get(key));
-					detail.add(d);
-					anyDetail |= !d.isEmpty();
-				}
-				if (anyDetail)
-				{
-					spaced(drill, note("Click pet to see odds. Skilling odds are based "
-						+ "on current level."), 3);
-				}
-				Map<String, Long> landed = build.feed.landed();
-				for (int i = 0; i < slots.size(); i++)
-				{
-					String slot = slots.get(i);
-					JPanel r = row(slot, "",
-						lit[i] || known.get(low(slot)) != null
-							? ACCENT_SESSION : ACCENT_RED, true);
-					Long when = landed.get(low(slot));
-					if (when != null)
-					{
-						r.setToolTipText(tip(slot, "Landed", dated(when)));
-					}
-					drill.add(r);
-					List<JPanel> d = detail.get(i);
-					if (d.isEmpty())
-					{
-						continue;
-					}
-					String foldKey = "pets:" + page + ":" + low(slot);
-					folds(r, foldKey);
-					if (foldOpen(foldKey))
-					{
-						for (JPanel line : d)
-						{
-							drill.add(line);
-						}
-					}
-				}
-				spaced(p, drill, 3);
-			}
-		}
-
-		if ("Other".equals(clogTab))
-		{
-			List<String> strangers = book.strangers();
-			if (!strangers.isEmpty())
-			{
-				p.add(vgap(6));
-				p.add(group("NEW SINCE THIS RELEASE"));
-				for (String pageName : strangers)
-				{
-					Map<String, Long> held = book.byPage.get(pageName);
-					Long kc = book.kcs.get(pageName);
-					p.add(row(ClogBook.prettyPage(pageName),
-						fmt(held == null ? 0 : held.size()) + " held"
-							+ (kc != null && kc > 0 ? " \u00b7 " + fmt(kc) + " kc" : "")));
-				}
-				p.add(ghostRow("Chronicle has no slot list for "
-					+ (strangers.size() == 1 ? "this page" : "these pages")
-					+ " yet, so only what you hold is known.", ""));
-			}
-		}
-		return p;
-	}
-
-	private static String chaseSources(GrindBook.PetChase chase)
-	{
-		if (chase.activity != null)
-		{
-			return chase.activity + ", " + fmt(chase.kc) + " " + chase.unit;
-		}
-		return sourceLine(chase.sources, chase.sources.size(), "").whole();
-	}
-
-	private static Line sourceLine(List<GrindBook.PetSource> src, int kept, String mark)
-	{
-		Line l = new Line();
-		for (int i = 0; i < kept; i++)
-		{
-			if (i > 0)
-			{
-				l.fixed(" · ");
-			}
-			l.name(src.get(i).boss);
-			l.fixed(", kc " + fmt(src.get(i).kc));
-		}
-		if (kept < src.size())
-		{
-			l.fixed(mark + (src.size() - kept));
-		}
-		return l;
-	}
-
-	private static final String[] DROP_MARKS = {" · +", " +"};
-
-	private static List<Integer> tailFirst(Line l, int from)
-	{
-		List<Integer> order = new ArrayList<>(l.names.subList(from, l.names.size()));
-		Collections.reverse(order);
-		return order;
-	}
-
-	static String fitChase(GrindBook.PetChase chase, String share)
-	{
-		FontMetrics fm = rowMetrics();
-		int avail = chaseRoom(share, fm);
-		if (chase.activity != null)
-		{
-			Line l = new Line();
-			l.name(chase.activity);
-			l.fixed(", " + fmt(chase.kc) + " ");
-			l.name(chase.unit);
-			String s = fitLine(l, tailFirst(l, 0), NAME_FLOOR, fm, avail);
-			if (s == null)
-			{
-				s = fitLine(l, tailFirst(l, 0), 1, fm, avail);
-			}
-			return s != null ? s : l.whole();
-		}
-		List<GrindBook.PetSource> src = chase.sources;
-		if (src.isEmpty())
-		{
-			return "";
-		}
-		for (int kept = src.size(); kept >= 1; kept--)
-		{
-			for (String mark : kept < src.size() ? DROP_MARKS : new String[]{""})
-			{
-				Line l = sourceLine(src, kept, mark);
-				String s = fitLine(l, tailFirst(l, 1), NAME_FLOOR, fm, avail);
-				if (s != null)
-				{
-					return s;
-				}
-			}
-		}
-		Line l = sourceLine(src, 1, DROP_MARKS[DROP_MARKS.length - 1]);
-		String s = fitLine(l, l.names, 1, fm, avail);
-		return s != null ? s : l.whole();
-	}
-
-	private static String chaseTip(GrindBook.PetChase chase)
-	{
-		StringBuilder sb = new StringBuilder(pct(chase.percentileDry, "Under ", "Over ") + " of players have " + chase.pet
-			+ " by this point. " + chaseSources(chase));
-		if (chase.activity != null && chase.sources.size() > 1)
-		{
-			sb.append(", mostly ").append(low(chase.sources.get(0).boss));
-		}
-		if (chase.level > 0)
-		{
-			sb.append(". Priced at ").append(chase.level)
-				.append(", the level you hold now, not the level each one was rolled at");
-		}
-		return sb.append(".").toString();
-	}
-
-	private static List<JPanel> petDetail(boolean lit, LocalStore.PetRow pet,
-		GrindBook.PetChase chase)
-	{
-		List<JPanel> out = new ArrayList<>();
-		if (pet != null)
-		{
-			StringBuilder line = new StringBuilder();
-			if (pet.source != null && !pet.source.isEmpty())
-			{
-				line.append(pet.source);
-				if (pet.kc > 0)
-				{
-					line.append(Sources.skill(pet.source.toUpperCase(Locale.ROOT)) != null
-						? ", " + fmt(pet.kc) + " xp"
-						: ", kc " + fmt(pet.kc));
-				}
-			}
-			if (line.length() > 0)
-			{
-				out.add(ghostRow(line.toString(), pet.ts > 0
-					? day(pet.ts) : ""));
-			}
-		}
-		else if (!lit && chase != null)
-		{
-			String share = holdShare(chase);
-			JPanel r = ghostRow(fitChase(chase, share), share,
-				chase.percentileDry >= 90 ? ACCENT_RED : null);
-			out.add(tipped(r, chaseTip(chase)));
-		}
-		return out;
-	}
-
-	private static JPanel tipped(JPanel r, String tip)
-	{
-		r.setToolTipText(tip);
-		for (Component c : r.getComponents())
-		{
-			if (c instanceof JComponent)
-			{
-				((JComponent) c).setToolTipText(tip);
-			}
-		}
-		return r;
-	}
-
-	private static String holdShare(GrindBook.PetChase chase)
-	{
-		return pct(chase.percentileDry, "<", ">") + " have";
-	}
-
-	private static String pct(double p, String under, String over)
-	{
-		return p < 1 ? under + "1%" : p > 99 ? over + "99%" : Math.round(p) + "%";
-	}
-
-	private Map<String, LocalStore.PetRow> petsByName()
-	{
-		Map<String, LocalStore.PetRow> out = new LinkedHashMap<>();
-		for (LocalStore.PetRow r : store.pets())
-		{
-			out.putIfAbsent(low(r.name), r);
-		}
-		return out;
-	}
-
 	int[] clogStanding()
 	{
 		int avail = live.clogAvailable();
 		return avail > 0 ? new int[]{live.clogFinished(), avail} : null;
 	}
 
-	private void addPaceLine(JPanel p, String section)
+	void addPaceLine(JPanel p, String section)
 	{
 		PaceBook.Pace pace;
 		try
@@ -3268,11 +2893,11 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private Map<String, Long> consumVals = new LinkedHashMap<>();
+	Map<String, Long> consumVals = new LinkedHashMap<>();
 
-	private long resourcesDropped;
+	long resourcesDropped;
 
-	private void statRows(JPanel p, List<Entry<String, Long>> rows)
+	void statRows(JPanel p, List<Entry<String, Long>> rows)
 	{
 		for (Entry<String, Long> e : rows)
 		{
@@ -3280,7 +2905,7 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private String rowValue(Entry<String, Long> e)
+	String rowValue(Entry<String, Long> e)
 	{
 		String base = value(e);
 		if (e.getKey().equals("resourcesGatheredValue") && resourcesDropped > 0)
@@ -3291,408 +2916,7 @@ class ChroniclePanel extends PluginPanel
 		return cv != null && cv > 0 ? base + " · " + gps(cv) : base;
 	}
 
-	private JPanel buildAllTrackers()
-	{
-		JPanel p = backPage();
-		consumVals = store.consumableValues();
-		Map<String, Long> counters = build.countersForPeriod();
-		if (counters == null)
-		{
-			p.add(noPeriod());
-			return p;
-		}
-		resourcesDropped = counters.getOrDefault("resourcesDroppedValue", 0L);
-		Map<String, Map<String, List<Entry<String, Long>>>> filed = new LinkedHashMap<>();
-		for (String fam : StatRegistry.FAMILIES)
-		{
-			filed.put(fam, new LinkedHashMap<>());
-		}
-		int kept = 0;
-		for (Entry<String, Long> e : counters.entrySet())
-		{
-			if (e.getValue() == null || e.getValue() <= 0 || StatRegistry.hidden(e.getKey()))
-			{
-				continue;
-			}
-			Map<String, List<Entry<String, Long>>> fam =
-				filed.computeIfAbsent(StatRegistry.family(e.getKey()), k -> new LinkedHashMap<>());
-			String sec = StatRegistry.subgroup(e.getKey());
-			String heads = sec.isEmpty()
-				? StatRegistry.headOf(StatRegistry.family(e.getKey()), e.getKey()) : null;
-			fam.computeIfAbsent(heads != null ? heads : sec, k -> new ArrayList<>()).add(e);
-			kept++;
-		}
-		JPanel head = card("Trackers");
-		head.add(row("Counters", fmt(kept), accent()));
-		head.add(row("Reading", wholeRecord() ? "Lifetime" : window().label));
-		spaced(p, head);
-		if (kept == 0)
-		{
-			return noted(p, window().phrase("Nothing tracked"));
-		}
-		for (Entry<String, Map<String, List<Entry<String, Long>>>> fam : filed.entrySet())
-		{
-			if (fam.getValue().isEmpty())
-			{
-				continue;
-			}
-			p.add(group(fam.getKey()));
-			for (Entry<String, List<Entry<String, Long>>> sec : fam.getValue().entrySet())
-			{
-				List<Entry<String, Long>> rows = sec.getValue();
-				rows.sort(StatRegistry::compareRows);
-				if (!sec.getKey().isEmpty())
-				{
-					p.add(ghostRow(sec.getKey(), ""));
-				}
-				statRows(p, rows);
-			}
-			p.add(vgap(4));
-		}
-		return p;
-	}
-
-	private static final String FOLD_DEATHS = "Combat:deaths";
-
-	private void addDeathsFold(JPanel p, String figure)
-	{
-		JPanel head = row("Deaths", figure);
-		foldHead(head, FOLD_DEATHS, "Who dealt them");
-		p.add(head);
-		if (!foldOpen(FOLD_DEATHS))
-		{
-			return;
-		}
-		Map<String, long[]> killers = new LinkedHashMap<>();
-		for (JsonObject e : build.feed.all())
-		{
-			long ts = safeLong(e.get("ts"));
-			if (!"DEATH".equals(typeOf(e)) || !window().inside(ts))
-			{
-				continue;
-			}
-			JsonObject d = obj(e, "data");
-			String who = has(d, "killerName") ? d.get("killerName").getAsString() : "Unknown";
-			long[] t = killers.computeIfAbsent(who, k -> new long[2]);
-			t[0]++;
-			t[1] = Math.max(t[1], ts);
-		}
-		List<Entry<String, long[]>> ranked = new ArrayList<>(killers.entrySet());
-		ranked.sort((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0]));
-		for (Entry<String, long[]> k : ranked)
-		{
-			JPanel r = row(k.getKey(), fmt(k.getValue()[0]) + " · last "
-				+ day(k.getValue()[1]));
-			if (!"Unknown".equals(k.getKey()))
-			{
-				final String who = k.getKey();
-				link(r, () -> openSourceLoose(who));
-			}
-			p.add(r);
-		}
-	}
-
-	private JPanel buildStats()
-	{
-		JPanel p = column();
-		consumVals = store.consumableValues();
-		String[] families = tab == Tab.RECORD
-			? new String[]{"Ledger & Roads", "Living"}
-			: StatRegistry.FAMILIES;
-		JPanel pills = new JPanel(new GridLayout(0, 2, 3, 3));
-		pills.setBackground(DARK);
-		for (String fam : families)
-		{
-			pills.add(pill(fam, fam.equals(statsFamily), 7, null, () ->
-			{
-				statsFamily = fam;
-				rebuildInPlace();
-			}));
-		}
-		p.add(pills);
-		if (tab == Tab.TRACKERS && !allTrackers)
-		{
-			p.add(moreRow("every counter in one place", this::openAllTrackers));
-		}
-		p.add(vgap(4));
-
-		Map<String, Long> counters = build.countersForPeriod();
-		if (counters == null)
-		{
-			p.add(noPeriod());
-			return p;
-		}
-		resourcesDropped = counters.getOrDefault("resourcesDroppedValue", 0L);
-		Map<String, List<Entry<String, Long>>> rowsBySection = new LinkedHashMap<>();
-		Map<String, Long> floorTotals = new LinkedHashMap<>();
-		for (Entry<String, Long> e : counters.entrySet())
-		{
-			if (e.getValue() == 0 || StatRegistry.hidden(e.getKey())
-				|| !StatRegistry.family(e.getKey()).equals(statsFamily))
-			{
-				continue;
-			}
-			String sec = StatRegistry.subgroup(e.getKey());
-			String heads = sec.isEmpty() ? StatRegistry.headOf(statsFamily, e.getKey()) : null;
-			if (StatRegistry.isFloor(e.getKey()) || heads != null)
-			{
-				floorTotals.merge(heads != null ? heads : sec, e.getValue(), Long::sum);
-				continue;
-			}
-			rowsBySection.computeIfAbsent(sec, k -> new ArrayList<>()).add(e);
-		}
-		if (rowsBySection.isEmpty() && floorTotals.isEmpty())
-		{
-			String unkept = build.notCounting(false);
-			return noted(p, unkept != null ? unkept : wholeRecord()
-				? "Nothing under " + statsFamily + " yet."
-				: window().phrase("Nothing under " + statsFamily));
-		}
-
-		List<Entry<String, Long>> destRows = statsFamily.equals("Ledger & Roads")
-			? rowsBySection.remove("Destinations") : null;
-		if (destRows != null && !rowsBySection.containsKey("Teleports")
-			&& !floorTotals.containsKey("Teleports"))
-		{
-			rowsBySection.put("Destinations", destRows);
-			destRows = null;
-		}
-
-		List<String> order = sectionOrder(rowsBySection, floorTotals);
-		for (String sec : order)
-		{
-			List<Entry<String, Long>> rows =
-				rowsBySection.getOrDefault(sec, new ArrayList<>());
-			rows.sort(StatRegistry::compareRows);
-			long floor = floorTotals.getOrDefault(sec, 0L);
-
-			if (sec.isEmpty())
-			{
-				for (Entry<String, Long> e : rows)
-				{
-					if ("deaths".equals(e.getKey()) && e.getValue() > 0)
-					{
-						addDeathsFold(p, rowValue(e));
-						continue;
-					}
-					p.add(row(StatRegistry.rowLabel(e.getKey()), rowValue(e)));
-				}
-				continue;
-			}
-
-			if (rows.isEmpty() && floor == 0)
-			{
-				continue;
-			}
-
-			long typedSum = 0;
-			boolean anyTyped = false;
-			long shown = 0;
-			for (Entry<String, Long> e : rows)
-			{
-				shown += e.getValue();
-				if (StatRegistry.typed(e.getKey()))
-				{
-					anyTyped = true;
-					typedSum += e.getValue();
-				}
-			}
-			long ghost = anyTyped && floor - typedSum >= 1 ? floor - typedSum : 0;
-			if (sec.equals("Teleports") && floor - shown >= 1)
-			{
-				ghost = floor - shown;
-			}
-			long total = Math.max(shown + ghost, floor);
-
-			boolean foldable = statsFamily.equals("Skilling")
-				|| sec.equals("Food") || sec.equals("Potions")
-				|| sec.equals("Teleports") || sec.equals("Destinations")
-				|| sec.equals("Thralls");
-			if (!foldable)
-			{
-				p.add(group(sec));
-				statRows(p, rows);
-				continue;
-			}
-
-			String stateKey = statsFamily + ":" + sec;
-			boolean open = foldOpen(stateKey);
-			long secGp = 0;
-			if (wholeRecord())
-			{
-				for (Entry<String, Long> e : rows)
-				{
-					Long cv = consumVals.get(e.getKey());
-					if (cv != null)
-					{
-						secGp += cv;
-					}
-				}
-			}
-			else if (sec.equals("Food") || sec.equals("Potions"))
-			{
-				String gpKey = sec.equals("Food") ? "foodConsumedValue" : "potionsConsumedValue";
-				Span s = build.span();
-				if (sessionPeriod() || (s != null && s.opening.counters.containsKey(gpKey)))
-				{
-					secGp = counters.getOrDefault(gpKey, 0L);
-				}
-			}
-			p.add(quietHead(sec, fmt(total) + tail(secGp),
-				stateKey));
-			if (open)
-			{
-				if (statsFamily.equals("Skilling"))
-				{
-					addPaceLine(p, sec);
-				}
-				boolean nested = statsFamily.equals("Skilling")
-					&& addCraftNested(p, sec, rows, counters);
-				if (!nested)
-				{
-					statRows(p, rows);
-					if (rows.isEmpty() && floor > 0)
-					{
-						List<Entry<String, Long>> floors = new ArrayList<>();
-						for (String fk : StatRegistry.floorKeys(sec))
-						{
-							long fv = counters.getOrDefault(fk, 0L);
-							if (fv > 0 && !StatRegistry.hidden(fk))
-							{
-								floors.add(new AbstractMap.SimpleEntry<>(fk, fv));
-							}
-						}
-						floors.sort(StatRegistry::compareRows);
-						for (Entry<String, Long> fe : floors)
-						{
-							p.add(row(StatRegistry.label(fe.getKey()), fmt(fe.getValue())));
-						}
-						if (!floors.isEmpty())
-						{
-							ghost = 0;
-						}
-					}
-					if (ghost > 0)
-					{
-						p.add(ghostRow(sec.equals("Teleports") ? "Other means" : "Other",
-							fmt(ghost)));
-					}
-				}
-				if (sec.equals("Teleports") && destRows != null && !destRows.isEmpty())
-				{
-					addDestinationsFold(p, destRows);
-				}
-			}
-		}
-		return p;
-	}
-
-	private List<String> sectionOrder(Map<String, List<Entry<String, Long>>> rowsBySection,
-		Map<String, Long> floorTotals)
-	{
-		LinkedHashSet<String> present = new LinkedHashSet<>();
-		present.addAll(rowsBySection.keySet());
-		present.addAll(floorTotals.keySet());
-		List<String> order = new ArrayList<>();
-		if (statsFamily.equals("Skilling"))
-		{
-			List<String> crafts = new ArrayList<>(present);
-			crafts.sort(Comparator.comparingLong((String s) ->
-			{
-				long floor = floorTotals.getOrDefault(s, 0L);
-				if (floor > 0)
-				{
-					return floor;
-				}
-				return sumOf(rowsBySection.getOrDefault(s, new ArrayList<>()));
-			}).reversed());
-			order.addAll(crafts);
-		}
-		else
-		{
-			for (String sec : StatRegistry.fixedSections(statsFamily))
-			{
-				if (present.remove(sec))
-				{
-					order.add(sec);
-				}
-			}
-			order.addAll(present);
-		}
-		return order;
-	}
-
-	private boolean addCraftNested(JPanel p, String craft,
-		List<Entry<String, Long>> rows, Map<String, Long> counters)
-	{
-		Map<String, List<Entry<String, Long>>> byVerb = new LinkedHashMap<>();
-		List<Entry<String, Long>> leaves = new ArrayList<>();
-		for (Entry<String, Long> e : rows)
-		{
-			String suf = StatRegistry.suffixOf(e.getKey());
-			if (suf == null)
-			{
-				leaves.add(e);
-			}
-			else
-			{
-				byVerb.computeIfAbsent(suf, k -> new ArrayList<>()).add(e);
-			}
-		}
-		if (byVerb.size() < 2)
-		{
-			return false;
-		}
-		for (Entry<String, Long> e : leaves)
-		{
-			p.add(row(StatRegistry.rowLabel(e.getKey()), value(e)));
-		}
-		List<String> verbs = new ArrayList<>(byVerb.keySet());
-		Map<String, Long> verbTotal = new LinkedHashMap<>();
-		for (String verb : verbs)
-		{
-			String floorKey = StatRegistry.suffixFloor(craft, verb);
-			long floorVal = floorKey != null ? counters.getOrDefault(floorKey, 0L) : 0L;
-			verbTotal.put(verb, Math.max(floorVal, sumOf(byVerb.get(verb))));
-		}
-		verbs.sort(Comparator.comparingLong(
-			(String v) -> verbTotal.getOrDefault(v, 0L)).reversed());
-		for (String verb : verbs)
-		{
-			String stateKey = "Skilling:" + craft + ":" + verb;
-			boolean open = foldOpen(stateKey);
-			p.add(subHead(StatRegistry.suffixLabel(verb),
-				fmt(verbTotal.getOrDefault(verb, 0L)), stateKey));
-			if (open)
-			{
-				statRows(p, byVerb.get(verb));
-				long verbGhost = verbTotal.get(verb) - sumOf(byVerb.get(verb));
-				if (verbGhost >= 1)
-				{
-					p.add(ghostRow("Other", fmt(verbGhost)));
-				}
-			}
-		}
-		return true;
-	}
-
-	private void addDestinationsFold(JPanel p, List<Entry<String, Long>> destRows)
-	{
-		destRows.sort(StatRegistry::compareRows);
-		long sum = sumOf(destRows);
-		String stateKey = "Ledger & Roads:Destinations";
-		boolean open = foldOpen(stateKey);
-		p.add(subHead("Destinations", fmt(sum), stateKey));
-		if (open)
-		{
-			for (Entry<String, Long> e : destRows)
-			{
-				p.add(row(StatRegistry.label(e.getKey()), value(e)));
-			}
-		}
-	}
-
-	private JPanel subHead(String label, String totalStr, String stateKey)
+	JPanel subHead(String label, String totalStr, String stateKey)
 	{
 		JPanel head = row(label, totalStr);
 		styled(part(head, BorderLayout.CENTER), small(), dim());
@@ -3948,7 +3172,7 @@ class ChroniclePanel extends PluginPanel
 		JPanel p = backPage();
 		if ("log".equals(sheetPage))
 		{
-			p.add(buildLog());
+			p.add(clog.buildLog());
 		}
 		else if ("clues".equals(sheetPage))
 		{
@@ -4490,7 +3714,7 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
-	private JPanel noPeriod()
+	JPanel noPeriod()
 	{
 		return note(historySpine == null
 			? "Reading your history..."
@@ -4739,7 +3963,7 @@ class ChroniclePanel extends PluginPanel
 
 	Runnable searchFirst;
 
-	private JPanel progress(float frac)
+	JPanel progress(float frac)
 	{
 		JPanel outer = new JPanel(new BorderLayout());
 		outer.setBackground(ColorScheme.SCROLL_TRACK_COLOR);
