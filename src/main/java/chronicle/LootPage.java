@@ -52,6 +52,8 @@ import static chronicle.Text.qtyGp;
 
 final class LootPage
 {
+	static final String UNFILED = "Everything else";
+
 	private final ChroniclePanel panel;
 
 	LootPage(ChroniclePanel panel)
@@ -343,21 +345,6 @@ final class LootPage
 		return page;
 	}
 
-	private static final class Kind
-	{
-		final String name;
-		long qty;
-		long value;
-		int distinct;
-
-		Kind(String name)
-		{
-			this.name = name;
-		}
-	}
-
-	static final String UNFILED = "Everything else";
-
 	private List<Kind> kindsOf(List<BagItem> bag)
 	{
 		Map<String, Kind> by = new LinkedHashMap<>();
@@ -417,5 +404,18 @@ final class LootPage
 			}
 		}
 		return kept;
+	}
+
+	private static final class Kind
+	{
+		final String name;
+		long qty;
+		long value;
+		int distinct;
+
+		Kind(String name)
+		{
+			this.name = name;
+		}
 	}
 }

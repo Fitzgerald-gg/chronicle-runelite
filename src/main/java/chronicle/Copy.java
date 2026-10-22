@@ -37,6 +37,15 @@ import static chronicle.Text.fmt;
 
 final class Copy
 {
+	static final DataFlavor PNG_BYTES = pngFlavor();
+	static boolean pngNativeMapped;
+	static final int COPY_MAX_HEIGHT = 20000;
+	static final int COPY_WIDTH = 340;
+	static final int COPY_ROWS = 60;
+	static final int COPY_COLUMNS = 6;
+	static final int COPY_GAP = 10;
+	static final int COPY_MOST = COPY_COLUMNS * 200;
+
 	private Copy()
 	{
 	}
@@ -88,10 +97,6 @@ final class Copy
 			return false;
 		}
 	}
-
-	static final DataFlavor PNG_BYTES = pngFlavor();
-
-	static boolean pngNativeMapped;
 
 	static DataFlavor pngFlavor()
 	{
@@ -147,8 +152,6 @@ final class Copy
 			.addUnencodedNativeForFlavor(PNG_BYTES, "public.png");
 		pngNativeMapped = true;
 	}
-
-	static final int COPY_MAX_HEIGHT = 20000;
 
 	static Image pageImage(JPanel page, int width)
 	{
@@ -206,8 +209,6 @@ final class Copy
 		g.drawString(said, 6, h - 6);
 	}
 
-	static final int COPY_WIDTH = 340;
-
 	static void layOut(Component c)
 	{
 		c.doLayout();
@@ -219,14 +220,6 @@ final class Copy
 			}
 		}
 	}
-
-	static final int COPY_ROWS = 60;
-
-	static final int COPY_COLUMNS = 6;
-
-	static final int COPY_GAP = 10;
-
-	static final int COPY_MOST = COPY_COLUMNS * 200;
 
 	static boolean copyPicture(JPanel page)
 	{

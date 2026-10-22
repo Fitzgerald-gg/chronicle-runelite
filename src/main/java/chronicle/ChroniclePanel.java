@@ -121,17 +121,34 @@ import static chronicle.Text.named;
 
 class ChroniclePanel extends PluginPanel
 {
-	enum View
-	{
-		HOME, DROPS, SLAYER, STATS, JOURNAL, SHEET, RECAP
-	}
-
-	enum Tab
-	{
-		RECORD, STANDING, LOOT, TRACKERS
-	}
-
 	private static final Map<Tab, String[]> SUBS = new EnumMap<>(Tab.class);
+
+	static final String[][] ACTIVITIES = {
+		{"Clues", "", "clues"},
+		{"Rifts closed", "Guardians of the Rift", ""},
+		{"Soul Wars", "Soul Wars", ""},
+		{"Collections", "", "log"},
+		{"Quests", "", "quests"},
+		{"Diaries", "", "diaries"},
+	};
+
+	static final int MOVED_RECORD = 1;
+	static final int MOVED_COUNTERS = 2;
+	static final int MOVED_SKILLS = 4;
+	static final int MOVED_CLOG = 8;
+
+	private static final int MOVED_ANY = MOVED_RECORD | MOVED_COUNTERS
+		| MOVED_SKILLS | MOVED_CLOG;
+
+	static final String UNDATED = "No loot has been dated yet. The roll keeps one entry a "
+		+ "day and starts with the next drop that lands.";
+
+	private static final int HIST_LIST_CAP = 6;
+	static final int ICON_W = 22;
+	static final int ICON_H = 18;
+
+	static final String[] PERIODS = {"Lifetime", "Year", "Month", "Week", "Day",
+		"Session"};
 
 	static
 	{
@@ -163,19 +180,18 @@ class ChroniclePanel extends PluginPanel
 	final Art art = new Art(this);
 	final ItemNames itemNames;
 	final Search index;
-
 	private final JPanel display = new JPanel(new BorderLayout());
-
 	private final ScrollColumn canvas = new ScrollColumn();
+
 	private final JScrollPane scrollPane = new JScrollPane(canvas,
 		ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
 		ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+
 	private final MaterialTabGroup tabGroup = new MaterialTabGroup();
 	final Map<Tab, String> subByTab = new EnumMap<>(Tab.class);
 	final IconTextField searchField = new IconTextField();
 	private final Timer searchDebounce;
 	private final Timer homeTicker;
-
 	View view = View.HOME;
 	Tab tab = Tab.RECORD;
 	private String detailItem;
@@ -191,13 +207,59 @@ class ChroniclePanel extends PluginPanel
 	int dropsShown = ROW_CAP;
 	String clogTab = "Bosses";
 	String clogPageSel;
-
 	private final JPanel band = new JPanel(new BorderLayout());
 	private final JLabel bandText = new JLabel();
 	private String histGranularity = "Lifetime";
 	private LocalDate histCursor = LocalDate.now();
 	private LocalDate histFrom;
 	private LocalDate histTo;
+	private final AtomicBoolean queued = new AtomicBoolean();
+	private final AtomicInteger movedMask = new AtomicInteger();
+	private boolean everShown;
+	private boolean staleWhileHidden;
+	private Point lastPointer;
+	private boolean keepScroll;
+	private final JPanel periodHolder = new JPanel(new BorderLayout());
+	private final JPanel north = new JPanel();
+	private long buildsRun;
+	private long lastBuildNanos;
+	private long lastBuildAt;
+	private JPanel aboveBoard;
+	private boolean bandFixes;
+	boolean onTaskOnly;
+	boolean dropsLeftBehind;
+	String lootKind;
+	String lootTask;
+	boolean dropsByKind;
+	List<GrindBook.GrindRow> grindsCache;
+	boolean grindsFetching;
+	SlayerJourney journeyCache;
+	boolean journeyFetching;
+	int detailTask = -1;
+	String leftBehindSource;
+	String leftBehindItem;
+	String slayerLens = "Tasks";
+	int slayerShown = ROW_CAP;
+	final Map<String, Integer> drillShown = new LinkedHashMap<>();
+	boolean drawingCopy;
+	private final Set<String> openFolds = new HashSet<>();
+	Map<String, Long> consumVals = new LinkedHashMap<>();
+	long resourcesDropped;
+	TreeMap<LocalDate, Baseline> historySpine;
+	SlayerJourney historyJourney;
+	LocalDate historyDay;
+	long historyFeedTs;
+	private boolean historyGathering;
+	private int historyEpoch;
+	private final Map<String, Integer> histListShown = new LinkedHashMap<>();
+	String periodTip;
+	String sheetPage;
+	String measuredSince;
+	private LocalDate periodFrom;
+	private LocalDate periodTo;
+	String journalLens = "All";
+	int journalShown = 60;
+	Runnable searchFirst;
 
 	ChroniclePanel(LocalStore store, Live live, ScheduledExecutorService executor, Gson gson,
 		SpriteManager sprites, SkillIconManager skillIcons)
@@ -503,15 +565,6 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	static final String[][] ACTIVITIES = {
-		{"Clues", "", "clues"},
-		{"Rifts closed", "Guardians of the Rift", ""},
-		{"Soul Wars", "Soul Wars", ""},
-		{"Collections", "", "log"},
-		{"Quests", "", "quests"},
-		{"Diaries", "", "diaries"},
-	};
-
 	void openActivity(String source)
 	{
 		if (build.names().named(source) == null && openLogPage(source))
@@ -546,24 +599,6 @@ class ChroniclePanel extends PluginPanel
 	{
 		return searchField.getText() == null ? "" : searchField.getText().trim();
 	}
-
-	private final AtomicBoolean queued = new AtomicBoolean();
-	private final AtomicInteger movedMask = new AtomicInteger();
-
-	private boolean everShown;
-
-	private boolean staleWhileHidden;
-
-	static final int MOVED_RECORD = 1;
-
-	static final int MOVED_COUNTERS = 2;
-
-	static final int MOVED_SKILLS = 4;
-
-	static final int MOVED_CLOG = 8;
-
-	private static final int MOVED_ANY = MOVED_RECORD | MOVED_COUNTERS
-		| MOVED_SKILLS | MOVED_CLOG;
 
 	private boolean viewCares(int moved)
 	{
@@ -634,8 +669,6 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 
-	private Point lastPointer;
-
 	private boolean beingRead()
 	{
 		Point was = lastPointer;
@@ -693,13 +726,6 @@ class ChroniclePanel extends PluginPanel
 		});
 	}
 
-	private boolean keepScroll;
-
-	private final JPanel periodHolder = new JPanel(new BorderLayout());
-	private final JPanel north = new JPanel();
-
-	private long buildsRun;
-
 	void rebuild()
 	{
 		long began = System.nanoTime();
@@ -713,9 +739,6 @@ class ChroniclePanel extends PluginPanel
 			lastBuildAt = System.currentTimeMillis();
 		}
 	}
-
-	private long lastBuildNanos;
-	private long lastBuildAt;
 
 	private long redrawFloorMs()
 	{
@@ -805,15 +828,11 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	private JPanel aboveBoard;
-
 	private void onSearchChanged()
 	{
 		drillShown.keySet().removeIf(k -> k.startsWith("search:"));
 		rebuild();
 	}
-
-	private boolean bandFixes;
 
 	private void paintBand(String stalled, String capture, String captureWhy)
 	{
@@ -868,27 +887,6 @@ class ChroniclePanel extends PluginPanel
 		return head;
 	}
 
-	static final String UNDATED = "No loot has been dated yet. The roll keeps one entry a "
-		+ "day and starts with the next drop that lands.";
-
-	boolean onTaskOnly;
-
-
-	boolean dropsLeftBehind;
-	String lootKind;
-	String lootTask;
-
-	boolean dropsByKind;
-
-	List<GrindBook.GrindRow> grindsCache;
-	boolean grindsFetching;
-
-	SlayerJourney journeyCache;
-	boolean journeyFetching;
-	int detailTask = -1;
-	String leftBehindSource;
-	String leftBehindItem;
-
 	void fetchSlayerJourney(Consumer<SlayerJourney> onDone)
 	{
 		if (!live.ready())
@@ -932,9 +930,6 @@ class ChroniclePanel extends PluginPanel
 		homeTicker.stop();
 		searchDebounce.stop();
 	}
-
-	String slayerLens = "Tasks";
-	int slayerShown = ROW_CAP;
 
 	void openCurrentTask()
 	{
@@ -1030,8 +1025,6 @@ class ChroniclePanel extends PluginPanel
 		store.items().getImage(itemId, (int) Math.min(Integer.MAX_VALUE, qty), qty > 1).addTo(slot);
 		return slot;
 	}
-
-	final Map<String, Integer> drillShown = new LinkedHashMap<>();
 
 	private void leaveSentPage()
 	{
@@ -1208,8 +1201,6 @@ class ChroniclePanel extends PluginPanel
 		return r;
 	}
 
-	boolean drawingCopy;
-
 	boolean copyPage(Supplier<JPanel> page)
 	{
 		drawingCopy = true;
@@ -1226,8 +1217,6 @@ class ChroniclePanel extends PluginPanel
 			drawingCopy = false;
 		}
 	}
-
-	private final Set<String> openFolds = new HashSet<>();
 
 	boolean foldOpen(String key)
 	{
@@ -1267,33 +1256,12 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	Map<String, Long> consumVals = new LinkedHashMap<>();
-
-	long resourcesDropped;
-
 	JPanel subHead(String label, String totalStr, String stateKey)
 	{
 		JPanel head = row(label, totalStr);
 		styled(part(head, BorderLayout.CENTER), small(), dim());
 		head.setBorder(pad(3, 10, 1, 2));
 		return folds(head, stateKey);
-	}
-
-
-	TreeMap<LocalDate, Baseline> historySpine;
-	SlayerJourney historyJourney;
-	LocalDate historyDay;
-	long historyFeedTs;
-	private boolean historyGathering;
-	private int historyEpoch;
-
-	@RequiredArgsConstructor
-	private static final class HistoryData
-	{
-		final TreeMap<LocalDate, Baseline> spine;
-		final long feedTs;
-		final SlayerJourney journey;
-		final LocalDate day;
 	}
 
 	void gatherHistory()
@@ -1339,9 +1307,6 @@ class ChroniclePanel extends PluginPanel
 		}.execute();
 	}
 
-	private static final int HIST_LIST_CAP = 6;
-	private final Map<String, Integer> histListShown = new LinkedHashMap<>();
-
 	int shownCap(String key)
 	{
 		return histListShown.getOrDefault(key, HIST_LIST_CAP);
@@ -1351,9 +1316,6 @@ class ChroniclePanel extends PluginPanel
 	{
 		more(card, size, cap, inset, n -> histListShown.put(key, n));
 	}
-
-	static final int ICON_W = 22;
-	static final int ICON_H = 18;
 
 	String periodTip(long[] played, List<Entry<String, Long>> gains)
 	{
@@ -1365,25 +1327,15 @@ class ChroniclePanel extends PluginPanel
 			"Experience", "+" + gp(xp));
 	}
 
-	String periodTip;
-	String sheetPage;
-	String measuredSince;
-
 	boolean wholeRecord()
 	{
 		return window().whole;
 	}
 
-	static final String[] PERIODS = {"Lifetime", "Year", "Month", "Week", "Day",
-		"Session"};
-
 	boolean sessionPeriod()
 	{
 		return window().session;
 	}
-
-	private LocalDate periodFrom;
-	private LocalDate periodTo;
 
 	private JPopupMenu periodMenu()
 	{
@@ -1558,9 +1510,6 @@ class ChroniclePanel extends PluginPanel
 		}
 	}
 
-	String journalLens = "All";
-	int journalShown = 60;
-
 	void openJournalOn(long ts)
 	{
 		if (ts > 0)
@@ -1598,8 +1547,6 @@ class ChroniclePanel extends PluginPanel
 		rebuild();
 	}
 
-	Runnable searchFirst;
-
 	JPanel backPage()
 	{
 		JPanel p = column();
@@ -1607,4 +1554,22 @@ class ChroniclePanel extends PluginPanel
 		return p;
 	}
 
+	enum View
+	{
+		HOME, DROPS, SLAYER, STATS, JOURNAL, SHEET, RECAP
+	}
+
+	enum Tab
+	{
+		RECORD, STANDING, LOOT, TRACKERS
+	}
+
+	@RequiredArgsConstructor
+	private static final class HistoryData
+	{
+		final TreeMap<LocalDate, Baseline> spine;
+		final long feedTs;
+		final SlayerJourney journey;
+		final LocalDate day;
+	}
 }

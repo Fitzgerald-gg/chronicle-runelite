@@ -58,6 +58,8 @@ import static chronicle.Text.share;
 
 final class LogPage
 {
+	private static final String[] DROP_MARKS = {" · +", " +"};
+
 	private final ChroniclePanel panel;
 
 	LogPage(ChroniclePanel panel)
@@ -297,8 +299,6 @@ final class LogPage
 		}
 		return l;
 	}
-
-	private static final String[] DROP_MARKS = {" · +", " +"};
 
 	private static List<Integer> tailFirst(Line l, int from)
 	{

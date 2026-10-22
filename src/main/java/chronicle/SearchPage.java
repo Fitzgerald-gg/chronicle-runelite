@@ -76,6 +76,8 @@ import static chronicle.panel.StatRegistry.prettify;
 
 final class SearchPage
 {
+	private static final int SEARCH_CAP = 4;
+
 	private final ChroniclePanel panel;
 
 	SearchPage(ChroniclePanel panel)
@@ -95,30 +97,6 @@ final class SearchPage
 		}
 		return false;
 	}
-
-	private static final class Hit
-	{
-		final String name;
-		final String figure;
-		final Color color;
-		final String tip;
-		final Runnable go;
-		final int score;
-		final long weight;
-
-		Hit(String name, String figure, Color color, String tip, Runnable go, int score, long weight)
-		{
-			this.name = name;
-			this.figure = figure == null ? "" : figure;
-			this.color = color;
-			this.tip = tip;
-			this.go = go;
-			this.score = score;
-			this.weight = weight;
-		}
-	}
-
-	private static final int SEARCH_CAP = 4;
 
 	private static void goTo(List<Hit> go, String ql, String name, String figure, Runnable to,
 		long weight, String... also)
@@ -564,6 +542,28 @@ final class SearchPage
 		if (panel.searchFirst == null)
 		{
 			panel.searchFirst = go;
+		}
+	}
+
+	private static final class Hit
+	{
+		final String name;
+		final String figure;
+		final Color color;
+		final String tip;
+		final Runnable go;
+		final int score;
+		final long weight;
+
+		Hit(String name, String figure, Color color, String tip, Runnable go, int score, long weight)
+		{
+			this.name = name;
+			this.figure = figure == null ? "" : figure;
+			this.color = color;
+			this.tip = tip;
+			this.go = go;
+			this.score = score;
+			this.weight = weight;
 		}
 	}
 }

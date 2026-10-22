@@ -32,7 +32,14 @@ import static chronicle.ChroniclePanel.ICON_W;
 
 final class Art
 {
+	private static final Map<Skill, BufferedImage> SKILL_ICONS =
+		new EnumMap<>(Skill.class);
+
 	private final ChroniclePanel panel;
+	private final Map<String, BufferedImage> images = new HashMap<>();
+	private final Set<String> artAsked = new HashSet<>();
+	private final Map<String, List<Object[]>> artWaiting = new LinkedHashMap<>();
+	private final Map<String, ImageIcon> scaledIcons = new LinkedHashMap<>();
 
 	Art(ChroniclePanel panel)
 	{
@@ -82,9 +89,6 @@ final class Art
 		return Sources.SKILLING.equals(kind) ? 775 : 774;
 	}
 
-	private static final Map<Skill, BufferedImage> SKILL_ICONS =
-		new EnumMap<>(Skill.class);
-
 	BufferedImage skillIcon(Skill sk)
 	{
 		return SKILL_ICONS.computeIfAbsent(sk, s ->
@@ -99,12 +103,6 @@ final class Art
 			}
 		});
 	}
-
-	private final Map<String, BufferedImage> images = new HashMap<>();
-
-	private final Set<String> artAsked = new HashSet<>();
-
-	private final Map<String, List<Object[]>> artWaiting = new LinkedHashMap<>();
 
 	void wearSprite(JLabel label, int spriteId, int w, int h)
 	{
@@ -158,8 +156,6 @@ final class Art
 		}
 		artWaiting.remove(key);
 	}
-
-	private final Map<String, ImageIcon> scaledIcons = new LinkedHashMap<>();
 
 	private void dress(JLabel label, String key, BufferedImage img, int w, int h)
 	{

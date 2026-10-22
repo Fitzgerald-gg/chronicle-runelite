@@ -52,6 +52,8 @@ import static chronicle.Text.tail;
 
 final class LedgerPage
 {
+	private static final String FOLD_DEATHS = "Combat:deaths";
+
 	private final ChroniclePanel panel;
 
 	LedgerPage(ChroniclePanel panel)
@@ -119,8 +121,6 @@ final class LedgerPage
 		}
 		return p;
 	}
-
-	private static final String FOLD_DEATHS = "Combat:deaths";
 
 	private void addDeathsFold(JPanel p, String figure)
 	{

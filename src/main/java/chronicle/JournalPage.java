@@ -53,13 +53,6 @@ import static chronicle.Text.fmt;
 
 final class JournalPage
 {
-	private final ChroniclePanel panel;
-
-	JournalPage(ChroniclePanel panel)
-	{
-		this.panel = panel;
-	}
-
 	private static final String[][] JOURNAL_LENSES = {
 		{"All"},
 		{"Log", "COLLECTION"},
@@ -69,6 +62,13 @@ final class JournalPage
 		{"Deaths", "DEATH"},
 		{"Sessions", "SESSION"},
 	};
+
+	private final ChroniclePanel panel;
+
+	JournalPage(ChroniclePanel panel)
+	{
+		this.panel = panel;
+	}
 
 	JPanel buildJournal()
 	{

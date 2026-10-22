@@ -55,19 +55,25 @@ import static chronicle.panel.StatRegistry.prettify;
 
 final class HomePage
 {
-	private final ChroniclePanel panel;
-
-	HomePage(ChroniclePanel panel)
-	{
-		this.panel = panel;
-	}
-
 	private static final DateTimeFormatter CLOCK =
 		DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
 
 	private static final String[] HOME_PINNED = {
 		"totalXpGained", "damageDealt", "consumedValue"
 	};
+
+	private static final String FOLD_HOME_XP = "home:xp";
+	private static final String FOLD_HOME_DAMAGE = "home:damage";
+
+	private static final List<String> DAMAGE_SPLIT = Arrays.asList(
+		"damageDealtMelee", "damageDealtRanged", "damageDealtMagic");
+
+	private final ChroniclePanel panel;
+
+	HomePage(ChroniclePanel panel)
+	{
+		this.panel = panel;
+	}
 
 	private static String homeLabel(String key)
 	{
@@ -436,11 +442,4 @@ final class HomePage
 		}
 		return out;
 	}
-
-	private static final String FOLD_HOME_XP = "home:xp";
-
-	private static final String FOLD_HOME_DAMAGE = "home:damage";
-
-	private static final List<String> DAMAGE_SPLIT = Arrays.asList(
-		"damageDealtMelee", "damageDealtRanged", "damageDealtMagic");
 }

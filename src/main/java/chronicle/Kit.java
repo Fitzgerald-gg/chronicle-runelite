@@ -100,31 +100,30 @@ import static chronicle.Text.share;
 
 final class Kit
 {
+	static final Color DARK = ColorScheme.DARK_GRAY_COLOR;
+	static final Color DARKER = ColorScheme.DARKER_GRAY_COLOR;
+	static final Color ACCENT_LIFETIME = ColorScheme.BRAND_ORANGE;
+	static final Color ACCENT_SESSION = new Color(85, 163, 90);
+	static final Color ACCENT_RED = new Color(196, 84, 74);
+	static final Color TILE_LIT = new Color(198, 198, 198);
+	static final int ROW_CAP = 30;
+	static final int PANEL_INSET = 8;
+	static final int CARD_INSET = 8;
+	static final int ROW_INSET = 2;
+	static final int ROW_GAP = 8;
+	static final String ELLIPSIS = "…";
+	static final int NAME_FLOOR = 3;
+	static final JLabel MEASURE = new JLabel();
+	static final int OVERLAY_BAR_W = 5;
+	static final String TIP_OPEN = "<html><body style='padding:2px'>";
+	static final String TIP_CLOSE = "</body></html>";
+	static final int NOTE_WIDTH = 190;
+	static final int HOVER_LIFT = 15;
+	static Runnable litNow;
+
 	private Kit()
 	{
 	}
-
-	static final Color DARK = ColorScheme.DARK_GRAY_COLOR;
-
-	static final Color DARKER = ColorScheme.DARKER_GRAY_COLOR;
-
-	static final Color ACCENT_LIFETIME = ColorScheme.BRAND_ORANGE;
-
-	static final Color ACCENT_SESSION = new Color(85, 163, 90);
-
-	static final Color ACCENT_RED = new Color(196, 84, 74);
-
-	static final Color TILE_LIT = new Color(198, 198, 198);
-
-	static final int ROW_CAP = 30;
-
-	static final int PANEL_INSET = 8;
-
-	static final int CARD_INSET = 8;
-
-	static final int ROW_INSET = 2;
-
-	static final int ROW_GAP = 8;
 
 	static Color wash(Color c)
 	{
@@ -174,12 +173,6 @@ final class Kit
 		return c;
 	}
 
-	static final String ELLIPSIS = "…";
-
-	static final int NAME_FLOOR = 3;
-
-	static final JLabel MEASURE = new JLabel();
-
 	static FontMetrics rowMetrics()
 	{
 		return MEASURE.getFontMetrics(FontManager.getRunescapeFont());
@@ -189,8 +182,6 @@ final class Kit
 	{
 		return OVERLAY_BAR_W;
 	}
-
-	static final int OVERLAY_BAR_W = 5;
 
 	static void overlayBar(JScrollPane scroll)
 	{
@@ -202,159 +193,11 @@ final class Kit
 		bar.setPreferredSize(new Dimension(OVERLAY_BAR_W, 0));
 	}
 
-	static final class OverlayScrollBarUI
-		extends BasicScrollBarUI
-	{
-		private static final int IDLE_MS = 700;
-		private static final int STEP_MS = 40;
-		private static final float STEP = 0.12f;
-		private static final Color THUMB = new Color(0xB0, 0xB0, 0xB0);
-
-		private float alpha;
-		private long lastMove;
-		private Timer fader;
-
-		@Override
-		protected JButton createDecreaseButton(int orientation)
-		{
-			return nothing();
-		}
-
-		@Override
-		protected JButton createIncreaseButton(int orientation)
-		{
-			return nothing();
-		}
-
-		private static JButton nothing()
-		{
-			JButton b = new JButton();
-			Dimension none = new Dimension(0, 0);
-			b.setPreferredSize(none);
-			b.setMinimumSize(none);
-			b.setMaximumSize(none);
-			b.setFocusable(false);
-			return b;
-		}
-
-		@Override
-		protected void installListeners()
-		{
-			super.installListeners();
-			scrollbar.addAdjustmentListener(e ->
-			{
-				if (e.getValueIsAdjusting())
-				{
-					wake();
-				}
-			});
-		}
-
-		@Override
-		protected void paintTrack(Graphics g, JComponent c,
-			Rectangle bounds)
-		{
-		}
-
-		@Override
-		protected void paintThumb(Graphics g, JComponent c,
-			Rectangle t)
-		{
-			if (alpha <= 0.02f || t.isEmpty())
-			{
-				return;
-			}
-			Graphics2D g2 = (Graphics2D) g.create();
-			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-				RenderingHints.VALUE_ANTIALIAS_ON);
-			g2.setComposite(AlphaComposite.getInstance(
-				AlphaComposite.SRC_OVER, Math.min(1f, alpha)));
-			g2.setColor(THUMB);
-			int h = Math.max(OVERLAY_BAR_W * 2, t.height - 4);
-			g2.fillRoundRect(t.x, t.y + 2, OVERLAY_BAR_W, h,
-				OVERLAY_BAR_W, OVERLAY_BAR_W);
-			g2.dispose();
-		}
-
-		void wake()
-		{
-			lastMove = System.currentTimeMillis();
-			alpha = 1f;
-			scrollbar.repaint();
-			if (fader == null)
-			{
-				fader = new Timer(STEP_MS, e -> tick());
-			}
-			if (!fader.isRunning())
-			{
-				fader.start();
-			}
-		}
-
-		private void tick()
-		{
-			if (scrollbar == null || !scrollbar.isShowing())
-			{
-				alpha = 0f;
-				fader.stop();
-				return;
-			}
-			if (System.currentTimeMillis() - lastMove < IDLE_MS)
-			{
-				return;
-			}
-			alpha -= STEP;
-			if (alpha <= 0f)
-			{
-				alpha = 0f;
-				fader.stop();
-			}
-			scrollbar.repaint();
-		}
-
-		@Override
-		public void uninstallUI(JComponent c)
-		{
-			if (fader != null)
-			{
-				fader.stop();
-			}
-			super.uninstallUI(c);
-		}
-	}
-
 	static int chaseRoom(String share, FontMetrics fm)
 	{
 		return PluginPanel.PANEL_WIDTH + PluginPanel.SCROLLBAR_WIDTH
 			- 2 * PANEL_INSET - scrollbarWidth() - 2 * CARD_INSET
 			- 2 * ROW_INSET - ROW_GAP - fm.stringWidth(share);
-	}
-
-	static final class Line
-	{
-		final List<String> pieces = new ArrayList<>();
-		final List<Integer> names = new ArrayList<>();
-
-		void fixed(String s)
-		{
-			pieces.add(s);
-		}
-
-		void name(String s)
-		{
-			names.add(pieces.size());
-			pieces.add(s);
-		}
-
-		String whole()
-		{
-			StringBuilder sb = new StringBuilder();
-			for (String s : pieces)
-			{
-				sb.append(s);
-			}
-			return sb.toString();
-		}
 	}
 
 	static String stub(String name, int keep)
@@ -444,10 +287,6 @@ final class Kit
 		}
 		return sb.append(TIP_CLOSE).toString();
 	}
-
-	static final String TIP_OPEN = "<html><body style='padding:2px'>";
-
-	static final String TIP_CLOSE = "</body></html>";
 
 	static String dimLine(String s)
 	{
@@ -539,44 +378,6 @@ final class Kit
 		};
 		p.setBackground(DARK);
 		return p;
-	}
-
-	static final class ScrollColumn extends JPanel implements Scrollable
-	{
-		ScrollColumn()
-		{
-			super(new BorderLayout());
-		}
-
-		@Override
-		public Dimension getPreferredScrollableViewportSize()
-		{
-			return getPreferredSize();
-		}
-
-		@Override
-		public int getScrollableUnitIncrement(Rectangle r, int o, int d)
-		{
-			return 16;
-		}
-
-		@Override
-		public int getScrollableBlockIncrement(Rectangle r, int o, int d)
-		{
-			return 80;
-		}
-
-		@Override
-		public boolean getScrollableTracksViewportWidth()
-		{
-			return true;
-		}
-
-		@Override
-		public boolean getScrollableTracksViewportHeight()
-		{
-			return false;
-		}
 	}
 
 	static JPanel card(String caption, String right)
@@ -675,8 +476,6 @@ final class Kit
 		return row("Worth", gps(v));
 	}
 
-	static final int NOTE_WIDTH = 190;
-
 	static JPanel note(String text)
 	{
 		JPanel p = new JPanel();
@@ -756,8 +555,6 @@ final class Kit
 		return p;
 	}
 
-	static final int HOVER_LIFT = 15;
-
 	static Color behind(Component c)
 	{
 		for (Component p = c.getParent(); p != null; p = p.getParent())
@@ -814,8 +611,6 @@ final class Kit
 		}
 		return eventSaysInside;
 	}
-
-	static Runnable litNow;
 
 	static void unlight()
 	{
@@ -1056,5 +851,191 @@ final class Kit
 			r.add(title, BorderLayout.CENTER);
 		}
 		r.add(fwd, BorderLayout.EAST);
+	}
+
+	static final class OverlayScrollBarUI
+		extends BasicScrollBarUI
+	{
+		private static final int IDLE_MS = 700;
+		private static final int STEP_MS = 40;
+		private static final float STEP = 0.12f;
+		private static final Color THUMB = new Color(0xB0, 0xB0, 0xB0);
+
+		private float alpha;
+		private long lastMove;
+		private Timer fader;
+
+		@Override
+		protected JButton createDecreaseButton(int orientation)
+		{
+			return nothing();
+		}
+
+		@Override
+		protected JButton createIncreaseButton(int orientation)
+		{
+			return nothing();
+		}
+
+		private static JButton nothing()
+		{
+			JButton b = new JButton();
+			Dimension none = new Dimension(0, 0);
+			b.setPreferredSize(none);
+			b.setMinimumSize(none);
+			b.setMaximumSize(none);
+			b.setFocusable(false);
+			return b;
+		}
+
+		@Override
+		protected void installListeners()
+		{
+			super.installListeners();
+			scrollbar.addAdjustmentListener(e ->
+			{
+				if (e.getValueIsAdjusting())
+				{
+					wake();
+				}
+			});
+		}
+
+		@Override
+		protected void paintTrack(Graphics g, JComponent c,
+			Rectangle bounds)
+		{
+		}
+
+		@Override
+		protected void paintThumb(Graphics g, JComponent c,
+			Rectangle t)
+		{
+			if (alpha <= 0.02f || t.isEmpty())
+			{
+				return;
+			}
+			Graphics2D g2 = (Graphics2D) g.create();
+			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+				RenderingHints.VALUE_ANTIALIAS_ON);
+			g2.setComposite(AlphaComposite.getInstance(
+				AlphaComposite.SRC_OVER, Math.min(1f, alpha)));
+			g2.setColor(THUMB);
+			int h = Math.max(OVERLAY_BAR_W * 2, t.height - 4);
+			g2.fillRoundRect(t.x, t.y + 2, OVERLAY_BAR_W, h,
+				OVERLAY_BAR_W, OVERLAY_BAR_W);
+			g2.dispose();
+		}
+
+		void wake()
+		{
+			lastMove = System.currentTimeMillis();
+			alpha = 1f;
+			scrollbar.repaint();
+			if (fader == null)
+			{
+				fader = new Timer(STEP_MS, e -> tick());
+			}
+			if (!fader.isRunning())
+			{
+				fader.start();
+			}
+		}
+
+		private void tick()
+		{
+			if (scrollbar == null || !scrollbar.isShowing())
+			{
+				alpha = 0f;
+				fader.stop();
+				return;
+			}
+			if (System.currentTimeMillis() - lastMove < IDLE_MS)
+			{
+				return;
+			}
+			alpha -= STEP;
+			if (alpha <= 0f)
+			{
+				alpha = 0f;
+				fader.stop();
+			}
+			scrollbar.repaint();
+		}
+
+		@Override
+		public void uninstallUI(JComponent c)
+		{
+			if (fader != null)
+			{
+				fader.stop();
+			}
+			super.uninstallUI(c);
+		}
+	}
+
+	static final class Line
+	{
+		final List<String> pieces = new ArrayList<>();
+		final List<Integer> names = new ArrayList<>();
+
+		void fixed(String s)
+		{
+			pieces.add(s);
+		}
+
+		void name(String s)
+		{
+			names.add(pieces.size());
+			pieces.add(s);
+		}
+
+		String whole()
+		{
+			StringBuilder sb = new StringBuilder();
+			for (String s : pieces)
+			{
+				sb.append(s);
+			}
+			return sb.toString();
+		}
+	}
+
+	static final class ScrollColumn extends JPanel implements Scrollable
+	{
+		ScrollColumn()
+		{
+			super(new BorderLayout());
+		}
+
+		@Override
+		public Dimension getPreferredScrollableViewportSize()
+		{
+			return getPreferredSize();
+		}
+
+		@Override
+		public int getScrollableUnitIncrement(Rectangle r, int o, int d)
+		{
+			return 16;
+		}
+
+		@Override
+		public int getScrollableBlockIncrement(Rectangle r, int o, int d)
+		{
+			return 80;
+		}
+
+		@Override
+		public boolean getScrollableTracksViewportWidth()
+		{
+			return true;
+		}
+
+		@Override
+		public boolean getScrollableTracksViewportHeight()
+		{
+			return false;
+		}
 	}
 }
