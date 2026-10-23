@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import static chronicle.Feed.typeOf;
 import static chronicle.Json.has;
@@ -37,20 +38,23 @@ import static chronicle.Kit.ACCENT_SESSION;
 import static chronicle.Kit.DARKER;
 import static chronicle.Kit.card;
 import static chronicle.Kit.column;
+import static chronicle.Kit.dim;
 import static chronicle.Kit.ghostRow;
 import static chronicle.Kit.nested;
 import static chronicle.Kit.note;
 import static chronicle.Kit.pad;
 import static chronicle.Kit.row;
+import static chronicle.Kit.small;
 import static chronicle.Kit.spaced;
+import static chronicle.Kit.styled;
 import static chronicle.Kit.value;
 import static chronicle.Text.fmt;
 import static chronicle.Text.gp;
 import static chronicle.Text.gps;
-import static chronicle.Text.hoursMinutes;
 import static chronicle.Text.named;
 import static chronicle.Text.plural;
 import static chronicle.Text.qtyGp;
+import static chronicle.Text.stopwatch;
 import static chronicle.panel.StatRegistry.prettify;
 
 final class HomePage
@@ -69,6 +73,8 @@ final class HomePage
 		"damageDealtMelee", "damageDealtRanged", "damageDealtMagic");
 
 	private final ChroniclePanel panel;
+
+	private JLabel clock;
 
 	HomePage(ChroniclePanel panel)
 	{
@@ -116,6 +122,20 @@ final class HomePage
 		}
 	}
 
+	private static String sessionTime(long began, long seconds)
+	{
+		return "since " + CLOCK.format(Instant.ofEpochMilli(began)) + " · " + stopwatch(seconds);
+	}
+
+	void tick()
+	{
+		long seconds = panel.live.sessionElapsedSeconds();
+		if (clock != null && clock.isShowing() && seconds > 0)
+		{
+			clock.setText(sessionTime(panel.live.sessionStart(), seconds));
+		}
+	}
+
 	JPanel buildHome()
 	{
 		JPanel p = column();
@@ -132,11 +152,14 @@ final class HomePage
 		}
 
 		long began = panel.live.sessionStart();
-		long ran = panel.live.sessionElapsedMinutes();
-		JPanel strip = began > 0 && ran > 0
-			? card("This session", "since " + CLOCK.format(Instant.ofEpochMilli(began))
-				+ " · " + hoursMinutes(ran))
-			: card("This session");
+		long ran = panel.live.sessionElapsedSeconds();
+		clock = null;
+		JPanel strip = card("This session");
+		if (began > 0 && ran > 0)
+		{
+			clock = styled(new JLabel(sessionTime(began, ran)), small(), dim());
+			strip = card("This session", clock);
+		}
 		Map<String, Integer> sess = panel.live.sessionView();
 		int mounted = 0;
 		Set<String> shownKeys = new HashSet<>();

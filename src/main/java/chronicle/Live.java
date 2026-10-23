@@ -26,6 +26,8 @@ interface Live
 
 	long sessionElapsedMinutes();
 
+	long sessionElapsedSeconds();
+
 	Map<String, Integer> sessionView();
 
 	List<SkillGain> sessionSkillXp();

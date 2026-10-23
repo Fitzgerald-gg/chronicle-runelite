@@ -372,12 +372,16 @@ final class Kit
 
 	static JPanel card(String caption, String right)
 	{
+		return card(caption, styled(new JLabel(right), small(), dim()));
+	}
+
+	static JPanel card(String caption, JLabel note)
+	{
 		JPanel c = cardPlain();
 		JPanel head = new JPanel(new BorderLayout());
 		head.setBackground(DARKER);
 		head.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JLabel cap = styled(new JLabel(caption.toUpperCase(Locale.ROOT)), small(), dim());
-		JLabel note = styled(new JLabel(right), small(), dim());
 		head.add(cap, BorderLayout.WEST);
 		head.add(note, BorderLayout.EAST);
 		head.setMaximumSize(new Dimension(Integer.MAX_VALUE, head.getPreferredSize().height));

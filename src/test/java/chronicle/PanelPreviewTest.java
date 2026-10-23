@@ -234,6 +234,12 @@ public class PanelPreviewTest
 		}
 
 		@Override
+		public long sessionElapsedSeconds()
+		{
+			return sessionElapsed * 60;
+		}
+
+		@Override
 		public Map<String, Integer> sessionView()
 		{
 			return session;

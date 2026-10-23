@@ -110,6 +110,11 @@ final class Text
 		return minutes >= 60 ? (minutes / 60) + "h " + (minutes % 60) + "m" : minutes + "m";
 	}
 
+	static String stopwatch(long seconds)
+	{
+		return String.format(Locale.ROOT, "%02d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60);
+	}
+
 	static String rateText(double perHour)
 	{
 		return perHour >= 10 ? fmt(Math.round(perHour)) : String.format(Locale.UK, "%.1f", perHour);

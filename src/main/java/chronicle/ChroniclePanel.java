@@ -173,6 +173,7 @@ class ChroniclePanel extends PluginPanel
 	final IconTextField searchField = new IconTextField();
 	private final Timer searchDebounce;
 	private final Timer homeTicker;
+	private final Timer clockTicker = new Timer(1000, e -> home.tick());
 	View view = View.HOME;
 	Tab tab = Tab.RECORD;
 	private String detailItem;
@@ -341,6 +342,7 @@ class ChroniclePanel extends PluginPanel
 			}
 		});
 		homeTicker.start();
+		clockTicker.start();
 		ToolTipManager.sharedInstance().setInitialDelay(220);
 		ToolTipManager.sharedInstance().setDismissDelay(20_000);
 
@@ -878,6 +880,7 @@ class ChroniclePanel extends PluginPanel
 	void shutdown()
 	{
 		homeTicker.stop();
+		clockTicker.stop();
 		searchDebounce.stop();
 	}
 

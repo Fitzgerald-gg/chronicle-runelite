@@ -135,4 +135,12 @@ public class SittingTest
 		assertEquals(2, h.tracker("deaths"));
 		assertEquals(2300, h.tracker("totalXpGained"));
 	}
+
+	@Test
+	public void theSessionTimeReadsInHoursMinutesAndSeconds()
+	{
+		h.sitting(42);
+		List<String> now = h.screen("Now");
+		assertTrue(now.toString(), now.stream().anyMatch(s -> s.matches("since \\d\\d:\\d\\d · 00:42:\\d\\d")));
+	}
 }

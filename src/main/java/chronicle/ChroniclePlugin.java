@@ -801,12 +801,18 @@ public class ChroniclePlugin extends Plugin implements Live
 	@Override
 	public long sessionElapsedMinutes()
 	{
+		return sessionElapsedSeconds() / 60;
+	}
+
+	@Override
+	public long sessionElapsedSeconds()
+	{
 		if (sessionStartMs <= 0 || client == null
 			|| client.getGameState() != GameState.LOGGED_IN)
 		{
 			return 0;
 		}
-		return Math.max(0, (System.currentTimeMillis() - sessionStartMs) / 60_000L);
+		return Math.max(0, (System.currentTimeMillis() - sessionStartMs) / 1000L);
 	}
 
 	@Override
