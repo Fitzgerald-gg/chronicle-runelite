@@ -724,6 +724,7 @@ public class ChronicleEventCapture
 		if (rogues)
 		{
 			roguesPending = null;
+			roguesCarried = false;
 		}
 		emitLoot(event.getName(), event.getType(), items);
 	}
