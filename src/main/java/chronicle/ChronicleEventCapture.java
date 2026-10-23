@@ -846,10 +846,16 @@ public class ChronicleEventCapture
 		}
 		long extra = bagDiamonds.read(diamonds);
 		String who = localName();
-		if (extra > 0 && who != null)
+		if (extra <= 0 || who == null || !localStore.isReadyFor(who))
 		{
-			localStore.topUpLoot(ROGUES_CHEST_NAME, ItemID.UNCUT_DIAMOND, extra, who);
+			return;
 		}
+		localStore.topUpLoot(ROGUES_CHEST_NAME, ItemID.UNCUT_DIAMOND, extra, who);
+		JsonObject data = new JsonObject();
+		data.addProperty("source", ROGUES_CHEST_NAME);
+		data.addProperty("category", LootRecordType.EVENT.name());
+		data.add("items", itemsJson(Collections.singletonList(new ItemStack(ItemID.UNCUT_DIAMOND, (int) extra))));
+		send("LOOT_CORRECTION", data, who);
 	}
 
 	private void readBagWindow()
@@ -910,6 +916,11 @@ public class ChronicleEventCapture
 			}
 			lastKillTimeTick = -1;
 		}
+		data.add("items", itemsJson(items));
+	}
+
+	private static JsonArray itemsJson(Collection<ItemStack> items)
+	{
 		JsonArray arr = new JsonArray();
 		if (items != null)
 		{
@@ -924,7 +935,7 @@ public class ChronicleEventCapture
 				}
 			}
 		}
-		data.add("items", arr);
+		return arr;
 	}
 
 	static double parseDuration(String text)
@@ -1473,6 +1484,11 @@ public class ChronicleEventCapture
 			return;
 		}
 		localStore.record(type, data, name);
+		send(type, data, name);
+	}
+
+	private void send(String type, JsonObject data, String name)
+	{
 		if (!config.cloudSync() || config.serverBaseUrl().trim().isEmpty())
 		{
 			return;

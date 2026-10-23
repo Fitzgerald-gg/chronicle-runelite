@@ -87,12 +87,15 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.http.api.item.ItemPrice;
 import net.runelite.http.api.loottracker.LootRecordType;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 final class Harness
@@ -116,6 +119,8 @@ final class Harness
 	private final SlayerPluginService slayer = mock(SlayerPluginService.class);
 	private final EventBus bus = new EventBus();
 	private final ItemManager items = mock(ItemManager.class);
+	private final ChronicleConfig config = mock(ChronicleConfig.class);
+	private final ChronicleApiClient api = mock(ChronicleApiClient.class);
 	private final List<String> said = new ArrayList<>();
 	private final List<String> clicked = new ArrayList<>();
 	private ChroniclePlugin plugin;
@@ -373,8 +378,8 @@ final class Harness
 			b.bind(Client.class).toInstance(client);
 			b.bind(ClientThread.class).toInstance(thread);
 			b.bind(ConfigManager.class).toInstance(config);
-			b.bind(ChronicleConfig.class).toInstance(mock(ChronicleConfig.class));
-			b.bind(ChronicleApiClient.class).toInstance(mock(ChronicleApiClient.class));
+			b.bind(ChronicleConfig.class).toInstance(this.config);
+			b.bind(ChronicleApiClient.class).toInstance(api);
 			b.bind(ScheduledExecutorService.class).toInstance(exec);
 			b.bind(ClientToolbar.class).toInstance(mock(ClientToolbar.class));
 			b.bind(PluginManager.class).toInstance(plugins);
@@ -553,6 +558,29 @@ final class Harness
 		when(m.getParam1()).thenReturn(widget);
 		when(m.getIdentifier()).thenReturn(itemId);
 		return post(new MenuOptionClicked(m));
+	}
+
+	Harness cloud()
+	{
+		when(config.cloudSync()).thenReturn(true);
+		when(config.serverBaseUrl()).thenReturn("https://chronicle.invalid");
+		profile.put(ChroniclePlugin.KEY_TOKEN, "token");
+		return this;
+	}
+
+	List<JsonObject> sent(String type)
+	{
+		ArgumentCaptor<JsonObject> events = ArgumentCaptor.forClass(JsonObject.class);
+		verify(api, atLeast(0)).postEvent(anyString(), anyString(), events.capture());
+		List<JsonObject> out = new ArrayList<>();
+		for (JsonObject e : events.getAllValues())
+		{
+			if (type.equals(e.get("type").getAsString()))
+			{
+				out.add(e.getAsJsonObject("data"));
+			}
+		}
+		return out;
 	}
 
 	Harness pack(int... idQty)

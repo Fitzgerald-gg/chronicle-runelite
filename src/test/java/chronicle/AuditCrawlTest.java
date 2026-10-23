@@ -35,6 +35,7 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import org.junit.Test;
 
 public class AuditCrawlTest
@@ -331,7 +332,19 @@ public class AuditCrawlTest
 	private void openSearch(String q) throws Exception
 	{
 		Object box = f("searchField").get(panel);
-		edt(() -> box.getClass().getMethod("setText", String.class).invoke(box, q));
+		Timer debounce = (Timer) f("searchDebounce").get(panel);
+		Method changed = ChroniclePanel.class.getDeclaredMethod("onSearchChanged");
+		changed.setAccessible(true);
+		edt(() ->
+		{
+			if (q.equals(box.getClass().getMethod("getText").invoke(box)))
+			{
+				return;
+			}
+			box.getClass().getMethod("setText", String.class).invoke(box, q);
+			debounce.stop();
+			changed.invoke(panel);
+		});
 	}
 
 	private void reset() throws Exception

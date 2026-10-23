@@ -360,6 +360,21 @@ public class LootTest
 	}
 
 	@Test
+	public void aCorrectionIsSentToTheCloudWithoutBeingAnOpening()
+	{
+		h.cloud().noted(NOTED_DIAMOND, ItemID.UNCUT_DIAMOND);
+		wilderness(true).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 10);
+		diamondLines(3).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 25);
+		assertEquals(3, h.sent("LOOT").stream().filter(e -> "Rogues' Chest".equals(e.get("source").getAsString())).count());
+		List<JsonObject> fixes = h.sent("LOOT_CORRECTION");
+		assertEquals(1, fixes.size());
+		assertEquals("Rogues' Chest", fixes.get(0).get("source").getAsString());
+		JsonObject item = fixes.get(0).getAsJsonArray("items").get(0).getAsJsonObject();
+		assertEquals(ItemID.UNCUT_DIAMOND, item.get("id").getAsInt());
+		assertEquals(6, item.get("quantity").getAsInt());
+	}
+
+	@Test
 	public void anEmptyBagSeenInTheCheckWindowStartsTheCountAtNothing()
 	{
 		wilderness(false).checkEmptyBag().tick();
