@@ -196,4 +196,13 @@ public class KillCountTest
 		assertEquals("Kills tracked: 12", sheet.get(raid + 1));
 		assertEquals("Drops: 5,000 \u00b7 5,000 gp", sheet.get(raid + 2));
 	}
+
+	@Test
+	public void phosanisNightmareReadsItsOwnLineOnTheNightmarePage()
+	{
+		h.clogPage("The Nightmare", Arrays.asList("Obtained: 1/16", "Nightmare kills: 5", "Phosani's Nightmare kills: 3")).save();
+		List<String> sheet = h.period("Lifetime", LocalDate.now()).screen("Standing");
+		assertEquals("Kills tracked: 5", Harness.after(sheet, "Nightmare"));
+		assertEquals("Kills tracked: 3", Harness.after(sheet, "Phosani's Nightmare"));
+	}
 }

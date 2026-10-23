@@ -35,6 +35,7 @@ import net.runelite.api.GameState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
+import net.runelite.api.MenuAction;
 import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
 import net.runelite.api.Player;
@@ -92,6 +93,24 @@ public class ChronicleEventCapture
 	private static final int[] BIG_DIAMOND_ROLL = {5, 6};
 	private static final String BAG_EMPTY = "The bag is empty.";
 	private static final String CONTAINERS_BANKED = "You empty all of your containers into the bank.";
+	private static final String DISPENSER_NAME = "Agility dispenser";
+	private static final Pattern DISPENSER = Pattern.compile(
+		"^You have been awarded (\\d+) x (.+?) and (\\d+) x (.+?)(?:, and an extra (.+?))? from the Agility dispenser\\.$");
+	private static final Map<String, Integer> DISPENSER_ITEMS = Map.ofEntries(
+		Map.entry("blighted anglerfish", ItemID.BLIGHTED_ANGLERFISH),
+		Map.entry("blighted manta ray", ItemID.BLIGHTED_MANTARAY),
+		Map.entry("blighted karambwan", ItemID.BLIGHTED_KARAMBWAN),
+		Map.entry("blighted super restore(4)", ItemID.BLIGHTED_4DOSE2RESTORE),
+		Map.entry("mithril plateskirt", ItemID.MITHRIL_PLATESKIRT),
+		Map.entry("mithril platelegs", ItemID.MITHRIL_PLATELEGS),
+		Map.entry("mithril chainbody", ItemID.MITHRIL_CHAINBODY),
+		Map.entry("steel platebody", ItemID.STEEL_PLATEBODY),
+		Map.entry("adamant platebody", ItemID.ADAMANT_PLATEBODY),
+		Map.entry("adamant platelegs", ItemID.ADAMANT_PLATELEGS),
+		Map.entry("adamant full helm", ItemID.ADAMANT_FULL_HELM),
+		Map.entry("rune med helm", ItemID.RUNE_MED_HELM),
+		Map.entry("rune chainbody", ItemID.RUNE_CHAINBODY),
+		Map.entry("rune kiteshield", ItemID.RUNE_KITESHIELD));
 	private static final Set<Integer> BAG_EMPTIERS = Set.of(InterfaceID.Bankside.LOOTINGBAG_BANKALL,
 		InterfaceID.BankDepositbox.DEPOSIT_LOOTINGBAG, InterfaceID.Bankmain.DEPOSITCONTAINERS);
 	// item, medium-diary amount, hard-diary amount
@@ -501,8 +520,9 @@ public class ChronicleEventCapture
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
 		int taken = event.getId();
-		if ("Take".equals(event.getMenuOption())
-			&& (taken == ItemID.UNCUT_DIAMOND || taken == ItemID.Cert.UNCUT_DIAMOND))
+		boolean diamond = taken == ItemID.UNCUT_DIAMOND || taken == ItemID.Cert.UNCUT_DIAMOND;
+		if (diamond && ("Take".equals(event.getMenuOption())
+			|| event.getMenuAction() == MenuAction.WIDGET_TARGET_ON_GROUND_ITEM))
 		{
 			bagDiamonds.forget();
 		}
@@ -711,20 +731,30 @@ public class ChronicleEventCapture
 	@Subscribe
 	public void onLootReceived(LootReceived event)
 	{
-		if (event.getType() == LootRecordType.NPC || event.getType() == LootRecordType.PLAYER)
+		if (event.getType() == LootRecordType.NPC || event.getType() == LootRecordType.PLAYER
+			|| DISPENSER_NAME.equals(event.getName()))
 		{
 			return;
 		}
 		boolean rogues = ROGUES_CHEST_NAME.equals(event.getName());
-		if (rogues && roguesPending == null)
-		{
-			return;
-		}
+		boolean answered = false;
 		List<ItemStack> items = new ArrayList<>();
 		for (ItemStack it : event.getItems())
 		{
 			int id = it.getId();
-			if (rogues ? unnoted(id) == roguesPending.getId() : id != ItemID.LOOTING_BAG && id != ItemID.LOOTING_BAG_OPEN)
+			if (!rogues)
+			{
+				if (id != ItemID.LOOTING_BAG && id != ItemID.LOOTING_BAG_OPEN)
+				{
+					items.add(it);
+				}
+			}
+			else if (roguesPending != null && unnoted(id) == roguesPending.getId())
+			{
+				items.add(it);
+				answered = true;
+			}
+			else if (isClueScroll(id))
 			{
 				items.add(it);
 			}
@@ -733,7 +763,7 @@ public class ChronicleEventCapture
 		{
 			return;
 		}
-		if (rogues)
+		if (answered)
 		{
 			roguesPending = null;
 			roguesCarried = false;
@@ -748,6 +778,37 @@ public class ChronicleEventCapture
 		data.addProperty("category", type != null ? type.name() : "EVENT");
 		addLoot(data, source, items);
 		emit("LOOT", data);
+	}
+
+	private boolean isClueScroll(int id)
+	{
+		ItemComposition c = client.getItemDefinition(id);
+		return c != null && c.getName() != null && c.getName().startsWith("Clue scroll");
+	}
+
+	private void recordDispenser(Matcher m)
+	{
+		List<ItemStack> items = new ArrayList<>();
+		addDispensed(items, m.group(2), count(m.group(1)));
+		addDispensed(items, m.group(4), count(m.group(3)));
+		if (m.group(5) != null)
+		{
+			addDispensed(items, m.group(5), 1);
+		}
+		if (!items.isEmpty())
+		{
+			emitLoot(DISPENSER_NAME, LootRecordType.EVENT, items);
+		}
+	}
+
+	private void addDispensed(List<ItemStack> items, String name, Integer qty)
+	{
+		Integer known = DISPENSER_ITEMS.get(name.toLowerCase(Locale.ROOT));
+		int id = known != null ? known : localStore.itemNamed(name);
+		if (id > 0 && qty != null && qty > 0)
+		{
+			items.add(new ItemStack(id, qty));
+		}
 	}
 
 	private int unnoted(int id)
@@ -1150,6 +1211,12 @@ public class ChronicleEventCapture
 		if (CONTAINERS_BANKED.equals(msg))
 		{
 			readBag(0);
+			return;
+		}
+		Matcher dispensed = DISPENSER.matcher(msg);
+		if (dispensed.matches())
+		{
+			recordDispenser(dispensed);
 			return;
 		}
 

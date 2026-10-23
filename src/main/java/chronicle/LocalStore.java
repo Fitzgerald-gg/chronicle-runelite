@@ -46,6 +46,7 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.game.ItemManager;
+import net.runelite.http.api.item.ItemPrice;
 
 @Singleton
 @Slf4j
@@ -384,6 +385,18 @@ class LocalStore implements chronicle.counters.GatheredLedger
 			fileItems(src, priced);
 			touch();
 		}
+	}
+
+	int itemNamed(String name)
+	{
+		for (ItemPrice p : itemManager.search(name))
+		{
+			if (p.getName().equalsIgnoreCase(name))
+			{
+				return p.getId();
+			}
+		}
+		return -1;
 	}
 
 	void topUpLoot(String source, int itemId, long qty, String rsn)

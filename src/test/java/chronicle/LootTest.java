@@ -398,6 +398,10 @@ public class LootTest
 		diamondLines(1).pack(ItemID.LOOTING_BAG_OPEN, 1).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 12);
 		assertEquals(6, diamonds());
 		assertEquals(2, chestLoots());
+		h.chat("You empty all of your containers into the bank.");
+		diamondLines(1).click("Cast", "Telekinetic Grab -> Uncut diamond", NOTED_DIAMOND,
+			MenuAction.WIDGET_TARGET_ON_GROUND_ITEM, 0, 0).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 6);
+		assertEquals(9, diamonds());
 	}
 
 	private Harness depositLoot()
@@ -419,5 +423,48 @@ public class LootTest
 		h.click("Deposit-1", "Uncut diamond", -1, MenuAction.CC_OP, -1, InterfaceID.Bankside.LOOTINGBAG_ITEMS);
 		diamondLines(1).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 11);
 		assertEquals(18, diamonds());
+	}
+
+	private JsonObject dispenserItems()
+	{
+		return drops().getAsJsonObject("Agility dispenser").getAsJsonObject("items");
+	}
+
+	@Test
+	public void theAgilityDispenserLineIsFiledWithItsExactAmounts()
+	{
+		h.chat("You have been awarded <col=ef1020>3 x Blighted anglerfish</col> and <col=ef1020>1 x Rune chainbody</col>"
+			+ ", and an extra <col=ef1020>Blighted super restore(4)</col> from the Agility dispenser.");
+		h.chat("You have been awarded <col=ef1020>2 x Blighted manta ray</col> and <col=ef1020>1 x Rune kiteshield</col>"
+			+ " from the Agility dispenser.");
+		assertEquals(2, drops().getAsJsonObject("Agility dispenser").get("loots").getAsInt());
+		assertEquals(3, qty(dispenserItems(), ItemID.BLIGHTED_ANGLERFISH));
+		assertEquals(1, qty(dispenserItems(), ItemID.RUNE_CHAINBODY));
+		assertEquals(1, qty(dispenserItems(), ItemID.BLIGHTED_4DOSE2RESTORE));
+		assertEquals(2, qty(dispenserItems(), ItemID.BLIGHTED_MANTARAY));
+		assertEquals(1, qty(dispenserItems(), ItemID.RUNE_KITESHIELD));
+	}
+
+	@Test
+	public void aDispenserReportFromTheTrackerAndAnUnknownRewardAreNotCountedTwice()
+	{
+		h.chat("You have been awarded <col=ef1020>3 x Blighted anglerfish</col> and <col=ef1020>1 x Mystery cape</col>"
+			+ " from the Agility dispenser.");
+		h.loot("Agility dispenser", LootRecordType.EVENT, ItemID.BLIGHTED_ANGLERFISH, 3, ItemID.RUNE_CHAINBODY, 1);
+		assertEquals(1, drops().getAsJsonObject("Agility dispenser").get("loots").getAsInt());
+		assertEquals(1, dispenserItems().size());
+		assertEquals(3, qty(dispenserItems(), ItemID.BLIGHTED_ANGLERFISH));
+	}
+
+	@Test
+	public void aClueScrollFromTheChestIsChestLoot()
+	{
+		h.item(2722, "Clue scroll (hard)", 0);
+		wilderness(true).chat("You find some uncut diamonds inside.").tick();
+		h.chat("You find a clue scroll inside.").tick();
+		h.loot("Rogues' Chest", LootRecordType.EVENT, 2722, 1).ticks(8);
+		assertEquals(2, chestLoots());
+		assertEquals(1, qty(chestItems(), 2722));
+		assertEquals(3, qty(chestItems(), ItemID.UNCUT_DIAMOND));
 	}
 }
