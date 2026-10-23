@@ -1351,7 +1351,7 @@ class ChroniclePanel extends PluginPanel
 	{
 		JLabel end = new JLabel("\u00d7");
 		end.setFont(FontManager.getRunescapeBoldFont());
-		end.setForeground(ColorScheme.PROGRESS_ERROR_COLOR);
+		end.setForeground(dim());
 		end.setToolTipText("End this session and start a new one. It is saved to the journal.");
 		link(end, live::newSession);
 		bar.add(Box.createRigidArea(new Dimension(end.getPreferredSize().width, 0)), BorderLayout.WEST);

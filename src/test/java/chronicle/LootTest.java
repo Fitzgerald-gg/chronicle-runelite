@@ -9,6 +9,8 @@ import java.util.List;
 import net.runelite.api.TileItem;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.GameState;
+import net.runelite.api.MenuAction;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.VarbitID;
@@ -396,5 +398,26 @@ public class LootTest
 		diamondLines(1).pack(ItemID.LOOTING_BAG_OPEN, 1).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 12);
 		assertEquals(6, diamonds());
 		assertEquals(2, chestLoots());
+	}
+
+	private Harness depositLoot()
+	{
+		return h.click("Deposit loot", "", -1, MenuAction.CC_OP, -1, InterfaceID.Bankside.LOOTINGBAG_BANKALL);
+	}
+
+	@Test
+	public void eachBankViewCorrectsTheTripAndDepositingStartsTheNextFromNothing()
+	{
+		wilderness(true);
+		depositLoot();
+		diamondLines(2).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 9);
+		assertEquals(9, diamonds());
+		depositLoot();
+		diamondLines(1).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 6);
+		assertEquals(15, diamonds());
+		assertEquals(3, chestLoots());
+		h.click("Deposit-1", "Uncut diamond", -1, MenuAction.CC_OP, -1, InterfaceID.Bankside.LOOTINGBAG_ITEMS);
+		diamondLines(1).container(InventoryID.LOOTING_BAG, NOTED_DIAMOND, 11);
+		assertEquals(18, diamonds());
 	}
 }

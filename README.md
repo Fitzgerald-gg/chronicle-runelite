@@ -19,7 +19,7 @@ The boards update live. A drop, level, kill or clue shows up on the board you ar
   <img src="docs/img/record-recap.png" width="200" alt="Record: Recap">
 </p>
 
-**Now** is your current session: xp gained, drops and their value, and anything else the session produced. Only what happened is listed, so a short session has a short page. Click the xp to see each skill and its xp per hour. Your slayer task appears at the top once you start killing it, and your latest drops are along the bottom. The red × on the This session bar saves this session to the journal and starts a fresh one without logging out, so you can time a run between banks.
+**Now** is your current session: xp gained, drops and their value, and anything else the session produced. Only what happened is listed, so a short session has a short page. Click the xp to see each skill and its xp per hour. Your slayer task appears at the top once you start killing it, and your latest drops are along the bottom. The × on the This session bar saves this session to the journal and starts a fresh one without logging out, so you can time a run between banks.
 
 **Journal** is a dated feed of every session, level, pet, collection log slot, quest, diary, combat achievement, slayer task, clue, personal best and death (with what killed you), grouped by day and filterable by type. Each day starts with its time played, xp and drops. It also marks milestones the game does not announce, such as 2,000 total level or 50M xp in a skill. Days recorded, on the journal's title card, opens a calendar of every day you have played.
 

@@ -92,6 +92,8 @@ public class ChronicleEventCapture
 	private static final int[] BIG_DIAMOND_ROLL = {5, 6};
 	private static final String BAG_EMPTY = "The bag is empty.";
 	private static final String CONTAINERS_BANKED = "You empty all of your containers into the bank.";
+	private static final Set<Integer> BAG_EMPTIERS = Set.of(InterfaceID.Bankside.LOOTINGBAG_BANKALL,
+		InterfaceID.BankDepositbox.DEPOSIT_LOOTINGBAG, InterfaceID.Bankmain.DEPOSITCONTAINERS);
 	// item, medium-diary amount, hard-diary amount
 	private static final Map<String, int[]> ROGUES_LOOT = Map.ofEntries(
 		Map.entry("nature runes", new int[]{ItemID.NATURERUNE, 40, 50}),
@@ -498,7 +500,17 @@ public class ChronicleEventCapture
 	@Subscribe
 	public void onMenuOptionClicked(MenuOptionClicked event)
 	{
-		if ("Take".equals(event.getMenuOption()) && unnoted(event.getId()) == ItemID.UNCUT_DIAMOND)
+		int taken = event.getId();
+		if ("Take".equals(event.getMenuOption())
+			&& (taken == ItemID.UNCUT_DIAMOND || taken == ItemID.Cert.UNCUT_DIAMOND))
+		{
+			bagDiamonds.forget();
+		}
+		if (BAG_EMPTIERS.contains(event.getParam1()))
+		{
+			readBag(0);
+		}
+		else if (event.getParam1() == InterfaceID.Bankside.LOOTINGBAG_ITEMS && !"Examine".equals(event.getMenuOption()))
 		{
 			bagDiamonds.forget();
 		}
